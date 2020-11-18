@@ -1,0 +1,54 @@
+name: Go-build-and-test
+
+on:
+  push:
+    branches: 
+    - design-1b 
+    - master
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    env:
+      working-directory: ./msft-operator/ray-operator
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.13
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+      with:
+        ref: design-1b
+    
+    - name: list directories
+      working-directory: ${{env.working-directory}}
+      run: ls -R
+    
+    - name: install kubebuilder
+      run: |
+        wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.0.0-alpha.1/kubebuilder_2.0.0-alpha.1_linux_amd64.tar.gz
+        tar -zxvf  kubebuilder_2.0.0-alpha.1_linux_amd64.tar.gz
+        sudo mv kubebuilder_2.0.0-alpha.1_linux_amd64 /usr/local/kubebuilder
+       
+    - name: Get dependencies
+      working-directory: ${{env.working-directory}}
+      run: |
+        go get -v -t -d ./...
+        if [ -f Gopkg.toml ]; then
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            dep ensure
+        fi
+    - name: Build
+      run: go build -v ./...
+      working-directory: ${{env.working-directory}}
+
+    - name: Test
+      run: go test -v ./... -cover
+      working-directory: ${{env.working-directory}}
