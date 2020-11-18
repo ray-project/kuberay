@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-code
+data: 
+# note: /var  should be writable to write to /var/ray_nodes.txt
+  code.py: |
+    import ray
+    from ray import services
+    from os import environ
+    redis_pass = environ.get("REDIS_PASSWORD") 
+    print("trying to connect to Ray!")
+    ray.init(address="auto", _redis_password=redis_pass)
+    print("now executing some code with Ray!")
+    import time
+    start = time.time()
+    @ray.remote
+    def f():
+      time.sleep(0.01)
+      return ray.services.get_node_ip_address()
+    values=set(ray.get([f.remote() for _ in range(1000)]))
+    print("Ray Nodes: ",str(values))
+    file = open("/var/ray_nodes.txt","a")
+    file.write("available nodes: %s\n" % str(values))
+    file.close()
+    end = time.time()
+    print("Execution time = ",end - start)
