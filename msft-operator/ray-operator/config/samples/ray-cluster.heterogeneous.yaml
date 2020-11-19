@@ -81,7 +81,7 @@ spec:
               path: code.py
   workerGroupsSpec:
   # the pod replicas in this group typed worker
-  - replicas: 2
+  - replicas: 3
     minReplicas: 1
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
@@ -92,8 +92,7 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     scaleStrategy:
       workersToDelete:
-      #- raycluster-heterogeneous-worker-small-group-kxcs7
-      #- raycluster-heterogeneous-worker-small-group-kvz7p
+      
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       redis-password: 'LetMeInRay'

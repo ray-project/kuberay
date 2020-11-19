@@ -23,6 +23,28 @@ Some of the main features of the operator are:
 - Automatically adding the volumeMount at `/dev/shm` for shared memory
 - Use of `ScaleStartegy` to remove specific nodes in specific groups
 
+## Overview
+
+
+When deployed, the ray operator will watch for K8s events (create/delete/update) for the `raycluster` resources. The ray operator can create a raycluster (head + multipe workers), delete a cluster, or update the cluster by adding or removing worker pods.
+
+### Ray cluster creation
+
+Once a `raycluster` resource is created, the operator will configure and create the ray-head and the ray-workers specified in the `raycluster` manifest as shown below.
+
+![](media/create-ray-cluster.gif)
+
+### Ray cluster Update
+
+You can update the number of replicas in a worker goup, and specify which exact replica to remove by updated the raycluster resource manifest:
+
+![](media/update-ray-cluster.gif)
+
+### Ray cluster example code
+
+An example ray code is defined in this [configmap](msft-operator/ray-operator/config/samples/config-map-ray-code.yaml) that is mounted into the ray head-pod. By examining the logs of the head pod, we can see the list of the IP addresses of the nodes that joined the ray cluster:
+
+![](media/logs-ray-cluster.gif)
 
 ## Usage
 
@@ -38,7 +60,6 @@ docker   | 19.03+|[download](https://docs.docker.com/install/)
 The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
 
 ### Running the unit tests
-
 
 ```
 go build
