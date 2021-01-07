@@ -2,8 +2,7 @@ name: Go-build-and-test
 
 on:
   push:
-    branches: 
-    - design-1b 
+    branches:  
     - master
   pull_request:
     branches: [ master ]
