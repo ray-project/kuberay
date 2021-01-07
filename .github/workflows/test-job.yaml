@@ -24,7 +24,7 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
       with:
-        ref: design-1b
+        ref: master
     
     - name: list directories
       working-directory: ${{env.working-directory}}
