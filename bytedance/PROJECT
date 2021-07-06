@@ -1,0 +1,5 @@
+layout:
+- go.kubebuilder.io/v3
+projectName: ray-operator
+repo: github.com/ray-project/ray-contrib/bytedance
+version: "3"
