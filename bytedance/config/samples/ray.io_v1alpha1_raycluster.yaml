@@ -1,0 +1,7 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: raycluster-sample
+spec:
+  # Add fields here
+  foo: bar
