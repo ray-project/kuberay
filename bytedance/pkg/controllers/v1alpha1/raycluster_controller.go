@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package v1alpha1
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/pkg/api/v1alpha1"
 )
 
 // RayClusterReconciler reconciles a RayCluster object

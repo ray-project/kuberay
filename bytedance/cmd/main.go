@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"github.com/ray-project/ray-contrib/bytedance/pkg/controllers/v1alpha1"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -31,8 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/api/v1alpha1"
-	"github.com/ray-project/ray-contrib/bytedance/controllers"
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/pkg/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -78,7 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.RayClusterReconciler{
+	if err = (&v1alpha1.RayClusterReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("RayCluster"),
 		Scheme: mgr.GetScheme(),

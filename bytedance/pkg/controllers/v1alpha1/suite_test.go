@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package v1alpha1
 
 import (
 	"path/filepath"
@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/pkg/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
