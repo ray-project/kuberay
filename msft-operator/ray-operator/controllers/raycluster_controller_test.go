@@ -155,7 +155,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayCluster resource")
 		})
 
-		It("should see the a raycluster object", func() {
+		It("should see a raycluster object", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -226,21 +226,18 @@ var _ = Context("Inside the default namespace", func() {
 
 		})
 
-		It("should update a raycluster object", func() {
-			// adding a scale strategy
+		It("should update a raycluster object deleting a random pod", func() {
+			// adding a scale down
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-
-			podToDelete1 := workerPods.Items[0]
 			rep := new(int32)
 			*rep = 2
 			myRayCluster.Spec.WorkerGroupsSpec[0].Replicas = rep
-			myRayCluster.Spec.WorkerGroupsSpec[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
-
 			err := K8sClient.Update(ctx, myRayCluster)
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
+
 		It("should have only 2 running worker", func() {
 
 			K8sClient.List(context.TODO(), &workerPods,
@@ -251,7 +248,36 @@ var _ = Context("Inside the default namespace", func() {
 					count++
 				}
 			}
-			Expect(count).Should(BeNumerically("==", 2), fmt.Sprintf("worker pod %v", workerPods.Items))
+			Expect(count).Should(BeNumerically("==", 2), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("should update a raycluster object", func() {
+			// adding a scale strategy
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+
+			podToDelete1 := workerPods.Items[0]
+			//podToDelete2 := workerPods.Items[1]
+			rep := new(int32)
+			*rep = 2
+			myRayCluster.Spec.WorkerGroupsSpec[0].Replicas = rep
+			myRayCluster.Spec.WorkerGroupsSpec[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
+
+			err := K8sClient.Update(ctx, myRayCluster)
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
+		})
+		It("should have only 1 running worker", func() {
+
+			K8sClient.List(context.TODO(), &workerPods,
+				client.InNamespace(myRayCluster.Namespace), client.MatchingLabels{"rayClusterName": myRayCluster.Name, "groupName": "small-group"}, &client.ListOptions{Namespace: "default"})
+			count := 0
+			for _, aPod := range workerPods.Items {
+				if reflect.DeepEqual(aPod.Status.Phase, v1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, v1.PodPending) {
+					count++
+				}
+			}
+			Expect(count).Should(BeNumerically("==", 2), fmt.Sprintf("worker pod with scale strategy %v", myRayCluster))
 		})
 	})
 })

@@ -39,6 +39,13 @@ func BuildServiceForHeadPod(instance rayiov1alpha1.RayCluster) *corev1.Service {
 	instance.Spec.HeadService.Spec.ClusterIP = corev1.ClusterIPNone //headless service
 	rayPodSvc := &instance.Spec.HeadService
 	rayPodSvc.Name = checkSvcName(instance)
+
+	// set labels
+	if rayPodSvc.ObjectMeta.Labels == nil {
+		rayPodSvc.ObjectMeta.Labels = make(map[string]string)
+	}
+	rayPodSvc.ObjectMeta.Labels["isRayService"] = "yes"
+
 	return rayPodSvc
 }
 

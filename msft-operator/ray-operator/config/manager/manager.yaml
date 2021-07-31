@@ -27,13 +27,13 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: ray-controller:latest
+        image: bonsaidev.azurecr.io/bonsaidev/ray-operator:0.1.0
         name: ray-manager
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 100Mi
           requests:
             cpu: 100m
-            memory: 20Mi
+            memory: 50Mi
       terminationGracePeriodSeconds: 10

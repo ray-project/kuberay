@@ -10,3 +10,6 @@ subjects:
 - kind: ServiceAccount
   name: default
   namespace: system
+- kind: ServiceAccount
+  name: default
+  namespace: default

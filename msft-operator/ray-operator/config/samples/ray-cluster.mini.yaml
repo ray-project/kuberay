@@ -32,8 +32,10 @@ spec:
       port: '6379' # should match headService targetPort
       object-manager-port: '12345'
       node-manager-port: '12346'
+      #include_webui: 'true'
       object-store-memory: '100000000'
       redis-password: 'LetMeInRay'
+      # webui_host: "10.1.2.60"
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
@@ -53,11 +55,13 @@ spec:
         containers:
         - name: ray-head
           image: rayproject/autoscaler
+          #image: rayproject/ray:nightly
+          #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
           # you can have any command and args here to run your code. 
           # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: ["python"]
+          command: ["sleep"]
           args:
-          - '/opt/code.py'
+          - '10000'
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -65,17 +69,7 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
-          volumeMounts:
-          - mountPath: /opt
-            name: config
-        volumes:
-        # You set volumes at the Pod level, then mount them into containers inside that Pod
-        - name: config
-          configMap:
-            # Provide the name of the ConfigMap you want to mount.
-            name: ray-code
-            # An array of keys from the ConfigMap to create as files
-            items:
-            - key: code.py
-              path: code.py
+          - containerPort: 8265 # Ray dashboard
+
+
 
