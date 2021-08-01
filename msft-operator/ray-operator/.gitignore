@@ -44,5 +44,8 @@ vendor/
 # Project related ignores
 /ray-operator
 
+*.vscode
+__debug_bin
+
 config/manager/my-kustomization.yaml
 config/manager/my-manager.yaml

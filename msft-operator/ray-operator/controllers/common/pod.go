@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	rayiov1alpha1 "ray-operator/api/v1alpha1"
+	"ray-operator/controllers/utils"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -42,7 +43,7 @@ func DefaultHeadPodConfig(instance rayiov1alpha1.RayCluster, rayNodeType rayiov1
 	if pConfig.podTemplate.Labels == nil {
 		pConfig.podTemplate.Labels = make(map[string]string)
 	}
-	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.HeadNode), instance.Name, "headGroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.HeadNode), instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 
 	if pConfig.podTemplate.ObjectMeta.Namespace == "" {
 		pConfig.podTemplate.ObjectMeta.Namespace = instance.Namespace
@@ -100,6 +101,9 @@ func BuildPod(conf PodConfig, rayNodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	addEmptyDir(&pod.Spec.Containers[index], &pod)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
+	if len(pod.Spec.InitContainers) > index {
+		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
+	}
 
 	//saving temporarly the old command and args
 	var cmd, args string
@@ -114,7 +118,7 @@ func BuildPod(conf PodConfig, rayNodeType rayiov1alpha1.RayNodeType, rayStartPar
 		pod.Spec.Containers[index].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
-			args = fmt.Sprintf("%s; %s && %s", cont, cmd, "sleep infinity")
+			args = fmt.Sprintf("%s && %s && %s", cont, cmd, "sleep infinity")
 		} else {
 			args = fmt.Sprintf("%s && %s", cont, "sleep infinity")
 		}
@@ -158,11 +162,16 @@ func getRayContainerIndex(pod v1.Pod) (index int) {
 // belonging to the given RayCluster CR name.
 func labelPod(rayNodeType string, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
 
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
 	ret = map[string]string{
+		"isRayNode":      "yes",
 		"rayClusterName": rayClusterName,
 		"rayNodeType":    rayNodeType,
 		"groupName":      groupName,
-		"identifier":     fmt.Sprintf("%s-%s", rayClusterName, rayNodeType),
+		"identifier":     utils.CheckLabel(fmt.Sprintf("%s-%s", rayClusterName, rayNodeType)),
 	}
 
 	for k, v := range ret {
@@ -271,7 +280,7 @@ func concatinateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	case rayiov1alpha1.HeadNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --block %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}

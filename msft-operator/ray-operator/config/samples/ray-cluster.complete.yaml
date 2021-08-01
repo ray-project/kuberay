@@ -55,7 +55,7 @@ spec:
           image: rayproject/autoscaler
           # you can have any command and args here to run your code. 
           # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: ["python"]
+          command: ["python3"]
           args:
           - '/opt/code.py'
           env:
@@ -91,11 +91,11 @@ spec:
                 command: ["/bin/sh","-c","ray stop"]
           resources:
             limits:
-              cpu: "2"
-              memory: "2G"
-            requests:
-              cpu: "1.5"
+              cpu: "1"
               memory: "1G"
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
           volumeMounts:
           - mountPath: /opt
             name: config
@@ -111,7 +111,7 @@ spec:
               path: code.py
   workerGroupsSpec:
   # the pod replicas in this group typed worker
-  - replicas: 2
+  - replicas: 1
     minReplicas: 1
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
@@ -122,8 +122,9 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - worker-9m1rp
-    #  - worker-4k2ih 
+    #  - raycluster-complete-worker-small-group-bdtwh
+    #  - raycluster-complete-worker-small-group-hv457
+    #  - raycluster-complete-worker-small-group-k8tj7 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       redis-password: 'LetMeInRay'
@@ -195,7 +196,7 @@ spec:
               name: log-volume
           resources:
             limits:
-              cpu: "2"
+              cpu: "1"
               memory: "512Mi"
             requests:
               cpu: "500m"
