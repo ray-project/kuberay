@@ -23,3 +23,7 @@ testbin/*
 *.swp
 *.swo
 *~
+
+# Operator test fiels and coverage file
+testbin/
+cover.out
