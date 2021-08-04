@@ -22,6 +22,28 @@ We will follow the path of the predecessors and make it better.
 - Support ray cluster rolling upgrade. (coming soon)
 - Expose rich telemetry of ray clusters. (coming soon)
 
+## Quick Start
+
+1. Build image and update
+```
+git clone https://github.com/ray-project/ray-contrib.git
+cd ray-contrib/bytedance && IMG=${org}/${repo}:${tag} make docker-build
+# push your images to registry
+```
+
+2. Deploy ray-operator
+
+```
+IMG=${org}/${repo}:${tag} make deploy
+```
+
+2. Deploy simple ray cluster
+
+```
+kubectl apply -f https://raw.githubusercontent.com/ray-project/ray-contrib/master/bytedance/examples/cluster-simple.yaml
+```
+
+
 ## Discussion, Contribution and Support
 
 If you have questions or what to get the latest project news, you can connect with us in the following ways:
