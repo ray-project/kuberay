@@ -18,7 +18,7 @@ package main
 
 import (
 	"flag"
-	"github.com/ray-project/ray-contrib/bytedance/pkg/controllers/v1alpha1"
+
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/pkg/api/v1alpha1"
+	rayclustercontroller "github.com/ray-project/ray-contrib/bytedance/pkg/controllers/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -43,7 +44,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(rayiov1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -78,11 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&v1alpha1.RayClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err = rayclustercontroller.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RayCluster")
 		os.Exit(1)
 	}
