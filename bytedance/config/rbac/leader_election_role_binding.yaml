@@ -5,8 +5,8 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: leader-election-role
+  name: ray-operator-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
+  name: ray-operator-service-account
   namespace: system
