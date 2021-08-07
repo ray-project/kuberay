@@ -1,11 +1,11 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: manager-rolebinding
+  name: ray-operator-clusterrole-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: ray-operator-cluster-role
+  name: ray-operator-clusterrole
 subjects:
 - kind: ServiceAccount
   name: ray-operator-service-account
