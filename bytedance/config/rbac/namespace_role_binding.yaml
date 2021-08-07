@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: proxy-rolebinding
+  name: ray-operator-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: proxy-role
+  kind: Role
+  name: ray-operator-role
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
+  name: ray-operator-service-account
   namespace: system
