@@ -196,6 +196,9 @@ func (r *RayClusterReconciler) createHeadService(rayPodSvc *corev1.Service, inst
 		UID:                instance.UID,
 		BlockOwnerDeletion: &blockOwnerDeletion,
 	}
+	if len(rayPodSvc.Name) > 63 {
+		rayPodSvc.Name = utils.TrimName(rayPodSvc.Name)
+	}
 	rayPodSvc.OwnerReferences = append(rayPodSvc.OwnerReferences, ownerReference)
 	if errSvc := r.Create(context.TODO(), rayPodSvc); errSvc != nil {
 		if errors.IsAlreadyExists(errSvc) {
@@ -271,7 +274,12 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster, svcName string) corev1.Pod {
 	podType := rayiov1alpha1.HeadNode
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
+	podName := strings.ToLower(string(rayiov1alpha1.HeadNode) + common.DashSymbol + instance.Name + common.DashSymbol)
+	podName = utils.TrimName(podName)
+	errorList, nameIsValid := utils.IsValid(podName)
+	if !nameIsValid {
+		log.Error(fmt.Errorf("validate pod name error"), strings.Join(errorList, " "))
+	}
 	podConf := common.DefaultHeadPodConfig(instance, podType, podName, svcName)
 	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
 	// Set raycluster instance as the owner and controller
@@ -285,7 +293,12 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster, s
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, svcName string) corev1.Pod {
 	podType := rayiov1alpha1.WorkerNode
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(podType) + common.DashSymbol + worker.GroupName + common.DashSymbol)
+	podName := strings.ToLower(string(podType) + common.DashSymbol + worker.GroupName + common.DashSymbol + instance.Name + common.DashSymbol)
+	podName = utils.TrimName(podName)
+	errorList, nameIsValid := utils.IsValid(podName)
+	if !nameIsValid {
+		log.Error(fmt.Errorf("validate pod name error"), strings.Join(errorList, " "))
+	}
 	podConf := common.DefaultWorkerPodConfig(instance, worker, podType, podName, svcName)
 	pod := common.BuildPod(podConf, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
 	// Set raycluster instance as the owner and controller

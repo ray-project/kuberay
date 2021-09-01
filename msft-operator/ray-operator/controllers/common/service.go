@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	rayiov1alpha1 "ray-operator/api/v1alpha1"
+	"ray-operator/controllers/utils"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -11,7 +12,7 @@ import (
 // DefaultServiceSelector creates a service in case the service is missing from the CR RayCluster
 func DefaultServiceSelector(instance rayiov1alpha1.RayCluster) map[string]string {
 	return map[string]string{
-		"identifier": fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode),
+		"identifier": utils.TrimName(fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode)),
 	}
 }
 
@@ -30,9 +31,11 @@ func BuildServiceForHeadPod(instance rayiov1alpha1.RayCluster) *corev1.Service {
 		instance.Spec.HeadService.Spec.Selector = DefaultServiceSelector(instance)
 	} else {
 		if _, ok := instance.Spec.HeadService.Spec.Selector["identifier"]; !ok {
-			instance.Spec.HeadService.Spec.Selector["identifier"] = fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode)
+			instance.Spec.HeadService.Spec.Selector["identifier"] = utils.TrimName(fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode))
 		}
 	}
+	// Making sure any existing selector is valid in length
+	instance.Spec.HeadService.Spec.Selector = utils.TrimMap(instance.Spec.HeadService.Spec.Selector)
 	if instance.Spec.HeadService.Spec.Ports == nil {
 		instance.Spec.HeadService.Spec.Ports = []corev1.ServicePort{{Name: "redis", Port: int32(defaultRedisPort)}}
 	}
@@ -47,8 +50,13 @@ func BuildServiceForHeadPod(instance rayiov1alpha1.RayCluster) *corev1.Service {
 func checkSvcName(instance rayiov1alpha1.RayCluster) (name string) {
 	if !strings.HasPrefix(instance.Spec.HeadService.Name, instance.Name) {
 		amendedName := fmt.Sprintf("%s-%s", instance.Name, instance.Spec.HeadService.Name)
+		amendedName = utils.TrimName(amendedName)
+		errorList, nameIsValid := utils.IsValid(amendedName)
+		if !nameIsValid {
+			log.Error(fmt.Errorf("validate pod name error"), strings.Join(errorList, " "))
+		}
 		log.Info("checkSvcName ", "svc name amended", amendedName)
 		return amendedName
 	}
-	return instance.Spec.HeadService.Name
+	return utils.TrimName(instance.Spec.HeadService.Name)
 }

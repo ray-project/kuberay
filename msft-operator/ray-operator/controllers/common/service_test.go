@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	rayiov1alpha1 "ray-operator/api/v1alpha1"
+	"ray-operator/controllers/utils"
 	"reflect"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 
 var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
@@ -79,8 +80,20 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	svc := BuildServiceForHeadPod(*instanceWithWrongSvc)
 
 	actualResult := svc.Spec.Selector["identifier"]
-	expectedResult := fmt.Sprintf("%s-%s", instanceWithWrongSvc.Name, rayiov1alpha1.HeadNode)
+	expectedResult := utils.TrimName(fmt.Sprintf("%s-%s", instanceWithWrongSvc.Name, rayiov1alpha1.HeadNode))
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+func TestCheckSvcName(t *testing.T) {
+	instanceWithWrongSvc.Name = "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head"
+	expectedResult := "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-di"
+	svcName := checkSvcName(*instanceWithWrongSvc)
+	if len(svcName) > 55 {
+		t.Fail()
+	}
+	if !reflect.DeepEqual(expectedResult, svcName) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, svcName)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	rayiov1alpha1 "ray-operator/api/v1alpha1"
+	"ray-operator/controllers/utils"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -162,7 +163,7 @@ func labelPod(rayNodeType string, rayClusterName string, groupName string, label
 		"rayClusterName": rayClusterName,
 		"rayNodeType":    rayNodeType,
 		"groupName":      groupName,
-		"identifier":     fmt.Sprintf("%s-%s", rayClusterName, rayNodeType),
+		"identifier":     utils.TrimName(fmt.Sprintf("%s-%s", rayClusterName, rayNodeType)),
 	}
 
 	for k, v := range ret {
@@ -271,7 +272,7 @@ func concatinateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	case rayiov1alpha1.HeadNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --block %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}

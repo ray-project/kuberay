@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	rayiov1alpha1 "ray-operator/api/v1alpha1"
+	"ray-operator/controllers/utils"
 	"reflect"
 	"time"
 
@@ -42,7 +43,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	var myRayCluster = &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "raycluster-sample",
+			Name:      "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director",
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayClusterSpec{
@@ -59,7 +60,7 @@ var _ = Context("Inside the default namespace", func() {
 					ClusterIP: corev1.ClusterIPNone,
 					// This selector must match the label of the head node.
 					Selector: map[string]string{
-						"identifier": "raycluster-sample-head",
+						"identifier": "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head",
 					},
 				},
 			},
@@ -77,7 +78,7 @@ var _ = Context("Inside the default namespace", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
 						Labels: map[string]string{
-							"rayCluster": "raycluster-sample",
+							"rayCluster": "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director",
 							"groupName":  "headgroup",
 						},
 					},
@@ -118,7 +119,7 @@ var _ = Context("Inside the default namespace", func() {
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Labels: map[string]string{
-								"rayCluster": "raycluster-sample",
+								"rayCluster": "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director",
 								"groupName":  "small-group",
 							},
 						},
@@ -164,9 +165,9 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: "raycluster-sample-head-svc", Namespace: "default"}, svc),
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.TrimName("f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head-svc"), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector["identifier"]).Should(Equal(fmt.Sprintf("%s-%s", myRayCluster.Name, rayiov1alpha1.HeadNode)))
+			Expect(svc.Spec.Selector["identifier"]).Should(Equal(utils.TrimName(fmt.Sprintf("%s-%s", myRayCluster.Name, rayiov1alpha1.HeadNode))))
 		})
 
 		It("should create more than 1 worker", func() {
