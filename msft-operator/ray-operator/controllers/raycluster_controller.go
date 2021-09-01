@@ -105,7 +105,8 @@ func (r *RayClusterReconciler) checkPods(instance *rayiov1alpha1.RayCluster, hea
 	//var updateNeeded bool
 	// check if all the pods exist
 	headPods := corev1.PodList{}
-	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), client.MatchingLabels{"rayClusterName": instance.Name, "groupName": "headgroup"}); err != nil {
+	log.Info("checkPods ", "fetching head pods with labels", instance.Namespace, "rayClusterName", instance.Name, "groupName", common.HeadGroup)
+	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), client.MatchingLabels{"rayClusterName": instance.Name, "groupName": common.HeadGroup}); err != nil {
 		return err
 	}
 	if len(headPods.Items) == 1 {
@@ -118,7 +119,7 @@ func (r *RayClusterReconciler) checkPods(instance *rayiov1alpha1.RayCluster, hea
 	}
 	if len(headPods.Items) == 0 || headPods.Items == nil {
 		// create head pod
-		log.Info("checkPods ", "creating head pod for cluster", instance.Name)
+		log.Info("checkPods ", "did not find any head pods in namespace", instance.Namespace, "creating head pod for cluster", instance.Name)
 		if err := r.createHeadPod(*instance, headSvcName); err != nil {
 			return err
 		}

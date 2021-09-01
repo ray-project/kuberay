@@ -88,7 +88,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 
 func TestCheckSvcName(t *testing.T) {
 	instanceWithWrongSvc.Name = "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head"
-	expectedResult := "f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-di"
+	expectedResult := "svc-f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090schola"
 	svcName := checkSvcName(*instanceWithWrongSvc)
 	if len(svcName) > 55 {
 		t.Fail()

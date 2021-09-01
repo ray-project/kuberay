@@ -165,7 +165,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.TrimName("f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head-svc"), Namespace: "default"}, svc),
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.TrimName("svc-f14805df-6edb-06d9-e8e3-ecfd05c4c1ae-lazer090scholar-director-head-svc"), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector["identifier"]).Should(Equal(utils.TrimName(fmt.Sprintf("%s-%s", myRayCluster.Name, rayiov1alpha1.HeadNode))))
 		})

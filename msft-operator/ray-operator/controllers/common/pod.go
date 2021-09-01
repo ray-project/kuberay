@@ -19,6 +19,7 @@ var log = logf.Log.WithName("RayCluster-Controller")
 
 const (
 	defaultServiceAccountName = "default"
+	HeadGroup                 = "headgroup"
 )
 
 // PodConfig contains pod config
@@ -43,7 +44,7 @@ func DefaultHeadPodConfig(instance rayiov1alpha1.RayCluster, rayNodeType rayiov1
 	if pConfig.podTemplate.Labels == nil {
 		pConfig.podTemplate.Labels = make(map[string]string)
 	}
-	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.HeadNode), instance.Name, "headGroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.HeadNode), instance.Name, HeadGroup, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 
 	if pConfig.podTemplate.ObjectMeta.Namespace == "" {
 		pConfig.podTemplate.ObjectMeta.Namespace = instance.Namespace
