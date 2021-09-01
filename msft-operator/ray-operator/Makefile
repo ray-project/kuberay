@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= bonsaidev.azurecr.io/bonsai/rayoperator:0.1.0 # bonsaidev.azurecr.io/bonsaidev:0.1.0
+IMG ?= ray-controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
