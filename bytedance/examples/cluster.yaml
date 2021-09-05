@@ -10,7 +10,7 @@ spec:
       object-manager-port: '12345'
       node-manager-port: '12346'
       object-store-memory: '100000000'
-      redis-password: 'LetMeInRay'
+      redis-password: 'AwesomeRay'
       dashboard-host: '0.0.0.0'
       num-cpus: '1'
       node-ip-address: $MY_POD_IP
