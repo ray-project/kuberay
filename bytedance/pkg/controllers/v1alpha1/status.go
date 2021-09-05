@@ -42,7 +42,7 @@ func (r *RayClusterReconciler) updateStatus(cluster *rayiov1alpha1.RayCluster) e
 	// TODO (@Jeffwan): Fetch head service and check if it's serving
 	// We always update cluster no matter if there's one change or not.
 	cluster.Status.LastUpdateTime.Time = time.Now()
-	if err := r.Update(context.TODO(), cluster); err != nil {
+	if err := r.Status().Update(context.TODO(), cluster); err != nil {
 		return err
 	}
 
