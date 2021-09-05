@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 
 	rayiov1alpha1 "github.com/ray-project/ray-contrib/bytedance/pkg/api/v1alpha1"
 	"github.com/ray-project/ray-contrib/bytedance/pkg/controllers/common"
@@ -89,7 +90,7 @@ func SetContainerEnvs(container *corev1.Container, rayNodeType rayiov1alpha1.Ray
 	if !envVarExists(common.RayHeadServicePortEnv, container.Env) {
 		port := corev1.EnvVar{Name: common.RayHeadServicePortEnv}
 		if value, ok := params["port"]; !ok {
-			port.Value = string(common.DefaultRedisPort)
+			port.Value = strconv.Itoa(common.DefaultRedisPort)
 		} else {
 			port.Value = value
 		}
@@ -123,7 +124,7 @@ func AddServiceAddress(params map[string]string, nodeType rayiov1alpha1.RayNodeT
 		if _, ok := params["address"]; !ok {
 			var svcPort string
 			if _, ok := params["port"]; !ok {
-				svcPort = string(common.DefaultRedisPort)
+				svcPort = strconv.Itoa(common.DefaultRedisPort)
 			} else {
 				svcPort = params["port"]
 			}
