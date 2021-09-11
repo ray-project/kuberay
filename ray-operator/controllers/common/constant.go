@@ -27,9 +27,9 @@ const (
 	PodReadyFilepath = "POD_READY_FILEPATH"
 
 	// Use as container env variable
-	Namespace        = "NAMESPACE"
-	ClusterName      = "CLUSTER_NAME"
-	RayIpEnv         = "RAY_IP"
-	RayPortEnv       = "RAY_PORT"
-	RedisPasswordEnv = "REDIS_PASSWORD"
+	NAMESPACE      = "NAMESPACE"
+	CLUSTER_NAME   = "CLUSTER_NAME"
+	RAY_IP         = "RAY_IP"
+	RAY_PORT       = "RAY_PORT"
+	REDIS_PASSWORD = "REDIS_PASSWORD"
 )

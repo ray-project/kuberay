@@ -107,3 +107,45 @@ func FindRayContainerIndex(spec corev1.PodSpec) (index int) {
 	}
 	return 0
 }
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateDesiredReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.Replicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateMinReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.MinReplicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateMaxReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.MaxReplicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateAvailableReplicas(pods corev1.PodList) int32 {
+	count := int32(0)
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
+			count++
+		}
+	}
+
+	return count
+}

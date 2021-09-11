@@ -187,8 +187,8 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if !envVarExists(RayIpEnv, container.Env) {
-		ip := v1.EnvVar{Name: RayIpEnv}
+	if !envVarExists(RAY_IP, container.Env) {
+		ip := v1.EnvVar{Name: RAY_IP}
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// if head, use localhost
 			ip.Value = "127.0.0.1"
@@ -198,8 +198,8 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 		}
 		container.Env = append(container.Env, ip)
 	}
-	if !envVarExists(RayPortEnv, container.Env) {
-		port := v1.EnvVar{Name: RayPortEnv}
+	if !envVarExists(RAY_PORT, container.Env) {
+		port := v1.EnvVar{Name: RAY_PORT}
 		if value, ok := rayStartParams["port"]; !ok {
 			// using default port
 			port.Value = strconv.Itoa(DefaultRedisPort)
@@ -209,9 +209,9 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 		}
 		container.Env = append(container.Env, port)
 	}
-	if !envVarExists(RedisPasswordEnv, container.Env) {
+	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
-		port := v1.EnvVar{Name: RedisPasswordEnv}
+		port := v1.EnvVar{Name: REDIS_PASSWORD}
 		if value, ok := rayStartParams["redis-password"]; ok {
 			port.Value = value
 		}

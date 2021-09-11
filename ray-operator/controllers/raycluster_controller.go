@@ -392,27 +392,27 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		return err
 	}
 
-	count := common.CalculateAvailableReplicas(runtimePods)
+	count := utils.CalculateAvailableReplicas(runtimePods)
 	if instance.Status.AvailableWorkerReplicas != count {
 		instance.Status.AvailableWorkerReplicas = count
 	}
 
-	count = common.CalculateDesiredReplicas(instance)
+	count = utils.CalculateDesiredReplicas(instance)
 	if instance.Status.DesiredWorkerReplicas != count {
 		instance.Status.DesiredWorkerReplicas = count
 	}
 
-	count = common.CalculateMinReplicas(instance)
+	count = utils.CalculateMinReplicas(instance)
 	if instance.Status.MinWorkerReplicas != count {
 		instance.Status.MinWorkerReplicas = count
 	}
 
-	count = common.CalculateMaxReplicas(instance)
+	count = utils.CalculateMaxReplicas(instance)
 	if instance.Status.MaxWorkerReplicas != count {
 		instance.Status.MaxWorkerReplicas = count
 	}
 
-	// TODO (@Jeffwan): Update state field.
+	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.
 	instance.Status.LastUpdateTime.Time = time.Now()
 	if err := r.Status().Update(context.Background(), instance); err != nil {
