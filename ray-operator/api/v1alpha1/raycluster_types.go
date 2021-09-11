@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//	appsv1 "k8s.io/api/apps/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -13,18 +12,22 @@ import (
 type RayClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	// HeadService is service to abstract the head pod. it will be used by the workers to connect to the head pod
-	HeadService v1.Service `json:"headService"`
 	// HeadGroupSpecs are the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods
-	WorkerGroupsSpec []WorkerGroupSpec `json:"workerGroupsSpec,omitempty"`
+	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 	// RayVersion is the version of ray being used. this affects the command used to start ray
 	RayVersion string `json:"rayVersion,omitempty"`
+	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
+	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
+	ServiceType v1.ServiceType `json:"serviceType"`
+	// EnableIngress indicates whether operator should create ingress object for head service or not.
+	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// Number of desired pods in this pod group. This is a pointer to distinguish between explicit
 	// zero and not specified. Defaults to 1.
 	Replicas *int32 `json:"replicas"`
@@ -59,13 +62,30 @@ type ScaleStrategy struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
+// The overall state of the Ray cluster.
+type ClusterState string
+
+const (
+	Ready     ClusterState = "ready"
+	UnHealthy ClusterState = "unHealthy"
+	Failed    ClusterState = "failed"
+)
+
 // RayClusterStatus defines the observed state of RayCluster
 type RayClusterStatus struct {
-
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
-	AvailableReplicas int32 `json:"availableReplicas,omitempty"`
+	State ClusterState `json:"state,omitempty"`
+	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
+	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
+	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.
+	DesiredWorkerReplicas int32 `json:"desiredWorkerReplicas,omitempty"`
+	// MinWorkerReplicas indicates sum of minimum replicas of each node group.
+	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
+	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
+	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
+	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 }
@@ -80,12 +100,11 @@ const (
 	WorkerNode RayNodeType = "worker"
 )
 
+// RayCluster is the Schema for the RayClusters API
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // +kubebuilder:object:root=true
-
-// RayCluster is the Schema for the RayClusters API
+// +kubebuilder:subresource:status
 type RayCluster struct {
 	// Standard object metadata.
 	metav1.TypeMeta   `json:",inline"`
