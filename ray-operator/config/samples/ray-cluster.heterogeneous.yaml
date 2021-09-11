@@ -7,21 +7,11 @@ metadata:
   name: raycluster-heterogeneous
 spec:
   rayVersion: '1.0.1'
-  ######################headService#################################
-  # head service, follows Kubernetes standard
-  headService: 
-    metadata:
-      name: "my-svc" # will automatically change to <clustername>-<svcName> i.e. <raycluster-heterogeneous-my-svc>, to avoid potential conflict
-    spec:
-      selector:
-        identifier: raycluster-heterogeneous-head # <clusterName>-<rayNodeType>
-      ports:
-        - protocol: TCP
-          port: 80
-          targetPort: 6379
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
+    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
+    serviceType: ClusterIP
     # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
     replicas: 1
     # logical group name, for this called head-group, also can be functional
@@ -79,7 +69,7 @@ spec:
             items:
             - key: code.py
               path: code.py
-  workerGroupsSpec:
+  workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 3
     minReplicas: 1

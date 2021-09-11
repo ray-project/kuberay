@@ -1,6 +1,8 @@
 images:
- - name: controller
-   newTag: latest
-   newName: ray-controller
+- name: controller
+  newName: seedjeffwan/ray-operator
+  newTag: v0.1.0
 resources:
 - manager.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
