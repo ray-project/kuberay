@@ -1,15 +1,15 @@
 module ray-operator
 
-go 1.12
+go 1.15
 
 require (
-	github.com/deckarep/golang-set v1.7.1
-	github.com/go-logr/logr v0.1.0
-	github.com/onsi/ginkgo v1.6.0
-	github.com/onsi/gomega v1.4.2
-	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
-	k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
-	k8s.io/client-go v0.0.0-20190918200256-06eb1244587a
-	k8s.io/utils v0.0.0-20190506122338-8fab8cb257d5
-	sigs.k8s.io/controller-runtime v0.3.0
+	github.com/go-logr/logr v0.3.0
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.2
+	github.com/stretchr/testify v1.5.1
+	k8s.io/api v0.19.14
+	k8s.io/apimachinery v0.19.14
+	k8s.io/client-go v0.19.14
+	k8s.io/utils v0.0.0-20200912215256-4140de9c8800
+	sigs.k8s.io/controller-runtime v0.7.2
 )
