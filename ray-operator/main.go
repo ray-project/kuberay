@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 
-	rayv1 "ray-operator/api/v1alpha1"
-	"ray-operator/controllers"
+	rayv1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	"github.com/ray-project/ray-contrib/ray-operator/controllers"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -52,12 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.RayClusterReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	if err = controllers.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RayCluster")
 		os.Exit(1)
 	}

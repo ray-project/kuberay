@@ -1,13 +1,14 @@
 package common
 
 import (
-	"fmt"
-	rayiov1alpha1 "ray-operator/api/v1alpha1"
 	"reflect"
 	"testing"
 
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+
+	"github.com/stretchr/testify/assert"
+
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
@@ -19,19 +20,6 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
 		RayVersion: "1.0",
-		HeadService: v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "head-svc",
-				Namespace: "default",
-			},
-			Spec: corev1.ServiceSpec{
-				Ports:     []corev1.ServicePort{{Name: "redis", Port: int32(6379)}},
-				ClusterIP: corev1.ClusterIPNone,
-				Selector: map[string]string{
-					"wrong-identifier": "raycluster-sample-head",
-				},
-			},
-		},
 		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
@@ -76,10 +64,17 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 }
 
 func TestBuildServiceForHeadPod(t *testing.T) {
-	svc := BuildServiceForHeadPod(*instanceWithWrongSvc)
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc)
+	assert.Nil(t, err)
 
-	actualResult := svc.Spec.Selector["identifier"]
-	expectedResult := fmt.Sprintf("%s-%s", instanceWithWrongSvc.Name, rayiov1alpha1.HeadNode)
+	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	expectedResult := string(instanceWithWrongSvc.Name)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualResult = svc.Spec.Selector[RayNodeTypeLabelKey]
+	expectedResult = string(rayiov1alpha1.HeadNode)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
