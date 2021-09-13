@@ -1,0 +1,205 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/api/go_client";
+package api;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+service ClusterRuntimeService {
+  // Creates a new Cluster.
+  rpc CreateClusterRuntime(CreateClusterRuntimeRequest) returns (ClusterRuntime) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha1/cluster_runtimes"
+      body: "cluster_runtime"
+    };
+  }
+
+  // Finds a specific Cluster by ID.
+  rpc GetClusterRuntime(GetClusterRuntimeRequest) returns (ClusterRuntime) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/cluster_runtimes/{id}"
+    };
+  }
+
+  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  rpc ListClusterRuntimes(ListClusterRuntimesRequest) returns (ListClusterRuntimesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/cluster_runtimes"
+    };
+  }
+
+  // Deletes an Cluster without deleting the Cluster's runs and jobs. To
+  // avoid unexpected behaviors, delete an Cluster's runs and jobs before
+  // deleting the Cluster.
+  rpc DeleteClusterRuntime(DeleteClusterRuntimeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha1/cluster_runtimes/{id}"
+    };
+  }
+}
+
+message CreateClusterRuntimeRequest {
+  // The Cluster to be created.
+  ClusterRuntime cluster_runtime = 1;
+}
+
+message GetClusterRuntimeRequest {
+  // The ID of the Cluster to be retrieved. reserved field for database layer query later
+  string id = 1;
+  // The name of the Cluster to be retrieved.
+  string name = 2;
+}
+
+message ListClusterRuntimesRequest {
+  // TODO: support paganation later
+}
+
+message ListClusterRuntimesResponse {
+  repeated ClusterRuntime runtimes = 1;
+}
+
+message DeleteClusterRuntimeRequest {
+  // The ID of the Cluster to be deleted.
+  string id = 1;
+  // The name of the Cluster to be deleted.
+  string name = 2;
+}
+
+message ClusterRuntime {
+  string id = 1;
+  string name = 2;
+  string base_image = 3;
+  repeated string pip_packages = 4;
+  repeated string conda_packages = 5;
+  repeated string system_packages = 6;
+  map<string, string> environment_variables = 7;
+  string custom_commands = 8;
+  // Output
+  string image = 9;
+}
+
+service ComputeRuntimeService {
+  // Creates a new Cluster.
+  rpc CreateComputeRuntime(CreateComputeRuntimeRequest) returns (ComputeRuntime) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha1/compute_runtimes"
+      body: "compute_runtime"
+    };
+  }
+
+  // Finds a specific Cluster by ID.
+  rpc GetComputeRuntime(GetComputeRuntimeRequest) returns (ComputeRuntime) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/compute_runtimes/{id}"
+    };
+  }
+
+  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  rpc ListComputeRuntimes(ListComputeRuntimesRequest) returns (ListComputeRuntimesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/compute_runtimes"
+    };
+  }
+
+  // Deletes an Cluster without deleting the Cluster's runs and jobs. To
+  // avoid unexpected behaviors, delete an Cluster's runs and jobs before
+  // deleting the Cluster.
+  rpc DeleteComputeRuntime(DeleteComputeRuntimeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha1/compute_runtimes/{id}"
+    };
+  }
+}
+
+message CreateComputeRuntimeRequest {
+  // The Compute to be created.
+  ComputeRuntime compute_runtime = 1;
+}
+
+message GetComputeRuntimeRequest {
+  // The ID of the Compute to be retrieved. reserved field for database layer query later
+  string id = 1;
+  // The name of the compute runtime to be retrieved.
+  string name = 2;
+}
+
+message ListComputeRuntimesRequest {
+  // TODO: support pagingation later
+}
+
+message ListComputeRuntimesResponse {
+  // A list of Compute returned.
+  repeated ComputeRuntime runtimes = 1;
+}
+
+message DeleteComputeRuntimeRequest {
+  // The ID of the compute runtime to be deleted.
+  string id = 1;
+  // The name of the compute runtime to be delete.
+  string name = 2;
+}
+
+message ComputeRuntime {
+  string id = 1;
+  string name = 2;
+  enum Cloud {
+      ALIBABA = 0;
+      AWS = 1;
+      AZURE = 2;
+      GCP = 3;
+      ON_PREM = 4;
+  }
+  Cloud cloud = 3;
+  string region = 4;
+  string availability_zone = 5;
+  HeadGroupSpec head_group_spec = 6;
+  repeated WorkerGroupSpec worker_group_sepc = 7;
+}
+
+message HeadGroupSpec {
+  // Optional
+  Resource resource = 1;
+  // Optional
+  map<string, string> ray_start_params = 2;
+  // Optional
+  string service_type = 3;
+  // Output: internal/external service endpoint
+  string service_address = 4;
+}
+
+message Resource {
+  uint32 cpu = 1;
+  uint32 memory = 2;
+  uint32 gpu = 3;
+  string gpu_accelerator = 4;
+}
+
+message WorkerGroupSpec {
+  // Optional input field.
+  string group_name = 1;
+  // Required input field
+  int32 replicas = 2;
+  // Optional
+  int32 min_replicas = 3;
+  // Optional
+  int32 max_replicas = 4;
+  // Optional
+  Resource resource = 5;
+  // Optional
+  map<string, string> ray_start_params = 6;
+}
