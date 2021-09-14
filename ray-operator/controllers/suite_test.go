@@ -16,10 +16,11 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"path/filepath"
-	rayiov1alpha1 "ray-operator/api/v1alpha1"
 	"testing"
+
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -38,6 +39,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var cfg *rest.Config
+var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func TestAPIs(t *testing.T) {
@@ -45,15 +47,16 @@ func TestAPIs(t *testing.T) {
 
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"Controller Suite",
-		[]Reporter{envtest.NewlineReporter{}})
+		[]Reporter{printer.NewlineReporter{}})
 }
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: true,
 	}
 
 	var err error
@@ -66,9 +69,26 @@ var _ = BeforeSuite(func(done Done) {
 
 	// +kubebuilder:scaffold:scheme
 
-	K8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
-	Expect(K8sClient).ToNot(BeNil())
+	Expect(k8sClient).ToNot(BeNil())
+
+	// Suggested way to run tests
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:             scheme.Scheme,
+		MetricsBindAddress: "0",
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
+
+	err = NewReconciler(mgr).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup controller")
+
+	go func() {
+		err = mgr.Start(ctrl.SetupSignalHandler())
+		Expect(err).ToNot(HaveOccurred())
+	}()
+	k8sClient = mgr.GetClient()
+	Expect(k8sClient).ToNot(BeNil())
 
 	close(done)
 }, 60)
@@ -78,34 +98,3 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
-
-func SetupTest(ctx context.Context) {
-	var stopCh chan struct{}
-
-	BeforeEach(func() {
-		stopCh = make(chan struct{})
-
-		mgr, err := ctrl.NewManager(cfg, ctrl.Options{MetricsBindAddress: "0"})
-		Expect(err).NotTo(HaveOccurred(), "failed to create manager")
-
-		controller := &RayClusterReconciler{
-			Client:   mgr.GetClient(),
-			Log:      logf.Log,
-			Scheme:   mgr.GetScheme(),
-			Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
-		}
-		err = controller.SetupWithManager(mgr)
-		Expect(err).NotTo(HaveOccurred(), "failed to setup controller")
-
-		go func() {
-			err := mgr.Start(stopCh)
-			Expect(err).NotTo(HaveOccurred(), "failed to start manager")
-		}()
-	})
-
-	AfterEach(func() {
-		close(stopCh)
-
-	})
-
-}

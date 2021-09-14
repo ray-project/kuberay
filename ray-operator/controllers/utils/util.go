@@ -7,6 +7,9 @@ import (
 	"strings"
 	"unicode"
 
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	"github.com/sirupsen/logrus"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -61,19 +64,6 @@ func CheckLabel(s string) string {
 	return s
 }
 
-// SetHeadSelector makes sure the selector is correct
-func SetHeadSelector(rayPodSvc *corev1.Service, rayClusterName string) {
-	if rayPodSvc.Spec.Selector == nil {
-		rayPodSvc.Spec.Selector = make(map[string]string)
-	}
-	if _, ok := rayPodSvc.Spec.Selector["identifier"]; !ok {
-		rayPodSvc.Spec.Selector["identifier"] = CheckLabel(fmt.Sprintf("%s-%s", rayClusterName, "head"))
-	}
-	if rayPodSvc.Spec.Selector["identifier"] != CheckLabel(fmt.Sprintf("%s-%s", rayClusterName, "head")) {
-		rayPodSvc.Spec.Selector["identifier"] = CheckLabel(fmt.Sprintf("%s-%s", rayClusterName, "head"))
-	}
-}
-
 // Before Get substring before a string.
 func Before(value string, a string) string {
 	pos := strings.Index(value, a)
@@ -96,4 +86,66 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 		return "default"
 	}
 	return metaData.Namespace
+}
+
+// GenerateServiceName generates a ray head service name from cluster name
+func GenerateServiceName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc")
+}
+
+// GenerateIdentifier generates identifier of same group pods
+func GenerateIdentifier(clusterName string, nodeType rayiov1alpha1.RayNodeType) string {
+	return fmt.Sprintf("%s-%s", clusterName, nodeType)
+}
+
+// TODO: find target container through name instead of using index 0.
+// FindRayContainerIndex finds the ray head/worker container's index in the pod
+func FindRayContainerIndex(spec corev1.PodSpec) (index int) {
+	// We only support one container at this moment. We definitely need a better way to filter out sidecar containers.
+	if len(spec.Containers) > 1 {
+		logrus.Warnf("Pod has multiple containers, we choose index=0 as Ray container")
+	}
+	return 0
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateDesiredReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.Replicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateMinReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.MinReplicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateMaxReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
+	count := int32(0)
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		count += *nodeGroup.MaxReplicas
+	}
+
+	return count
+}
+
+// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+func CalculateAvailableReplicas(pods corev1.PodList) int32 {
+	count := int32(0)
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
+			count++
+		}
+	}
+
+	return count
 }

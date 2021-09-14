@@ -3,101 +3,76 @@ package common
 import (
 	"bytes"
 	"fmt"
-	rayiov1alpha1 "ray-operator/api/v1alpha1"
-	"ray-operator/controllers/utils"
+	"strconv"
 	"strings"
+
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	"github.com/ray-project/ray-contrib/ray-operator/controllers/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var log = logf.Log.WithName("RayCluster-Controller")
-
 const (
-	defaultServiceAccountName = "default"
+	SharedMemoryVolumeName      = "shared-mem"
+	SharedMemoryVolumeMountPath = "/dev/shm"
 )
 
-// PodConfig contains pod config
-type PodConfig struct {
-	RayCluster  rayiov1alpha1.RayCluster
-	PodType     rayiov1alpha1.RayNodeType
-	PodName     string
-	podTemplate v1.PodTemplateSpec
-}
+var (
+	log = logf.Log.WithName("RayCluster-Controller")
+)
 
-// DefaultHeadPodConfig sets the config values
-func DefaultHeadPodConfig(instance rayiov1alpha1.RayCluster, rayNodeType rayiov1alpha1.RayNodeType, podName string, svcName string) PodConfig {
-	podTemplate := instance.Spec.HeadGroupSpec.Template
-	podTemplate.ObjectMeta = instance.Spec.HeadGroupSpec.Template.ObjectMeta
-	podTemplate.Spec = instance.Spec.HeadGroupSpec.Template.Spec
-	pConfig := PodConfig{
-		RayCluster:  instance,
-		PodType:     rayNodeType,
-		PodName:     podName,
-		podTemplate: podTemplate,
-	}
-	if pConfig.podTemplate.Labels == nil {
-		pConfig.podTemplate.Labels = make(map[string]string)
-	}
-	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.HeadNode), instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-
-	if pConfig.podTemplate.ObjectMeta.Namespace == "" {
-		pConfig.podTemplate.ObjectMeta.Namespace = instance.Namespace
+// DefaultHeadPodTemplate sets the config values
+func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
+	podTemplate := headSpec.Template
+	podTemplate.GenerateName = podName
+	if podTemplate.ObjectMeta.Namespace == "" {
+		podTemplate.ObjectMeta.Namespace = instance.Namespace
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
-	instance.Spec.HeadGroupSpec.RayStartParams = setMissingRayStartParams(instance.Spec.HeadGroupSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
-
-	pConfig.podTemplate.GenerateName = podName
-
-	return pConfig
+	if podTemplate.Labels == nil {
+		podTemplate.Labels = make(map[string]string)
+	}
+	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
+	return podTemplate
 }
 
-// todo verify the values here
-
-// DefaultWorkerPodConfig sets the config values
-func DefaultWorkerPodConfig(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, rayNodeType rayiov1alpha1.RayNodeType, podName string, svcName string) PodConfig {
+// DefaultWorkerPodTemplate sets the config values
+func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
-	podTemplate.ObjectMeta = workerSpec.Template.ObjectMeta
-	pConfig := PodConfig{
-		RayCluster:  instance,
-		PodType:     rayNodeType,
-		PodName:     podName,
-		podTemplate: podTemplate,
-	}
-	if pConfig.podTemplate.Labels == nil {
-		pConfig.podTemplate.Labels = make(map[string]string)
-	}
-	pConfig.podTemplate.Labels = labelPod(string(rayiov1alpha1.WorkerNode), instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-
-	if pConfig.podTemplate.ObjectMeta.Namespace == "" {
-		pConfig.podTemplate.ObjectMeta.Namespace = instance.Namespace
+	podTemplate.GenerateName = podName
+	if podTemplate.ObjectMeta.Namespace == "" {
+		podTemplate.ObjectMeta.Namespace = instance.Namespace
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
+
+	if podTemplate.Labels == nil {
+		podTemplate.Labels = make(map[string]string)
+	}
+	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 
-	pConfig.podTemplate.GenerateName = podName
-
-	return pConfig
+	return podTemplate
 }
 
 // BuildPod a pod config
-func BuildPod(conf PodConfig, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) (aPod v1.Pod) {
-
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Pod",
 		},
-		ObjectMeta: conf.podTemplate.ObjectMeta,
-		Spec:       conf.podTemplate.Spec,
+		ObjectMeta: podTemplateSpec.ObjectMeta,
+		Spec:       podTemplateSpec.Spec,
 	}
 	index := getRayContainerIndex(pod)
-	cont := concatinateContainerCommand(rayNodeType, rayStartParams)
+	cont := concatenateContainerCommand(rayNodeType, rayStartParams)
 
 	addEmptyDir(&pod.Spec.Containers[index], &pod)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
@@ -105,7 +80,7 @@ func BuildPod(conf PodConfig, rayNodeType rayiov1alpha1.RayNodeType, rayStartPar
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
 	}
 
-	//saving temporarly the old command and args
+	// saving temporarily the old command and args
 	var cmd, args string
 	if len(pod.Spec.Containers[index].Command) > 0 {
 		cmd = convertCmdToString(pod.Spec.Containers[index].Command)
@@ -158,30 +133,29 @@ func getRayContainerIndex(pod v1.Pod) (index int) {
 	return 0
 }
 
-// The function labelsForCluster returns the labels for selecting the resources
+// labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType string, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
-
+func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	ret = map[string]string{
-		"isRayNode":      "yes",
-		"rayClusterName": rayClusterName,
-		"rayNodeType":    rayNodeType,
-		"groupName":      groupName,
-		"identifier":     utils.CheckLabel(fmt.Sprintf("%s-%s", rayClusterName, rayNodeType)),
+		RayNodeLabelKey:      "yes",
+		RayClusterLabelKey:   rayClusterName,
+		RayNodeTypeLabelKey:  string(rayNodeType),
+		RayNodeGroupLabelKey: groupName,
+		RayIDLabelKey:        utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
 	}
 
 	for k, v := range ret {
-		if k == rayNodeType {
+		if k == string(rayNodeType) {
 			// overriding invalide values for this label
 			if v != string(rayiov1alpha1.HeadNode) && v != string(rayiov1alpha1.WorkerNode) {
 				labels[k] = v
 			}
 		}
-		if k == "groupName" {
+		if k == RayNodeGroupLabelKey {
 			// overriding invalide values for this label
 			if v != groupName {
 				labels[k] = v
@@ -213,8 +187,8 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if !envVarExists("RAY_IP", container.Env) {
-		ip := v1.EnvVar{Name: "RAY_IP"}
+	if !envVarExists(RAY_IP, container.Env) {
+		ip := v1.EnvVar{Name: RAY_IP}
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// if head, use localhost
 			ip.Value = "127.0.0.1"
@@ -224,20 +198,20 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 		}
 		container.Env = append(container.Env, ip)
 	}
-	if !envVarExists("RAY_PORT", container.Env) {
-		port := v1.EnvVar{Name: "RAY_PORT"}
+	if !envVarExists(RAY_PORT, container.Env) {
+		port := v1.EnvVar{Name: RAY_PORT}
 		if value, ok := rayStartParams["port"]; !ok {
 			// using default port
-			port.Value = "6379"
+			port.Value = strconv.Itoa(DefaultRedisPort)
 		} else {
 			// setting the RAY_PORT env var from the params
 			port.Value = value
 		}
 		container.Env = append(container.Env, port)
 	}
-	if !envVarExists("REDIS_PASSWORD", container.Env) {
+	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
-		port := v1.EnvVar{Name: "REDIS_PASSWORD"}
+		port := v1.EnvVar{Name: REDIS_PASSWORD}
 		if value, ok := rayStartParams["redis-password"]; ok {
 			port.Value = value
 		}
@@ -274,8 +248,8 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	return rayStartParams
 }
 
-// concatinateContainerCommand with ray start
-func concatinateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
+// concatenateContainerCommand with ray start
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
@@ -303,7 +277,7 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 	}
 	//1) create a Volume of type emptyDir and add it to Volumes
 	emptyDirVolume := v1.Volume{
-		Name: "shared-mem",
+		Name: SharedMemoryVolumeName,
 		VolumeSource: v1.VolumeSource{
 			EmptyDir: &v1.EmptyDirVolumeSource{
 				Medium:    v1.StorageMediumMemory,
@@ -317,8 +291,8 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 
 	//2) create a VolumeMount that uses the emptyDir
 	mountedVolume := v1.VolumeMount{
-		MountPath: "/dev/shm",
-		Name:      "shared-mem",
+		MountPath: SharedMemoryVolumeMountPath,
+		Name:      SharedMemoryVolumeName,
 		ReadOnly:  false,
 	}
 	if !checkIfVolumeMounted(container, pod) {
@@ -328,7 +302,7 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 
 func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod) bool {
 	for _, mountedVol := range container.VolumeMounts {
-		if mountedVol.MountPath == "/dev/shm" {
+		if mountedVol.MountPath == SharedMemoryVolumeMountPath {
 			for _, podVolume := range pod.Spec.Volumes {
 				if mountedVol.Name == podVolume.Name {
 					// already mounted, nothing to do

@@ -2,32 +2,32 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    control-plane: ray-manager
-  name: system
+    control-plane: ray-operator
+  name: ray-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ray-manager
+  name: ray-operator
   namespace: system
   labels:
-    control-plane: ray-manager
+    control-plane: ray-operator
 spec:
   selector:
     matchLabels:
-      control-plane: ray-manager
+      control-plane: ray-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: ray-manager
+        control-plane: ray-operator
     spec:
       containers:
       - command:
         - /manager
-        args:
-        - --enable-leader-election
-        image: ray-controller:latest
+#        args:
+#        - --enable-leader-election
+        image: controller:latest
         name: ray-manager
         resources:
           limits:

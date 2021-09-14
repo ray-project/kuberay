@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
@@ -18,22 +17,6 @@ var myRayCluster = &RayCluster{
 	},
 	Spec: RayClusterSpec{
 		RayVersion: "1.0",
-		HeadService: v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "head-svc",
-				Namespace: "default",
-			},
-			Spec: corev1.ServiceSpec{
-				Ports: []corev1.ServicePort{{Name: "redis", Port: int32(6379)}},
-				// Use a headless service, meaning that the DNS record for the service will
-				// point directly to the head node pod's IP address.
-				ClusterIP: corev1.ClusterIPNone,
-				// This selector must match the label of the head node.
-				Selector: map[string]string{
-					"identifier": "raycluster-sample-head",
-				},
-			},
-		},
 		HeadGroupSpec: HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
@@ -74,7 +57,7 @@ var myRayCluster = &RayCluster{
 				},
 			},
 		},
-		WorkerGroupsSpec: []WorkerGroupSpec{
+		WorkerGroupSpecs: []WorkerGroupSpec{
 			WorkerGroupSpec{
 				Replicas:    pointer.Int32Ptr(3),
 				MinReplicas: pointer.Int32Ptr(0),

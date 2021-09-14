@@ -1,61 +1,61 @@
 package common
 
 import (
-	"fmt"
-	rayiov1alpha1 "ray-operator/api/v1alpha1"
-	"strings"
-
+	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	"github.com/ray-project/ray-contrib/ray-operator/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// DefaultServiceSelector creates a service in case the service is missing from the CR RayCluster
-func DefaultServiceSelector(instance rayiov1alpha1.RayCluster) map[string]string {
-	return map[string]string{
-		"identifier": fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode),
-	}
-}
 
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceForHeadPod(instance rayiov1alpha1.RayCluster) *corev1.Service {
-	if instance.Spec.HeadService.Namespace == "" {
-		if instance.Namespace != "" {
-			// the Custom resource namespace is assumed to be the same for all the pods and the head service.
-			instance.Spec.HeadService.Namespace = instance.Namespace
-		} else {
-			instance.Spec.HeadService.Namespace = "default"
-		}
+func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+	labels := map[string]string{
+		RayClusterLabelKey:  cluster.Name,
+		RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode),
+		RayIDLabelKey:       utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode),
 	}
-	if instance.Spec.HeadService.Spec.Selector == nil {
-		instance.Spec.HeadService.Spec.Selector = DefaultServiceSelector(instance)
-	} else {
-		if _, ok := instance.Spec.HeadService.Spec.Selector["identifier"]; !ok {
-			instance.Spec.HeadService.Spec.Selector["identifier"] = fmt.Sprintf("%s-%s", instance.Name, rayiov1alpha1.HeadNode)
-		}
-	}
-	if instance.Spec.HeadService.Spec.Ports == nil {
-		instance.Spec.HeadService.Spec.Ports = []corev1.ServicePort{{Name: "redis", Port: int32(defaultRedisPort)}}
-	}
-	instance.Spec.HeadService.Spec.ClusterIP = corev1.ClusterIPNone //headless service
-	rayPodSvc := &instance.Spec.HeadService
-	rayPodSvc.Name = checkSvcName(instance)
 
-	// set labels
-	if rayPodSvc.ObjectMeta.Labels == nil {
-		rayPodSvc.ObjectMeta.Labels = make(map[string]string)
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServiceName(cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports:    []corev1.ServicePort{},
+			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+		},
 	}
-	rayPodSvc.ObjectMeta.Labels["isRayService"] = "yes"
 
-	return rayPodSvc
+	ports, _ := getPortsFromCluster(cluster)
+	// Assign default ports
+	if len(ports) == 0 {
+		ports[DefaultClientPortName] = DefaultClientPort
+		ports[DefaultRedisPortName] = DefaultRedisPort
+		ports[DefaultDashboardName] = DefaultDashboardPort
+	}
+
+	for name, port := range ports {
+		svcPort := corev1.ServicePort{Name: name, Port: port}
+		service.Spec.Ports = append(service.Spec.Ports, svcPort)
+	}
+
+	return service, nil
 }
 
-// checkServiceName verfies that we prefix the Ray cluster name to the service name
-// this avoid having service conflicts in case two  Ray clusters define the same service name
-func checkSvcName(instance rayiov1alpha1.RayCluster) (name string) {
-	if !strings.HasPrefix(instance.Spec.HeadService.Name, instance.Name) {
-		amendedName := fmt.Sprintf("%s-%s", instance.Name, instance.Spec.HeadService.Name)
-		log.Info("checkSvcName ", "svc name amended", amendedName)
-		return amendedName
+// getPortsFromCluster get the ports from head container and directly map them in service
+// It's user's responsibility to maintain rayStartParam ports and container ports mapping
+// TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
+func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, error) {
+	svcPorts := map[string]int32{}
+
+	index := utils.FindRayContainerIndex(cluster.Spec.HeadGroupSpec.Template.Spec)
+	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+	for _, port := range cPorts {
+		svcPorts[port.Name] = port.ContainerPort
 	}
-	return instance.Spec.HeadService.Name
+
+	return svcPorts, nil
 }
