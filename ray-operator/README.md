@@ -66,16 +66,6 @@ go build
 go test ./... -cover
 ```
 
-You can also build the operator using Bazel:
-
-```generate BUILD.bazel
-bazel run //:gazelle
-```
-
-```build script
-bazel build //:ray-operator
-```
-
 #### Testing using Ginkgo
 ```
 sudo apt install golang-ginkgo-dev
