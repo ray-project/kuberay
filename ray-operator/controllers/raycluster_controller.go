@@ -68,7 +68,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // Reconcile used to bridge the desired state with the current state
-func (r *RayClusterReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	log.Info("reconciling RayCluster", "cluster name", request.Name)
 
@@ -77,19 +77,19 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request reconcile.
 	if err := r.Get(context.TODO(), request.NamespacedName, instance); err != nil {
 		log.Error(err, "Read request instance error!")
 		// Error reading the object - requeue the request.
-		return reconcile.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.reconcileServices(instance); err != nil {
-		return reconcile.Result{RequeueAfter: DefaultRequeueDuration}, err
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcilePods(instance); err != nil {
-		return reconcile.Result{RequeueAfter: DefaultRequeueDuration}, err
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
 	// update the status if needed
 	r.updateStatus(instance)
-	return reconcile.Result{}, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster) error {

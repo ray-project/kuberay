@@ -101,10 +101,8 @@ const (
 )
 
 // RayCluster is the Schema for the RayClusters API
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 type RayCluster struct {
 	// Standard object metadata.
 	metav1.TypeMeta   `json:",inline"`
@@ -115,7 +113,7 @@ type RayCluster struct {
 	Status RayClusterStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // RayClusterList contains a list of RayCluster
 type RayClusterList struct {
