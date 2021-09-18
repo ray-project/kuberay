@@ -1,8 +1,0 @@
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: ray-priority
-value: 100
-preemptionPolicy: Never
-globalDefault: false
-description: "This priority class is used for Ray pods."

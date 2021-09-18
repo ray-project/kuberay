@@ -24,6 +24,7 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+      serviceAccountName: ray-operator-service-account
       containers:
       - command:
         - /manager
