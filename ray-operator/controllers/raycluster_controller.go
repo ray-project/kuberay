@@ -18,6 +18,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,6 +87,9 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	if err := r.reconcileIngress(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -98,6 +102,37 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		log.Error(err, "Update status error", "cluster name", request.Name)
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayCluster) error {
+	if instance.Spec.HeadGroupSpec.EnableIngress == nil || !*instance.Spec.HeadGroupSpec.EnableIngress {
+		return nil
+	}
+
+	headIngresses := networkingv1.IngressList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	if err := r.List(context.TODO(), &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return err
+	}
+
+	if headIngresses.Items != nil && len(headIngresses.Items) == 1 {
+		r.Log.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
+		return nil
+	}
+
+	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
+		ingress, err := common.BuildIngressForHeadService(*instance)
+		if err != nil {
+			return err
+		}
+
+		err = r.createHeadIngress(ingress, instance)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster) error {
@@ -277,6 +312,26 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 	}
+	return nil
+}
+
+func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, instance *rayiov1alpha1.RayCluster) error {
+	// making sure the name is valid
+	ingress.Name = utils.CheckName(ingress.Name)
+	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
+		return err
+	}
+
+	if err := r.Create(context.TODO(), ingress); err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.Info("Ingress already exists,no need to create")
+			return nil
+		}
+		log.Error(err, "Ingress create error!", "Ingress.Error", err)
+		return err
+	}
+	log.Info("Ingress created successfully", "ingress name", ingress.Name)
+	r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created ingress %s", ingress.Name)
 	return nil
 }
 
