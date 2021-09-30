@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-heterogeneous
 spec:
-  rayVersion: '1.6.0'
+  rayVersion: '1.0.1'
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
