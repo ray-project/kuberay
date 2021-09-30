@@ -54,6 +54,13 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+          ports:
+          - containerPort: 6379
+            name: redis
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
           volumeMounts:
           - mountPath: /opt
             name: config
