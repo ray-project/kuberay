@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '0.8.6' # should match the Ray version in the image of the containers
+  rayVersion: '1.6.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -59,7 +59,11 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
+            name: redis
           - containerPort: 8265 # Ray dashboard
+            name: dashboard
+          - containerPort: 10001
+            name: client
 
 
 
