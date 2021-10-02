@@ -1,4 +1,4 @@
-module github.com/ray-project/ray-contrib/ray-operator
+module github.com/ray-project/kuberay/ray-operator
 
 go 1.15
 
