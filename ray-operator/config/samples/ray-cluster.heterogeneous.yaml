@@ -40,15 +40,15 @@ spec:
         annotations:
           key: value
       spec:
-        initContainers: # to avoid worker crashing before head service is created
+#        initContainers: # to avoid worker crashing before head service is created
         containers:
         - name: ray-head
           image: rayproject/autoscaler
           # you can have any command and args here to run your code. 
           # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: ["python"]
+          command: ["sleep"]
           args:
-          - '/opt/code.py'
+          - 'infinity'
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -56,6 +56,11 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
+            name: redis
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
           volumeMounts:
           - mountPath: /opt
             name: config
@@ -80,8 +85,8 @@ spec:
     # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
     # the operator will remove pods from the list until the number of replicas is satisfied
     # when a pod is confirmed to be deleted, its name will be removed from the list below
-    scaleStrategy:
-      workersToDelete:
+#    scaleStrategy:
+#      workersToDelete:
       
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
@@ -152,8 +157,8 @@ spec:
     # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
     # the operator will remove pods from the list until the number of replicas is satisfied
     # when a pod is confirmed to be deleted, its name will be removed from the list below
-    scaleStrategy:
-      workersToDelete:
+#    scaleStrategy:
+#      workersToDelete:
       #- raycluster-heterogeneous-worker-medium-group-7bv5h
     #  - worker-4k2ih 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
@@ -173,7 +178,7 @@ spec:
         initContainers:
         - name: init-myservice
           image: busybox:1.28
-          command: ['sh', '-c', "until nslookup raycluster-heterogeneous-my-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]   
+          command: ['sh', '-c', "until nslookup raycluster-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
           image: rayproject/autoscaler
