@@ -1,15 +1,9 @@
-# Ray Kubernetes Operator (experimental)
+# Ray Kubernetes Operator
 
-This is a variation implementation of [Design 1B](https://docs.google.com/document/d/1DPS-e34DkqQ4AeJpoBnSrUM8SnHnQVkiLlcmI4zWEWg/edit?ts=5f906e13#heading=h.825wx4vpnxmb) discussed with the Ray community
+KubeRay operator makes deploying and managing Ray clusters on top of Kubernetes painless - clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller.
+The Ray Operator is a Kubernetes operator to automate provisioning, management, autoscaling and operations of Ray clusters deployed to Kubernetes.
 
 ![overview](media/overview.png)
-
-NOTE: The documentation is still in progress and incomplete. The operator is still under active development. Please see [the documentation](https://docs.ray.io/en/latest/deploy-on-kubernetes.html#deploying-on-kubernetes) for current best practices.
-
-This directory contains the source code for a Ray operator for Kubernetes.
-
-The operator makes deploying and managing Ray clusters on top of Kubernetes painless - clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller.
-The Ray Operator is a Kubernetes operator to automate provisioning, management, autoscaling and operations of Ray clusters deployed to Kubernetes.
 
 Some of the main features of the operator are:
 - Management of first-class RayClusters via a [custom resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-resources).
@@ -24,7 +18,6 @@ Some of the main features of the operator are:
 - Use of `ScaleStartegy` to remove specific nodes in specific groups
 
 ## Overview
-
 
 When deployed, the ray operator will watch for K8s events (create/delete/update) for the `raycluster` resources. The ray operator can create a raycluster (head + multipe workers), delete a cluster, or update the cluster by adding or removing worker pods.
 
@@ -46,92 +39,27 @@ An example ray code is defined in this [configmap](msft-operator/ray-operator/co
 
 ![](media/logs-ray-cluster.gif)
 
-## Usage
 
-This section walks through how to build and deploy the operator in a running Kubernetes cluster.
-
-### Requirements
-software  | version | link
-:-------------  | :---------------:| -------------:
-kubectl |  v1.18.3+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.13+|[download](https://golang.org/dl/)
-docker   | 19.03+|[download](https://docs.docker.com/install/)
-
-The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
-
-### Running the unit tests
-
-```
-go build
-go test ./... -cover
-```
-
-#### Testing using Ginkgo
-```
-sudo apt install golang-ginkgo-dev
-ginkgo ./controllers/
-```
-
-example results:
-```
-Running Suite: Controller Suite
-===============================
-Random Seed: 1605120291
-Will run 6 of 6 specs
-
-••••••
-
-Ran 6 of 6 Specs in 5.068 seconds
-SUCCESS! -- 6 Passed | 0 Failed | 0 Pending | 0 Skipped
-PASS
-
-Ginkgo ran 1 suite in 6.968063881s
-Test Suite Passed
-```
-
-### Building the controller
-
-The first step to deploying the Ray operator is building the container image that contains the operator controller and pushing it to Docker Hub so it can be pulled down and run in the Kubernetes cluster.
+### Deploy the operator
 
 ```shell script
-# From the ray/deploy/ray-operator directory.
-# Replace DOCKER_ACCOUNT with your docker account or push to your preferred Docker image repository.
-docker build -t $DOCKER_ACCOUNT:controller .
-docker push $DOCKER_ACCOUNT:controller
+kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
 
-In the future (once the operator is stabilized), an official controller image will be uploaded and available to users on Docker Hub.
-
-### Installing the custom resource definition
-
-The next step is to install the RayCluster custom resource definition into the cluster. Build and apply the CRD:
-
+Check that the controller is running.
 ```shell script
-kubectl kustomize config/crd | kubectl apply -f -
+$ kubectl get deployments -n ray-system
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+ray-operator   1/1     1            1           40s
+
+$ kubectl get pods -n ray-system
+NAME                            READY   STATUS    RESTARTS   AGE
+ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 ```
 
-Refer to [raycluster_types.go](api/v1alpha1/raycluster_types.go) and [ray.io_rayclusters.yaml](config/crd/bases/ray.io_rayclusters.yaml) for the details of the CRD.
-
-### Deploying the controller
-
-First, modify the controller config to use the image you build. Replace "controller" in config/manager/kustomization.yaml with the name of your image. Then, build the controller config and apply it to the cluster:
-
+Delete the operator
 ```shell script
-kubectl kustomize config/manager | kubectl apply -f -
-```
-
-```shell script
-# Check that the controller is running.
-$ kubectl get pods  -n system
-NAME                                               READY   STATUS    RESTARTS   AGE
-ray-manager-66b9b97bcf-8l6lt   2/2     Running   0          30s
-
-$ kubectl get deployments -n system
-NAME                              READY   UP-TO-DATE   AVAILABLE   AGE
-ray-manager-manager   1/1     1            1           44m
-
-# Delete the controller if need be.
-$ kubectl delete deployment ray-operator-controller-manager -n system
+kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
 
 ### Running an example cluster
@@ -143,7 +71,6 @@ Sample  | Description
 [ray-cluster.mini.yaml](config/samples/ray-cluster.mini.yaml)   | Small example consisting of 1 head pod.
 [ray-cluster.heterogeneous.yaml](config/samples/ray-cluster.heterogeneous.yaml)  | Example with heterogenous worker types. 1 head pod and 2 worker pods, each of which has a different resource quota.
 [ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resouce properties.
-
 
 ```shell script
 # Create a configmap with a hello world Ray code.
@@ -170,6 +97,7 @@ raycluster-heterogeneous-worker-medium-group-ljzzt   1/1     Running   0        
 raycluster-heterogeneous-worker-small-group-76qxb    1/1     Running   0          14m
 raycluster-heterogeneous-worker-small-group-dcl4d    1/1     Running   0          14m
 ```
+
 ```shell
 $ kubectl get services
 NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
@@ -206,6 +134,7 @@ now executing some code with Ray!
 Ray Nodes:  {'10.1.73.139', '10.1.73.138', '10.1.73.140', '10.1.73.141'}
 Execution time =  6.961702346801758
 ```
+
 ```
 # Delete the cluster.
 $ kubectl delete raycluster raycluster-heterogeneous

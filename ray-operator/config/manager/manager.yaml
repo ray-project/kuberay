@@ -30,7 +30,7 @@ spec:
         - /manager
 #        args:
 #        - --enable-leader-election
-        image: controller:latest
+        image: kuberay/operator
         name: ray-manager
         securityContext:
           allowPrivilegeEscalation: false
