@@ -39,20 +39,16 @@ make test
 example results:
 ```
 ✗ make test
-/Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/bin/controller-gen "crd:maxDescLen=100,trivialVersions=true,preserveUnknownFields=false" rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-/Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+...
 go fmt ./...
 go vet ./...
-mkdir -p /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin
-test -f /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin/setup-envtest.sh || curl -sSLo /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-source /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin/setup-envtest.sh; fetch_envtest_tools /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin; setup_envtest_env /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin; go test ./... -coverprofile cover.out
-Using cached envtest tools from /Users/jiaxin/go/src/github.com/ray-project/ray-contrib/ray-operator/testbin
+...
 setting up env vars
-?   	github.com/ray-project/ray-contrib/ray-operator	[no test files]
-ok  	github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1	0.023s	coverage: 0.9% of statements
-ok  	github.com/ray-project/ray-contrib/ray-operator/controllers	9.587s	coverage: 66.8% of statements
-ok  	github.com/ray-project/ray-contrib/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
-ok  	github.com/ray-project/ray-contrib/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
+?   	github.com/ray-project/kuberay/ray-operator	[no test files]
+ok  	github.com/ray-project/kuberay/ray-operator/api/v1alpha1	0.023s	coverage: 0.9% of statements
+ok  	github.com/ray-project/kuberay/ray-operator/controllers	9.587s	coverage: 66.8% of statements
+ok  	github.com/ray-project/kuberay/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
+ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
 ```
 
 ### Manually test new image in running cluster
