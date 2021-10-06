@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
-	"github.com/ray-project/ray-contrib/ray-operator/controllers/common"
-	_ "github.com/ray-project/ray-contrib/ray-operator/controllers/common"
-	"github.com/ray-project/ray-contrib/ray-operator/controllers/utils"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/common"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
 	"k8s.io/client-go/tools/record"
 

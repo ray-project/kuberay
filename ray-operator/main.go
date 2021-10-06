@@ -5,7 +5,7 @@ import (
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/ray-project/ray-contrib/ray-operator/controllers"
+	"github.com/ray-project/kuberay/ray-operator/controllers"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -13,7 +13,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

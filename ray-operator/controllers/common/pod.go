@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
-	"github.com/ray-project/ray-contrib/ray-operator/controllers/utils"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 

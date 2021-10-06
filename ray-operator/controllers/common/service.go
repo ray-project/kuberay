@@ -1,8 +1,8 @@
 package common
 
 import (
-	rayiov1alpha1 "github.com/ray-project/ray-contrib/ray-operator/api/v1alpha1"
-	"github.com/ray-project/ray-contrib/ray-operator/controllers/utils"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
