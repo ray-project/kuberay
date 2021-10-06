@@ -56,7 +56,7 @@ Don't forget to link PR to issue if you are solving one.
 If you run into any merge issues, checkout this [git tutorial](https://lab.github.com/githubtraining/managing-merge-conflicts) to help you resolve merge conflicts and other issues.
 
 
-### Release Acknolwedge
+### Release Acknowledgements
 
 Once your PR is merged, your contributions will be acknowledged in every release, see [CHANGELOG](./CHANGELOG.md) for more details.
 
