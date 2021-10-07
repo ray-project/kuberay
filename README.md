@@ -2,7 +2,7 @@
 
 KubRay is an open source toolkit to run Ray applications on Kubernetes.
 
-KubeRay provides several tools to improve running and managing Apache Ray's experience on Kubernetes.
+KubeRay provides several tools to improve running and managing Ray's experience on Kubernetes.
 
 - Ray Operator
 - Backend services to create/delete cluster resources (incubating)
