@@ -22,6 +22,7 @@ spec:
       labels:
         control-plane: ray-operator
     spec:
+      serviceAccountName: ray-operator-service-account
       securityContext:
         runAsNonRoot: true
       containers:
