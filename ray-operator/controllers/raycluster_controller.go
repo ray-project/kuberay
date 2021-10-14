@@ -80,6 +80,11 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
