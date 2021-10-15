@@ -80,7 +80,7 @@ var _ = BeforeSuite(func(done Done) {
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
 
-	err = NewReconciler(mgr).SetupWithManager(mgr)
+	err = NewReconciler(mgr).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup controller")
 
 	go func() {
