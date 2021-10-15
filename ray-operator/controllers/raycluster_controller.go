@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	controller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -376,7 +377,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 }
 
 // SetupWithManager builds the reconciler.
-func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
@@ -387,6 +388,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},
 		}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: reconcileConcurrency}).
 		Complete(r)
 }
 
