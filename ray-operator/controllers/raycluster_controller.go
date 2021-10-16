@@ -105,11 +105,20 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		return err
 	}
 
-	if headServices.Items != nil && len(headServices.Items) == 1 {
-		r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
-		// TODO: compare diff and reconcile the object
-		// For example. ServiceType might be changed or port might be modified
-		return nil
+	if headServices.Items != nil {
+		if len(headServices.Items) == 1 {
+			r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
+			// TODO: compare diff and reconcile the object
+			// For example. ServiceType might be changed or port might be modified
+			return nil
+		}
+
+		// This should never happen.
+		// We add the protection here just in case controller has race issue or user manually create service with same label.
+		if len(headServices.Items) > 1 {
+			r.Log.Info("reconcileServices ", "Duplicates head service found", len(headServices.Items))
+			return nil
+		}
 	}
 
 	// Create head service if there's no existing one in the cluster.
