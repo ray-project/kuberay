@@ -72,7 +72,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		Spec:       podTemplateSpec.Spec,
 	}
 	index := getRayContainerIndex(pod)
-	cont := concatenateContainerCommand(rayNodeType, rayStartParams)
 
 	addEmptyDir(&pod.Spec.Containers[index], &pod)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
@@ -80,25 +79,10 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
 	}
 
-	// saving temporarily the old command and args
-	var cmd, args string
-	if len(pod.Spec.Containers[index].Command) > 0 {
-		cmd = convertCmdToString(pod.Spec.Containers[index].Command)
-	}
-	if len(pod.Spec.Containers[index].Args) > 0 {
-		cmd += convertCmdToString(pod.Spec.Containers[index].Args)
-	}
-	if !strings.Contains(cmd, "ray start") {
-		// replacing the old command
+	if len(pod.Spec.Containers[index].Command) <= 0 && len(pod.Spec.Containers[index].Args) <= 0 {
+		// if command and args are empty, set the default value
 		pod.Spec.Containers[index].Command = []string{"/bin/bash", "-c", "--"}
-		if cmd != "" {
-			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
-			args = fmt.Sprintf("%s && %s && %s", cont, cmd, "sleep infinity")
-		} else {
-			args = fmt.Sprintf("%s && %s", cont, "sleep infinity")
-		}
-
-		pod.Spec.Containers[index].Args = []string{args}
+		pod.Spec.Containers[index].Args = []string{concatenateContainerCommand(rayNodeType, rayStartParams)}
 	}
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
@@ -252,9 +236,9 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start --block --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start --block %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}

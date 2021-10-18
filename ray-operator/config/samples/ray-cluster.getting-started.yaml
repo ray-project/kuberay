@@ -43,11 +43,6 @@ spec:
         containers:
         - name: ray-head
           image: rayproject/autoscaler
-          # you can have any command and args here to run your code. 
-          # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: ["python"]
-          args:
-          - '/opt/code.py'
           env:
           - name: MY_POD_IP
             valueFrom:

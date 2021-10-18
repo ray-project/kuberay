@@ -47,11 +47,6 @@ spec:
           image: rayproject/ray:1.6.0
           #image: rayproject/ray:nightly
           #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
-          # you can have any command and args here to run your code. 
-          # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: ["sleep"]
-          args:
-          - '10000'
           env:
           - name: MY_POD_IP
             valueFrom:
