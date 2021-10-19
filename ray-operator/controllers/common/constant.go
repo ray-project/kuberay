@@ -8,9 +8,6 @@ const (
 	RayNodeLabelKey      = "ray.io/is-ray-node"
 	RayIDLabelKey        = "ray.io/identifier"
 
-	// rayOperator is the value of ray-operator used as identifier for the pod
-	rayOperator = "ray-operator"
-
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 
