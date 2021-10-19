@@ -94,7 +94,9 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// update the status if needed
-	r.updateStatus(instance)
+	if err := r.updateStatus(instance); err != nil {
+		log.Error(err, "Update status error", "cluster name", request.Name)
+	}
 	return ctrl.Result{}, nil
 }
 

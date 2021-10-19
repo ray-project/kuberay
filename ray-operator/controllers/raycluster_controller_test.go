@@ -160,7 +160,8 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a head pod resource", func() {
 			var headPods corev1.PodList
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
-			k8sClient.List(ctx, &headPods, filterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
+			err := k8sClient.List(ctx, &headPods, filterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
+			Expect(err).NotTo(HaveOccurred(), "failed list head pods")
 			Expect(len(headPods.Items)).Should(BeNumerically("==", 1), "My head pod list= %v", headPods.Items)
 
 			pod := &corev1.Pod{}
