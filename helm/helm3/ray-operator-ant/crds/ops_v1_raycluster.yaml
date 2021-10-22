@@ -1,0 +1,113 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rayclusters.ops.ray.alipay.com
+spec:
+  group: ops.ray.alipay.com
+  names:
+    kind: RayCluster
+    plural: rayclusters
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              clusterName:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                type: string
+              extensions:
+                properties:
+                  affinity:
+                    type: object
+                  annotations:
+                    description: Annotations for pod
+                    type: object
+                  containerEnv:
+                    description: List of environment variables to set in the container.
+                    items:
+                      type: object
+                    type: array
+                  headResources:
+                    description: the resource requirements for the head.
+                    type: object
+                  headServiceSuffix:
+                    description: Head service suffix.
+                    type: string
+                  labels:
+                    description: raycluster.component and rayclusters.ops.ray.alipay.com/component-name
+                      are default labels, do not overwrite them.
+                    type: object
+                  nodeSelector:
+                    description: NodeSelector specifies a map of key-value pairs. For
+                      the pod to be eligible to run on a node, the node must have each
+                      of the indicated key-value pairs as labels.
+                    type: object
+                  tolerations:
+                    description: Tolerations specifies the pod's tolerations.
+                    items:
+                      type: object
+                    type: array
+                  volumeMounts:
+                    items:
+                      type: object
+                    type: array
+                  volumes:
+                    items:
+                      type: object
+                    type: array
+                  workerResources:
+                    description: the resource requirements for the worker.
+                    type: object
+                type: object
+              imagePullPolicy:
+                type: string
+              images:
+                properties:
+                  defaultImage:
+                    type: string
+                  flumeImage:
+                    type: string
+                type: object
+              initArgs:
+                type: object
+              workerSize:
+                format: int32
+                type: integer
+            required:
+            - clusterName
+            - images
+            - workerSize
+            type: object
+          status:
+            properties:
+              head:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: string
+              workers:
+                items:
+                  type: string
+                type: array
+            required:
+            - head
+            type: object
