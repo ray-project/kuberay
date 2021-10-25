@@ -109,18 +109,14 @@ $curl -X POST http://ray-cluster-ant-head-svc.ray-operator.svc.cluster.local:300
 
 ## Forward to dashboard
 
-pod启动完成后，登录dashboard
-
 ```console
-$ kubectl get pod -o wide -n ray-operator
-NAME                                READY   STATUS    RESTARTS   AGE   IP          NODE             NOMINATED NODE   READINESS GATES
-ray-operator-ant-79ffc66696-ck4t9   1/1     Running   0          31m   10.1.1.79   docker-desktop   <none>           <none>
-sample-ray-headgroup-head-0         1/1     Running   0          27m   10.1.1.81   docker-desktop   <none>           <none>
-sample-ray-workergroup-worker-0     1/1     Running   1          27m   10.1.1.80   docker-desktop   <none>           <none>
+$ kubectl get pod -o wide
+NAME                                       READY   STATUS    RESTARTS   AGE    IP            NODE             NOMINATED NODE   READINESS GATES
+ray-cluster-ant-head-sd77l                 1/1     Running   0          8h     10.1.61.208   docker-desktop   <none>           <none>
+ray-cluster-ant-worker-workergroup-czxd6   1/1     Running   0          8h     10.1.61.207   docker-desktop   <none>           <none>
+ray-operator-ant-687785b964-jgfhv          1/1     Running   6          3d4h   10.1.61.196   docker-desktop   <none>           <none>
 
-$ kubectl port-forward pod/sample-ray-headgroup-head-0 8090 -n ray-operator
-Forwarding from 127.0.0.1:8090 -> 8090
-Forwarding from [::1]:8090 -> 8090
+$ kubectl port-forward ray-cluster-ant-head-sd77l 8265
+Forwarding from 127.0.0.1:8265 -> 8265
+Forwarding from [::1]:8265 -> 8265
 ```
-
-接着在浏览器中输入127.0.0.1:8090就可以登录dashboard了
