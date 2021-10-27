@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/ray-project/kuberay/workflows/Go-build-and-test/badge.svg)](https://github.com/ray-project/kuberay/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ray-project/kuberay)](https://goreportcard.com/report/github.com/ray-project/kuberay)
 
-KubRay is an open source toolkit to run Ray applications on Kubernetes.
+KubeRay is an open source toolkit to run Ray applications on Kubernetes.
 
 KubeRay provides several tools to improve running and managing Ray's experience on Kubernetes.
 
