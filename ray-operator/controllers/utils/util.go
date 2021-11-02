@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
