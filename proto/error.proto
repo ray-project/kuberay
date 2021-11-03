@@ -5,11 +5,6 @@ package proto;
 
 import "google/protobuf/any.proto";
 
-message Error {
-  string error_message = 1;
-  string error_details = 2;
-}
-
 message Status {
   string error = 1;
   int32 code = 2;

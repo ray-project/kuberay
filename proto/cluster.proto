@@ -27,52 +27,48 @@ message Cluster {
     PRODUCTION = 3;
   }
   Environment environment = 5;
-
-  // Required field. This field will be used to retrieve right ray container
-  string image = 6;
   
   // Required field. This field indicates ray cluster configuration
-  ClusterSpec cluster_spec = 7;
+  ClusterSpec cluster_spec = 6;
 
   // Output. The time that the Cluster created.
-  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp created_at = 7;
 
   // Output. The time that the Cluster deleted.
-  google.protobuf.Timestamp deleted_at = 9;
+  google.protobuf.Timestamp deleted_at = 8;
 }
 
 message ClusterSpec {
-  // The name of the cluster spec
-  string name = 1;
   // The head group configuration
-  HeadGroupSpec head_group_spec = 2;
+  HeadGroupSpec head_group_spec = 1;
   // The worker group configurations
-  repeated WorkerGroupSpec worker_group_sepc = 3;
+  repeated WorkerGroupSpec worker_group_sepc = 2;
 }
 
 message HeadGroupSpec {
   // Optional. The computeTemplate of head node group
-  ComputeTemplate resource = 1;
-  // Optional. The ray start parames of head node group
-  map<string, string> ray_start_params = 2;
+  string compute_template = 1;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 2;
   // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
   string service_type = 3;
-  // Output: internal/external service endpoint
-  string service_address = 4;
+  // Optional. The ray start parames of head node group
+  map<string, string> ray_start_params = 4;
 }
 
 message WorkerGroupSpec {
   // Required. Group name of the current worker group
   string group_name = 1;
-  // Required. Desired replicas of the worker group 
-  int32 replicas = 2;
-  // Optional. Min replicas of the worker group 
-  int32 min_replicas = 3;
-  // Optional. Max replicas of the worker group 
-  int32 max_replicas = 4;
   // Optional. The computeTemplate of head node group
-  ComputeTemplate resource = 5;
+  string compute_template = 2;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 3;
+  // Required. Desired replicas of the worker group 
+  int32 replicas = 4;
+  // Optional. Min replicas of the worker group 
+  int32 min_replicas = 5;
+  // Optional. Max replicas of the worker group 
+  int32 max_replicas = 6;
   // Optional. The ray start parames of worker node group
-  map<string, string> ray_start_params = 6;
+  map<string, string> ray_start_params = 7;
 }
-
