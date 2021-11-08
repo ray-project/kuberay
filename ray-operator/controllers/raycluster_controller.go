@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	_ "github.com/ray-project/kuberay/ray-operator/controllers/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	controller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -80,6 +81,11 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -88,7 +94,9 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// update the status if needed
-	r.updateStatus(instance)
+	if err := r.updateStatus(instance); err != nil {
+		log.Error(err, "Update status error", "cluster name", request.Name)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -99,11 +107,20 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		return err
 	}
 
-	if headServices.Items != nil && len(headServices.Items) == 1 {
-		r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
-		// TODO: compare diff and reconcile the object
-		// For example. ServiceType might be changed or port might be modified
-		return nil
+	if headServices.Items != nil {
+		if len(headServices.Items) == 1 {
+			r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
+			// TODO: compare diff and reconcile the object
+			// For example. ServiceType might be changed or port might be modified
+			return nil
+		}
+
+		// This should never happen.
+		// We add the protection here just in case controller has race issue or user manually create service with same label.
+		if len(headServices.Items) > 1 {
+			r.Log.Info("reconcileServices ", "Duplicates head service found", len(headServices.Items))
+			return nil
+		}
 	}
 
 	// Create head service if there's no existing one in the cluster.
@@ -371,7 +388,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 }
 
 // SetupWithManager builds the reconciler.
-func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
@@ -382,6 +399,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},
 		}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: reconcileConcurrency}).
 		Complete(r)
 }
 

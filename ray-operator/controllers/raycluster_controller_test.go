@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"time"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
@@ -32,9 +32,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
+)
+
+const (
+	DefaultAttempts               = 4
+	DefaultSleepDurationInSeconds = 2
 )
 
 var _ = Context("Inside the default namespace", func() {
@@ -154,7 +160,8 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a head pod resource", func() {
 			var headPods corev1.PodList
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
-			k8sClient.List(ctx, &headPods, filterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
+			err := k8sClient.List(ctx, &headPods, filterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
+			Expect(err).NotTo(HaveOccurred(), "failed list head pods")
 			Expect(len(headPods.Items)).Should(BeNumerically("==", 1), "My head pod list= %v", headPods.Items)
 
 			pod := &corev1.Pod{}
@@ -193,7 +200,13 @@ var _ = Context("Inside the default namespace", func() {
 			*rep = 2
 			myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
 
-			Expect(k8sClient.Update(ctx, myRayCluster)).Should(Succeed(), "failed to update test RayCluster resource")
+			// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
+			// We need to handle conflict error and retry the update.
+			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
+				return k8sClient.Update(ctx, myRayCluster)
+			})
+
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
 
 		It("should have only 2 running worker", func() {
@@ -248,4 +261,24 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		return count, nil
 	}
+}
+
+func retryOnOldRevision(attempts int, sleep time.Duration, f func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			fmt.Printf("retrying after error: %v", err)
+			time.Sleep(sleep)
+			sleep *= 2
+		}
+		err = f()
+		if err == nil {
+			return nil
+		}
+
+		if !errors.IsConflict(err) {
+			return nil
+		}
+	}
+	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
 }

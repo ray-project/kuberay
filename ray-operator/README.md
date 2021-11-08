@@ -7,7 +7,7 @@ The Ray Operator is a Kubernetes operator to automate provisioning, management, 
 
 Some of the main features of the operator are:
 - Management of first-class RayClusters via a [custom resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-resources).
-- Support for hetergenous worker types in a single Ray cluster.
+- Support for heterogenous worker types in a single Ray cluster.
 - Built-in monitoring via Prometheus.
 - Use of `PodTemplate` to create Ray pods
 - Updated status based on the running pods

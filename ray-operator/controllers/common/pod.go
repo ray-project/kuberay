@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -186,7 +186,7 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 	if !envVarExists("RAY_IP", container.Env) {
 		ip := v1.EnvVar{Name: "RAY_IP"}
-		ip.Value = fmt.Sprintf("%s", svcName)
+		ip.Value = svcName
 		container.Env = append(container.Env, ip)
 	}
 }
@@ -205,7 +205,7 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 			ip.Value = "127.0.0.1"
 		} else {
 			// if worker, use the service name of the head
-			ip.Value = fmt.Sprintf("%s", svcName)
+			ip.Value = svcName
 		}
 		container.Env = append(container.Env, ip)
 	}
@@ -231,7 +231,7 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
-	if envVars == nil || len(envVars) == 0 {
+	if len(envVars) == 0 {
 		return false
 	}
 
@@ -247,7 +247,7 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, svcName string) (completeStartParams map[string]string) {
 	if nodeType == rayiov1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
-			address := fmt.Sprintf("%s", svcName)
+			address := svcName
 			if _, okPort := rayStartParams["port"]; !okPort {
 				address = fmt.Sprintf("%s:%s", address, "6379")
 			} else {
@@ -350,7 +350,7 @@ func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 }
 
 func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
-	mem := &resource.Quantity{}
+	var mem *resource.Quantity
 	//check the requests, if they are not set, check the limits.
 	if q, ok := container.Resources.Requests[v1.ResourceMemory]; ok {
 		mem = &q
