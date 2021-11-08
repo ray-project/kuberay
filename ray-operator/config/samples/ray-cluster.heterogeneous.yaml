@@ -160,6 +160,7 @@ spec:
     rayStartParams:
       redis-password: 'LetMeInRay'
       node-ip-address: $MY_POD_IP
+      block: "true"
     #pod template
     template:
       metadata:

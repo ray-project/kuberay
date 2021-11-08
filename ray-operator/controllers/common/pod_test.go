@@ -71,6 +71,7 @@ var instance = &rayiov1alpha1.RayCluster{
 					"port":           "6379",
 					"redis-password": "LetMeInRay",
 					"num-cpus":       "1",
+					"block":          "true",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -139,7 +140,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block  --num-cpus=1  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args)
 	}
