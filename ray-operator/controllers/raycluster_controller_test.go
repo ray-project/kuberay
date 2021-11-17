@@ -213,7 +213,7 @@ var _ = Context("Inside the default namespace", func() {
 			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
+				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("should update a raycluster object", func() {

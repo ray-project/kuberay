@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"net"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
+	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
+
+	"google.golang.org/grpc"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -27,6 +32,15 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayiov1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+}
+
+type server struct {
+	rpc.UnimplementedNodeProviderServer
+}
+
+func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
+	setupLog.Info("received", in.GetClusterName())
+	return &rpc.NonTerminatedNodesResponse{}, nil
 }
 
 func main() {
@@ -81,5 +95,13 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+
+	setupLog.Info("starting rpc server")
+	lis, err := net.Listen("tcp", "localhost:5000")
+	s := grpc.NewServer()
+	rpc.RegisterNodeProviderServer(s, &server{})
+	if err := s.Serve(lis); err != nil {
+		setupLog.Error(err, "failed to serve")
 	}
 }

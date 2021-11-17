@@ -9,7 +9,7 @@ spec:
   - name: ray-head
     image: rayproject/autoscaler
     command: ["/bin/bash", "-c", "--"]
-    args: ["ray start --head --block --port=6379 --redis-password=LetMeInRay --node-ip-address=$MY_POD_IP; python /opt/code.py"]
+    args: ["ray start --head --no-monitor --block --port=6379 --redis-password=LetMeInRay --node-ip-address=$MY_POD_IP; python /opt/code.py"]
     lifecycle:
       postStart:
         exec:

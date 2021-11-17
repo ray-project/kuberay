@@ -252,7 +252,9 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		// ray start --head --no-monitor  --port=6379  --redis-password=5241590000000000  --dashboard-host=0.0.0.0  --node-ip-address=$MY_POD_IP  --node-manager-port=12346  --num-cpus=1  --object-manager-port=12345  --object-store-memory=100000000
+		// return fmt.Sprintf("ulimit -n 65536; ray start --head --no-monitor --block %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; sleep 10000")
 	case rayiov1alpha1.WorkerNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:

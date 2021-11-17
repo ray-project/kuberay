@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoscaler-config
+data: 
+  ray_bootstrap_config.yaml: |
+    cluster_name: test-cluster
+    max_workers: 10
+    provider:
+      type: kuberay
+    head_node_type: ray.head.default
+    available_node_types:
+      ray.head.default:
+        resources: {"CPU": 1}
+    file_mounts: {}
+    cluster_synced_files: []
+    file_mounts_sync_continuously: False
+    initialization_commands: []
+    setup_commands: []
+    head_setup_commands: []
+    worker_setup_commands: []
+    head_start_ray_commands: []
+    worker_start_ray_commands: []
+    head_node: {}
+    worker_nodes: {}
