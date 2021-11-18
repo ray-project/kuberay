@@ -12,6 +12,7 @@ import (
 	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection" // For debugging
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,8 +40,22 @@ type server struct {
 }
 
 func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
-	setupLog.Info("received", in.GetClusterName())
+	setupLog.Info("the rpc server", "received:", in.GetClusterName())
 	return &rpc.NonTerminatedNodesResponse{}, nil
+}
+
+func startRpcServer() {
+	setupLog.Info("starting rpc server")
+	lis, err := net.Listen("tcp", ":5000")
+	if err != nil {
+		setupLog.Error(err, "failed to listen")
+	}
+	s := grpc.NewServer()
+	rpc.RegisterNodeProviderServer(s, &server{})
+	reflection.Register(s)
+	if err := s.Serve(lis); err != nil {
+		setupLog.Error(err, "failed to serve")
+	}
 }
 
 func main() {
@@ -91,17 +106,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	go startRpcServer()
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
-	}
-
-	setupLog.Info("starting rpc server")
-	lis, err := net.Listen("tcp", "localhost:5000")
-	s := grpc.NewServer()
-	rpc.RegisterNodeProviderServer(s, &server{})
-	if err := s.Serve(lis); err != nil {
-		setupLog.Error(err, "failed to serve")
 	}
 }
