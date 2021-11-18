@@ -8,10 +8,13 @@ data:
     max_workers: 10
     provider:
       type: kuberay
+      disable_node_updaters: True
+      server_address: localhost:5000
     head_node_type: ray.head.default
     available_node_types:
       ray.head.default:
         resources: {"CPU": 1}
+        node_config: {}
     file_mounts: {}
     cluster_synced_files: []
     file_mounts_sync_continuously: False
