@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-heterogeneous
 spec:
-  rayVersion: '1.0.1'
+  rayVersion: '1.8.0'
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -40,15 +40,14 @@ spec:
         annotations:
           key: value
       spec:
-#        initContainers: # to avoid worker crashing before head service is created
         containers:
         - name: ray-head
-          image: rayproject/autoscaler
+          image: rayproject/ray:1.8.0
           # you can have any command and args here to run your code. 
           # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
           command: ["sleep"]
           args:
-          - 'infinity'
+          - "infinity"
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -72,8 +71,8 @@ spec:
             name: ray-code
             # An array of keys from the ConfigMap to create as files
             items:
-            - key: code.py
-              path: code.py
+            - key: sample_code.py
+              path: sample_code.py
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 3
@@ -107,10 +106,11 @@ spec:
         # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
         - name: init-myservice
           image: busybox:1.28
+          # Change the cluster postfix if you don't have a default setting
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]   
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/autoscaler
+          image: rayproject/ray:1.8.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           env:
@@ -178,10 +178,11 @@ spec:
         initContainers:
         - name: init-myservice
           image: busybox:1.28
+          # Change the cluster postfix if you don't have a default setting
           command: ['sh', '-c', "until nslookup raycluster-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/autoscaler
+          image: rayproject/ray:1.8.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           env:

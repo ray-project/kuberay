@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '0.8.6' # should match the Ray version in the image of the containers
+  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -44,14 +44,14 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.6.0
+          image: rayproject/ray:1.8.0
           #image: rayproject/ray:nightly
           #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
           # you can have any command and args here to run your code. 
           # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
           command: ["sleep"]
           args:
-          - '10000'
+          - "infinity"
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -64,6 +64,3 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-
-
-
