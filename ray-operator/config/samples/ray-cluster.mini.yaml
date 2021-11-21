@@ -64,15 +64,3 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-          volumeMounts:
-          - mountPath: /opt
-            name: config
-        volumes:
-        - name: config
-          configMap:
-            # Provide the name of the ConfigMap you want to mount.
-            name: ray-code
-            # An array of keys from the ConfigMap to create as files
-            items:
-            - key: sample_code.py
-              path: sample_code.py
