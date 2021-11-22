@@ -19,7 +19,8 @@ type RayClusterSpec struct {
 	// RayVersion is the version of ray being used. this affects the command used to start ray
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
-	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	EnableInTreeAutoscaling *bool    `json:"enableInTreeAutoscaling,omitempty"`
+	DesiredWorkers          []string `json:"desiredWorkers,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -76,7 +77,8 @@ type RayClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
-	State ClusterState `json:"state,omitempty"`
+	State          ClusterState `json:"state,omitempty"`
+	CurrentWorkers []string     `json:"currentWorkers,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
 	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
 	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.

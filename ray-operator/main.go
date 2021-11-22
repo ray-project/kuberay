@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"net"
 	"os"
@@ -11,8 +12,13 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers"
 	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
 
+	"github.com/google/uuid"
+	clientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection" // For debugging
+	types "k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -36,7 +42,14 @@ func init() {
 }
 
 type server struct {
-	rpc.UnimplementedNodeProviderServer
+	rpc.UnimplementedKuberayNodeProviderServer
+	ClientSet *clientset.Clientset
+}
+
+type patchArrayOfStrings struct {
+	Op    string   `json:"op"`
+	Path  string   `json:"path"`
+	Value []string `json:"value"`
 }
 
 func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
@@ -44,14 +57,39 @@ func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNo
 	return &rpc.NonTerminatedNodesResponse{}, nil
 }
 
-func startRpcServer() {
+func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rpc.CreateNodeResponse, error) {
+	// TODO: Support creation of multiple nodes
+	setupLog.Info("the rpc server", "received count:", in.GetCount())
+	setupLog.Info("the rpc server", "received tags:", in.GetTags())
+	id := uuid.New()
+	// Patch the RayCluster
+	payload := []patchArrayOfStrings{{
+		Op:    "add",
+		Path:  "/spec/desiredWorkers",
+		Value: []string{id.String()},
+	}}
+	// TODO: error handling
+	payloadBytes, _ := json.Marshal(payload)
+	// TODO: Make the patching work
+	result, err := s.ClientSet.RayV1alpha1().RayClusters("default").Patch(ctx, "test", types.JSONPatchType, payloadBytes)
+	return &rpc.CreateNodeResponse{
+		NodeToMeta: map[string]*rpc.NodeMeta{
+			id.String(): &rpc.NodeMeta{},
+		},
+	}, nil
+}
+
+func startRpcServer(config *rest.Config) {
 	setupLog.Info("starting rpc server")
 	lis, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		setupLog.Error(err, "failed to listen")
 	}
+	server := &server{
+		ClientSet: rayv1alpha1.NewForConfigOrDie(config),
+	}
 	s := grpc.NewServer()
-	rpc.RegisterNodeProviderServer(s, &server{})
+	rpc.RegisterKuberayNodeProviderServer(s, server)
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
 		setupLog.Error(err, "failed to serve")
@@ -78,7 +116,9 @@ func main() {
 
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	config := ctrl.GetConfigOrDie()
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
@@ -106,7 +146,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go startRpcServer()
+	go startRpcServer(config)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

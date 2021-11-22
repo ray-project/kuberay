@@ -5,11 +5,13 @@ metadata:
 data: 
   ray_bootstrap_config.yaml: |
     cluster_name: test-cluster
-    max_workers: 10
+    min_workers: 5
+    max_workers: 5
+    idle_timeout_minutes: 15
     provider:
       type: kuberay
       disable_node_updaters: True
-      server_address: localhost:5000
+      server_address: 172.17.0.2:5000
     head_node_type: ray.head.default
     available_node_types:
       ray.head.default:
@@ -24,5 +26,6 @@ data:
     worker_setup_commands: []
     head_start_ray_commands: []
     worker_start_ray_commands: []
+    auth: {}
     head_node: {}
     worker_nodes: {}
