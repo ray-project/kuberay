@@ -18,6 +18,23 @@ Due to above reason, it's worth to build generic abstraction on top of RayCluste
 
 ## Proposal
 
+### Deployment topology and interactive flow
+
+The new gRPC service would be a individual deployment of the KubeRay control plane and user can choose to install it optinally. It will create a service and exposes endpoint to users.
+
+```
+NAME                                                      READY   STATUS    RESTARTS      AGE
+kuberay-grpc-service-c8db9dc65-d4w5r                      1/1     Running   0             2d15h
+kuberay-operator-785476b948-fmlm7                         1/1     Running   0             3d
+```
+
+In issue [#29](https://github.com/ray-project/kuberay/issues/29), `RayCluster` CRD clientset has been generated and gRPC service can leverage it to operate Custom Resources.
+
+A simple flow would be like this. (Thanks [@akanso](https://github.com/akanso) for providing the flow)
+```
+client --> GRPC Server --> [created Custom Resources] <-- Ray Operator (reads CR and accordingly performs CRUD)
+```
+
 ### API abstraction
 
 Protocol Buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. Protoc also provides different community plugins to meet different needs.
@@ -157,6 +174,6 @@ The service will implement gPRC server as following graph shows.
 
 ## Implementation History
 
-- 2021-11-0x: inital proposal accepted.
+- 2021-11-25: inital proposal accepted.
 
 > Note: we should update doc when there's a large update.
