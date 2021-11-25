@@ -20,7 +20,7 @@ Due to above reason, it's worth to build generic abstraction on top of RayCluste
 
 ### Deployment topology and interactive flow
 
-The new gRPC service would be a individual deployment of the KubeRay control plane and user can choose to install it optinally. It will create a service and exposes endpoint to users.
+The new gRPC service would be a individual deployment of the KubeRay control plane and user can choose to install it optionally. It will create a service and exposes endpoint to users.
 
 ```
 NAME                                                      READY   STATUS    RESTARTS      AGE
