@@ -43,6 +43,7 @@ spec:
       spec:
         containers:
         - name: ray-head
+          image: rayproject/ray:1.8.0
           env:
           - name: CPU_REQUEST
             valueFrom:
@@ -114,6 +115,7 @@ spec:
     rayStartParams:
       redis-password: 'LetMeInRay'
       node-ip-address: $MY_POD_IP
+      block: 'true'
     #pod template
     template:
       metadata:
