@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '0.8.6' # should match the Ray version in the image of the containers
+  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -29,6 +29,7 @@ spec:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+      block: 'true'
     #pod template
     template:
       metadata:
@@ -44,7 +45,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.6.0
+          image: rayproject/ray:1.8.0
           #image: rayproject/ray:nightly
           #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
           env:
@@ -59,6 +60,3 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-
-
-

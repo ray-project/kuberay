@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-getting-started
 spec:
-  rayVersion: '0.8.6' # should match the Ray version in the image of the containers
+  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -27,6 +27,7 @@ spec:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+      block: 'true'
     #pod template
     template:
       metadata:
@@ -42,7 +43,6 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/autoscaler
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -61,8 +61,8 @@ spec:
             name: ray-code-single
             # An array of keys from the ConfigMap to create as files
             items:
-            - key: code.py
-              path: code.py
+            - key: sample_code.py
+              path: sample_code.py
 ######################Ray code sample#################################
 # this is only an example code that is mounted into the container and executed to show the Ray cluster at work
 ---
@@ -71,9 +71,8 @@ kind: ConfigMap
 metadata:
   name: ray-code-single
 data: 
-  code.py: |
+  sample_code.py: |
     import ray
-    from ray import services
     from os import environ
     redis_pass = environ.get("REDIS_PASSWORD") 
     print("trying to connect to Ray!")
@@ -84,11 +83,11 @@ data:
     @ray.remote
     def f():
       time.sleep(0.01)
-      return ray.services.get_node_ip_address()
+      return ray._private.services.get_node_ip_address()
     values=set(ray.get([f.remote() for _ in range(1000)]))
     print("Ray Nodes: ",str(values))
-    f = open("/var/ray_nodes.txt","a")
-    f.write("available nodes: %s\n" % str(values))
-    f.close()
+    file = open("/tmp/ray_nodes.txt","a")
+    file.write("available nodes: %s\n" % str(values))
+    file.close()
     end = time.time()
     print("Execution time = ",end - start)
