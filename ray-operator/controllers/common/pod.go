@@ -10,7 +10,9 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1 "k8s.io/api/core/v1"
@@ -43,14 +45,10 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	return podTemplate
 }
 
-// DefaultWorkerPodTemplate sets the config values and allows to specify the full pod name
-func DefaultWorkerPodTemplateEx(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string, generateName bool) v1.PodTemplateSpec {
+// DefaultWorkerPodTemplate sets the config values
+func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
-	if generateName {
-		podTemplate.GenerateName = podName
-	} else {
-		podTemplate.Name = podName
-	}
+	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
 		podTemplate.ObjectMeta.Namespace = instance.Namespace
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
@@ -63,11 +61,6 @@ func DefaultWorkerPodTemplateEx(instance rayiov1alpha1.RayCluster, workerSpec ra
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 
 	return podTemplate
-}
-
-// DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
-	return DefaultWorkerPodTemplateEx(instance, workerSpec, podName, svcName, true)
 }
 
 // BuildPod a pod config
@@ -114,6 +107,21 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 
 	setContainerEnvVars(&pod.Spec.Containers[index], rayNodeType, rayStartParams, svcName)
+
+	return pod
+}
+
+// Build worker instance pods.
+func BuildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, scheme *runtime.Scheme) v1.Pod {
+	podName := strings.ToLower(instance.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol)
+	podName = utils.CheckName(podName) // making sure the name is valid
+	svcName := utils.GenerateServiceName(instance.Name)
+	podTemplateSpec := DefaultWorkerPodTemplate(instance, worker, podName, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	// Set raycluster instance as the owner and controller
+	if err := controllerutil.SetControllerReference(&instance, &pod, scheme); err != nil {
+		log.Error(err, "Failed to set controller reference for raycluster pod")
+	}
 
 	return pod
 }

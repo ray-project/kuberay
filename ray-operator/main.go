@@ -5,15 +5,12 @@ import (
 	"flag"
 	"net"
 	"os"
-	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
-	utils "github.com/ray-project/kuberay/ray-operator/controllers/utils"
 	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
 
-	"github.com/google/uuid"
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	clientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	"google.golang.org/grpc"
@@ -22,7 +19,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -116,15 +112,7 @@ func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rp
 	}
 	// TODO: Support multiple WorkerGroupSpecs
 	worker := instance.Spec.WorkerGroupSpecs[0]
-	podName := strings.ToLower(instance.Name+common.DashSymbol+string(rayiov1alpha1.WorkerNode)+common.DashSymbol+worker.GroupName+common.DashSymbol) + uuid.New().String()
-	podName = utils.CheckName(podName) // making sure the name is valid
-	svcName := utils.GenerateServiceName(instance.Name)
-	podTemplateSpec := common.DefaultWorkerPodTemplateEx(*instance, worker, podName, svcName, false)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
-	// Set raycluster instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, &pod, s.Scheme); err != nil {
-		setupLog.Error(err, "Failed to set controller reference for raycluster pod")
-	}
+	pod := common.BuildWorkerPod(*instance, worker, s.Scheme)
 
 	err = s.Client.Create(ctx, &pod)
 	if err != nil {
@@ -134,7 +122,7 @@ func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rp
 	return &rpc.CreateNodeResponse{
 		NodeToMeta: map[string]*rpc.NodeMeta{
 			// TODO: Add labels
-			podName: &rpc.NodeMeta{},
+			pod.Name: &rpc.NodeMeta{},
 		},
 	}, nil
 }
