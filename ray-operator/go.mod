@@ -20,3 +20,5 @@ require (
 )
 
 replace github.com/ray-project/kuberay/ray-operator/rpc => ./rpc
+
+replace github.com/ray-project/kuberay/ray-operator/pkg => ./pkg

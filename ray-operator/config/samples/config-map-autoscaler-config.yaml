@@ -11,12 +11,18 @@ data:
     provider:
       type: kuberay
       disable_node_updaters: True
+      disable_launch_config_check: True
       server_address: 172.17.0.2:5000
     head_node_type: ray.head.default
     available_node_types:
       ray.head.default:
         resources: {"CPU": 1}
         node_config: {}
+        max_workers: 5
+      ray.worker.default:
+        resources: {"CPU": 1}
+        node_config: {}
+        max_workers: 5
     file_mounts: {}
     cluster_synced_files: []
     file_mounts_sync_continuously: False

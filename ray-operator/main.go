@@ -13,12 +13,15 @@ import (
 	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
 
 	"github.com/google/uuid"
+	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	clientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection" // For debugging
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -44,6 +47,7 @@ func init() {
 type server struct {
 	rpc.UnimplementedKuberayNodeProviderServer
 	ClientSet *clientset.Clientset
+	Client    client.Client
 }
 
 type patchArrayOfStrings struct {
@@ -52,9 +56,46 @@ type patchArrayOfStrings struct {
 	Value []string `json:"value"`
 }
 
+// Translate tags from Kuberay format to Ray autoscaler format
+func translateTags(labels map[string]string) map[string]string {
+	tags := map[string]string{}
+	for k, v := range labels {
+		tags[k] = v
+	}
+	tags["ray-node-status"] = "up-to-date"
+	if tags["ray.io/node-type"] == "head" {
+		tags["ray-node-type"] = "head"
+		tags["ray-user-node-type"] = "ray.head.default"
+	} else {
+		tags["ray-node-type"] = "worker"
+		tags["ray-user-node-type"] = "ray.worker.default"
+	}
+	return tags
+}
+
 func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
-	setupLog.Info("the rpc server", "received:", in.GetClusterName())
-	return &rpc.NonTerminatedNodesResponse{}, nil
+	pods := corev1.PodList{}
+	// TODO: Cluster name and namespace
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
+	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	if err != nil {
+		setupLog.Error(err, "error listing pods")
+	}
+	nodeIds := []string{}
+	nodeIps := []string{}
+	nodeTags := []*rpc.NodeTags{}
+	for index := range pods.Items {
+		nodeIds = append(nodeIds, pods.Items[index].ObjectMeta.Name)
+		nodeIps = append(nodeIps, pods.Items[index].Status.PodIP)
+		tags := translateTags(pods.Items[index].ObjectMeta.Labels)
+		nodeTags = append(nodeTags, &rpc.NodeTags{NodeTags: tags})
+	}
+	result := &rpc.NonTerminatedNodesResponse{
+		NodeIds:      nodeIds,
+		NodeIps:      nodeIps,
+		NodeTagsList: nodeTags,
+	}
+	return result, nil
 }
 
 func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rpc.CreateNodeResponse, error) {
@@ -70,12 +111,76 @@ func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rp
 	}}
 	// TODO: error handling
 	payloadBytes, _ := json.Marshal(payload)
-	// TODO: Make the patching work
-	result, err := s.ClientSet.RayV1alpha1().RayClusters("default").Patch(ctx, "test", types.JSONPatchType, payloadBytes)
+	// TODO: Put the right cluster name here
+	_, err := s.ClientSet.RayV1alpha1().RayClusters("default").Patch(ctx, "raycluster-complete", types.JSONPatchType, payloadBytes, v1.PatchOptions{})
+	if err != nil {
+		setupLog.Error(err, "failed to patch resource")
+	}
+
 	return &rpc.CreateNodeResponse{
 		NodeToMeta: map[string]*rpc.NodeMeta{
+			// TODO: Add labels
 			id.String(): &rpc.NodeMeta{},
 		},
+	}, nil
+}
+
+func (s *server) TerminateNodes(ctx context.Context, in *rpc.TerminateNodesRequest) (*rpc.TerminateNodesResponse, error) {
+	deletedNodesMeta := map[string]*rpc.NodeMeta{}
+	for index := range in.NodeIds {
+		pod := corev1.Pod{}
+		pod.Name = in.NodeIds[index]
+		err := s.Client.Delete(ctx, &pod)
+		if err != nil {
+			setupLog.Error(err, "failed to delete pod")
+		} else {
+			deletedNodesMeta[in.NodeIds[index]] = &rpc.NodeMeta{
+				NodeMeta: map[string]string{"terminated": "ok"},
+			}
+		}
+	}
+	return &rpc.TerminateNodesResponse{
+		NodeToMeta: deletedNodesMeta,
+	}, nil
+}
+
+func (s *server) InternalIp(ctx context.Context, in *rpc.InternalIpRequest) (*rpc.InternalIpResponse, error) {
+	pods := corev1.PodList{}
+	// TODO: Cluster name and namespace
+	// TODO: Only query the node in in.NodeId
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
+	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	if err != nil {
+		setupLog.Error(err, "error listing pods")
+	}
+	nodeIp := "unassigned"
+	for index := range pods.Items {
+		if pods.Items[index].ObjectMeta.Name == in.NodeId {
+			nodeIp = pods.Items[index].Status.PodIP
+		}
+	}
+	return &rpc.InternalIpResponse{
+		NodeIp: nodeIp,
+	}, nil
+}
+
+func (s *server) NodeTags(ctx context.Context, in *rpc.NodeTagsRequest) (*rpc.NodeTagsResponse, error) {
+	pods := corev1.PodList{}
+	// TODO: Cluster name and namespace
+	// TODO: Only query the node in in.NodeId
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
+	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	if err != nil {
+		setupLog.Error(err, "error listing pods")
+	}
+	nodeTags := map[string]string{}
+	for index := range pods.Items {
+		if pods.Items[index].ObjectMeta.Name == in.NodeId {
+			nodeTags = translateTags(pods.Items[index].ObjectMeta.Labels)
+		}
+	}
+	return &rpc.NodeTagsResponse{
+		NodeTags: nodeTags,
 	}, nil
 }
 
@@ -85,8 +190,10 @@ func startRpcServer(config *rest.Config) {
 	if err != nil {
 		setupLog.Error(err, "failed to listen")
 	}
+	client, err := client.New(config, client.Options{})
 	server := &server{
-		ClientSet: rayv1alpha1.NewForConfigOrDie(config),
+		ClientSet: clientset.NewForConfigOrDie(config),
+		Client:    client,
 	}
 	s := grpc.NewServer()
 	rpc.RegisterKuberayNodeProviderServer(s, server)
