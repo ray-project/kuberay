@@ -48,12 +48,6 @@ type server struct {
 	Scheme    *runtime.Scheme
 }
 
-type patchArrayOfStrings struct {
-	Op    string   `json:"op"`
-	Path  string   `json:"path"`
-	Value []string `json:"value"`
-}
-
 // Translate tags from Kuberay format to Ray autoscaler format
 func translateTags(labels map[string]string) map[string]string {
 	tags := map[string]string{}
