@@ -22,6 +22,7 @@ data:
       ray.worker.default:
         resources: {"CPU": 1}
         node_config: {}
+        min_workers: 2
         max_workers: 5
     file_mounts: {}
     cluster_synced_files: []

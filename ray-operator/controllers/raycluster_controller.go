@@ -179,8 +179,11 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 	}
-	// Log target state for pods
-	log.Info("reconcilePods ", "desired workers", instance.Spec.DesiredWorkers)
+
+	log.Info("reconcilePods", "using Ray autoscaler", *instance.Spec.EnableInTreeAutoscaling)
+	if *instance.Spec.EnableInTreeAutoscaling {
+		return nil
+	}
 
 	// Reconcile worker pods now
 	for index, worker := range instance.Spec.WorkerGroupSpecs {

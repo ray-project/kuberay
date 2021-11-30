@@ -53,7 +53,8 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayClusterSpec{
-			RayVersion: "1.0",
+			RayVersion:              "1.0",
+			EnableInTreeAutoscaling: pointer.BoolPtr(false),
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				ServiceType: "ClusterIP",
 				Replicas:    pointer.Int32Ptr(1),

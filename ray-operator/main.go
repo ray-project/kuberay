@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"net"
 	"os"
+	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
+	utils "github.com/ray-project/kuberay/ray-operator/controllers/utils"
 	rpc "github.com/ray-project/kuberay/ray-operator/rpc"
 
 	"github.com/google/uuid"
@@ -19,9 +20,9 @@ import (
 	"google.golang.org/grpc/reflection" // For debugging
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	types "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -48,6 +49,7 @@ type server struct {
 	rpc.UnimplementedKuberayNodeProviderServer
 	ClientSet *clientset.Clientset
 	Client    client.Client
+	Scheme    *runtime.Scheme
 }
 
 type patchArrayOfStrings struct {
@@ -73,11 +75,16 @@ func translateTags(labels map[string]string) map[string]string {
 	return tags
 }
 
-func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
+func listPods(ctx context.Context, s *server, clusterName string, namespace string) (corev1.PodList, error) {
 	pods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: clusterName}
+	err := s.Client.List(ctx, &pods, client.InNamespace(namespace), filterLabels)
+	return pods, err
+}
+
+func (s *server) NonTerminatedNodes(ctx context.Context, in *rpc.NonTerminatedNodesRequest) (*rpc.NonTerminatedNodesResponse, error) {
 	// TODO: Cluster name and namespace
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
-	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	pods, err := listPods(ctx, s, "raycluster-complete", "default")
 	if err != nil {
 		setupLog.Error(err, "error listing pods")
 	}
@@ -102,25 +109,32 @@ func (s *server) CreateNode(ctx context.Context, in *rpc.CreateNodeRequest) (*rp
 	// TODO: Support creation of multiple nodes
 	setupLog.Info("the rpc server", "received count:", in.GetCount())
 	setupLog.Info("the rpc server", "received tags:", in.GetTags())
-	id := uuid.New()
-	// Patch the RayCluster
-	payload := []patchArrayOfStrings{{
-		Op:    "add",
-		Path:  "/spec/desiredWorkers",
-		Value: []string{id.String()},
-	}}
-	// TODO: error handling
-	payloadBytes, _ := json.Marshal(payload)
-	// TODO: Put the right cluster name here
-	_, err := s.ClientSet.RayV1alpha1().RayClusters("default").Patch(ctx, "raycluster-complete", types.JSONPatchType, payloadBytes, v1.PatchOptions{})
+
+	instance, err := s.ClientSet.RayV1alpha1().RayClusters("default").Get(ctx, "raycluster-complete", v1.GetOptions{})
 	if err != nil {
-		setupLog.Error(err, "failed to patch resource")
+		setupLog.Error(err, "error getting cluster resource")
+	}
+	// TODO: Support multiple WorkerGroupSpecs
+	worker := instance.Spec.WorkerGroupSpecs[0]
+	podName := strings.ToLower(instance.Name+common.DashSymbol+string(rayiov1alpha1.WorkerNode)+common.DashSymbol+worker.GroupName+common.DashSymbol) + uuid.New().String()
+	podName = utils.CheckName(podName) // making sure the name is valid
+	svcName := utils.GenerateServiceName(instance.Name)
+	podTemplateSpec := common.DefaultWorkerPodTemplateEx(*instance, worker, podName, svcName, false)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	// Set raycluster instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, &pod, s.Scheme); err != nil {
+		setupLog.Error(err, "Failed to set controller reference for raycluster pod")
+	}
+
+	err = s.Client.Create(ctx, &pod)
+	if err != nil {
+		setupLog.Error(err, "failed to create pod")
 	}
 
 	return &rpc.CreateNodeResponse{
 		NodeToMeta: map[string]*rpc.NodeMeta{
 			// TODO: Add labels
-			id.String(): &rpc.NodeMeta{},
+			podName: &rpc.NodeMeta{},
 		},
 	}, nil
 }
@@ -145,11 +159,9 @@ func (s *server) TerminateNodes(ctx context.Context, in *rpc.TerminateNodesReque
 }
 
 func (s *server) InternalIp(ctx context.Context, in *rpc.InternalIpRequest) (*rpc.InternalIpResponse, error) {
-	pods := corev1.PodList{}
 	// TODO: Cluster name and namespace
 	// TODO: Only query the node in in.NodeId
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
-	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	pods, err := listPods(ctx, s, "raycluster-complete", "default")
 	if err != nil {
 		setupLog.Error(err, "error listing pods")
 	}
@@ -165,11 +177,9 @@ func (s *server) InternalIp(ctx context.Context, in *rpc.InternalIpRequest) (*rp
 }
 
 func (s *server) NodeTags(ctx context.Context, in *rpc.NodeTagsRequest) (*rpc.NodeTagsResponse, error) {
-	pods := corev1.PodList{}
 	// TODO: Cluster name and namespace
 	// TODO: Only query the node in in.NodeId
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: "raycluster-complete"}
-	err := s.Client.List(ctx, &pods, client.InNamespace("default"), filterLabels)
+	pods, err := listPods(ctx, s, "raycluster-complete", "default")
 	if err != nil {
 		setupLog.Error(err, "error listing pods")
 	}
@@ -184,7 +194,7 @@ func (s *server) NodeTags(ctx context.Context, in *rpc.NodeTagsRequest) (*rpc.No
 	}, nil
 }
 
-func startRpcServer(config *rest.Config) {
+func startRpcServer(config *rest.Config, scheme *runtime.Scheme) {
 	setupLog.Info("starting rpc server")
 	lis, err := net.Listen("tcp", ":5000")
 	if err != nil {
@@ -194,6 +204,7 @@ func startRpcServer(config *rest.Config) {
 	server := &server{
 		ClientSet: clientset.NewForConfigOrDie(config),
 		Client:    client,
+		Scheme:    scheme,
 	}
 	s := grpc.NewServer()
 	rpc.RegisterKuberayNodeProviderServer(s, server)
@@ -253,7 +264,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go startRpcServer(config)
+	go startRpcServer(config, scheme)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

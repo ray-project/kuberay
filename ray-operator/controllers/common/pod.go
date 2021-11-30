@@ -43,10 +43,14 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	return podTemplate
 }
 
-// DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
+// DefaultWorkerPodTemplate sets the config values and allows to specify the full pod name
+func DefaultWorkerPodTemplateEx(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string, generateName bool) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
-	podTemplate.GenerateName = podName
+	if generateName {
+		podTemplate.GenerateName = podName
+	} else {
+		podTemplate.Name = podName
+	}
 	if podTemplate.ObjectMeta.Namespace == "" {
 		podTemplate.ObjectMeta.Namespace = instance.Namespace
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
@@ -59,6 +63,11 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 
 	return podTemplate
+}
+
+// DefaultWorkerPodTemplate sets the config values
+func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
+	return DefaultWorkerPodTemplateEx(instance, workerSpec, podName, svcName, true)
 }
 
 // BuildPod a pod config

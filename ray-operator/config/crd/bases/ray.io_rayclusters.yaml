@@ -34,10 +34,6 @@ spec:
           spec:
             description: Specification of the desired behavior of the RayCluster.
             properties:
-              desiredWorkers:
-                items:
-                  type: string
-                type: array
               enableInTreeAutoscaling:
                 description: EnableInTreeAutoscaling indicates whether operator should
                   create in tree autoscaling configs
@@ -10135,10 +10131,6 @@ spec:
                   available in the cluster
                 format: int32
                 type: integer
-              currentWorkers:
-                items:
-                  type: string
-                type: array
               desiredWorkerReplicas:
                 description: DesiredWorkerReplicas indicates overall desired replicas
                   claimed by the user at the cluster level.

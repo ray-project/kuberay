@@ -7,6 +7,7 @@ metadata:
   name: raycluster-complete
 spec:
   rayVersion: '1.0.1'
+  enableInTreeAutoscaling: true
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
