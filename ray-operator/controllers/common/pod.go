@@ -72,7 +72,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		Spec:       podTemplateSpec.Spec,
 	}
 	index := getRayContainerIndex(pod)
-	cont := concatenateContainerCommand(rayNodeType, rayStartParams)
 
 	addEmptyDir(&pod.Spec.Containers[index], &pod)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
@@ -80,7 +79,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
 	}
 
-	// saving temporarily the old command and args
 	var cmd, args string
 	if len(pod.Spec.Containers[index].Command) > 0 {
 		cmd = convertCmdToString(pod.Spec.Containers[index].Command)
@@ -89,17 +87,23 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[index].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams)
 		// replacing the old command
 		pod.Spec.Containers[index].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
-			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
-			args = fmt.Sprintf("%s && %s && %s", cont, cmd, "sleep infinity")
+			args = fmt.Sprintf("%s && %s", cont, cmd)
 		} else {
-			args = fmt.Sprintf("%s && %s", cont, "sleep infinity")
+			args = cont
+		}
+
+		if !isRayStartWithBlock(rayStartParams) {
+			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
+			args = args + " && sleep infinity"
 		}
 
 		pod.Spec.Containers[index].Args = []string{args}
 	}
+
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
@@ -107,6 +111,13 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	setContainerEnvVars(&pod.Spec.Containers[index], rayNodeType, rayStartParams, svcName)
 
 	return pod
+}
+
+func isRayStartWithBlock(rayStartParams map[string]string) bool {
+	if blockValue, exist := rayStartParams["block"]; exist {
+		return strings.ToLower(blockValue) == "true"
+	}
+	return false
 }
 
 func convertCmdToString(cmdArr []string) (cmd string) {
@@ -264,7 +275,11 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
 	for k, v := range rayStartParams {
-		fmt.Fprintf(flags, " --%s=%s ", k, v)
+		if strings.ToLower(v) == "true" {
+			fmt.Fprintf(flags, " --%s ", k)
+		} else {
+			fmt.Fprintf(flags, " --%s=%s ", k, v)
+		}
 	}
 	return flags.String()
 }
