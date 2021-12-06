@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+// ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
+message ComputeTemplate {
+  // The ID of the compute template
+  string name = 1;
+  // Number of cpus
+  uint32 cpu = 2;
+  // Number of memory
+  uint32 memory = 3;
+  // Number of gpus
+  uint32 gpu = 4;
+  // The detail gpu accelerator type
+  string gpu_accelerator = 5;
+}
+
+// ImageTemplate can be used by worker group and workspce.
+// They can be distinguish by different entrypoints
+message ImageTemplate {
+  // The ID of the image template
+  string name = 1;
+  // The base container image to be used for image building
+  string base_image = 2;
+  // The pip packages to install
+  repeated string pip_packages = 3;
+  // The conda packages to install
+  repeated string conda_packages = 4;
+  // The system packages to install
+  repeated string system_packages = 5;
+  // The environment variables to set
+  map<string, string> environment_variables = 6;
+  // The post install commands to execute
+  string custom_commands = 7;
+  // Output. The result image generated
+  string image = 9;
+}

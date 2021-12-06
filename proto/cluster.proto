@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+import "google/protobuf/timestamp.proto";
+
+
+message Cluster {
+  // Required input field. Unique Cluster name provided by user.
+  string name = 1;
+
+  // Required input field. Cluster's namespace provided by user
+  string namespace = 2;
+
+  // Required field. This field indicates the user who owns the cluster.
+  string user = 3;
+
+  // Optional input field. Ray cluster version
+  string version = 4;
+
+  // Optional field.
+  enum Environment {
+    DEV = 0;
+    TESTING = 1;
+    STAGING = 2;
+    PRODUCTION = 3;
+  }
+  Environment environment = 5;
+  
+  // Required field. This field indicates ray cluster configuration
+  ClusterSpec cluster_spec = 6;
+
+  // Output. The time that the Cluster created.
+  google.protobuf.Timestamp created_at = 7;
+
+  // Output. The time that the Cluster deleted.
+  google.protobuf.Timestamp deleted_at = 8;
+}
+
+message ClusterSpec {
+  // The head group configuration
+  HeadGroupSpec head_group_spec = 1;
+  // The worker group configurations
+  repeated WorkerGroupSpec worker_group_sepc = 2;
+}
+
+message HeadGroupSpec {
+  // Optional. The computeTemplate of head node group
+  string compute_template = 1;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 2;
+  // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
+  string service_type = 3;
+  // Optional. The ray start parames of head node group
+  map<string, string> ray_start_params = 4;
+}
+
+message WorkerGroupSpec {
+  // Required. Group name of the current worker group
+  string group_name = 1;
+  // Optional. The computeTemplate of head node group
+  string compute_template = 2;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 3;
+  // Required. Desired replicas of the worker group 
+  int32 replicas = 4;
+  // Optional. Min replicas of the worker group 
+  int32 min_replicas = 5;
+  // Optional. Max replicas of the worker group 
+  int32 max_replicas = 6;
+  // Optional. The ray start parames of worker node group
+  map<string, string> ray_start_params = 7;
+}
