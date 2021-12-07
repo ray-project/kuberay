@@ -1,6 +1,6 @@
 # Ray Operator
 
-Ray-Operator-Helm: A simple Helm chart
+KubRay-Operator: A simple Helm chart
 
 Run a deployment of Ray Operator.
 
@@ -18,7 +18,7 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 Please use command below:
 ```console
-$ helm install  ray-operator-helm . --values values.yaml --namespace default --create-namespace
+$ helm install  kubray-operator . --values values.yaml --namespace default --create-namespace
 ```
 ## List the Chart
 
@@ -33,7 +33,7 @@ $ helm list -n default
 To uninstall/delete the `my-release` deployment:
 
 ```console
-$ helm delete ray-operator-helm
+$ helm delete kubray-operator
 ```
 
 The command removes nearly all the Kubernetes components associated with the

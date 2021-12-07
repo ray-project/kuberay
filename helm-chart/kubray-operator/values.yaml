@@ -1,4 +1,4 @@
-# Default values for ray-operator-helm.
+# Default values for kubray-operator.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -9,8 +9,8 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-nameOverride: "ray-operator-helm"
-fullnameOverride: "ray-operator-helm"
+nameOverride: "kubray-operator"
+fullnameOverride: "kubray-operator"
 
 ## Install Default RBAC roles and bindings
 rbac:

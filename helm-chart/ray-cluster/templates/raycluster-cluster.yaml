@@ -2,8 +2,8 @@ apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
   labels:
-{{ include "ray-cluster-helm.labels" . | indent 4 }}
-  name: {{ include "ray-cluster-helm.fullname" . }}
+{{ include "ray-cluster.labels" . | indent 4 }}
+  name: {{ include "ray-cluster.fullname" . }}
 spec:
   headGroupSpec:
     serviceType: ClusterIP
@@ -31,8 +31,8 @@ spec:
         labels:
           groupName: {{ .Values.head.groupName }}
           rayNodeType: {{ .Values.head.type }}
-          rayCluster: {{ include "ray-cluster-helm.fullname" . }}
-{{ include "ray-cluster-helm.labels" . | indent 10 }}
+          rayCluster: {{ include "ray-cluster.fullname" . }}
+{{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
   - rayStartParams:
@@ -67,5 +67,5 @@ spec:
         labels:
           rayNodeType: {{ .Values.worker.type }}
           groupName: {{ .Values.worker.groupName }}
-          rayCluster: {{ include "ray-cluster-helm.fullname" . }}
-{{ include "ray-cluster-helm.labels" . | indent 10 }}
+          rayCluster: {{ include "ray-cluster.fullname" . }}
+{{ include "ray-cluster.labels" . | indent 10 }}

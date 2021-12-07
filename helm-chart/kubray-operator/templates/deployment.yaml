@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "ray-operator-helm.fullname" . }}
+  name: {{ include "kubray-operator.fullname" . }}
   labels:
-{{ include "ray-operator-helm.labels" . | indent 4 }}
+{{ include "kubray-operator.labels" . | indent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "ray-operator-helm.name" . }}
+      app.kubernetes.io/name: {{ include "kubray-operator.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "ray-operator-helm.name" . }}
+        app.kubernetes.io/name: {{ include "kubray-operator.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
     {{- with .Values.imagePullSecrets }}

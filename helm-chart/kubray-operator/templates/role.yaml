@@ -3,8 +3,8 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
-{{ include "ray-operator-helm.labels" . | indent 4 }}
-  name: {{ include "ray-operator-helm.fullname" . }}
+{{ include "kubray-operator.labels" . | indent 4 }}
+  name: {{ include "kubray-operator.fullname" . }}
 rules:
 - apiGroups:
   - ""
