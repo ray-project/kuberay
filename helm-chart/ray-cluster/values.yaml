@@ -1,0 +1,100 @@
+# Default values for ray-cluster.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: rayproject/ray
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: "ray"
+fullnameOverride: ""
+
+head:
+  groupName: headgroup
+  replicas: 1
+  type: head
+  labels:
+    key: value
+  initArgs:
+    port: '6379'
+    object-manager-port: '12345'
+    node-manager-port: '12346'
+    object-store-memory: '100000000'
+    redis-password: 'LetMeInRay'
+    dashboard-host: '0.0.0.0'
+    num-cpus: '1' # can be auto-completed from the limits
+    node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+  containerEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+  resources:
+    limits:
+      cpu: 1
+    requests:
+       cpu: 200m
+  annotations: {}
+  volumes:
+    - name: config
+      configMap:
+        name: ray-code
+        items:
+          - key: code.py
+            path: code.py
+  volumeMounts:
+    - mountPath: /opt
+      name: config
+
+
+worker:
+  groupName: workergroup
+  replicas: 1
+  type: worker
+  labels:
+    key: value
+  initArgs:
+    node-ip-address: $MY_POD_IP
+    redis-password: LetMeInRay
+  containerEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: RAY_DISABLE_DOCKER_CPU_WARNING
+      value: "1"
+    - name: CPU_REQUEST
+      valueFrom:
+        resourceFieldRef:
+          containerName: ray-worker
+          resource: requests.cpu
+    - name: MY_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+  ports:
+    - containerPort: 80
+      protocol: TCP
+  resources: 
+    limits:
+      cpu: 1
+    requests:
+       cpu: 200m
+  annotations:
+    key: value
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+  volumeMounts:
+    - mountPath: /var/log
+      name: log-volume
+
+headServiceSuffix: "ray-operator.svc"
+
+service:
+  type: ClusterIP
+  port: 8080
