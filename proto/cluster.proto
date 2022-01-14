@@ -3,8 +3,94 @@ syntax = "proto3";
 option go_package = "github.com/ray-project/kuberay/proto/go_client";
 package proto;
 
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  schemes: HTTP;
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+service ClusterService {
+  // Creates a new Cluster.
+  rpc CreateCluster(CreateClusterRequest) returns (Cluster) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha1/clusters"
+      body: "cluster"
+    };
+  }
+
+  // Finds a specific Cluster by ID.
+  rpc GetCluster(GetClusterRequest) returns (Cluster) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/clusters/{id}"
+    };
+  }
+
+  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/clusters"
+    };
+  }
+
+  // Deletes an cluster without deleting the cluster's runs and jobs. To
+  // avoid unexpected behaviors, delete an cluster's runs and jobs before
+  // deleting the cluster.
+  rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha1/clusters/{id}"
+    };
+  }
+}
+
+message CreateClusterRequest {
+  // The Cluster to be created.
+  Cluster cluster = 1;
+}
+
+message GetClusterRequest {
+  // The ID of the Cluster to be retrieved.
+  string id = 1;
+  // The name of the Cluster to be retrieved.
+  string name = 2;
+}
+
+message ListClustersRequest {
+  // A page token to request the next page of results. The token is acquried
+  // from the nextPageToken field of the response from the previous
+  // ListCluster call or can be omitted when fetching the first page.
+  // TODO: support this later
+}
+
+message ListClustersResponse {
+  // A list of Clusters returned.
+  repeated Cluster clusters = 1;
+
+  // The total number of Clusters for the given query.
+  // int32 total_size = 2;
+
+  // The token to list the next page of Clusters.
+  // string next_page_token = 3;
+}
+
+message DeleteClusterRequest {
+  // The ID of the cluster to be deleted.
+  string id = 1;
+  // The name of the Cluster to be retrieved.
+  string name = 2;
+}
 
 message Cluster {
   // Required input field. Unique Cluster name provided by user.
