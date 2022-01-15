@@ -16,9 +16,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/service/pkg/interceptor"
-	"github.com/ray-project/kuberay/service/pkg/manager"
-	"github.com/ray-project/kuberay/service/pkg/server"
+	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
+	"github.com/ray-project/kuberay/apiserver/pkg/server"
 )
 
 var (

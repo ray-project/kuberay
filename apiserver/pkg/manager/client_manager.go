@@ -3,8 +3,8 @@ package manager
 import (
 	"time"
 
-	"github.com/ray-project/kuberay/service/pkg/client"
-	"github.com/ray-project/kuberay/service/pkg/util"
+	"github.com/ray-project/kuberay/apiserver/pkg/client"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"k8s.io/klog/v2"
 )
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	"github.com/ray-project/kuberay/service/pkg/util"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
