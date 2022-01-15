@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/ray-project/kuberay/service/pkg/util"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"

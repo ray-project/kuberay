@@ -1,4 +1,4 @@
-module github.com/ray-project/kuberay/service
+module github.com/ray-project/kuberay/apiserver
 
 go 1.17
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/golang/protobuf/ptypes/empty"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/service/pkg/manager"
-	"github.com/ray-project/kuberay/service/pkg/util"
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
 type ClusterServerOptions struct {
