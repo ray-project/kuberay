@@ -62,9 +62,6 @@ jobs:
       with:
         go-version: '~1.15.1'
 
-    - name: Set up Docker
-      uses: docker-practice/actions-setup-docker@master
-
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
       with:
@@ -72,6 +69,16 @@ jobs:
         # triggered a workflow, this defaults to the reference or SHA for that event.
         # Default value should work for both pull_request and merge(push) event.
         ref: ${{github.event.pull_request.head.sha}}
+
+    - name: Install goimports
+      run: go get golang.org/x/tools/cmd/goimports
+
+    - name: Run goimports
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l . | tee goimports.out)" || { cat goimports.out && exit 1; }
+
+    - name: Open this to see how to fix goimports if it fails
+      run: echo Run goimports -w .
+      if: failure()
     
     - name: list directories
       working-directory: ${{env.working-directory}}
@@ -90,10 +97,13 @@ jobs:
       run: make build
       working-directory: ${{env.working-directory}}
 
-    - name: Build Docker Image
-      run: make docker-build
-      working-directory: ${{env.working-directory}}
-
     - name: Test
       run: make test
+      working-directory: ${{env.working-directory}}
+
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
+
+    - name: Build Docker Image
+      run: make docker-image
       working-directory: ${{env.working-directory}}

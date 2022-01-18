@@ -35,7 +35,6 @@ func (c *ClientManager) Time() util.TimeInterface {
 	return c.time
 }
 
-
 func (c *ClientManager) init() {
 	// db, kubernetes initialization
 	klog.Info("Initializing client manager")
