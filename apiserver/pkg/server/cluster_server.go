@@ -2,10 +2,11 @@ package server
 
 import (
 	"context"
+
 	"github.com/golang/protobuf/ptypes/empty"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 type ClusterServerOptions struct {
@@ -41,7 +42,6 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*empty.Empty, error) {
 	panic("Implement me")
 }
-
 
 func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 	if request.Cluster.Name == "" {
