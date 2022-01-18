@@ -165,11 +165,13 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		}
 	} else if len(headPods.Items) > 1 {
 		log.Info("reconcilePods ", "more than 1 head pod found for cluster", instance.Name)
-		for index := range headPods.Items {
+		itemLength := len(headPods.Items)
+		for index := 0; index < itemLength; index++ {
 			if headPods.Items[index].Status.Phase == v1.PodRunning || headPods.Items[index].Status.Phase == v1.PodPending {
 				// Remove the healthy pod  at index i from the list of pods to delete
 				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // replace last element with the healthy head.
 				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
+				itemLength--
 			}
 		}
 		// delete all the extra head pod pods
