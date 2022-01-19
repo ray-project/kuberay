@@ -74,7 +74,7 @@ jobs:
       run: go get golang.org/x/tools/cmd/goimports
 
     - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l . | tee goimports.out)" || { cat goimports.out && exit 1; }
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ | tee goimports.out)" || { cat goimports.out && exit 1; }
 
     - name: Open this to see how to fix goimports if it fails
       run: echo Run goimports -w .
