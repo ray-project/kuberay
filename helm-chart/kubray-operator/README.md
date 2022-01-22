@@ -18,14 +18,14 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 Please use command below:
 ```console
-$ helm install  kubray-operator . --values values.yaml --namespace default --create-namespace
+$ helm install kuberay-operator . --values values.yaml --namespace kuberay-operator --create-namespace
 ```
 ## List the Chart
 
 To list the `my-release` deployment:
 
 ```console
-$ helm list -n default
+$ helm list -n kuberay-operator
 ```
 
 ## Uninstalling the Chart
@@ -33,7 +33,7 @@ $ helm list -n default
 To uninstall/delete the `my-release` deployment:
 
 ```console
-$ helm delete kubray-operator
+$ helm delete kuberay-operator -n kuberay-operator
 ```
 
 The command removes nearly all the Kubernetes components associated with the
