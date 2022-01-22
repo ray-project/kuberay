@@ -27,7 +27,7 @@ spec:
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
       metadata:
-        annotation: {{- toYaml .Values.head.annotations | nindent 10 }}
+        annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         labels:
           groupName: {{ .Values.head.groupName }}
           rayNodeType: {{ .Values.head.type }}
@@ -63,7 +63,7 @@ spec:
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
       metadata:
-        annotation: {{- toYaml .Values.worker.annotations | nindent 10 }}
+        annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         labels:
           rayNodeType: {{ .Values.worker.type }}
           groupName: {{ .Values.worker.groupName }}
