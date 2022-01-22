@@ -4,4 +4,8 @@ kind: Kustomization
 namespace: ray-system
 
 resources:
-- apiserver.yaml
+- namespace.yaml
+- ../../ray-operator/config/crd
+
+configurations:
+- params.yaml

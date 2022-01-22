@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kuberay-apiserver
-  namespace: ray-system
 spec:
   selector:
     matchLabels:
@@ -16,7 +15,7 @@ spec:
       serviceAccountName: kuberay-apiserver
       containers:
       - name: kuberay-apiserver-container
-        image: kuberay/kuberay-apiserver:v0.1.0
+        image: kuberay/apiserver
         ports:
         - containerPort: 8888
         - containerPort: 8887
@@ -36,7 +35,6 @@ metadata:
     prometheus.io/path: /metrics
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
-  namespace: ray-system
 spec:
   type: NodePort
   selector:
@@ -58,7 +56,6 @@ metadata:
   labels:
     app: kuberay-apiserver
   name: kuberay-apiserver
-  namespace: ray-system
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
