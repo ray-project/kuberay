@@ -2,7 +2,7 @@ name: Go-build-and-test
 
 on:
   push:
-    branches:  
+    branches:
     - master
   pull_request:
     branches: [ master ]
@@ -12,11 +12,11 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.15.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
         # Use the same go version with build job
-        go-version: '~1.15.1'
+        go-version: '1.17'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -57,10 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.15.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
-        go-version: '~1.15.1'
+        go-version: '1.17'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -79,11 +79,11 @@ jobs:
     - name: Open this to see how to fix goimports if it fails
       run: echo Run goimports -w .
       if: failure()
-    
+
     - name: list directories
       working-directory: ${{env.working-directory}}
       run: ls -R
-    
+
     - name: install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
