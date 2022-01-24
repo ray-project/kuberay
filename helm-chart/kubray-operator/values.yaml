@@ -5,8 +5,8 @@
 replicaCount: 1
 
 image:
-  repository: docker.io/library/controller
-  tag: latest
+  repository: kuberay/operator
+  tag: v0.1.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kubray-operator"
