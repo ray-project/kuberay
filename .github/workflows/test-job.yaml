@@ -53,6 +53,7 @@ jobs:
   build:
     env:
       working-directory: ./ray-operator
+      cli-working-directory: ./cli
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +75,7 @@ jobs:
       run: go get golang.org/x/tools/cmd/goimports
 
     - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ | tee goimports.out)" || { cat goimports.out && exit 1; }
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
 
     - name: Open this to see how to fix goimports if it fails
       run: echo Run goimports -w .
@@ -107,3 +108,7 @@ jobs:
     - name: Build Docker Image
       run: make docker-image
       working-directory: ${{env.working-directory}}
+
+    - name: Build CLI
+      run: go build -o kuberay -a main.go
+      working-directory: ${{env.cli-working-directory}}
