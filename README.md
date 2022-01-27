@@ -14,7 +14,16 @@ KubeRay provides several tools to improve running and managing Ray's experience 
 - Operator Integration with Kubernetes node problem detector (future work)
 - Kubernetes based workspace to easily submit ray jobs (future work)
 
-## Use helm chart
+## Quick Start
+
+### Use Yaml
+
+```
+kubectl apply -k manifests/cluster-scope-resources
+kubectl apply -k manifests/base
+```
+
+### Use helm chart
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
 Please read [kubray-operator](helm-chart/kubray-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.

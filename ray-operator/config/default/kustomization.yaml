@@ -16,6 +16,7 @@ bases:
 - ../crd
 - ../rbac
 - ../manager
+- namespace.yaml
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
 
