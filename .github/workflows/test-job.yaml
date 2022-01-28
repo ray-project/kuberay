@@ -106,8 +106,20 @@ jobs:
       uses: docker-practice/actions-setup-docker@master
 
     - name: Build Docker Image
-      run: make docker-image
+      run: IMG=kuberay/operator:nightly make docker-image
       working-directory: ${{env.working-directory}}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+      if: ${{ github.ref == 'refs/heads/master' }}
+
+    - name: Push to DockerHub
+      run: docker push kuberay/operator:nightly
+      working-directory: ${{env.working-directory}}
+      if: ${{ github.ref == 'refs/heads/master' }}
 
     - name: Build CLI
       run: go build -o kuberay -a main.go
