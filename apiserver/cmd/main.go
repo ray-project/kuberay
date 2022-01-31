@@ -51,7 +51,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(grpc.UnaryInterceptor(interceptor.ApiServerInterceptor), grpc.MaxRecvMsgSize(math.MaxInt32))
 	api.RegisterClusterServiceServer(s, server.NewClusterServer(resourceManager, &server.ClusterServerOptions{CollectMetrics: *collectMetricsFlag}))
-	// TODO: add rest servers here
+	api.RegisterComputeTemplateServiceServer(s, server.NewComputeTemplateServer(resourceManager, &server.ComputeTemplateServerOptions{CollectMetrics: *collectMetricsFlag}))
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -72,7 +72,7 @@ func startHttpProxy() {
 	// Create gRPC HTTP MUX and register services.
 	runtimeMux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{OrigName: true, EmitDefaults: true}))
 	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
-	// TODO: add rest servers here
+	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()

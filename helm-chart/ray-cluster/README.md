@@ -14,7 +14,7 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 ## TL;DR;
 
 ```console
-helm install --name ray-cluster . --values values.yaml --namespace default
+helm install ray-cluster . --values values.yaml --namespace ray-system --create-namespace
 ```
 
 ## Installing the Chart
@@ -23,10 +23,10 @@ To install the chart with the release name `my-release`:
 
 
 ```console
-helm install --name sample ray-cluster --values ray-cluster/values.yaml --namespace default
+helm install my-release . --values values.yaml --namespace ray-system --create-namespace
 ```
 
-> note: The chart will submit a RayCluster. 
+> note: The chart will submit a RayCluster.
 
 
 ## Uninstalling the Chart
@@ -34,7 +34,7 @@ helm install --name sample ray-cluster --values ray-cluster/values.yaml --namesp
 To uninstall/delete the `my-release` deployment:
 
 ```console
-helm delete ray-cluster
+helm delete my-release -n ray-system
 ```
 
 The command removes nearly all the Kubernetes components associated with the
@@ -42,7 +42,7 @@ chart and deletes the release.
 
 ## Check Cluster status
 
-### Get Service 
+### Get Service
 
 ```console
 $ kubectl get svc -l ray.io/cluster=ray-cluster
