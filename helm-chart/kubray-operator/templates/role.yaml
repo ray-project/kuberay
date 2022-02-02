@@ -48,4 +48,10 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - "ray.io"
+  resources:
+  - rayclusters
+  verbs:
+  - "*"
 {{- end }}
