@@ -1,6 +1,6 @@
 # Ray Operator
 
-KubRay-Operator: A simple Helm chart
+Kuberay-operator: A simple Helm chart
 
 Run a deployment of Ray Operator.
 
