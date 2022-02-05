@@ -1,14 +1,7 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: ray-operator
-  name: ray-system
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ray-operator
+  name: kuberay-operator
   namespace: system
   labels:
     control-plane: ray-operator

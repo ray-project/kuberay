@@ -2,7 +2,7 @@ name: Go-build-and-test
 
 on:
   push:
-    branches:  
+    branches:
     - master
   pull_request:
     branches: [ master ]
@@ -12,11 +12,11 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.15.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
         # Use the same go version with build job
-        go-version: '~1.15.1'
+        go-version: '1.17'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -53,14 +53,15 @@ jobs:
   build:
     env:
       working-directory: ./ray-operator
+      cli-working-directory: ./cli
     name: Build
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.15.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
-        go-version: '~1.15.1'
+        go-version: '1.17'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -74,16 +75,16 @@ jobs:
       run: go get golang.org/x/tools/cmd/goimports
 
     - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ | tee goimports.out)" || { cat goimports.out && exit 1; }
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
 
     - name: Open this to see how to fix goimports if it fails
       run: echo Run goimports -w .
       if: failure()
-    
+
     - name: list directories
       working-directory: ${{env.working-directory}}
       run: ls -R
-    
+
     - name: install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
@@ -107,3 +108,7 @@ jobs:
     - name: Build Docker Image
       run: make docker-image
       working-directory: ${{env.working-directory}}
+
+    - name: Build CLI
+      run: go build -o kuberay -a main.go
+      working-directory: ${{env.cli-working-directory}}
