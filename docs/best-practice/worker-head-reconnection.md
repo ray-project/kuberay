@@ -30,5 +30,4 @@ Before that, to solve the workers-head connection lost, there are two options:
 
 - Make reconnection shorter: for version <= 1.9.1, you can set this head param --system-config='{"ping_gcs_rpc_server_max_retries": 20}' to reduce the delay from 600s down to 20s before workers reconnect to the new head. 
 
-
 > Note: we should update this doc when GCS HA feature gets updated.
