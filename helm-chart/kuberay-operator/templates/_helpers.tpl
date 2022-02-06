@@ -2,7 +2,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "kubray-operator.name" -}}
+{{- define "kuberay-operator.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
@@ -11,7 +11,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "kubray-operator.fullname" -}}
+{{- define "kuberay-operator.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -27,16 +27,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "kubray-operator.chart" -}}
+{{- define "kuberay-operator.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{/*
 Common labels
 */}}
-{{- define "kubray-operator.labels" -}}
-app.kubernetes.io/name: {{ include "kubray-operator.name" . }}
-helm.sh/chart: {{ include "kubray-operator.chart" . }}
+{{- define "kuberay-operator.labels" -}}
+app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
+helm.sh/chart: {{ include "kuberay-operator.chart" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
@@ -47,9 +47,9 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "kubray-operator.serviceAccountName" -}}
+{{- define "kuberay-operator.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
-    {{ default (include "kubray-operator.fullname" .) .Values.serviceAccount.name }}
+    {{ default (include "kuberay-operator.fullname" .) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}

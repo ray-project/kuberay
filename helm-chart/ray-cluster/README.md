@@ -57,7 +57,7 @@ $ kubectl get pod -o wide
 NAME                                       READY   STATUS    RESTARTS   AGE    IP            NODE             NOMINATED NODE   READINESS GATES
 ray-cluster-head-sd77l                 1/1     Running   0          8h     10.1.61.208   docker-desktop   <none>           <none>
 ray-cluster-worker-workergroup-czxd6   1/1     Running   0          8h     10.1.61.207   docker-desktop   <none>           <none>
-kubray-operator-687785b964-jgfhv          1/1     Running   6          3d4h   10.1.61.196   docker-desktop   <none>           <none>
+kuberay-operator-687785b964-jgfhv          1/1     Running   6          3d4h   10.1.61.196   docker-desktop   <none>           <none>
 
 $ kubectl port-forward ray-cluster-head-sd77l 8265
 Forwarding from 127.0.0.1:8265 -> 8265
