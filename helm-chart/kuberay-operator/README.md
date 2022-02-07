@@ -18,7 +18,7 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 To avoid duplicate CRD definitions in this repo, we reuse CRD config in `ray-operator`:
 ```console
-$ kubectl apply -k "kuberay/ray-operator/config/crd"
+$ kubectl apply -k "../../ray-operator/config/crd"
 ```
 
 Please use command below:
