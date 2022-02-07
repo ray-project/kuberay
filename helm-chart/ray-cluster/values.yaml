@@ -18,13 +18,11 @@ head:
     key: value
   initArgs:
     port: '6379'
-    object-manager-port: '12345'
-    node-manager-port: '12346'
-    object-store-memory: '100000000'
     redis-password: 'LetMeInRay'
     dashboard-host: '0.0.0.0'
     num-cpus: '1' # can be auto-completed from the limits
     node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+    block: 'true'
   containerEnv:
     - name: MY_POD_IP
       valueFrom:
@@ -37,15 +35,11 @@ head:
        cpu: 200m
   annotations: {}
   volumes:
-    - name: config
-      configMap:
-        name: ray-code
-        items:
-          - key: code.py
-            path: code.py
+    - name: log-volume
+      emptyDir: { }
   volumeMounts:
-    - mountPath: /opt
-      name: config
+    - mountPath: /tmp/ray
+      name: log-volume
 
 
 worker:
@@ -57,6 +51,7 @@ worker:
   initArgs:
     node-ip-address: $MY_POD_IP
     redis-password: LetMeInRay
+    block: 'true'
   containerEnv:
     - name: MY_POD_IP
       valueFrom:
@@ -90,7 +85,7 @@ worker:
     - name: log-volume
       emptyDir: {}
   volumeMounts:
-    - mountPath: /var/log
+    - mountPath: /tmp/ray
       name: log-volume
 
 headServiceSuffix: "ray-operator.svc"
