@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: kuberay/operator
-  tag: v0.1.0
+  tag: nightly
   pullPolicy: IfNotPresent
 
 nameOverride: "kubray-operator"
