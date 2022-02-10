@@ -26,7 +26,7 @@ kubectl apply -k manifests/base
 ### Use helm chart
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
-Please read [kubray-operator](helm-chart/kubray-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
+Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
 
 ## Development
 
