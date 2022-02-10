@@ -1,4 +1,4 @@
-# Default values for kubray-operator.
+# Default values for kuberay-operator.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -9,8 +9,8 @@ image:
   tag: nightly
   pullPolicy: IfNotPresent
 
-nameOverride: "kubray-operator"
-fullnameOverride: "kubray-operator"
+nameOverride: "kuberay-operator"
+fullnameOverride: "kuberay-operator"
 
 ## Install Default RBAC roles and bindings
 rbac:
