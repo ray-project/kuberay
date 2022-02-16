@@ -12,9 +12,6 @@ spec:
     replicas: 1
     rayStartParams:
       port: '6379'
-      object-manager-port: '12345'
-      node-manager-port: '12346'
-      object-store-memory: '100000000'
       redis-password: 'LetMeInRay'
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
@@ -24,7 +21,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.6.0
+          image: rayproject/ray:1.9.2
           env:
           - name: MY_POD_IP
             valueFrom:

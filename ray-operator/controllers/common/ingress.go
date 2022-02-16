@@ -1,27 +1,23 @@
 package common
 
 import (
-	"errors"
+	"fmt"
+
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
+	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
-// BuildIngressForHeadService Builds the ingress for head service.
-// This is used to expose external an endpoint for external traffic.
+// BuildIngressForHeadService Builds the ingress for head service dashboard.
+// This is used to expose dashboard for external traffic.
 func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
 	labels := map[string]string{
 		RayClusterLabelKey: cluster.Name,
 		RayIDLabelKey:      utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode),
-	}
-
-	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
-	_, ok := cluster.Annotations[IngressClassAnnotationKey]
-	if !ok {
-		return nil, errors.New("can not find ingress class name from annotation")
 	}
 
 	// Copy other ingress configuration from cluster annotation
@@ -31,27 +27,26 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 		annotation[key] = value
 	}
 
-	// The tricky thing is we need three ports. redis, dashboard, client. should we use /dashboard /redis to support that?
-	// 1. does ingress support non-UI ports like 10001, 6379 etc.
-	// 2. verify ingress controller.
-
 	var paths []networkingv1.HTTPIngressPath
 	pathType := networkingv1.PathTypeExact
-	serviceName := utils.GenerateServiceName(cluster.Name)
-	ports := getServicePorts(cluster)
-	for portName, port := range ports {
-		paths = append(paths, networkingv1.HTTPIngressPath{
-			Path:     "/" + portName,
+	servicePorts := getServicePorts(cluster)
+	dashboardPort := int32(DefaultDashboardPort)
+	if port, ok := servicePorts["dashboard"]; ok {
+		dashboardPort = port
+	}
+	paths = []networkingv1.HTTPIngressPath{
+		networkingv1.HTTPIngressPath{
+			Path:     "/" + cluster.Name,
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
-					Name: serviceName,
+					Name: utils.GenerateServiceName(cluster.Name),
 					Port: networkingv1.ServiceBackendPort{
-						Number: port,
+						Number: dashboardPort,
 					},
 				},
 			},
-		})
+		},
 	}
 
 	ingress := &networkingv1.Ingress{
@@ -66,14 +61,20 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 				{
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
-							// https://github.com/kubernetes/ingress-nginx/issues/1655#issuecomment-79129310
-							// It's ok to expose more ports on the same path
 							Paths: paths,
 						},
 					},
 				},
 			},
 		},
+	}
+
+	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
+	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
+	if !ok {
+		logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
+	} else {
+		ingress.Spec.IngressClassName = &ingressClassName
 	}
 
 	return ingress, nil

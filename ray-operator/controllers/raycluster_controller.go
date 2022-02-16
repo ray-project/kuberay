@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controller "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -123,6 +124,10 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
 		ingress, err := common.BuildIngressForHeadService(*instance)
 		if err != nil {
+			return err
+		}
+
+		if err := controllerruntime.SetControllerReference(instance, ingress, r.Scheme); err != nil {
 			return err
 		}
 

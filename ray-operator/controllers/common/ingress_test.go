@@ -78,10 +78,11 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayiov1alpha1.RayCluster{
 	},
 }
 
-func TestBuildIngressForHeadServiceDisabled(t *testing.T) {
+// only throw warning message and rely on Kubernetes to assign default ingress class
+func TestBuildIngressForHeadServiceWithoutIngressClass(t *testing.T) {
 	ingress, err := BuildIngressForHeadService(*instanceWithIngressEnabledWithoutIngressClass)
-	assert.Nil(t, ingress)
-	assert.NotNil(t, err)
+	assert.NotNil(t, ingress)
+	assert.Nil(t, err)
 }
 
 func TestBuildIngressForHeadService(t *testing.T) {
@@ -105,10 +106,10 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	assert.Equal(t, 1, len(ingress.Spec.Rules))
 
 	// paths count
-	expectedPaths := len(getServicePorts(*instanceWithIngressEnabled))
+	expectedPaths := 1 // dashboard only
 	actualPaths := len(ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths)
 	if !reflect.DeepEqual(expectedPaths, actualPaths) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+		t.Fatalf("Expected `%v` but got `%v`", expectedPaths, actualPaths)
 	}
 
 	// path names
