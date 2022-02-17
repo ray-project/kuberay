@@ -1,0 +1,37 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  name: raycluster-ingress
+spec:
+  rayVersion: '1.6.0' # should match the Ray version in the image of the containers
+  headGroupSpec:
+    serviceType: NodePort
+    enableIngress: true
+    replicas: 1
+    rayStartParams:
+      port: '6379'
+      redis-password: 'LetMeInRay'
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1' # can be auto-completed from the limits
+      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:1.9.2
+          env:
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          ports:
+          - containerPort: 6379
+            name: redis
+          - containerPort: 8265 # Ray dashboard
+            name: dashboard
+          - containerPort: 10001
+            name: client
+
