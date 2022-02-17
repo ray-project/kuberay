@@ -78,7 +78,10 @@ jobs:
       run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
 
     - name: Open this to see how to fix goimports if it fails
-      run: echo Run goimports -w .
+      run: |
+        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
+        $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
       if: failure()
 
     - name: list directories
