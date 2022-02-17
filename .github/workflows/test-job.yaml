@@ -79,7 +79,8 @@ jobs:
 
     - name: Open this to see how to fix goimports if it fails
       run: |
-        echo Run goimports -w .
+        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
         $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
       if: failure()
 
