@@ -5028,6 +5028,29 @@ spec:
                 - serviceType
                 - template
                 type: object
+              jobSpec:
+                description: Job will be submitted when raycluster is ready
+                properties:
+                  entrypoint:
+                    description: 'Command to start execution, ex: "python script.py"'
+                    type: string
+                  metadata:
+                    additionalProperties:
+                      type: string
+                    description: Metadata to pass in to configure job behavior or
+                      use as tags
+                    type: object
+                  runtimeEnv:
+                    additionalProperties:
+                      type: string
+                    description: Dict to setup execution environment, it is variable,
+                      the map value is expected a serialized value.
+                    type: object
+                  shutdownAfterJobFinished:
+                    description: ShutdownAfterJobFinished indicates whether delete
+                      raycluster after job finish
+                    type: boolean
+                type: object
               rayVersion:
                 description: RayVersion is the version of ray being used. this affects
                   the command used to start ray

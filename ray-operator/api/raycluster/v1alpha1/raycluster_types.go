@@ -20,6 +20,9 @@ type RayClusterSpec struct {
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// Job will be submitted when raycluster is ready
+	// +optional
+	Job JobSpec `json:"jobSpec,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -60,6 +63,18 @@ type WorkerGroupSpec struct {
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+}
+
+// JobSpec is the spec for the job which will be submitted when raycluster is ready
+type JobSpec struct {
+	// Dict to setup execution environment, it is variable, the map value is expected a serialized value.
+	RuntimeEnv map[string]string `json:"runtimeEnv,omitempty"`
+	// Command to start execution, ex: "python script.py"
+	Entrypoint string `json:"entrypoint,omitempty"`
+	// Metadata to pass in to configure job behavior or use as tags
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// ShutdownAfterJobFinished indicates whether delete raycluster after job finish
+	ShutdownAfterJobFinished bool `json:"shutdownAfterJobFinished,omitempty"`
 }
 
 // The overall state of the Ray cluster.
