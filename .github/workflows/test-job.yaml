@@ -121,8 +121,8 @@ jobs:
       run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
     - name: Get dependencies
-      working-directory: ${{env.working-directory}}
       run: go mod download
+      working-directory: ${{env.working-directory}}
 
     - name: Build
       run: make build
@@ -132,24 +132,32 @@ jobs:
       run: make test
       working-directory: ${{env.working-directory}}
 
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+      working-directory: ${{env.working-directory}}
+
     - name: Checkout Python
       uses: actions/checkout@v2
+
     - name: Setup Python
       uses: actions/setup-python@v2
       with:
         python-version: '3.x'
 
     - name: Install Python dependencies
-      working-directory: ${{env.working-directory}}
       run: pip install -r config/requirements.txt
+      working-directory: ${{env.working-directory}}
 
     - name: Run compatibility test
-      working-directory: ${{env.working-directory}}
       run: |
         for i in "rayproject/ray:1.8.0" "rayproject/ray:1.9.0" "rayproject/ray:1.10.0"
         do
           KUBERAY_TEST_RAY_IMAGE=$i python ./tests/compatibility-test.py
         done
+      working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
