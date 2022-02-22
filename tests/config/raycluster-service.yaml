@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-cluster-nodeport
+spec:
+  type: NodePort
+  selector:
+    rayCluster: raycluster-sample
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      nodePort: 30379
+    - name: dashboard
+      port: 8265
+      targetPort: 8265
+      nodePort: 30265
+    - name: headnode
+      port: 10001
+      targetPort: 10001
+      nodePort: 30001

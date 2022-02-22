@@ -132,6 +132,21 @@ jobs:
       run: make test
       working-directory: ${{env.working-directory}}
 
+    - name: Checkout Python
+      uses: actions/checkout@v2
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install Python dependencies
+      working-directory: ${{env.working-directory}}
+      run: pip install -r config/requirements.txt
+
+    - name: Run compatibility test
+      working-directory: ${{env.working-directory}}
+      run: python ./tests/compatibility-test.py
+
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
 
