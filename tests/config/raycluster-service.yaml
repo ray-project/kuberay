@@ -5,7 +5,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    rayCluster: raycluster-sample
+    rayCluster: raycluster-compatibility-test
   ports:
     - name: redis
       port: 6379

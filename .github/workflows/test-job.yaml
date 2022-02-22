@@ -109,7 +109,9 @@ jobs:
 
     - name: list directories
       working-directory: ${{env.working-directory}}
-      run: ls -R
+      run: |
+        pwd
+        ls -R
 
     - name: install kubebuilder
       run: |
@@ -137,7 +139,6 @@ jobs:
         curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
         chmod +x ./kind
         sudo mv ./kind /usr/local/bin/kind
-      working-directory: ${{env.working-directory}}
 
     - name: Checkout Python
       uses: actions/checkout@v2
@@ -148,16 +149,15 @@ jobs:
         python-version: '3.x'
 
     - name: Install Python dependencies
-      run: pip install -r config/requirements.txt
-      working-directory: ${{env.working-directory}}
+      run: pip install -r ./tests/config/requirements.txt
 
     - name: Run compatibility test
       run: |
-        for i in "rayproject/ray:1.8.0" "rayproject/ray:1.9.0" "rayproject/ray:1.10.0"
+        for i in "1.8.0" "1.9.0" "1.10.0"
         do
-          KUBERAY_TEST_RAY_IMAGE=$i python ./tests/compatibility-test.py
+          echo "Using Ray image $i"
+          RAY_VERSION=$i python ./tests/compatibility-test.py
         done
-      working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master

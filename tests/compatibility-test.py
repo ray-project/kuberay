@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -8,8 +9,8 @@ from string import Template
 
 import docker
 
-ray_version = '1.8.0'
-ray_image = "rayproject/ray:1.8.0"
+ray_version = '1.9.0'
+ray_image = "rayproject/ray:1.9.0"
 
 kindcluster_config_file = 'tests/config/cluster-config.yaml'
 
@@ -39,9 +40,9 @@ def create_cluster():
 
 def apply_kuberay_resources():
     shell_assert_success(
-        'kubectl apply -k github.com/ray-project/kuberay/manifests/cluster-scope-resources')
+        'kubectl apply -k manifests/cluster-scope-resources')
     shell_assert_success(
-        'kubectl apply -k github.com/ray-project/kuberay/manifests/base')
+        'kubectl apply -k manifests/base')
 
 
 def create_kuberay_cluster():
@@ -63,7 +64,7 @@ def create_kuberay_cluster():
     time.sleep(180)
 
     shell_assert_success(
-        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-sample --timeout=1600s')
+        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --timeout=1600s')
     shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
 
 
@@ -76,6 +77,7 @@ def download_images():
     client.images.pull(ray_image)
     # not enabled for now
     # shell_assert_success('kind load docker-image \"{}\"'.format(ray_image))
+    client.close()
 
 
 class BasicRayTestCase(unittest.TestCase):
@@ -91,8 +93,7 @@ class BasicRayTestCase(unittest.TestCase):
                                           remove=True,
                                           detach=True,
                                           tty=True,
-                                          network_mode='host',
-                                          command='/bin/bash')
+                                          network_mode='host')
         rtn_code, output = container.exec_run(['python',
                                               '-c', '''
 import ray
@@ -105,10 +106,20 @@ def f(x):
 futures = [f.remote(i) for i in range(4)]
 print(ray.get(futures))
 '''],
-                                              stderr=False)
+                                              demux=True)
+        stdout_str, _ = output
+
         container.stop()
-        assert output == b'[0, 1, 4, 9]\n'
-        assert rtn_code == 0
+
+        if stdout_str != b'[0, 1, 4, 9]\n':
+            print(output, file=sys.stderr)
+            raise Exception('invalid result.')
+        if rtn_code != 0:
+            msg = 'invalid return code {}'.format(rtn_code)
+            print(msg, file=sys.stderr)
+            raise Exception(msg)
+
+        client.close()
 
     def tearDown(self):
         delete_cluster()
@@ -117,9 +128,10 @@ print(ray.get(futures))
 def parse_environment():
     global ray_version, ray_image
     for k, v in os.environ.items():
-        if k == 'KUBERAY_TEST_RAY_IMAGE':
-            ray_image = v
-            ray_version = v.split(':')[1]
+        if k == 'RAY_VERSION':
+            print('Setting Ray image to: {}'.format(v), file=sys.stderr)
+            ray_version = v
+            ray_image = 'rayproject/ray:{}'.format(ray_version)
 
 
 if __name__ == '__main__':

@@ -20,10 +20,7 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
       port: '6379' # should match headService targetPort
-      object-manager-port: '12345'
-      node-manager-port: '12346'
       #include_webui: 'true'
-      object-store-memory: '100000000'
       redis-password: 'LetMeInRay'
       # webui_host: "10.1.2.60"
       dashboard-host: '0.0.0.0'
@@ -36,7 +33,7 @@ spec:
         labels:
           # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: raycluster-sample # will be injected if missing
+          rayCluster: raycluster-compatibility-test
           rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod
