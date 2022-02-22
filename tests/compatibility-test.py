@@ -117,10 +117,9 @@ print(ray.get(futures))
 def parse_environment():
     global ray_version, ray_image
     for k, v in os.environ.items():
-        if k == 'KUBERAY_TEST_RAY_VERSION':
-            ray_version = v
         if k == 'KUBERAY_TEST_RAY_IMAGE':
             ray_image = v
+            ray_version = v.split(':')[1]
 
 
 if __name__ == '__main__':

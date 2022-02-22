@@ -145,7 +145,11 @@ jobs:
 
     - name: Run compatibility test
       working-directory: ${{env.working-directory}}
-      run: python ./tests/compatibility-test.py
+      run: |
+        for i in "rayproject/ray:1.8.0" "rayproject/ray:1.9.0" "rayproject/ray:1.10.0"
+        do
+          KUBERAY_TEST_RAY_IMAGE=$i python ./tests/compatibility-test.py
+        done
 
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
