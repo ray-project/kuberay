@@ -54,6 +54,7 @@ jobs:
     env:
       working-directory: ./ray-operator
       cli-working-directory: ./cli
+      apiserver-working-directory: ./apiserver
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -112,9 +113,12 @@ jobs:
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
 
-    - name: Build Docker Image
+    - name: Build Docker Image - Operator
       run: IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
       working-directory: ${{env.working-directory}}
+
+    - name: Build Docker Image - Apiserver
+      run: docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
 
     - name: Log in to Docker Hub
       uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
@@ -128,9 +132,14 @@ jobs:
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
+        docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
+        docker push kuberay/apiserver:nightly
+
       working-directory: ${{env.working-directory}}
       if: ${{ github.ref == 'refs/heads/master' }}
 
     - name: Build CLI
       run: go build -o kuberay -a main.go
       working-directory: ${{env.cli-working-directory}}
+
