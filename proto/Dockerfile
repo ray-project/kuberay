@@ -1,0 +1,35 @@
+# Generate client code (go & json) from API protocol buffers
+FROM golang:1.16.6 as generator
+
+ENV PROTOC_VERSION 3.17.3
+ENV GOLANG_PROTOBUF_VERSION v1.5.2
+ENV GRPC_GATEWAY_VERSION v2.6.0
+ENV GRPC_GATEWAY_OPENAPI_VERSION v2.5.0
+ENV GRPC_VERSION v1.38.0
+ENV GOLANG_GRPC_VERSION v1.1.0
+
+ENV GOBIN=/go/bin
+
+# Install protoc.
+RUN apt-get update && apt-get install -y jq sed unzip
+RUN curl -L -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip
+RUN unzip -o protoc.zip -d /usr/ bin/protoc
+RUN unzip -o protoc.zip -d /usr/ 'include/*'
+RUN rm -f protoc.zip
+ENV PROTOCCOMPILER /usr/bin/protoc
+ENV PROTOCINCLUDE /usr/include/google/protobuf
+
+# Install protoc-gen-go && protoc-gen-go-grpc
+RUN go install github.com/golang/protobuf/protoc-gen-go@$GOLANG_PROTOBUF_VERSION
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$GOLANG_GRPC_VERSION
+
+# Install protoc-gen-rpc-gateway && protoc-gen-openapiv2.
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$GRPC_GATEWAY_VERSION
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@$GRPC_GATEWAY_OPENAPI_VERSION
+
+# WORKAROUND: https://github.com/docker-library/golang/issues/225#issuecomment-403170792
+ENV XDG_CACHE_HOME /tmp/.cache
+# Make all files accessible to non-root users.
+RUN chmod -R 775 /usr/bin/
+RUN chmod -R 775 /usr/include/google
+RUN chmod -R 775 /go

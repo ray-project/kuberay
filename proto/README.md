@@ -9,25 +9,12 @@ In order to run generation commands successfully, please make sure you have foll
 - [Make](https://man7.org/linux/man-pages/man1/make.1.html)
 - [Docker](https://www.docker.com/)
 
-Currently, docker isnot being used for code generation. This is in the roadmap.
-User still have to install protoc, etc to successfully generate the code.
+Run following command to build proto-generator image. We will use it to generate apis.
+
+> Note: you can actually skip this step, and it will download a prebuilt image instead.
 
 ```
-# 1. Install Protocol Buffer
-
-$ brew install protobuf
-$ protoc --version  # Ensure compiler version is 3+
-
-# 2. Install go plugin for protoc and grpc
-
-$ go get -u google.golang.org/grpc
-$ go get -u github.com/golang/protobuf/protoc-gen-go
-
-# 3. Install grpc gateway and openapi plugin for protoc 
-
-$ go get -u github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
-$ go get -u github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2 
-
+make image
 ```
 
 ## Auto Generation
@@ -49,7 +36,7 @@ and [html-inline](https://github.com/substack/html-inline) to generate the API r
 
 ### Third Party Protos
 
-Third party proto dependencies are sync back to `api/third_party` for easy development (IDE friendly).
+Third party proto dependencies are sync back to `proto/third_party` for easy development (IDE friendly).
 Actually, we should specify the directory in which to search for imports instead.
 
 ```
@@ -62,4 +49,3 @@ protoc -I.
 Source: 
 - [googleapis](https://github.com/googleapis/googleapis/tree/master/google/api)
 - [protoc-gen-openapiv2](https://github.com/grpc-ecosystem/grpc-gateway/tree/master/protoc-gen-openapiv2/options)
-
