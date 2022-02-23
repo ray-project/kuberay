@@ -46,7 +46,7 @@ func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options uti
 	}
 
 	// out of cluster
-	rayClusterClient, err = newOutOfClusterRayClusterClient(err, rayClusterClient)
+	rayClusterClient, err = newOutOfClusterRayClusterClient()
 	if err == nil {
 		return &RayClusterClient{client: rayClusterClient}
 	}
@@ -63,7 +63,7 @@ func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options uti
 	return &RayClusterClient{client: rayClusterClient}
 }
 
-func newOutOfClusterRayClusterClient(err error, rayClusterClient rayiov1alpha1.RayV1alpha1Interface) (rayiov1alpha1.RayV1alpha1Interface, error) {
+func newOutOfClusterRayClusterClient() (rayiov1alpha1.RayV1alpha1Interface, error) {
 	home := homedir.HomeDir()
 	if home == "" {
 		return nil, errors.New("Cannot get home dir")
@@ -75,6 +75,6 @@ func newOutOfClusterRayClusterClient(err error, rayClusterClient rayiov1alpha1.R
 	if err != nil {
 		return nil, err
 	}
-	rayClusterClient = rayclusterclient.NewForConfigOrDie(config).RayV1alpha1()
+	rayClusterClient := rayclusterclient.NewForConfigOrDie(config).RayV1alpha1()
 	return rayClusterClient, nil
 }
