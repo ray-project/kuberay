@@ -43,11 +43,11 @@ var instance = &rayiov1alpha1.RayCluster{
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "ray-head",
 							Image: "rayproject/autoscaler",
 							Env: []corev1.EnvVar{
-								corev1.EnvVar{
+								{
 									Name: "MY_POD_IP",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
@@ -62,7 +62,7 @@ var instance = &rayiov1alpha1.RayCluster{
 			},
 		},
 		WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
-			rayiov1alpha1.WorkerGroupSpec{
+			{
 				Replicas:    pointer.Int32Ptr(3),
 				MinReplicas: pointer.Int32Ptr(0),
 				MaxReplicas: pointer.Int32Ptr(10000),
@@ -83,11 +83,11 @@ var instance = &rayiov1alpha1.RayCluster{
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
-							corev1.Container{
+							{
 								Name:  "ray-worker",
 								Image: "rayproject/autoscaler",
 								Env: []corev1.EnvVar{
-									corev1.EnvVar{
+									{
 										Name: "MY_POD_IP",
 										ValueFrom: &corev1.EnvVarSource{
 											FieldRef: &corev1.ObjectFieldSelector{
