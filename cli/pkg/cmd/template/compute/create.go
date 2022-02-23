@@ -8,6 +8,7 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
 type CreateOptions struct {
@@ -36,7 +37,9 @@ func newCmdCreate() *cobra.Command {
 	cmd.Flags().Uint32Var(&opts.memory, "memory", 1, "ray pod memory in GB")
 	cmd.Flags().Uint32Var(&opts.gpu, "gpu", 0, "ray head GPU")
 	cmd.Flags().StringVar(&opts.gpuAccelerator, "gpu-accelerator", "", "GPU Accelerator type")
-	cmd.MarkFlagRequired("name")
+	if err := cmd.MarkFlagRequired("name"); err != nil {
+		klog.Warning(err)
+	}
 
 	return cmd
 }
