@@ -40,6 +40,25 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
+
+	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
+	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
+		headSpec.RayStartParams["no-monitor"] = "true"
+		// set custom service account with proper roles bound.
+		podTemplate.Spec.ServiceAccountName = instance.Name
+
+		redisPasswd := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]
+		if len(redisPasswd) == 0 {
+			redisPasswd = DefaultRedisPassword
+		}
+
+		// inject autoscaler pod into head pod
+		container := BuildAutoscalerContainer(redisPasswd)
+		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
+		// set custom service account which can be authorized to talk with apiserver
+		podTemplate.Spec.ServiceAccountName = instance.Name
+	}
+
 	return podTemplate
 }
 
@@ -111,6 +130,57 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	setContainerEnvVars(&pod.Spec.Containers[index], rayNodeType, rayStartParams, svcName)
 
 	return pod
+}
+
+// BuildAutoscalerContainer build a ray autoscaler container which can be appended to head pod.
+func BuildAutoscalerContainer(redisPasswd string) v1.Container {
+	container := v1.Container{
+		Name: "autoscaler",
+		// TODO: choose right version based on instance.spec.Version
+		Image:           "kuberay/autoscaler:nightly",
+		ImagePullPolicy: v1.PullAlways,
+		Env: []v1.EnvVar{
+			{
+				Name: "RAY_CLUSTER_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "metadata.labels['ray.io/cluster']",
+					},
+				},
+			},
+			{
+				Name: "RAY_CLUSTER_NAMESPACE",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+		},
+		Command: []string{
+			"/home/ray/anaconda3/bin/python",
+		},
+		Args: []string{
+			"/home/ray/run_autoscaler_with_retries.py",
+			"--cluster-name",
+			"$(RAY_CLUSTER_NAME)",
+			"--cluster-namespace",
+			"$(RAY_CLUSTER_NAMESPACE)",
+			"--redis-password",
+			redisPasswd,
+		},
+		Resources: v1.ResourceRequirements{
+			Limits: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("500m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+			Requests: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("256m"),
+				v1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+		},
+	}
+	return container
 }
 
 func isRayStartWithBlock(rayStartParams map[string]string) bool {

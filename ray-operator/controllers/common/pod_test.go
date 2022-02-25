@@ -7,15 +7,17 @@ import (
 	"strings"
 	"testing"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
 
-var instance = &rayiov1alpha1.RayCluster{
+var instance = rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
@@ -33,7 +35,7 @@ var instance = &rayiov1alpha1.RayCluster{
 				"redis-password":      "LetMeInRay",
 				"num-cpus":            "1",
 			},
-			Template: corev1.PodTemplateSpec{
+			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
@@ -41,16 +43,16 @@ var instance = &rayiov1alpha1.RayCluster{
 						"ray.io/group":   "headgroup",
 					},
 				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
 						{
 							Name:  "ray-head",
 							Image: "rayproject/autoscaler",
-							Env: []corev1.EnvVar{
+							Env: []v1.EnvVar{
 								{
 									Name: "MY_POD_IP",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
 											FieldPath: "status.podIP",
 										},
 									},
@@ -73,7 +75,7 @@ var instance = &rayiov1alpha1.RayCluster{
 					"num-cpus":       "1",
 					"block":          "true",
 				},
-				Template: corev1.PodTemplateSpec{
+				Template: v1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
 						Labels: map[string]string{
@@ -81,16 +83,16 @@ var instance = &rayiov1alpha1.RayCluster{
 							"ray.io/group":   "small-group",
 						},
 					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
 							{
 								Name:  "ray-worker",
 								Image: "rayproject/autoscaler",
-								Env: []corev1.EnvVar{
+								Env: []v1.EnvVar{
 									{
 										Name: "MY_POD_IP",
-										ValueFrom: &corev1.EnvVarSource{
-											FieldRef: &corev1.ObjectFieldSelector{
+										ValueFrom: &v1.EnvVarSource{
+											FieldRef: &v1.ObjectFieldSelector{
 												FieldPath: "status.podIP",
 											},
 										},
@@ -105,14 +107,63 @@ var instance = &rayiov1alpha1.RayCluster{
 	},
 }
 
+var autoscalerContainer = v1.Container{
+	Name:            "autoscaler",
+	Image:           "kuberay/autoscaler:nightly",
+	ImagePullPolicy: v1.PullAlways,
+	Env: []v1.EnvVar{
+		{
+			Name: "RAY_CLUSTER_NAME",
+			ValueFrom: &v1.EnvVarSource{
+				FieldRef: &v1.ObjectFieldSelector{
+					FieldPath: "metadata.labels['ray.io/cluster']",
+				},
+			},
+		},
+		{
+			Name: "RAY_CLUSTER_NAMESPACE",
+			ValueFrom: &v1.EnvVarSource{
+				FieldRef: &v1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+	},
+	Command: []string{
+		"/home/ray/anaconda3/bin/python",
+	},
+	Args: []string{
+		"/home/ray/run_autoscaler_with_retries.py",
+		"--cluster-name",
+		"$(RAY_CLUSTER_NAME)",
+		"--cluster-namespace",
+		"$(RAY_CLUSTER_NAMESPACE)",
+		"--redis-password",
+		DefaultRedisPassword,
+	},
+	Resources: v1.ResourceRequirements{
+		Limits: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("500m"),
+			v1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+		Requests: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("256m"),
+			v1.ResourceMemory: resource.MustParse("256Mi"),
+		},
+	},
+}
+
+var trueFlag = true
+
 func TestBuildPod(t *testing.T) {
-	podName := strings.ToLower(instance.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
-	svcName := utils.GenerateServiceName(instance.Name)
-	podTemplateSpec := DefaultHeadPodTemplate(*instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
+	cluster := instance.DeepCopy()
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
-	expectedResult := instance.Name
+	expectedResult := cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -128,13 +179,13 @@ func TestBuildPod(t *testing.T) {
 	}
 
 	//testing worker pod
-	worker := instance.Spec.WorkerGroupSpecs[0]
-	podName = instance.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	podTemplateSpec = DefaultWorkerPodTemplate(*instance, worker, podName, svcName)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName)
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
 
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
-	actualResult = instance.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
+	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
 
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -143,6 +194,76 @@ func TestBuildPod(t *testing.T) {
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args)
+	}
+}
+
+func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName)
+
+	actualResult := pod.Labels[RayClusterLabelKey]
+	expectedResult := cluster.Name
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+	actualResult = pod.Labels[RayNodeTypeLabelKey]
+	expectedResult = string(rayiov1alpha1.HeadNode)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+	actualResult = pod.Labels[RayNodeGroupLabelKey]
+	expectedResult = "headgroup"
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	// verify no-monitoring is set. conversion only happens in BuildPod so we can only check it here.
+	expectedResult = "--no-monitor"
+	if !strings.Contains(pod.Spec.Containers[0].Args[0], expectedResult) {
+		t.Fatalf("Expected `%v` in `%v` but doesn't have the config", expectedResult, pod.Spec.Containers[0].Args[0])
+	}
+
+	actualResult = cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"]
+	targetContainer, err := utils.FilterContainerByName(pod.Spec.Containers, "autoscaler")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if !utils.Contains(targetContainer.Args, actualResult) {
+		t.Fatalf("Expected redis password `%v` in `%v` but not found", targetContainer.Args, actualResult)
+	}
+}
+
+func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+
+	// autoscaler container is injected into head pod
+	actualContainerCount := len(podTemplateSpec.Spec.Containers)
+	expectedContainerCount := 2
+	if !reflect.DeepEqual(expectedContainerCount, actualContainerCount) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedContainerCount, actualContainerCount)
+	}
+
+	actualResult := podTemplateSpec.Spec.ServiceAccountName
+	expectedResult := cluster.Name
+
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+func TestBuildAutoscalerContainer(t *testing.T) {
+	actualContainer := BuildAutoscalerContainer(DefaultRedisPassword)
+	expectedContainer := autoscalerContainer
+	if !reflect.DeepEqual(expectedContainer, actualContainer) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
 	}
 }
 

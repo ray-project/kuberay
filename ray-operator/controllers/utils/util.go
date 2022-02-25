@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -148,4 +149,19 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	}
 
 	return count
+}
+
+func Contains(s []string, searchTerm string) bool {
+	i := sort.SearchStrings(s, searchTerm)
+	return i < len(s) && s[i] == searchTerm
+}
+
+func FilterContainerByName(containers []corev1.Container, name string) (corev1.Container, error) {
+	for _, container := range containers {
+		if strings.Compare(container.Name, name) == 0 {
+			return container, nil
+		}
+	}
+
+	return corev1.Container{}, fmt.Errorf("can not find container %s", name)
 }

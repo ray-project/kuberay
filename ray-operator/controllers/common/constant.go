@@ -29,4 +29,7 @@ const (
 	RAY_IP         = "RAY_IP"
 	RAY_PORT       = "RAY_PORT"
 	REDIS_PASSWORD = "REDIS_PASSWORD"
+
+	// Ray core default configurations
+	DefaultRedisPassword = "5241590000000000"
 )
