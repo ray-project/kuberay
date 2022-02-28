@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
@@ -53,12 +55,24 @@ func newCmdCreate() *cobra.Command {
 	cmd.Flags().StringVar(&opts.workerComputeTemplate, "worker-compute-template", "", "compute template name of worker in the first worker group")
 	cmd.Flags().StringVar(&opts.workerImage, "worker-image", "", "image of worker in the first worker group")
 	cmd.Flags().Uint32Var(&opts.workerReplicas, "worker-replicas", 1, "pod replicas of workers in the first worker group")
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("user")
-	cmd.MarkFlagRequired("head-image")
-	cmd.MarkFlagRequired("head-compute-tempalte")
-	cmd.MarkFlagRequired("worker-image")
-	cmd.MarkFlagRequired("worker-compute-template")
+	if err := cmd.MarkFlagRequired("name"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("user"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("head-image"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("head-compute-template"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("worker-image"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("worker-compute-template"); err != nil {
+		klog.Warning(err)
+	}
 
 	// handle user from auth and inject it.
 

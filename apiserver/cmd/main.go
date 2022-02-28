@@ -24,7 +24,6 @@ import (
 var (
 	rpcPortFlag        = flag.String("rpcPortFlag", ":8887", "RPC Port")
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
-	configPath         = flag.String("config", "", "Path to JSON file containing config")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 )
 
@@ -80,7 +79,10 @@ func startHttpProxy() {
 	topMux.Handle("/", runtimeMux)
 	topMux.Handle("/metrics", promhttp.Handler())
 
-	http.ListenAndServe(*httpPortFlag, topMux)
+	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
+		klog.Fatal(err)
+	}
+
 	klog.Info("Http Proxy started")
 }
 

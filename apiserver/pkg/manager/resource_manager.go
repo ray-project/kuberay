@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 
@@ -12,7 +11,6 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
@@ -45,10 +43,6 @@ func NewResourceManager(clientManager ClientManagerInterface) *ResourceManager {
 // Clients
 func (r *ResourceManager) getRayClusterClient(namespace string) rayiov1alpha1.RayClusterInterface {
 	return r.clientManager.ClusterClient().RayClusterClient(namespace)
-}
-
-func (r *ResourceManager) getKubernetesPodClient(namespace string) clientv1.PodInterface {
-	return r.clientManager.KubernetesClient().PodClient(namespace)
 }
 
 func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv1.ConfigMapInterface {
@@ -166,7 +160,7 @@ func (r *ResourceManager) CreateComputeTemplate(ctx context.Context, runtime *ap
 		return nil, util.NewInternalServerError(err, "Failed to convert compute runtime (%s/%s)", DefaultNamespace, runtime.Name)
 	}
 
-	client := r.clientManager.KubernetesClient().ConfigMapClient(DefaultNamespace)
+	client := r.getKubernetesConfigMapClient(DefaultNamespace)
 	newRuntime, err := client.Create(ctx, computeTemplate, metav1.CreateOptions{})
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to create a compute runtime for (%s/%s)", DefaultNamespace, runtime.Name)
@@ -176,12 +170,12 @@ func (r *ResourceManager) CreateComputeTemplate(ctx context.Context, runtime *ap
 }
 
 func (r *ResourceManager) GetComputeTemplate(ctx context.Context, name string) (*v1.ConfigMap, error) {
-	client := r.clientManager.KubernetesClient().ConfigMapClient(DefaultNamespace)
+	client := r.getKubernetesConfigMapClient(DefaultNamespace)
 	return getComputeTemplateByName(ctx, client, name)
 }
 
 func (r *ResourceManager) ListComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error) {
-	client := r.clientManager.KubernetesClient().ConfigMapClient(DefaultNamespace)
+	client := r.getKubernetesConfigMapClient(DefaultNamespace)
 	configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
 	if err != nil {
 		return nil, util.Wrap(err, "List compute runtimes failed")
@@ -197,7 +191,7 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context) ([]*v1.Confi
 }
 
 func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string) error {
-	client := r.clientManager.KubernetesClient().ConfigMapClient(DefaultNamespace)
+	client := r.getKubernetesConfigMapClient(DefaultNamespace)
 
 	configMap, err := getComputeTemplateByName(ctx, client, name)
 	if err != nil {
@@ -229,54 +223,4 @@ func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInte
 	}
 
 	return runtime, nil
-}
-
-// getClusterByName returns the Kubernetes RayCluster object by given name and client
-func getClusterByNameFromLabel(ctx context.Context, client rayiov1alpha1.RayClusterInterface, name string) (*v1alpha1.RayCluster, error) {
-	labelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			util.RayClusterNameLabelKey: name,
-		},
-	}
-	clusters, err := client.List(ctx, metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
-	})
-	if err != nil {
-		return nil, util.Wrap(err, "Get Cluster failed")
-	}
-
-	if len(clusters.Items) > 1 {
-		return nil, fmt.Errorf("find %d duplicates clusters", len(clusters.Items))
-	}
-
-	if len(clusters.Items) == 0 {
-		return nil, fmt.Errorf("can not find clusters with name %s", name)
-	}
-
-	return &clusters.Items[0], nil
-}
-
-func getComputeTemplateByLabel(ctx context.Context, name string, client clientv1.ConfigMapInterface) (*v1.ConfigMap, error) {
-	labelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"ray.io/config-type":     "compute-runtime",
-			"ray.io/compute-runtime": name,
-		},
-	}
-	runtimes, err := client.List(ctx, metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
-	})
-	if err != nil {
-		return nil, util.Wrap(err, "Get compute runtime failed")
-	}
-
-	if len(runtimes.Items) > 1 {
-		return nil, fmt.Errorf("find %d duplicates compute runtimes", len(runtimes.Items))
-	}
-
-	if len(runtimes.Items) == 0 {
-		return nil, fmt.Errorf("can not find compue runtime with name %s", name)
-	}
-
-	return &runtimes.Items[0], nil
 }
