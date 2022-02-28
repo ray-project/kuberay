@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/cli/pkg/cmd/cluster"
 	"github.com/ray-project/kuberay/cli/pkg/cmd/config"
 	"github.com/ray-project/kuberay/cli/pkg/cmd/info"
@@ -76,12 +78,16 @@ func initConfig() {
 
 		viper.SetDefault("endpoint", fmt.Sprintf("%s:%s", cmdutil.DefaultRpcAddress, cmdutil.DefaultRpcPort))
 		// Do not write to file system if it already exists
-		viper.SafeWriteConfig()
+		if err := viper.SafeWriteConfig(); err != nil {
+			klog.Fatal(err)
+		}
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 
-	viper.ReadInConfig()
+	if err := viper.ReadInConfig(); err != nil {
+		klog.Fatal(err)
+	}
 }
 
 func initLogger(level int, colorValue string) {

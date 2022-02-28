@@ -26,7 +26,26 @@ jobs:
         # Default value should work for both pull_request and merge(push) event.
         ref: ${{github.event.pull_request.head.sha}}
 
-    - name: Run linter
+    - name: Run gofmt
+      uses: Jerome1337/gofmt-action@v1.0.4
+      with:
+        gofmt-path: 'apiserver cli ray-operator'
+        gofmt-flags: '-l -d -s'
+
+    - name: Install goimports
+      run: go get golang.org/x/tools/cmd/goimports
+
+    - name: Run goimports
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
+
+    - name: Open this to see how to fix goimports if it fails
+      run: |
+        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
+        $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
+      if: failure()
+
+    - name: Run linter against ray operator
       uses: golangci/golangci-lint-action@v2
       with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
@@ -50,6 +69,22 @@ jobs:
 
           # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
           # skip-build-cache: true
+
+    - name: Run linter against apiserver
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.29
+        working-directory: ./apiserver
+        args: --timeout=3m
+        skip-go-installation: true
+
+    - name: Run linter against cli
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.29
+        working-directory: ./cli
+        args: --timeout=3m
+        skip-go-installation: true
   build:
     env:
       working-directory: ./ray-operator
@@ -70,19 +105,6 @@ jobs:
         # triggered a workflow, this defaults to the reference or SHA for that event.
         # Default value should work for both pull_request and merge(push) event.
         ref: ${{github.event.pull_request.head.sha}}
-
-    - name: Install goimports
-      run: go get golang.org/x/tools/cmd/goimports
-
-    - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
-
-    - name: Open this to see how to fix goimports if it fails
-      run: |
-        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
-        echo "Proposed format changes:"
-        $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
-      if: failure()
 
     - name: list directories
       working-directory: ${{env.working-directory}}

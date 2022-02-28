@@ -30,7 +30,7 @@ var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:    "ray-head",
 							Image:   "rayproject/autoscaler",
 							Command: []string{"python"},
@@ -55,13 +55,13 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayiov1alpha1.RayCluster{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:    "ray-head",
 							Image:   "rayproject/autoscaler",
 							Command: []string{"python"},
 							Args:    []string{"/opt/code.py"},
 							Env: []corev1.EnvVar{
-								corev1.EnvVar{
+								{
 									Name: "MY_POD_IP",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
