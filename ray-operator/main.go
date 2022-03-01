@@ -36,7 +36,7 @@ func main() {
 	var reconcileConcurrency int
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
 	opts := zap.Options{
@@ -55,7 +55,8 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ray-operator-leader",
+		LeaderElectionID:       "kuberay-leader",
+		Namespace:              "ray-operator",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
