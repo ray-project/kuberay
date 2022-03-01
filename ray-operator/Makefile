@@ -1,3 +1,5 @@
+BUILD_TIME      := $(shell date "+%F %T")
+COMMIT_SHA1     := $(shell git rev-parse HEAD )
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
@@ -58,7 +60,13 @@ test: manifests generate fmt vet ## Run tests.
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build                                    \
+    -ldflags                                    \
+    "                                           \
+    -X 'main._buildTime_=${BUILD_TIME}'        \
+    -X 'main._commitId_=${COMMIT_SHA1}'        \
+    "                                           \
+    -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
