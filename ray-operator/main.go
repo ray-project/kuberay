@@ -34,11 +34,17 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var reconcileConcurrency int
+	var watchNamespace string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
+	flag.StringVar(
+		&watchNamespace,
+		"watch-namespace",
+		"",
+		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -56,7 +62,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "kuberay-leader",
-		Namespace:              "ray-operator",
+		Namespace:              watchNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
