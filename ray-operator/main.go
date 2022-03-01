@@ -39,7 +39,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var reconcileConcurrency int
-	flag.BoolVar(&version, "--version", false, "Show the version information.")
+	flag.BoolVar(&version, "version", false, "Show the version information.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
