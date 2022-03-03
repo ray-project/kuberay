@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/ray-project/kuberay/ray-operator/operatorconfig"
@@ -20,8 +21,11 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	_version_   = "0.2"
+	_buildTime_ = ""
+	_commitId_  = ""
+	scheme      = runtime.NewScheme()
+	setupLog    = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -31,11 +35,13 @@ func init() {
 }
 
 func main() {
+	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
+	flag.BoolVar(&version, "version", false, "Show the version information.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
@@ -51,6 +57,12 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	if version {
+		fmt.Printf("Version:\t%s\n", _version_)
+		fmt.Printf("Commit ID:\t%s\n", _commitId_)
+		fmt.Printf("Build time:\t%s\n", _buildTime_)
+		os.Exit(0)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
