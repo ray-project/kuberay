@@ -264,17 +264,23 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
-		rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+		if !cpu.IsZero() {
+			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+		}
 	}
 
 	if _, ok := rayStartParams["object-store-memory"]; !ok {
 		memory := resource.Limits[v1.ResourceMemory]
-		rayStartParams["object-store-memory"] = strconv.FormatInt(memory.Value(), 10)
+		if !memory.IsZero() {
+			rayStartParams["object-store-memory"] = strconv.FormatInt(memory.Value(), 10)
+		}
 	}
 
 	if _, ok := rayStartParams["num-gpus"]; !ok {
 		gpu := resource.Limits["gpu"]
-		rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
+		if !gpu.IsZero() {
+			rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
+		}
 	}
 
 	log.Info("concatenate container command", "ray start params", rayStartParams)
