@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -14,13 +15,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	_version_   = "0.2"
+	_buildTime_ = ""
+	_commitId_  = ""
+	scheme      = runtime.NewScheme()
+	setupLog    = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -30,20 +34,34 @@ func init() {
 }
 
 func main() {
+	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var reconcileConcurrency int
+	var watchNamespace string
+	flag.BoolVar(&version, "version", false, "Show the version information.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
+	flag.StringVar(
+		&watchNamespace,
+		"watch-namespace",
+		"",
+		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	if version {
+		fmt.Printf("Version:\t%s\n", _version_)
+		fmt.Printf("Commit ID:\t%s\n", _commitId_)
+		fmt.Printf("Build time:\t%s\n", _buildTime_)
+		os.Exit(0)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -56,6 +74,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ray-operator-leader",
+		Namespace:              watchNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

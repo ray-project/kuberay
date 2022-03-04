@@ -3,10 +3,11 @@ package common
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 
 	corev1 "k8s.io/api/core/v1"
@@ -42,13 +43,11 @@ var instance = &rayiov1alpha1.RayCluster{
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
-							Name:    "ray-head",
-							Image:   "rayproject/autoscaler",
-							Command: []string{"python"},
-							Args:    []string{"/opt/code.py"},
+						{
+							Name:  "ray-head",
+							Image: "rayproject/autoscaler",
 							Env: []corev1.EnvVar{
-								corev1.EnvVar{
+								{
 									Name: "MY_POD_IP",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
@@ -63,7 +62,7 @@ var instance = &rayiov1alpha1.RayCluster{
 			},
 		},
 		WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
-			rayiov1alpha1.WorkerGroupSpec{
+			{
 				Replicas:    pointer.Int32Ptr(3),
 				MinReplicas: pointer.Int32Ptr(0),
 				MaxReplicas: pointer.Int32Ptr(10000),
@@ -72,6 +71,7 @@ var instance = &rayiov1alpha1.RayCluster{
 					"port":           "6379",
 					"redis-password": "LetMeInRay",
 					"num-cpus":       "1",
+					"block":          "true",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -83,13 +83,11 @@ var instance = &rayiov1alpha1.RayCluster{
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
-							corev1.Container{
-								Name:    "ray-worker",
-								Image:   "rayproject/autoscaler",
-								Command: []string{"echo"},
-								Args:    []string{"Hello Ray"},
+							{
+								Name:  "ray-worker",
+								Image: "rayproject/autoscaler",
 								Env: []corev1.EnvVar{
-									corev1.EnvVar{
+									{
 										Name: "MY_POD_IP",
 										ValueFrom: &corev1.EnvVarSource{
 											FieldRef: &corev1.ObjectFieldSelector{
@@ -141,4 +139,21 @@ func TestBuildPod(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
+	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args)
+	}
+}
+
+func splitAndSort(s string) []string {
+	strs := strings.Split(s, " ")
+	result := make([]string, 0, len(strs))
+	for _, s := range strs {
+		if len(s) > 0 {
+			result = append(result, s)
+		}
+	}
+	sort.Strings(result)
+	return result
 }

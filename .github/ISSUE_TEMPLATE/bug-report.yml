@@ -30,6 +30,8 @@ body:
       multiple: true
       options:
         - "ray-operator"
+        - "apiserver"
+        - "ci"
         - "Others"
     validations:
       required: true

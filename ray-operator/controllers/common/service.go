@@ -1,7 +1,7 @@
 package common
 
 import (
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,20 +29,24 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 		},
 	}
 
-	ports, _ := getPortsFromCluster(cluster)
-	// Assign default ports
-	if len(ports) == 0 {
-		ports[DefaultClientPortName] = DefaultClientPort
-		ports[DefaultRedisPortName] = DefaultRedisPort
-		ports[DefaultDashboardName] = DefaultDashboardPort
-	}
-
+	ports := getServicePorts(cluster)
 	for name, port := range ports {
 		svcPort := corev1.ServicePort{Name: name, Port: port}
 		service.Spec.Ports = append(service.Spec.Ports, svcPort)
 	}
 
 	return service, nil
+}
+
+// getServicePorts will either user passing ports or default ports to create service.
+func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
+	ports, err := getPortsFromCluster(cluster)
+	// Assign default ports
+	if err != nil || len(ports) == 0 {
+		ports = getDefaultPorts()
+	}
+
+	return ports
 }
 
 // getPortsFromCluster get the ports from head container and directly map them in service
@@ -58,4 +62,12 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 	}
 
 	return svcPorts, nil
+}
+
+func getDefaultPorts() map[string]int32 {
+	return map[string]int32{
+		DefaultClientPortName: DefaultClientPort,
+		DefaultRedisPortName:  DefaultRedisPort,
+		DefaultDashboardName:  DefaultDashboardPort,
+	}
 }

@@ -103,6 +103,7 @@ const (
 // RayCluster is the Schema for the RayClusters API
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+genclient
 type RayCluster struct {
 	// Standard object metadata.
 	metav1.TypeMeta   `json:",inline"`

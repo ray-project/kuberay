@@ -1,8 +1,10 @@
+BUILD_TIME      := $(shell date "+%F %T")
+COMMIT_SHA1     := $(shell git rev-parse HEAD )
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:maxDescLen=100,trivialVersions=true,preserveUnknownFields=false"
+CRD_OPTIONS ?= "crd:maxDescLen=100,trivialVersions=true,preserveUnknownFields=false,generateEmbeddedObjectMeta=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -58,13 +60,21 @@ test: manifests generate fmt vet ## Run tests.
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build                                    \
+    -ldflags                                    \
+    "                                           \
+    -X 'main._buildTime_=${BUILD_TIME}'         \
+    -X 'main._commitId_=${COMMIT_SHA1}'         \
+    "                                           \
+    -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
-docker-build: test ## Build docker image with the manager.
+docker-image: ## Build image only
 	docker build -t ${IMG} .
+
+docker-build: test docker-image ## Build docker image with the manager.
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
@@ -87,7 +97,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.0)
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.

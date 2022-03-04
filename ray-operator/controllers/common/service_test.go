@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 
 	"github.com/stretchr/testify/assert"
 
@@ -40,13 +40,13 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:    "ray-head",
 							Image:   "rayproject/autoscaler",
 							Command: []string{"python"},
 							Args:    []string{"/opt/code.py"},
 							Env: []corev1.EnvVar{
-								corev1.EnvVar{
+								{
 									Name: "MY_POD_IP",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{

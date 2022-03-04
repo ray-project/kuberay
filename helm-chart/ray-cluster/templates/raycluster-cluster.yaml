@@ -1,0 +1,71 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  labels:
+{{ include "ray-cluster.labels" . | indent 4 }}
+  name: {{ include "ray-cluster.fullname" . }}
+spec:
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+    {{- range $key, $val := .Values.head.initArgs }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    replicas: {{ .Values.head.replicas }}
+    template:
+      spec:
+        containers:
+          - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
+            name: ray-head
+            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            resources: {{- toYaml .Values.head.resources | nindent 14 }}
+            env:
+              - name: TYPE
+                value: head
+            {{- toYaml .Values.head.containerEnv | nindent 14}}
+        volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
+        affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
+      metadata:
+        annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
+        labels:
+          groupName: {{ .Values.head.groupName }}
+          rayNodeType: {{ .Values.head.type }}
+          rayCluster: {{ include "ray-cluster.fullname" . }}
+{{ include "ray-cluster.labels" . | indent 10 }}
+
+  workerGroupSpecs:
+  - rayStartParams:
+    {{- range $key, $val := .Values.worker.initArgs }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    replicas: {{ .Values.worker.replicas }}
+    minReplicas: {{ .Values.worker.miniReplicas | default 1 }}
+    maxReplicas: {{ .Values.worker.maxiReplicas | default 2147483647 }}
+    groupName: {{ .Values.worker.groupName }}
+    template:
+      spec:
+        initContainers:
+          - name: init-myservice
+            image: busybox:1.28
+            command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+        containers:
+          - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+            name: ray-worker
+            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            resources: {{- toYaml .Values.worker.resources | nindent 14 }}
+            env:
+              - name: TYPE
+                value: worker
+            {{- toYaml .Values.worker.containerEnv | nindent 14}}
+            ports: {{- toYaml .Values.worker.ports | nindent 14}}
+        volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
+        affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
+      metadata:
+        annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
+        labels:
+          rayNodeType: {{ .Values.worker.type }}
+          groupName: {{ .Values.worker.groupName }}
+          rayCluster: {{ include "ray-cluster.fullname" . }}
+{{ include "ray-cluster.labels" . | indent 10 }}

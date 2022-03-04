@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  schemes: HTTP;
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+service ClusterService {
+  // Creates a new Cluster.
+  rpc CreateCluster(CreateClusterRequest) returns (Cluster) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha1/clusters"
+      body: "cluster"
+    };
+  }
+
+  // Finds a specific Cluster by ID.
+  rpc GetCluster(GetClusterRequest) returns (Cluster) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/clusters/{id}"
+    };
+  }
+
+  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha1/clusters"
+    };
+  }
+
+  // Deletes an cluster without deleting the cluster's runs and jobs. To
+  // avoid unexpected behaviors, delete an cluster's runs and jobs before
+  // deleting the cluster.
+  rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha1/clusters/{id}"
+    };
+  }
+}
+
+message CreateClusterRequest {
+  // The Cluster to be created.
+  Cluster cluster = 1;
+}
+
+message GetClusterRequest {
+  // The ID of the Cluster to be retrieved.
+  string id = 1;
+  // The name of the Cluster to be retrieved.
+  string name = 2;
+}
+
+message ListClustersRequest {
+  // A page token to request the next page of results. The token is acquried
+  // from the nextPageToken field of the response from the previous
+  // ListCluster call or can be omitted when fetching the first page.
+  // TODO: support this later
+}
+
+message ListClustersResponse {
+  // A list of Clusters returned.
+  repeated Cluster clusters = 1;
+
+  // The total number of Clusters for the given query.
+  // int32 total_size = 2;
+
+  // The token to list the next page of Clusters.
+  // string next_page_token = 3;
+}
+
+message DeleteClusterRequest {
+  // The ID of the cluster to be deleted.
+  string id = 1;
+  // The name of the Cluster to be retrieved.
+  string name = 2;
+}
+
+message Cluster {
+  // Required input field. Unique Cluster name provided by user.
+  string name = 1;
+
+  // Required input field. Cluster's namespace provided by user
+  string namespace = 2;
+
+  // Required field. This field indicates the user who owns the cluster.
+  string user = 3;
+
+  // Optional input field. Ray cluster version
+  string version = 4;
+
+  // Optional field.
+  enum Environment {
+    DEV = 0;
+    TESTING = 1;
+    STAGING = 2;
+    PRODUCTION = 3;
+  }
+  Environment environment = 5;
+  
+  // Required field. This field indicates ray cluster configuration
+  ClusterSpec cluster_spec = 6;
+
+  // Output. The time that the Cluster created.
+  google.protobuf.Timestamp created_at = 7;
+
+  // Output. The time that the Cluster deleted.
+  google.protobuf.Timestamp deleted_at = 8;
+}
+
+message ClusterSpec {
+  // The head group configuration
+  HeadGroupSpec head_group_spec = 1;
+  // The worker group configurations
+  repeated WorkerGroupSpec worker_group_sepc = 2;
+}
+
+message HeadGroupSpec {
+  // Optional. The computeTemplate of head node group
+  string compute_template = 1;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 2;
+  // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
+  string service_type = 3;
+  // Optional. The ray start parames of head node group
+  map<string, string> ray_start_params = 4;
+}
+
+message WorkerGroupSpec {
+  // Required. Group name of the current worker group
+  string group_name = 1;
+  // Optional. The computeTemplate of head node group
+  string compute_template = 2;
+  // Optional field. This field will be used to retrieve right ray container
+  string image = 3;
+  // Required. Desired replicas of the worker group 
+  int32 replicas = 4;
+  // Optional. Min replicas of the worker group 
+  int32 min_replicas = 5;
+  // Optional. Max replicas of the worker group 
+  int32 max_replicas = 6;
+  // Optional. The ray start parames of worker node group
+  map<string, string> ray_start_params = 7;
+}

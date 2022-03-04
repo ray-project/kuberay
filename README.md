@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/ray-project/kuberay/workflows/Go-build-and-test/badge.svg)](https://github.com/ray-project/kuberay/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ray-project/kuberay)](https://goreportcard.com/report/github.com/ray-project/kuberay)
 
-KubRay is an open source toolkit to run Ray applications on Kubernetes.
+KubeRay is an open source toolkit to run Ray applications on Kubernetes.
 
 KubeRay provides several tools to improve running and managing Ray's experience on Kubernetes.
 
@@ -13,6 +13,20 @@ KubeRay provides several tools to improve running and managing Ray's experience 
 - Kubernetes event dumper for ray clusters/pod/services (future work)
 - Operator Integration with Kubernetes node problem detector (future work)
 - Kubernetes based workspace to easily submit ray jobs (future work)
+
+## Quick Start
+
+### Use Yaml
+
+```
+kubectl apply -k manifests/cluster-scope-resources
+kubectl apply -k manifests/base
+```
+
+### Use helm chart
+
+A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
+Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
 
 ## Development
 

@@ -37,13 +37,13 @@ var myRayCluster = &RayCluster{
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:    "ray-head",
 							Image:   "rayproject/autoscaler",
 							Command: []string{"python"},
 							Args:    []string{"/opt/code.py"},
 							Env: []corev1.EnvVar{
-								corev1.EnvVar{
+								{
 									Name: "MY_POD_IP",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
@@ -58,7 +58,7 @@ var myRayCluster = &RayCluster{
 			},
 		},
 		WorkerGroupSpecs: []WorkerGroupSpec{
-			WorkerGroupSpec{
+			{
 				Replicas:    pointer.Int32Ptr(3),
 				MinReplicas: pointer.Int32Ptr(0),
 				MaxReplicas: pointer.Int32Ptr(10000),
@@ -78,13 +78,13 @@ var myRayCluster = &RayCluster{
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
-							corev1.Container{
+							{
 								Name:    "ray-worker",
 								Image:   "rayproject/autoscaler",
 								Command: []string{"echo"},
 								Args:    []string{"Hello Ray"},
 								Env: []corev1.EnvVar{
-									corev1.EnvVar{
+									{
 										Name: "MY_POD_IP",
 										ValueFrom: &corev1.EnvVarSource{
 											FieldRef: &corev1.ObjectFieldSelector{
