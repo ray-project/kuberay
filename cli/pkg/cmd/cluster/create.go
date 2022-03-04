@@ -48,7 +48,7 @@ func newCmdCreate() *cobra.Command {
 		"environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION)")
 	cmd.Flags().StringVar(&opts.version, "version", "1.9.0", "version of the ray cluster")
 	cmd.Flags().StringVar(&opts.user, "user", "", "SSO username of ray cluster creator")
-	cmd.Flags().StringVar(&opts.headComputeTemplate, "head-compute-tempalte", "", "compuate template name for ray head")
+	cmd.Flags().StringVar(&opts.headComputeTemplate, "head-compute-template", "", "compuate template name for ray head")
 	cmd.Flags().StringVar(&opts.headImage, "head-image", "", "ray head image")
 	cmd.Flags().StringVar(&opts.headServiceType, "head-service-type", "ClusterIP", "ray head service type (ClusterIP, NodePort, LoadBalancer)")
 	cmd.Flags().StringVar(&opts.workerGroupName, "worker-group-name", "", "first worker group name")
@@ -71,6 +71,9 @@ func newCmdCreate() *cobra.Command {
 		klog.Warning(err)
 	}
 	if err := cmd.MarkFlagRequired("worker-compute-template"); err != nil {
+		klog.Warning(err)
+	}
+	if err := cmd.MarkFlagRequired("worker-group-name"); err != nil {
 		klog.Warning(err)
 	}
 
