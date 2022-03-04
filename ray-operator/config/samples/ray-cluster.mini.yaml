@@ -23,11 +23,11 @@ spec:
       object-manager-port: '12345'
       node-manager-port: '12346'
       #include_webui: 'true'
-#      object-store-memory: '100000000'
+      object-store-memory: '100000000'
       redis-password: 'LetMeInRay'
       # webui_host: "10.1.2.60"
       dashboard-host: '0.0.0.0'
-#      num-cpus: '1' # can be auto-completed from the limits
+      num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
     #pod template
