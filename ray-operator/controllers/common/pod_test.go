@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"reflect"
 	"sort"
 	"strings"
@@ -96,6 +97,14 @@ var instance = &rayiov1alpha1.RayCluster{
 										},
 									},
 								},
+								Resources: corev1.ResourceRequirements{
+									Limits: corev1.ResourceList{
+										corev1.ResourceMemory: resource.MustParse("4Gi"),
+									},
+									Requests: corev1.ResourceList{
+										corev1.ResourceMemory: resource.MustParse("4Gi"),
+									},
+								},
 							},
 						},
 					},
@@ -140,7 +149,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --object-store-memory=4294967296  --address=raycluster-sample-head-svc:6379  --port=6379  --redis-password=LetMeInRay")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
 	}
