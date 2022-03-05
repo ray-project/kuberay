@@ -79,7 +79,9 @@ func initConfig() {
 		viper.SetDefault("endpoint", fmt.Sprintf("%s:%s", cmdutil.DefaultRpcAddress, cmdutil.DefaultRpcPort))
 		// Do not write to file system if it already exists
 		if err := viper.SafeWriteConfig(); err != nil {
-			klog.Fatal(err)
+			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
+				klog.Fatal(err)
+			}
 		}
 	}
 
