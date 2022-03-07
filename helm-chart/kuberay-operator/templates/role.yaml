@@ -9,49 +9,99 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods
-  - pods/log
-  - pods/status
-  - pods/exec
-  - services
-  - endpoints
-  - persistentvolumeclaims
   - events
-  - configmaps
-  - secrets
   verbs:
-  - "*"
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
-  - namespaces
+  - pods
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - deployments/status
-  - daemonsets
-  - replicasets
-  - statefulsets
-  - statefulsets/status
-  verbs:
-  - "*"
 - apiGroups:
   - ""
   resources:
-  - nodes
+  - pods/status
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
-  - "ray.io"
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ray.io
   resources:
   - rayclusters
   verbs:
-  - "*"
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ray.io
+  resources:
+  - rayclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingressclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
 {{- end }}
