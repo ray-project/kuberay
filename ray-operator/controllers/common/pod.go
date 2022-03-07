@@ -47,6 +47,9 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// set custom service account with proper roles bound.
 		podTemplate.Spec.ServiceAccountName = instance.Name
 
+		// Note: Starting with the upcoming Ray 1.11.0, Ray will by default no longer use Redis
+		// should be possible to drop some of the logic around Redis passwords at that point.
+		// TODO(jiaxin.shan): Add version compatibility for 1.11.0 later.
 		redisPasswd := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]
 		if len(redisPasswd) == 0 {
 			redisPasswd = DefaultRedisPassword
@@ -169,6 +172,7 @@ func BuildAutoscalerContainer(redisPasswd string) v1.Container {
 			"--redis-password",
 			redisPasswd,
 		},
+		// TODO: make resource requirement configurable.
 		Resources: v1.ResourceRequirements{
 			Limits: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("500m"),

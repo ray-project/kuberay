@@ -93,13 +93,13 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
-	if err := r.reconcileServiceAccounts(instance); err != nil {
+	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileRole(instance); err != nil {
+	if err := r.reconcileAutoscalerRole(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileRoleBinding(instance); err != nil {
+	if err := r.reconcileAutoscalerRoleBinding(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileIngress(instance); err != nil {
@@ -515,33 +515,19 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileServiceAccounts(instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayiov1alpha1.RayCluster) error {
 	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
 		return nil
 	}
 
-	serviceAccounts := corev1.ServiceAccountList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &serviceAccounts, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
-	}
-
-	if serviceAccounts.Items != nil {
-		if len(serviceAccounts.Items) == 1 {
-			r.Log.Info("reconcileServiceAccounts ", "service account found", serviceAccounts.Items[0].Name)
-			return nil
+	serviceAccount := &corev1.ServiceAccount{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, serviceAccount); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
 		}
 
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(serviceAccounts.Items) > 1 {
-			r.Log.Info("reconcileServiceAccounts ", "Duplicates service account found", len(serviceAccounts.Items))
-			return nil
-		}
-	}
-
-	// Create head service if there's no existing one in the cluster.
-	if serviceAccounts.Items == nil || len(serviceAccounts.Items) == 0 {
+		// Create service account for autoscaler if there's no existing one in the cluster.
 		serviceAccount, err := common.BuildServiceAccount(instance)
 		if err != nil {
 			return err
@@ -570,33 +556,19 @@ func (r *RayClusterReconciler) reconcileServiceAccounts(instance *rayiov1alpha1.
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileRole(instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayiov1alpha1.RayCluster) error {
 	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
 		return nil
 	}
 
-	roles := rbacv1.RoleList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &roles, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
-	}
-
-	if roles.Items != nil {
-		if len(roles.Items) == 1 {
-			r.Log.Info("reconcileRoles ", "role found", roles.Items[0].Name)
-			return nil
+	role := &rbacv1.Role{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, role); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
 		}
 
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(roles.Items) > 1 {
-			r.Log.Info("reconcileRoles ", "Duplicates role found", len(roles.Items))
-			return nil
-		}
-	}
-
-	// Create head service if there's no existing one in the cluster.
-	if roles.Items == nil || len(roles.Items) == 0 {
+		// Create role for autoscaler if there's no existing one in the cluster.
 		role, err := common.BuildRole(instance)
 		if err != nil {
 			return err
@@ -625,33 +597,19 @@ func (r *RayClusterReconciler) reconcileRole(instance *rayiov1alpha1.RayCluster)
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileRoleBinding(instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1alpha1.RayCluster) error {
 	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
 		return nil
 	}
 
-	roleBindings := rbacv1.RoleBindingList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &roleBindings, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
-	}
-
-	if roleBindings.Items != nil {
-		if len(roleBindings.Items) == 1 {
-			r.Log.Info("reconcileRoleBindings ", "role binding found", roleBindings.Items[0].Name)
-			return nil
+	roleBinding := &rbacv1.RoleBinding{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, roleBinding); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
 		}
 
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(roleBindings.Items) > 1 {
-			r.Log.Info("reconcileRoleBindings ", "Duplicates role binding found", len(roleBindings.Items))
-			return nil
-		}
-	}
-
-	// Create head service if there's no existing one in the cluster.
-	if roleBindings.Items == nil || len(roleBindings.Items) == 0 {
+		// Create role bindings for autoscaler if there's no existing one in the cluster.
 		roleBinding, err := common.BuildRoleBinding(instance)
 		if err != nil {
 			return err
