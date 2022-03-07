@@ -151,23 +151,28 @@ jobs:
     - name: Install Python dependencies
       run: pip install -r ./tests/config/requirements.txt
 
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
+
+    - name: Build Docker Image - Operator
+      run: |
+        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly
+      working-directory: ${{env.working-directory}}
+
+    - name: Build Docker Image - Apiserver
+      run: |
+        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
+        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly
+
     - name: Run compatibility test
+      # compatibility test depends on operator & apiserver images built in previous steps.
       run: |
         for i in "1.8.0" "1.9.0" "1.10.0"
         do
           echo "Using Ray image $i"
           RAY_VERSION=$i python ./tests/compatibility-test.py
         done
-
-    - name: Set up Docker
-      uses: docker-practice/actions-setup-docker@master
-
-    - name: Build Docker Image - Operator
-      run: IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
-      working-directory: ${{env.working-directory}}
-
-    - name: Build Docker Image - Apiserver
-      run: docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
 
     - name: Log in to Docker Hub
       uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
@@ -179,7 +184,6 @@ jobs:
     - name: Push to DockerHub
       run: |
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
         docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;

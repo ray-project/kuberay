@@ -39,6 +39,8 @@ def create_cluster():
 
 
 def apply_kuberay_resources():
+    shell_assert_success('kind load docker-image kuberay/operator:nightly')
+    shell_assert_success('kind load docker-image kuberay/apiserver:nightly')
     shell_assert_success(
         'kubectl apply -k manifests/cluster-scope-resources')
     shell_assert_success(
