@@ -269,10 +269,10 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 		}
 	}
 
-	if _, ok := rayStartParams["object-store-memory"]; !ok {
+	if _, ok := rayStartParams["memory"]; !ok {
 		memory := resource.Limits[v1.ResourceMemory]
 		if !memory.IsZero() {
-			rayStartParams["object-store-memory"] = strconv.FormatInt(memory.Value(), 10)
+			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
 		}
 	}
 
@@ -283,7 +283,7 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 		}
 	}
 
-	log.Info("concatenate container command", "ray start params", rayStartParams)
+	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
