@@ -8,6 +8,7 @@ import (
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
+	"github.com/ray-project/kuberay/ray-operator/operatorconfig"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -172,6 +173,11 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 				labels[k] = v
 			}
 		}
+		if _, ok := labels[k]; !ok {
+			labels[k] = v
+		}
+	}
+	for k,v := range operatorconfig.Config.ClusterLabel{
 		if _, ok := labels[k]; !ok {
 			labels[k] = v
 		}

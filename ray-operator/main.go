@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/ray-project/kuberay/ray-operator/operatorconfig"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
@@ -48,6 +49,12 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
+
+	err := operatorconfig.InitOperatorConfig()
+	if err != nil {
+		setupLog.Error(err, "unable to init config")
+		os.Exit(1)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
