@@ -14,7 +14,7 @@ Run following command to build proto-generator image. We will use it to generate
 > Note: you can actually skip this step, and it will download a prebuilt image instead.
 
 ```
-make image
+make build-image
 ```
 
 ## Auto Generation
