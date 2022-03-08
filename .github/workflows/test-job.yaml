@@ -155,23 +155,23 @@ jobs:
       uses: docker-practice/actions-setup-docker@master
 
     - name: Build Docker Image - Operator
-      run: |
-        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
-        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly
+      run: IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
       working-directory: ${{env.working-directory}}
 
     - name: Build Docker Image - Apiserver
-      run: |
-        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly
+      run: docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
 
     - name: Run compatibility test
       # compatibility test depends on operator & apiserver images built in previous steps.
       run: |
+        pushd manifests/base/
+        kustomize edit set image kuberay/operator=kuberay/operator:${{ steps.vars.outputs.sha_short }}
+        kustomize edit set image kuberay/apiserver=kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
+        popd
         for i in "1.8.0" "1.9.0" "1.10.0"
         do
           echo "Using Ray image $i"
-          RAY_VERSION=$i python ./tests/compatibility-test.py
+          RAY_VERSION=$i KUBERAY_IMG_SHA=${{ steps.vars.outputs.sha_short }} python ./tests/compatibility-test.py
         done
 
     - name: Log in to Docker Hub
@@ -184,6 +184,7 @@ jobs:
     - name: Push to DockerHub
       run: |
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
         docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;

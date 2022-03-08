@@ -19,6 +19,7 @@ raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
 
+kuberay_sha = 'nightly'
 
 def shell_run(cmd):
     logger.info(cmd)
@@ -39,8 +40,8 @@ def create_cluster():
 
 
 def apply_kuberay_resources():
-    shell_assert_success('kind load docker-image kuberay/operator:nightly')
-    shell_assert_success('kind load docker-image kuberay/apiserver:nightly')
+    shell_assert_success('kind load docker-image kuberay/operator:{}'.format(kuberay_sha))
+    shell_assert_success('kind load docker-image kuberay/apiserver:{}'.format(kuberay_sha))
     shell_assert_success(
         'kubectl apply -k manifests/cluster-scope-resources')
     shell_assert_success(
@@ -128,12 +129,15 @@ print(ray.get(futures))
 
 
 def parse_environment():
-    global ray_version, ray_image
+    global ray_version, ray_image, kuberay_sha
     for k, v in os.environ.items():
         if k == 'RAY_VERSION':
             print('Setting Ray image to: {}'.format(v), file=sys.stderr)
             ray_version = v
             ray_image = 'rayproject/ray:{}'.format(ray_version)
+        if k == 'KUBERAY_IMG_SHA':
+            print('Using KubeRay docker build SHA: {}'.format(v))
+            kuberay_sha = v
 
 
 if __name__ == '__main__':
