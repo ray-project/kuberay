@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	rbacv1 "k8s.io/api/rbac/v1"
+
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	_ "github.com/ray-project/kuberay/ray-operator/controllers/common"
@@ -71,6 +73,9 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=core,resources=serviceaccount,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
@@ -88,7 +93,15 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
-
+	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+	if err := r.reconcileAutoscalerRole(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+	if err := r.reconcileAutoscalerRoleBinding(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 	if err := r.reconcileIngress(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -98,7 +111,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.reconcilePods(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-
 	// update the status if needed
 	if err := r.updateStatus(instance); err != nil {
 		log.Error(err, "Update status error", "cluster name", request.Name)
@@ -498,6 +510,129 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	instance.Status.LastUpdateTime.Time = time.Now()
 	if err := r.Status().Update(context.Background(), instance); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayiov1alpha1.RayCluster) error {
+	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+		return nil
+	}
+
+	serviceAccount := &corev1.ServiceAccount{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, serviceAccount); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// Create service account for autoscaler if there's no existing one in the cluster.
+		serviceAccount, err := common.BuildServiceAccount(instance)
+		if err != nil {
+			return err
+		}
+
+		// making sure the name is valid
+		serviceAccount.Name = utils.CheckName(serviceAccount.Name)
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(instance, serviceAccount, r.Scheme); err != nil {
+			return err
+		}
+
+		if errSvc := r.Create(context.TODO(), serviceAccount); errSvc != nil {
+			if errors.IsAlreadyExists(errSvc) {
+				log.Info("Pod service account already exist,no need to create")
+				return nil
+			}
+			log.Error(errSvc, "Pod Service Account create error!", "Pod.ServiceAccount.Error", errSvc)
+			return errSvc
+		}
+		log.Info("Pod ServiceAccount created successfully", "service account name", serviceAccount.Name)
+		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created service account %s", serviceAccount.Name)
+		return nil
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayiov1alpha1.RayCluster) error {
+	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+		return nil
+	}
+
+	role := &rbacv1.Role{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, role); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// Create role for autoscaler if there's no existing one in the cluster.
+		role, err := common.BuildRole(instance)
+		if err != nil {
+			return err
+		}
+
+		// making sure the name is valid
+		role.Name = utils.CheckName(role.Name)
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(instance, role, r.Scheme); err != nil {
+			return err
+		}
+
+		if errSvc := r.Create(context.TODO(), role); errSvc != nil {
+			if errors.IsAlreadyExists(errSvc) {
+				log.Info("role already exist,no need to create")
+				return nil
+			}
+			log.Error(errSvc, "Role create error!", "Role.Error", errSvc)
+			return errSvc
+		}
+		log.Info("Role created successfully", "role name", role.Name)
+		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created role %s", role.Name)
+		return nil
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1alpha1.RayCluster) error {
+	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+		return nil
+	}
+
+	roleBinding := &rbacv1.RoleBinding{}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	if err := r.Get(context.TODO(), namespacedName, roleBinding); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// Create role bindings for autoscaler if there's no existing one in the cluster.
+		roleBinding, err := common.BuildRoleBinding(instance)
+		if err != nil {
+			return err
+		}
+
+		// making sure the name is valid
+		roleBinding.Name = utils.CheckName(roleBinding.Name)
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(instance, roleBinding, r.Scheme); err != nil {
+			return err
+		}
+
+		if errSvc := r.Create(context.TODO(), roleBinding); errSvc != nil {
+			if errors.IsAlreadyExists(errSvc) {
+				log.Info("role binding already exist,no need to create")
+				return nil
+			}
+			log.Error(errSvc, "Role binding create error!", "RoleBinding.Error", errSvc)
+			return errSvc
+		}
+		log.Info("RoleBinding created successfully", "role binding name", roleBinding.Name)
+		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created role binding %s", roleBinding.Name)
+		return nil
 	}
 
 	return nil
