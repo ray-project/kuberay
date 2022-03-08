@@ -10,6 +10,9 @@ image:
 nameOverride: "ray"
 fullnameOverride: ""
 
+imagePullSecrets: []
+  # - name: an-existing-secret
+
 head:
   groupName: headgroup
   replicas: 1
