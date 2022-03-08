@@ -1,0 +1,33 @@
+version: "1.5"
+
+stages:
+  - 代码检查
+
+静态扫描:
+  stage: 代码检查
+  plugin: CMD
+  pluginConfig:
+    encoding: UTF-8
+    taskKind: CMD_GOLANGCI_LINT
+
+构建Namespaced Controller镜像:
+  stage: 代码检查
+  plugin: ANT-BUILD
+  passEnv: true
+  pluginConfig:
+    image: reg.docker.alibaba-inc.com/antsigma/golang-dev:1.13.12
+    inputs:
+      params:
+        - name: DOCKERFILE
+          value: ./ray-operator/Dockerfile.manager
+        - name: DIRECTORY
+          value: ./ray-operator
+    outputs:
+      ### TODO(user): modify to your image repo addr
+      ### TODO(user): 镜像推送时，如遇到授权问题，请将账号admin.for.antb 添加授权并设置为读写权限之上；
+      ### more info: https://yuque.antfin-inc.com/docs/share/786cf0fb-e070-4484-b7a8-979991f23af9#bc90917b
+      - name: "ray-operator-manager"
+        namespace: ray_deploy
+        repository: reg.docker.alibaba-inc.com
+        type: image
+        desc: "manager image of ray-operator"
