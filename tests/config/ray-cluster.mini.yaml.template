@@ -1,0 +1,57 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+    # An unique identifier for the head node and workers of this cluster.
+  name: raycluster-mini
+spec:
+  rayVersion: '$ray_version' # should match the Ray version in the image of the containers
+  ######################headGroupSpecs#################################
+  # head group template and specs, (perhaps 'group' is not needed in the name)
+  headGroupSpec:
+    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
+    serviceType: ClusterIP
+    # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
+    replicas: 1
+    # logical group name, for this called head-group, also can be functional
+    # pod type head or worker
+    # rayNodeType: head # Not needed since it is under the headgroup
+    # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
+    rayStartParams:
+      port: '6379' # should match headService targetPort
+      #include_webui: 'true'
+      redis-password: 'LetMeInRay'
+      # webui_host: "10.1.2.60"
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1' # can be auto-completed from the limits
+      node-ip-address: $$MY_POD_IP # auto-completed as the head pod IP
+      block: 'true'
+    #pod template
+    template:
+      metadata:
+        labels:
+          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
+          # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+          rayCluster: raycluster-compatibility-test
+          rayNodeType: head # will be injected if missing, must be head or wroker
+          groupName: headgroup # will be injected if missing
+        # annotations for pod
+        annotations:
+          key: value
+      spec:
+        containers:
+        - name: ray-head
+          image: $ray_image
+          env:
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          ports:
+          - containerPort: 6379
+            name: redis
+          - containerPort: 8265 # Ray dashboard
+            name: dashboard
+          - containerPort: 10001
+            name: client

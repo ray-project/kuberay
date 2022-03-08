@@ -109,7 +109,9 @@ jobs:
 
     - name: list directories
       working-directory: ${{env.working-directory}}
-      run: ls -R
+      run: |
+        pwd
+        ls -R
 
     - name: install kubebuilder
       run: |
@@ -121,8 +123,8 @@ jobs:
       run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
     - name: Get dependencies
-      working-directory: ${{env.working-directory}}
       run: go mod download
+      working-directory: ${{env.working-directory}}
 
     - name: Build
       run: make build
@@ -131,6 +133,23 @@ jobs:
     - name: Test
       run: make test
       working-directory: ${{env.working-directory}}
+
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Checkout Python
+      uses: actions/checkout@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install Python dependencies
+      run: pip install -r ./tests/config/requirements.txt
 
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
@@ -141,6 +160,19 @@ jobs:
 
     - name: Build Docker Image - Apiserver
       run: docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
+
+    - name: Run compatibility test
+      # compatibility test depends on operator & apiserver images built in previous steps.
+      run: |
+        pushd manifests/base/
+        kustomize edit set image kuberay/operator=kuberay/operator:${{ steps.vars.outputs.sha_short }}
+        kustomize edit set image kuberay/apiserver=kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
+        popd
+        for i in "1.8.0" "1.9.0" "1.10.0"
+        do
+          echo "Using Ray image $i"
+          RAY_VERSION=$i KUBERAY_IMG_SHA=${{ steps.vars.outputs.sha_short }} python ./tests/compatibility-test.py
+        done
 
     - name: Log in to Docker Hub
       uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
