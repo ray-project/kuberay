@@ -15,6 +15,7 @@ COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 COPY vendor/ vendor/
+COPY operatorconfig/ operatorconfig/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=off go build -a -o manager main.go
@@ -24,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=off go build -a -o manager
 FROM reg.docker.alibaba-inc.com/alibase/alios7u2-min
 WORKDIR /
 COPY --from=builder /go/src/github.com/ray-project/kuberay/ray-operator/manager .
-USER 65532:65532
+USER admin
 
 ENTRYPOINT ["/manager","--watch-namespace","ray-operator"]
 
