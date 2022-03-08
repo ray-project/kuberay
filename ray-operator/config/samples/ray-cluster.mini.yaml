@@ -57,11 +57,9 @@ spec:
             limits:
               cpu: 1
               memory: 2Gi
-              gpu: 1
             requests:
               cpu: 1
               memory: 2Gi
-              gpu: 1
           ports:
           - containerPort: 6379
             name: redis
