@@ -26,6 +26,6 @@ WORKDIR /
 COPY --from=builder /go/src/github.com/ray-project/kuberay/ray-operator/manager .
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/manager","--watch-namespace","ray-operator"]
 
 
