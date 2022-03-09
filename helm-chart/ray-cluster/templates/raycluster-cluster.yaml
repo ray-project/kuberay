@@ -24,6 +24,9 @@ spec:
               - name: TYPE
                 value: head
             {{- toYaml .Values.head.containerEnv | nindent 14}}
+            {{- with .Values.head.envFrom }}
+            envFrom: {{- toYaml . | nindent 14}}
+            {{- end }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
       metadata:
@@ -59,6 +62,9 @@ spec:
               - name: TYPE
                 value: worker
             {{- toYaml .Values.worker.containerEnv | nindent 14}}
+            {{- with .Values.worker.envFrom }}
+            envFrom: {{- toYaml . | nindent 14}}
+            {{- end }}
             ports: {{- toYaml .Values.worker.ports | nindent 14}}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
