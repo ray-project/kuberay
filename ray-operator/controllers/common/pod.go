@@ -109,7 +109,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[index].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[index].Resources)
 		// replacing the old command
 		pod.Spec.Containers[index].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -334,7 +334,31 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
+
+	if _, ok := rayStartParams["num-cpus"]; !ok {
+		cpu := resource.Limits[v1.ResourceCPU]
+		if !cpu.IsZero() {
+			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+		}
+	}
+
+	if _, ok := rayStartParams["memory"]; !ok {
+		memory := resource.Limits[v1.ResourceMemory]
+		if !memory.IsZero() {
+			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
+		}
+	}
+
+	if _, ok := rayStartParams["num-gpus"]; !ok {
+		gpu := resource.Limits["gpu"]
+		if !gpu.IsZero() {
+			rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
+		}
+	}
+
+	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
+
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))

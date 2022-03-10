@@ -53,6 +53,13 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 1
+              memory: 2Gi
           ports:
           - containerPort: 6379
             name: redis
