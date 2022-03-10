@@ -26,6 +26,8 @@ spec:
             {{- toYaml .Values.head.containerEnv | nindent 14}}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
+        tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
+        nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
       metadata:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         labels:
@@ -62,6 +64,8 @@ spec:
             ports: {{- toYaml .Values.worker.ports | nindent 14}}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
+        tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
+        nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         labels:

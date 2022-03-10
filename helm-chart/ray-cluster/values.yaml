@@ -34,6 +34,9 @@ head:
     requests:
        cpu: 200m
   annotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
   volumes:
     - name: log-volume
       emptyDir: { }
