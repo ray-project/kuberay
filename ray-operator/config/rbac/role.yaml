@@ -46,7 +46,7 @@ rules:
   - ""
   resources:
   - services
-  - serviceaccount
+  - serviceaccounts
   verbs:
   - create
   - delete
