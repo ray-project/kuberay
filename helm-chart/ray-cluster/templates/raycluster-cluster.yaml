@@ -14,6 +14,7 @@ spec:
     replicas: {{ .Values.head.replicas }}
     template:
       spec:
+        imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         containers:
           - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             name: ray-head
@@ -47,6 +48,7 @@ spec:
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
+        imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         initContainers:
           - name: init-myservice
             image: busybox:1.28
