@@ -1,10 +1,10 @@
-# Explaination and Best Practice for workers-head Reconnection
+# Explanation and Best Practice for workers-head Reconnection
 
 ## Problem
 
 For a `RayCluster` with a head and several workers, if a worker is crashed, it will be relaunched immediately and re-join the same cluster quickly; however, when the head is crashed, it will run into the issue [#104](https://github.com/ray-project/kuberay/issues/104) that all worker nodes are lost from the head for a long period of time. 
 
-## Explaination
+## Explanation
 
 When the head pod was deleted, it will be recreated with a new IP by KubeRay controller，and the GCS server address is changed accordingly. The Raylets of all workers will try to get GCS address from Redis in ‘ReconnectGcsServer’, but the redis_clients always use the previous head IP, so they will always fail to get new GCS address. The Raylets will not exit until max retries are reached. There are two configurations determining this long delay:
 
