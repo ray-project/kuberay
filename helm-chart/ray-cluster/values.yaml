@@ -31,6 +31,9 @@ head:
       valueFrom:
         fieldRef:
           fieldPath: status.podIP
+  envFrom: []
+    # - secretRef:
+    #     name: my-env-secret
   resources:
     limits:
       cpu: 1
@@ -74,6 +77,9 @@ worker:
       valueFrom:
         fieldRef:
           fieldPath: metadata.name
+  envFrom: []
+    # - secretRef:
+    #     name: my-env-secret
   ports:
     - containerPort: 80
       protocol: TCP
