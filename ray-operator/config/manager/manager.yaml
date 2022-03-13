@@ -4,20 +4,20 @@ metadata:
   name: kuberay-operator
   namespace: system
   labels:
-    control-plane: ray-operator
+    control-plane: kuberay-operator
 spec:
   selector:
     matchLabels:
-      control-plane: ray-operator
+      control-plane: kuberay-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: ray-operator
+        control-plane: kuberay-operator
     spec:
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: ray-operator-service-account
+      serviceAccountName: kuberay-operator
       containers:
       - command:
         - /manager

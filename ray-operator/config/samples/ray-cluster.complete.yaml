@@ -82,19 +82,6 @@ spec:
             requests:
               cpu: "500m"
               memory: "512Mi"
-          volumeMounts:
-          - mountPath: /opt
-            name: config
-        volumes:
-        # You set volumes at the Pod level, then mount them into containers inside that Pod
-        - name: config
-          configMap:
-            # Provide the name of the ConfigMap you want to mount.
-            name: ray-code
-            # An array of keys from the ConfigMap to create as files
-            items:
-            - key: sample_code.py
-              path: sample_code.py
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1

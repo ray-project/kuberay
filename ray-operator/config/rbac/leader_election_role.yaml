@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: ray-operator-leader-election-role
+  name: kuberay-operator-leader-election
 rules:
 - apiGroups:
   - ""
