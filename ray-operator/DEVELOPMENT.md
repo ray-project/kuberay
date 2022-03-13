@@ -6,11 +6,15 @@ This section walks through how to build and test the operator in a running Kuber
 
 software  | version | link
 :-------------  | :---------------:| -------------:
-kubectl |  v1.18.3+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.13+|[download](https://golang.org/dl/)
+kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+go  | v1.16+|[download](https://golang.org/dl/)
 docker   | 19.03+|[download](https://docs.docker.com/install/)
 
 The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
+
+### Setup on Kind
+
+For a local [kind](https://kind.sigs.k8s.io/) environment setup, you can follow the Jupyter Notebook example: [KubeRay-on-kind](../docs/notebook/kuberay-on-kind.ipynb).
 
 ## Development
 

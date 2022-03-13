@@ -8,30 +8,28 @@ KubeRay is an open source toolkit to run Ray applications on Kubernetes.
 KubeRay provides several tools to improve running and managing Ray's experience on Kubernetes.
 
 - Ray Operator
-- Backend services to create/delete cluster resources (incubating)
-- Kubectl plugin/CLI to operate CRD objects (future work)
+- Backend services to create/delete cluster resources
+- Kubectl plugin/CLI to operate CRD objects
+- Data Scientist centric workspace for fast prototyping (incubating)
+- Native Job and Serving integration with Clusters (incubating)
 - Kubernetes event dumper for ray clusters/pod/services (future work)
 - Operator Integration with Kubernetes node problem detector (future work)
-- Kubernetes based workspace to easily submit ray jobs (future work)
 
 ## Quick Start
 
 ### Use Yaml
 
+#### Nightly version
+
 ```
-kubectl apply -k manifests/cluster-scope-resources
-kubectl apply -k manifests/base
+kubectl apply -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
 ```
 
 ### Use helm chart
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
-
-### Setup on Kind
-
-For a local [kind](https://kind.sigs.k8s.io/) environment setup, you can follow the Jupyter Notebook example: [KubeRay-on-kind](./docs/notebook/kuberay-on-kind.ipynb).
-
 
 ## Development
 
