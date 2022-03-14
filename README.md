@@ -26,6 +26,13 @@ kubectl apply -k "github.com/ray-project/kuberay/manifests/cluster-scope-resourc
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
 ```
 
+#### Stable version
+
+```
+kubectl apply -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.2.0"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
+```
+
 ### Use helm chart
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
