@@ -1,8 +1,10 @@
-# permissions to do leader election.
-apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbacEnable }}
 kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: kuberay-operator-leader-election
+  labels:
+{{ include "kuberay-operator.labels" . | indent 4 }}
+  name: {{ include "kuberay-operator.fullname" . }}
 rules:
 - apiGroups:
   - ""
@@ -30,3 +32,4 @@ rules:
   - events
   verbs:
   - create
+{{- end }}

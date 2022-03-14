@@ -1,4 +1,4 @@
-# Ray Operator
+# KubeRay Operator
 
 Kuberay-operator: A simple Helm chart
 
@@ -23,7 +23,7 @@ $ kubectl apply -k "../../ray-operator/config/crd"
 
 Please use command below:
 ```console
-$ helm install kuberay-operator . --values values.yaml --namespace kuberay-operator --create-namespace
+$ helm install kuberay-operator . --values values.yaml --namespace ray-system --create-namespace
 ```
 ## List the Chart
 
@@ -38,7 +38,7 @@ $ helm list -n kuberay-operator
 To uninstall/delete the `my-release` deployment:
 
 ```console
-$ helm delete kuberay-operator -n kuberay-operator
+$ helm delete kuberay-operator -n ray-system
 ```
 
 The command removes nearly all the Kubernetes components associated with the
