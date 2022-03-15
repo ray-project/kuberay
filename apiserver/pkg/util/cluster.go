@@ -268,7 +268,7 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 						},
 					},
 					Lifecycle: &v1.Lifecycle{
-						PreStop: &v1.Handler{
+						PreStop: &v1.LifecycleHandler{
 							Exec: &v1.ExecAction{
 								Command: []string{
 									"/bin/sh", "-c", "ray stop",
