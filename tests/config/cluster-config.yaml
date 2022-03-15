@@ -21,3 +21,5 @@ nodes:
         hostPort: 10001
         listenAddress: "0.0.0.0"
         protocol: tcp
+  - role: worker
+  - role: worker

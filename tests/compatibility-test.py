@@ -102,19 +102,32 @@ class BasicRayTestCase(unittest.TestCase):
 import ray
 ray.init(address='ray://127.0.0.1:10001')
 
-@ray.remote
-def f(x):
-    return x * x
+NUM_OF_WORKERS = 3
 
-futures = [f.remote(i) for i in range(4)]
-print(ray.get(futures))
+@ray.remote
+class Worker:
+    def work(self):
+        # return the host that I am working on
+        return 'done'
+
+@ray.remote
+class Supervisor:
+    def __init__(self):
+        # initialize workers
+        self.workers = [Worker.remote() for _ in range(NUM_OF_WORKERS)]
+    def work(self):
+        # get all worker results
+        return ray.get([w.work.remote() for w in self.workers])
+
+sup = Supervisor.remote()
+print(ray.get(sup.work.remote()))
 '''],
                                               demux=True)
         stdout_str, _ = output
 
         container.stop()
 
-        if stdout_str != b'[0, 1, 4, 9]\n':
+        if stdout_str != b'[\'done\', \'done\', \'done\']\n':
             print(output, file=sys.stderr)
             raise Exception('invalid result.')
         if rtn_code != 0:

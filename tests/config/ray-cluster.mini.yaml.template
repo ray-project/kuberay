@@ -36,9 +36,6 @@ spec:
           rayCluster: raycluster-compatibility-test
           rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
-        # annotations for pod
-        annotations:
-          key: value
       spec:
         containers:
         - name: ray-head
@@ -55,3 +52,44 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+  workerGroupSpecs:
+  # the pod replicas in this group typed worker
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    groupName: workergroup
+    rayStartParams:
+      redis-password: 'LetMeInRay'
+      node-ip-address: $$MY_POD_IP
+      block: 'true'
+    #pod template
+    template:
+      metadata:
+        labels:
+          rayCluster: raycluster-compatibility-test # will be injected if missing
+          rayNodeType: worker # will be injected if missing
+          groupName: workergroup # will be injected if missing
+      spec:
+        initContainers: # to avoid worker crashing before head service is created
+        - name: init-myservice
+          image: busybox:1.28
+          # Change the cluster postfix if you don't have a default setting
+          command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+        containers:
+        - name: worker-node
+          image: $ray_image
+          env:
+          - name: TYPE
+            value: "worker"
+          - name:  RAY_DISABLE_DOCKER_CPU_WARNING
+            value: "1"
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          ports:
+          - containerPort: 80
