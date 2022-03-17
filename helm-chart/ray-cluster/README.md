@@ -14,16 +14,14 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 ## TL;DR;
 
 ```console
-helm install ray-cluster . --values values.yaml --namespace ray-system --create-namespace
+$ helm install ray-cluster --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.2.0/helm-chart-ray-cluster-0.1.0.tgz
 ```
 
 ## Installing the Chart
 
 To install the chart with the release name `my-release`:
-
-
 ```console
-helm install my-release . --values values.yaml --namespace ray-system --create-namespace
+$ helm install my-release --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.2.0/helm-chart-ray-cluster-0.1.0.tgz
 ```
 
 > note: The chart will submit a RayCluster.
