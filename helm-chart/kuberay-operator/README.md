@@ -18,12 +18,12 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 To avoid duplicate CRD definitions in this repo, we reuse CRD config in `ray-operator`:
 ```console
-$ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.2.0"
+$ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0"
 ```
 
 Please use command below:
 ```console
-$ helm install kuberay-operator --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.2.0/helm-chart-kuberay-operator-0.1.0.tgz
+$ helm install kuberay-operator --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.3.0/helm-chart-kuberay-operator-0.1.0.tgz
 ```
 
 ## List the Chart
