@@ -248,6 +248,32 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 		diff := *worker.Replicas - int32(len(runningPods.Items))
+
+		//// SriramQ: How do I create a feature flag to guard the new functionality?
+		featureFlag := true
+
+		if featureFlag {
+			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
+			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
+			log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
+			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
+				pod := corev1.Pod{}
+				pod.Name = podsToDelete
+				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
+				log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
+				if err := r.Delete(context.TODO(), &pod); err != nil {
+					if !errors.IsNotFound(err) {
+						return err
+					}
+					log.Info("reconcilePods", "unable to delete worker ", pod.Name)
+				} else {
+					diff--
+					r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
+				}
+			}
+			worker.ScaleStrategy.WorkersToDelete = []string{}
+		}
+
 		if diff > 0 {
 			//pods need to be added
 			log.Info("reconcilePods", "add workers for group", worker.GroupName)
@@ -262,7 +288,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		} else if diff == 0 {
 			log.Info("reconcilePods", "all workers already exist for group", worker.GroupName)
 			continue
-		} else if int32(len(runningPods.Items)) == (*worker.Replicas + int32(len(worker.ScaleStrategy.WorkersToDelete))) {
+		} else if -diff == int32(len(worker.ScaleStrategy.WorkersToDelete)) {
 			log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
 			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
 				pod := corev1.Pod{}
@@ -279,9 +305,11 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 			continue
-		} else if *worker.Replicas < int32(len(runningPods.Items)) {
+		} else {
+			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
 			// we need to scale down
 			workersToRemove := int32(len(runningPods.Items)) - *worker.Replicas
+			//// SriramQ: Isn't this too early? This does not consider the IsNotFound case (see below)
 			randomlyRemovedWorkers := workersToRemove - int32(len(worker.ScaleStrategy.WorkersToDelete))
 			// we only need to scale down the workers in the ScaleStrategy
 			log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
@@ -296,8 +324,12 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 					}
 					log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
 				}
+				//// SriramQ: Shouldn't this be in the else part of the above if?
 				r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 			}
+			//// SriramQ: Any difference between this and "worker.ScaleStrategy.WorkesToDelete = ..."
+			//// SriramQ: I assume this means that the operator is clearing WorkersToDelete in
+			////          UpdateStatus() - which means the clearing in the Autoscaler is redundant
 			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 
 			// remove the remaining pods not part of the scaleStrategy
@@ -305,6 +337,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			if int(randomlyRemovedWorkers) > 0 {
 				for _, randomPodToDelete := range runningPods.Items {
 					found := false
+					//// SriramQ: Isn't the following loop dead code - see my previous question
 					for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
 						if randomPodToDelete.Name == podsToDelete {
 							found = true
