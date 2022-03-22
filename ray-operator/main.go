@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
@@ -53,6 +54,7 @@ func main() {
 		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
