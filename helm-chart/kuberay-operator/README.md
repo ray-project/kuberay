@@ -23,7 +23,7 @@ $ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v
 
 Please use command below:
 ```console
-$ helm install kuberay-operator --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.3.0/helm-chart-kuberay-operator-0.1.0.tgz
+$ helm install kuberay-operator --namespace ray-system --create-namespace $(curl -s https://api.github.com/repos/ray-project/kuberay/releases/latest | grep '"browser_download_url":' | sort | grep -om1 'https.*helm-chart-kuberay-operator.*tgz')
 ```
 
 ## List the Chart
