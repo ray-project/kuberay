@@ -51,7 +51,8 @@ func main() {
 		"watch-namespace",
 		"",
 		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
-	flag.BoolVar(&controllers.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", false,
+	// temporarily setting default value to true to see how tests do
+	flag.BoolVar(&controllers.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", true,
 		"Temporary feature flag - to be deleted after testing")
 	opts := zap.Options{
 		Development: true,

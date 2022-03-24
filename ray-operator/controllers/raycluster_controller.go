@@ -251,9 +251,12 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		diff := *worker.Replicas - int32(len(runningPods.Items))
 
 		if PrioritizeWorkersToDelete {
+			if diff >= 0 {
+				break
+			}
 			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
 			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
-			log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
+			log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
 			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
 				pod := corev1.Pod{}
 				pod.Name = podsToDelete
