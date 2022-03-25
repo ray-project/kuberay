@@ -255,9 +255,6 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
 			log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
 			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				if diff >= 0 {
-					break
-				}
 				pod := corev1.Pod{}
 				pod.Name = podsToDelete
 				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
