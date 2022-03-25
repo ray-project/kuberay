@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers"
@@ -56,6 +57,7 @@ func main() {
 		"Temporary feature flag - to be deleted after testing")
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
