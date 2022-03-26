@@ -37,8 +37,9 @@ import (
 )
 
 var (
-	log                    = logf.Log.WithName("raycluster-controller")
-	DefaultRequeueDuration = 2 * time.Second
+	log                       = logf.Log.WithName("raycluster-controller")
+	DefaultRequeueDuration    = 2 * time.Second
+	PrioritizeWorkersToDelete bool
 )
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -248,6 +249,32 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 		diff := *worker.Replicas - int32(len(runningPods.Items))
+
+		if PrioritizeWorkersToDelete {
+			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
+			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
+			log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
+			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
+				pod := corev1.Pod{}
+				pod.Name = podsToDelete
+				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
+				log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
+				if err := r.Delete(context.TODO(), &pod); err != nil {
+					if !errors.IsNotFound(err) {
+						return err
+					}
+					log.Info("reconcilePods", "unable to delete worker ", pod.Name)
+				} else {
+					diff--
+					r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
+				}
+			}
+			worker.ScaleStrategy.WorkersToDelete = []string{}
+		}
+
+		// Once we remove the feature flag and commit to those changes, the code below can be cleaned up
+		// It will end being a simple: "if diff > 0 { } else { }"
+
 		if diff > 0 {
 			//pods need to be added
 			log.Info("reconcilePods", "add workers for group", worker.GroupName)
@@ -262,7 +289,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		} else if diff == 0 {
 			log.Info("reconcilePods", "all workers already exist for group", worker.GroupName)
 			continue
-		} else if int32(len(runningPods.Items)) == (*worker.Replicas + int32(len(worker.ScaleStrategy.WorkersToDelete))) {
+		} else if -diff == int32(len(worker.ScaleStrategy.WorkersToDelete)) {
 			log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
 			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
 				pod := corev1.Pod{}
@@ -279,7 +306,8 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 			continue
-		} else if *worker.Replicas < int32(len(runningPods.Items)) {
+		} else {
+			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
 			// we need to scale down
 			workersToRemove := int32(len(runningPods.Items)) - *worker.Replicas
 			randomlyRemovedWorkers := workersToRemove - int32(len(worker.ScaleStrategy.WorkersToDelete))
