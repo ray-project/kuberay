@@ -85,12 +85,13 @@ jobs:
         working-directory: ./cli
         args: --timeout=3m
         skip-go-installation: true
+
   build:
     env:
       working-directory: ./ray-operator
       cli-working-directory: ./cli
       apiserver-working-directory: ./apiserver
-    name: Build
+    name: Build Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
 
@@ -134,45 +135,31 @@ jobs:
       run: make test
       working-directory: ${{env.working-directory}}
 
-    - name: Install Kind
-      run: |
-        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
-        chmod +x ./kind
-        sudo mv ./kind /usr/local/bin/kind
-
-    - name: Checkout Python
-      uses: actions/checkout@v2
-
-    - name: Setup Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-
-    - name: Install Python dependencies
-      run: pip install -r ./tests/config/requirements.txt
-
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
 
     - name: Build Docker Image - Operator
-      run: IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
+      run: |
+        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
+        docker save -o /tmp/operator.tar kuberay/operator:${{ steps.vars.outputs.sha_short }}
       working-directory: ${{env.working-directory}}
 
-    - name: Build Docker Image - Apiserver
-      run: docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
+    - name: Upload Artifact Operator
+      uses: actions/upload-artifact@v2
+      with:
+        name: operator_img
+        path: /tmp/operator.tar
 
-    - name: Run compatibility test
-      # compatibility test depends on operator & apiserver images built in previous steps.
+    - name: Build Docker Image - Apiserver
       run: |
-        pushd manifests/base/
-        kustomize edit set image kuberay/operator=kuberay/operator:${{ steps.vars.outputs.sha_short }}
-        kustomize edit set image kuberay/apiserver=kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-        popd
-        for i in "1.8.0" "1.9.0" "1.10.0"
-        do
-          echo "Using Ray image $i"
-          RAY_VERSION=$i KUBERAY_IMG_SHA=${{ steps.vars.outputs.sha_short }} python ./tests/compatibility-test.py
-        done
+        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
+        docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
+
+    - name: Upload Artifact Apiserver
+      uses: actions/upload-artifact@v2
+      with:
+        name: apiserver_img
+        path: /tmp/apiserver.tar
 
     - name: Log in to Docker Hub
       uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
@@ -197,3 +184,53 @@ jobs:
       run: go build -o kuberay -a main.go
       working-directory: ${{env.cli-working-directory}}
 
+  test-compatibility-1_8_0:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Compatibility Test 1.8.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 1.8.0
+
+  test-compatibility-1_9_0:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Compatibility Test 1.9.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 1.9.0
+
+  test-compatibility-1_10_0:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Compatibility Test 1.10.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 1.10.0
