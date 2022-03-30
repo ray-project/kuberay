@@ -42,12 +42,12 @@ An example ray code is defined in this [configmap](msft-operator/ray-operator/co
 
 ### Deploy the operator
 
-```shell script
+```shell
 kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
 
 Check that the controller is running.
-```shell script
+```shell
 $ kubectl get deployments -n ray-system
 NAME           READY   UP-TO-DATE   AVAILABLE   AGE
 ray-operator   1/1     1            1           40s
@@ -58,7 +58,7 @@ ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 ```
 
 Delete the operator
-```shell script
+```shell
 kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
 
@@ -72,14 +72,14 @@ Sample  | Description
 [ray-cluster.heterogeneous.yaml](config/samples/ray-cluster.heterogeneous.yaml)  | Example with heterogenous worker types. 1 head pod and 2 worker pods, each of which has a different resource quota.
 [ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resouce properties.
 
-```shell script
+```shell
 # Create a configmap with a hello world Ray code.
 kubectl create -f config/samples/config-map-ray-code.yaml
 configmap/ray-code created
 ```
 
 
-```shell script
+```shell
 # Create a cluster.
 $ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
 raycluster.ray.io/raycluster-heterogeneous created

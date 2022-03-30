@@ -1,0 +1,82 @@
+# Project Information
+site_name: KubeRay
+site_url: https://ray-project.github.io/kuberay
+
+# Repository
+repo_name: ray-project/kuberay
+repo_url: https://github.com/ray-project/kuberay
+edit_uri: ""
+
+# Configuration
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+  icon:
+    repo: fontawesome/brands/github
+
+# Navigation
+nav:
+  - Home:
+    - Welcome: index.md
+    - Installation(Yaml): deploy/installation.md
+    - Installation(Helm): deploy/helm.md
+    - Installation(Helm-cluster): deploy/helm-cluster.md
+  - Components:
+    - KubeRay Operator: components/operator.md
+    - KubeRay ApiServer: components/apiserver.md
+    - KubeRay CLI: components/cli.md
+  - Features:
+    - Autoscaling: guidance/autoscaler.md
+    - Ingress: guidance/ingress.md
+  - Best Practice:
+    - Worker reconnection: best-practice/worker-head-reconnection.md
+  - Troubleshooting:
+    - Guidance: troubleshooting.md
+  - Designs:
+    - Core API and Backend Service: design/protobuf-grpc-service.md
+
+# Customization
+extra:
+  version:
+    provider: mike
+
+plugins:
+  - tags
+  - search
+
+# Markdown Extension
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - toc:
+      permalink: true
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
