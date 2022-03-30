@@ -12,7 +12,7 @@ spec:
     replicas: 1
     rayStartParams:
       port: '6379'
-      redis-password: 'LetMeInRay'
+      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP

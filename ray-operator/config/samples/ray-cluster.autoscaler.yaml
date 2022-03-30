@@ -29,7 +29,7 @@ spec:
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
       num-cpus: '1' # can be auto-completed from the limits
-      redis-password: 'LetMeInRay'
+      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
       # Currently, `resources` must be provided in the unfortunate format demonstrated below.
@@ -105,7 +105,7 @@ spec:
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       #redis-password: '5241590000000000'
-      redis-password: 'LetMeInRay'
+      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       node-ip-address: $MY_POD_IP
       block: 'true'
     #pod template

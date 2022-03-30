@@ -32,19 +32,6 @@ jobs:
         gofmt-path: 'apiserver cli ray-operator'
         gofmt-flags: '-l -d -s'
 
-    - name: Install goimports
-      run: go get golang.org/x/tools/cmd/goimports
-
-    - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
-
-    - name: Open this to see how to fix goimports if it fails
-      run: |
-        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
-        echo "Proposed format changes:"
-        $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
-      if: failure()
-
     - name: Run linter against ray operator
       uses: golangci/golangci-lint-action@v2
       with:
@@ -65,7 +52,7 @@ jobs:
           skip-go-installation: true
 
           # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          # skip-pkg-cache: true
+          skip-pkg-cache: true
 
           # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
           # skip-build-cache: true
@@ -77,6 +64,7 @@ jobs:
         working-directory: ./apiserver
         args: --timeout=3m
         skip-go-installation: true
+        skip-pkg-cache: true
 
     - name: Run linter against cli
       uses: golangci/golangci-lint-action@v2
@@ -85,6 +73,20 @@ jobs:
         working-directory: ./cli
         args: --timeout=3m
         skip-go-installation: true
+        skip-pkg-cache: true
+
+    - name: Install goimports
+      run: go get golang.org/x/tools/cmd/goimports
+
+    - name: Run goimports
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
+
+    - name: Open this to see how to fix goimports if it fails
+      run: |
+        echo "Run command 'goimports -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
+        $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
+      if: failure()
 
   build:
     env:
@@ -234,3 +236,20 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 1.10.0
+
+  test-compatibility-1_11_0:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Compatibility Test 1.11.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 1.11.0
