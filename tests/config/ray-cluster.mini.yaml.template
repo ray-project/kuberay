@@ -21,7 +21,7 @@ spec:
     rayStartParams:
       port: '6379' # should match headService targetPort
       #include_webui: 'true'
-      redis-password: 'LetMeInRay'
+      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       # webui_host: "10.1.2.60"
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
