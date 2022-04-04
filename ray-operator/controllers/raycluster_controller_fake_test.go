@@ -22,7 +22,9 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -42,17 +44,20 @@ import (
 var (
 	namespaceStr     string
 	instanceName     string
+	headGroupNameStr string
 	groupNameStr     string
 	expectReplicaNum int32
 	testPods         []runtime.Object
 	testRayCluster   *rayiov1alpha1.RayCluster
+	workerSelector   labels.Selector
 )
 
-func setupTest() {
+func setupTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	namespaceStr = "default"
 	instanceName = "raycluster-sample"
+	headGroupNameStr = "head-group"
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
 	testPods = []runtime.Object{
@@ -63,7 +68,7 @@ func setupTest() {
 				Labels: map[string]string{
 					common.RayClusterLabelKey:   instanceName,
 					common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
-					common.RayNodeGroupLabelKey: groupNameStr,
+					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
 			Status: corev1.PodStatus{
@@ -112,6 +117,19 @@ func setupTest() {
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod4",
+				Namespace: namespaceStr,
+				Labels: map[string]string{
+					common.RayClusterLabelKey:   instanceName,
+					common.RayNodeGroupLabelKey: groupNameStr,
+				},
+			},
+			Status: corev1.PodStatus{
+				Phase: v1.PodRunning,
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod5",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
 					common.RayClusterLabelKey:   instanceName,
@@ -207,14 +225,30 @@ func setupTest() {
 			},
 		},
 	}
+
+	instanceReqValue := []string{instanceName}
+	instanceReq, err := labels.NewRequirement(
+		common.RayClusterLabelKey,
+		selection.Equals,
+		instanceReqValue)
+	assert.Nil(t, err, "Fail to create requirement")
+	groupNameReqValue := []string{groupNameStr}
+	groupNameReq, err := labels.NewRequirement(
+		common.RayNodeGroupLabelKey,
+		selection.Equals,
+		groupNameReqValue)
+	assert.Nil(t, err, "Fail to create requirement")
+
+	workerSelector = labels.NewSelector().Add(*instanceReq).Add(*groupNameReq)
 }
 
-func tearDown() {
+func tearDown(t *testing.T) {
 	PrioritizeWorkersToDelete = false
 }
 
 func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
-	setupTest()
+	setupTest(t)
+	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 
@@ -231,9 +265,13 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	testRayClusterReconciler.reconcilePods(testRayCluster)
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
 
-	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
 
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
@@ -242,7 +280,8 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
-	setupTest()
+	setupTest(t)
+	defer tearDown(t)
 
 	var localExpectReplicaNum int32 = 2
 	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = &localExpectReplicaNum
@@ -263,9 +302,13 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	testRayClusterReconciler.reconcilePods(testRayCluster)
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
 
-	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
 
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
@@ -280,7 +323,8 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 }
 
 func TestReconcile_PodCrash_Fail(t *testing.T) {
-	setupTest()
+	setupTest(t)
+	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 
@@ -303,9 +347,13 @@ func TestReconcile_PodCrash_Fail(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	testRayClusterReconciler.reconcilePods(testRayCluster)
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
 
-	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
 
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
@@ -320,8 +368,8 @@ func TestReconcile_PodCrash_Fail(t *testing.T) {
 }
 
 func TestReconcile_PodCrash_OK(t *testing.T) {
-	setupTest()
-	defer tearDown()
+	setupTest(t)
+	defer tearDown(t)
 
 	PrioritizeWorkersToDelete = true
 
@@ -346,9 +394,13 @@ func TestReconcile_PodCrash_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	testRayClusterReconciler.reconcilePods(testRayCluster)
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
 
-	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
 
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
