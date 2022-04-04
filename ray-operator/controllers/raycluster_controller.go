@@ -265,7 +265,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 					}
 					log.Info("reconcilePods", "unable to delete worker ", pod.Name)
 				} else {
-					diff--
+					diff++
 					r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 				}
 			}
