@@ -221,13 +221,8 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 	podList := corev1.PodList{}
 	err := fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	if err != nil {
-		t.Fatalf("Fail to get pod list")
-	}
-
-	if len(testPods) != len(podList.Items) {
-		t.Fatalf("Init pod list len is wrong")
-	}
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -240,13 +235,10 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	if err != nil {
-		t.Fatalf("Fail to get pod list after reconcoile")
-	}
+	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	if int(expectReplicaNum) != len(podList.Items) {
-		t.Fatalf("Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-	}
+	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
+		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
@@ -260,13 +252,9 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	podList := corev1.PodList{}
 	err := fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	if err != nil {
-		t.Fatalf("Fail to get pod list")
-	}
+	assert.Nil(t, err, "Fail to get pod list")
 
-	if len(testPods) != len(podList.Items) {
-		t.Fatalf("Init pod list len is wrong")
-	}
+	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -279,13 +267,10 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 
 	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	if err != nil {
-		t.Fatalf("Fail to get pod list after reconcoile")
-	}
+	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	if int(localExpectReplicaNum) != len(podList.Items) {
-		t.Fatalf("Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-	}
+	assert.Equal(t, int(localExpectReplicaNum), len(podList.Items),
+		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
 	for i := 0; i < len(podList.Items); i++ {
 		if contains(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, podList.Items[i].Name) {
@@ -322,7 +307,7 @@ func TestReconcile_PodCrash_Fail(t *testing.T) {
 
 	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	assert.Nil(t, err, "Fail to get pod list after reconcoile")
+	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
 	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
@@ -365,7 +350,7 @@ func TestReconcile_PodCrash_OK(t *testing.T) {
 
 	err = fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
 
-	assert.Nil(t, err, "Fail to get pod list after reconcoile")
+	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
 	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
