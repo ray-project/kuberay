@@ -270,6 +270,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				}
 			}
 			worker.ScaleStrategy.WorkersToDelete = []string{}
+			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 		}
 
 		// Once we remove the feature flag and commit to those changes, the code below can be cleaned up
