@@ -279,7 +279,7 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
@@ -324,7 +324,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
@@ -371,7 +371,7 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
@@ -416,7 +416,7 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
@@ -465,7 +465,7 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
@@ -511,7 +511,7 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is cleared")
+	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func contains(slice []string, item string) bool {
