@@ -279,7 +279,6 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
@@ -323,8 +322,6 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 			t.Fatalf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
-
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
@@ -370,8 +367,6 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
-
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
@@ -415,8 +410,6 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
-
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
@@ -464,8 +457,6 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
-
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
@@ -510,8 +501,6 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
-
-	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
 }
 
 func TestReconcile_UpdateLocalWorkersToDelete_OK(t *testing.T) {

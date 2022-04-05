@@ -236,7 +236,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		}
 	}
 	// Reconcile worker pods now
-	for index, worker := range instance.Spec.WorkerGroupSpecs {
+	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		workerPods := corev1.PodList{}
 		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -271,7 +271,6 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				}
 			}
 			worker.ScaleStrategy.WorkersToDelete = []string{}
-			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 		}
 
 		// Once we remove the feature flag and commit to those changes, the code below can be cleaned up
@@ -306,7 +305,6 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				}
 				r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 			}
-			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 			continue
 		} else {
 			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
@@ -328,7 +326,6 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				}
 				r.Recorder.Eventf(instance, v1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 			}
-			instance.Spec.WorkerGroupSpecs[index].ScaleStrategy.WorkersToDelete = []string{}
 
 			// remove the remaining pods not part of the scaleStrategy
 			i := 0
