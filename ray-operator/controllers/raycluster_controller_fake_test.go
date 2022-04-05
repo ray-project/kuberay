@@ -480,7 +480,7 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
-	// Simulate 2 pod container crash.
+	// Simulate 1 pod container crash.
 	podList.Items[3].Status.Phase = v1.PodFailed
 	err = fakeClient.Update(context.Background(), &podList.Items[3])
 	assert.Nil(t, err, "Fail to get update pod status")
@@ -512,6 +512,38 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 	}
 
 	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, 0, "WorkersToDelete is not cleared")
+}
+
+func TestReconcile_UpdateLocalWorkersToDelete_OK(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+
+	podList := corev1.PodList{}
+	err := fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+
+	// Simulate 1 pod container crash.
+	podList.Items[1].Status.Phase = v1.PodFailed
+	runningPodsItems := append(podList.Items[:1], podList.Items[2:]...)
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	testWorker := testRayCluster.Spec.WorkerGroupSpecs[0]
+
+	// this should remove `pod1` from testWorker.ScaleStrategy.WorkersToDelete
+	testRayClusterReconciler.updateLocalWorkersToDelete(&testWorker, runningPodsItems)
+
+	assert.Len(t, testWorker.ScaleStrategy.WorkersToDelete, 1, "updateLocalWorkersToDelete does not update WorkersToDelete properly")
+	assert.Equal(t, testWorker.ScaleStrategy.WorkersToDelete[0], "pod2")
 }
 
 func contains(slice []string, item string) bool {

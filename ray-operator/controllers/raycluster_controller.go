@@ -248,6 +248,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				runningPods.Items = append(runningPods.Items, aPod)
 			}
 		}
+		r.updateLocalWorkersToDelete(&worker, runningPods.Items)
 		diff := *worker.Replicas - int32(len(runningPods.Items))
 
 		if PrioritizeWorkersToDelete {
@@ -360,6 +361,25 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		}
 	}
 	return nil
+}
+
+func (r *RayClusterReconciler) updateLocalWorkersToDelete(worker *rayiov1alpha1.WorkerGroupSpec, runningItems []v1.Pod) {
+	var actualWorkersToDelete []string
+	itemMap := make(map[string]int)
+
+	// Create a map for quick lookup.
+	for _, item := range runningItems {
+		itemMap[item.Name] = 1
+	}
+
+	// Build actualWorkersToDelete to only include running items.
+	for _, workerToDelete := range worker.ScaleStrategy.WorkersToDelete {
+		if _, ok := itemMap[workerToDelete]; ok {
+			actualWorkersToDelete = append(actualWorkersToDelete, workerToDelete)
+		}
+	}
+
+	worker.ScaleStrategy.WorkersToDelete = actualWorkersToDelete
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, instance *rayiov1alpha1.RayCluster) error {
