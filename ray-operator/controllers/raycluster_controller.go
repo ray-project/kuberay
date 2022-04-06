@@ -85,7 +85,11 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Fetch the RayCluster instance
 	instance := &rayiov1alpha1.RayCluster{}
 	if err := r.Get(context.TODO(), request.NamespacedName, instance); err != nil {
-		log.Error(err, "Read request instance error!")
+		if errors.IsNotFound(err) {
+			log.Info("Read request instance not found error!")
+		} else {
+			log.Error(err, "Read request instance error!")
+		}
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -114,7 +118,11 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	// update the status if needed
 	if err := r.updateStatus(instance); err != nil {
-		log.Error(err, "Update status error", "cluster name", request.Name)
+		if errors.IsNotFound(err) {
+			log.Info("Update status not found error", "cluster name", request.Name)
+		} else {
+			log.Error(err, "Update status error", "cluster name", request.Name)
+		}
 	}
 	return ctrl.Result{}, nil
 }
