@@ -20,5 +20,5 @@ spec:
   rayVersion: '1.9.2'
   headGroupSpec:
     serviceType: NodePort
-    enableIngress: true -> enables ingress
+    enableIngress: true # enables ingress
 ```
