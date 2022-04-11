@@ -65,6 +65,8 @@ message GetClusterRequest {
   string id = 1;
   // The name of the Cluster to be retrieved.
   string name = 2;
+  // The namespace of the Cluster to be retrieved.
+  string namespace = 3;
 }
 
 message ListClustersRequest {
@@ -88,8 +90,10 @@ message ListClustersResponse {
 message DeleteClusterRequest {
   // The ID of the cluster to be deleted.
   string id = 1;
-  // The name of the Cluster to be retrieved.
+  // The name of the Cluster to be deleted.
   string name = 2;
+  // The namespace of the Cluster to be deleted.
+  string namespace = 3;
 }
 
 message Cluster {
