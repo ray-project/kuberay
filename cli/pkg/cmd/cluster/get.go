@@ -12,20 +12,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type GetOptions struct {
+	namespace string
+}
+
 func newCmdGet() *cobra.Command {
+	opts := GetOptions{}
+
 	cmd := &cobra.Command{
 		Use:   "get <cluster id>",
 		Short: "Get a ray cluster by name",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return getCluster(args[0])
+			return getCluster(args[0], opts)
 		},
 	}
 
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "ray-system",
+		"kubernetes namespace where the cluster is provisioned")
 	return cmd
 }
 
-func getCluster(name string) error {
+func getCluster(name string, opts GetOptions) error {
 	// Get gRPC connection
 	conn, err := cmdutil.GetGrpcConn()
 	if err != nil {
@@ -39,10 +47,11 @@ func getCluster(name string) error {
 	defer cancel()
 
 	r, err := client.GetCluster(ctx, &go_client.GetClusterRequest{
-		Name: name,
+		Name:      name,
+		Namespace: opts.namespace,
 	})
 	if err != nil {
-		log.Fatalf("could not list clusters: %v", err)
+		log.Fatalf("could not get cluster %v: %v", name, err)
 	}
 	row, nWorkGroups := convertClusterToString(r)
 	header := []string{"Name", "User", "Namespace", "Created At", "Version", "Environment", "Head Image", "Head Compute Template", "Head Service Type"}
