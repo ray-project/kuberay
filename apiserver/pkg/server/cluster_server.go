@@ -39,7 +39,7 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 
 // Finds a specific Cluster by cluster name.
 func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterRequest) (*api.Cluster, error) {
-	cluster, err := s.resourceManager.GetCluster(ctx, request.Name)
+	cluster, err := s.resourceManager.GetCluster(ctx, request.Name, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "Get cluster failed.")
 	}
@@ -64,7 +64,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 // deleting the Cluster.
 func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*empty.Empty, error) {
 	// TODO: do we want to have some logics here to check cluster exist here? or put it inside resourceManager
-	if err := s.resourceManager.DeleteCluster(ctx, request.Name); err != nil {
+	if err := s.resourceManager.DeleteCluster(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
 	}
 
@@ -78,6 +78,10 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 
 	if request.Cluster.User == "" {
 		return util.NewInvalidInputError("User who create the cluster is empty. Please specify a valid value.")
+	}
+
+	if request.Cluster.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
 
 	if len(request.Cluster.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
