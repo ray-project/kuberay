@@ -222,9 +222,12 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 	if len(headPods.Items) == 0 || headPods.Items == nil {
 		// create head pod
 		log.Info("reconcilePods ", "creating head pod for cluster", instance.Name)
+		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(*instance); err != nil {
+			common.FailedClustersCounterInc(instance.Namespace)
 			return err
 		}
+		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
 		log.Info("reconcilePods ", "more than 1 head pod found for cluster", instance.Name)
 		itemLength := len(headPods.Items)

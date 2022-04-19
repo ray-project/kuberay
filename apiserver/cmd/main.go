@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/reflection"
 	"k8s.io/klog/v2"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
@@ -48,12 +50,20 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 		klog.Fatalf("Failed to start GPRC server: %v", err)
 	}
 
-	s := grpc.NewServer(grpc.UnaryInterceptor(interceptor.ApiServerInterceptor), grpc.MaxRecvMsgSize(math.MaxInt32))
+	s := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, interceptor.ApiServerInterceptor)),
+		grpc.MaxRecvMsgSize(math.MaxInt32))
 	api.RegisterClusterServiceServer(s, server.NewClusterServer(resourceManager, &server.ClusterServerOptions{CollectMetrics: *collectMetricsFlag}))
 	api.RegisterComputeTemplateServiceServer(s, server.NewComputeTemplateServer(resourceManager, &server.ComputeTemplateServerOptions{CollectMetrics: *collectMetricsFlag}))
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
+	// Make sure all of the Prometheus metrics are initialized.
+	grpc_prometheus.Register(s)
+	// This is to enable `grpc_server_handling_seconds`, otherwise we won't have latency metrics.
+	// see https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/master/README.md#histograms for details.
+	grpc_prometheus.EnableHandlingTimeHistogram()
 	if err := s.Serve(listener); err != nil {
 		klog.Fatalf("Failed to serve gRPC listener: %v", err)
 	}
