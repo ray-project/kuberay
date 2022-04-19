@@ -69,5 +69,6 @@ func getDefaultPorts() map[string]int32 {
 		DefaultClientPortName: DefaultClientPort,
 		DefaultRedisPortName:  DefaultRedisPort,
 		DefaultDashboardName:  DefaultDashboardPort,
+		DefaultMetricsName:    DefaultMetricsPort,
 	}
 }
