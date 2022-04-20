@@ -8,13 +8,6 @@ import (
 
 // Define all the prometheus counters for all clusters
 var (
-	clustersRunningCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ray_operator_clusters_running",
-			Help: "Current running ray clusters",
-		},
-		[]string{"namespace"},
-	)
 	clustersCreatedCount = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ray_operator_clusters_created_total",
