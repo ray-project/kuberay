@@ -80,10 +80,6 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 		return util.NewInvalidInputError("User who create the cluster is empty. Please specify a valid value.")
 	}
 
-	if request.Cluster.Namespace == "" {
-		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
-	}
-
 	if len(request.Cluster.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
 		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
 	}

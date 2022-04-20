@@ -109,6 +109,10 @@ func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, na
 		return nil, util.NewInvalidInputError("clusterName is empty, failed to get the cluster.")
 	}
 
+	if len(namespace) == 0 {
+		namespace = DefaultNamespace
+	}
+
 	client := r.getRayClusterClient(namespace)
 	return getClusterByName(ctx, client, clusterName)
 }
@@ -131,6 +135,10 @@ func (r *ResourceManager) ListClusters(ctx context.Context) ([]*v1alpha1.RayClus
 func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string, namespace string) error {
 	if len(clusterName) == 0 {
 		return util.NewInvalidInputError("clusterName is empty, failed to delete the cluster.")
+	}
+
+	if len(namespace) == 0 {
+		namespace = DefaultNamespace
 	}
 
 	client := r.getRayClusterClient(namespace)
