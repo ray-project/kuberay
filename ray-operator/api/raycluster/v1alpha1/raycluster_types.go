@@ -7,7 +7,7 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-//var app appsv1.Deployment{}
+// var app appsv1.Deployment{}
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -52,7 +52,7 @@ type WorkerGroupSpec struct {
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template a pod template for the worker
 	Template v1.PodTemplateSpec `json:"template"`
-	//ScaleStrategy defines which pods to remove
+	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 }
 

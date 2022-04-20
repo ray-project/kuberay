@@ -17,7 +17,7 @@ type RayCluster struct {
 }
 
 // NewRayCluster creates a RayCluster.
-//func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
+// func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
 func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) *RayCluster {
 	// figure out how to build this
 	computeTemplate := computeTemplateMap[apiCluster.ClusterSpec.HeadGroupSpec.ComputeTemplate]

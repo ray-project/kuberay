@@ -285,9 +285,9 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		// It will end being a simple: "if diff > 0 { } else { }"
 
 		if diff > 0 {
-			//pods need to be added
+			// pods need to be added
 			log.Info("reconcilePods", "add workers for group", worker.GroupName)
-			//create all workers of this group
+			// create all workers of this group
 			var i int32
 			for i = 0; i < diff; i++ {
 				log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))

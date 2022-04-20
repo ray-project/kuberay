@@ -22,9 +22,7 @@ const (
 	SharedMemoryVolumeMountPath = "/dev/shm"
 )
 
-var (
-	log = logf.Log.WithName("RayCluster-Controller")
-)
+var log = logf.Log.WithName("RayCluster-Controller")
 
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
@@ -200,7 +198,6 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 		fmt.Fprintf(cmdAggr, " %s ", v)
 	}
 	return cmdAggr.String()
-
 }
 
 func getRayContainerIndex(pod v1.Pod) (index int) {
@@ -214,7 +211,7 @@ func getRayContainerIndex(pod v1.Pod) (index int) {
 			}
 		}
 	}
-	//not found, use first container
+	// not found, use first container
 	return 0
 }
 
@@ -254,7 +251,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 }
 
 func setInitContainerEnvVars(container *v1.Container, svcName string) {
-	//RAY_IP can be used in the DNS lookup
+	// RAY_IP can be used in the DNS lookup
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
@@ -317,7 +314,7 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 	return false
 }
 
-//TODO auto complete params
+// TODO auto complete params
 func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, svcName string) (completeStartParams map[string]string) {
 	if nodeType == rayiov1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
@@ -335,7 +332,6 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 
 // concatenateContainerCommand with ray start
 func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
-
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -388,7 +384,7 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 	if checkIfVolumeMounted(container, pod) {
 		return
 	}
-	//1) create a Volume of type emptyDir and add it to Volumes
+	// 1) create a Volume of type emptyDir and add it to Volumes
 	emptyDirVolume := v1.Volume{
 		Name: SharedMemoryVolumeName,
 		VolumeSource: v1.VolumeSource{
@@ -402,7 +398,7 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 		pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
 	}
 
-	//2) create a VolumeMount that uses the emptyDir
+	// 2) create a VolumeMount that uses the emptyDir
 	mountedVolume := v1.VolumeMount{
 		MountPath: SharedMemoryVolumeMountPath,
 		Name:      SharedMemoryVolumeName,
@@ -440,7 +436,7 @@ func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 			}
 		}
 		if !valid {
-			//remove the VolumeMount
+			// remove the VolumeMount
 			container.VolumeMounts[index] = container.VolumeMounts[len(container.VolumeMounts)-1]
 			container.VolumeMounts = container.VolumeMounts[:len(container.VolumeMounts)-1]
 		}
@@ -449,7 +445,7 @@ func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 
 func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
 	var mem *resource.Quantity
-	//check the requests, if they are not set, check the limits.
+	// check the requests, if they are not set, check the limits.
 	if q, ok := container.Resources.Requests[v1.ResourceMemory]; ok {
 		mem = &q
 		return mem

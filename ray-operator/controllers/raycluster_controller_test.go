@@ -47,7 +47,7 @@ var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 
-	var myRayCluster = &rayiov1alpha1.RayCluster{
+	myRayCluster := &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
@@ -126,7 +126,7 @@ var _ = Context("Inside the default namespace", func() {
 		},
 	}
 
-	var filterLabels = client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
 
 	Describe("When creating a raycluster", func() {
 		It("should create a raycluster object", func() {
@@ -185,7 +185,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			Expect(err).NotTo(HaveOccurred(), "failed delete a pod")
 
-			//at least 3 pods should be in none-failed phase
+			// at least 3 pods should be in none-failed phase
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))

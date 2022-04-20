@@ -29,11 +29,9 @@ func TestStatus(t *testing.T) {
 	if !IsCreated(pod) {
 		t.Fail()
 	}
-
 }
 
 func TestCheckName(t *testing.T) {
-
 	// test 1 -> change
 	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
 	str = CheckName(str)
@@ -56,7 +54,6 @@ func TestCheckName(t *testing.T) {
 }
 
 func createSomePod() (pod *corev1.Pod) {
-
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

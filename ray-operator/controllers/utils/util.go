@@ -25,7 +25,7 @@ func CheckName(s string) string {
 	maxLenght := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
 
 	if len(s) > maxLenght {
-		//shorten the name
+		// shorten the name
 		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
 		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
@@ -50,7 +50,7 @@ func CheckLabel(s string) string {
 	maxLenght := 63
 
 	if len(s) > maxLenght {
-		//shorten the name
+		// shorten the name
 		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]

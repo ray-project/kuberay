@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-
 	"math"
 	"net"
 	"net/http"
@@ -35,7 +34,6 @@ func main() {
 
 	go startRpcServer(resourceManager)
 	startHttpProxy()
-
 }
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
