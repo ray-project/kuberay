@@ -20,9 +20,9 @@ const DefaultNamespace = "ray-system"
 // kubernetes objects and potential db objects underneath operations should be encapsulated at this layer
 type ResourceManagerInterface interface {
 	CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error)
-	GetCluster(ctx context.Context, clusterName string) (*v1alpha1.RayCluster, error)
+	GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error)
 	ListClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error)
-	DeleteCluster(ctx context.Context, clusterName string) error
+	DeleteCluster(ctx context.Context, clusterName string, namespace string) error
 	CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*v1.ConfigMap, error)
 	GetComputeTemplate(ctx context.Context, name string) (*v1.ConfigMap, error)
 	ListComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error)
@@ -104,12 +104,16 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 	return dict, nil
 }
 
-func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string) (*v1alpha1.RayCluster, error) {
+func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error) {
 	if len(clusterName) == 0 {
 		return nil, util.NewInvalidInputError("clusterName is empty, failed to get the cluster.")
 	}
 
-	client := r.getRayClusterClient(DefaultNamespace)
+	if len(namespace) == 0 {
+		namespace = DefaultNamespace
+	}
+
+	client := r.getRayClusterClient(namespace)
 	return getClusterByName(ctx, client, clusterName)
 }
 
@@ -128,12 +132,16 @@ func (r *ResourceManager) ListClusters(ctx context.Context) ([]*v1alpha1.RayClus
 	return result, nil
 }
 
-func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string) error {
+func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string, namespace string) error {
 	if len(clusterName) == 0 {
 		return util.NewInvalidInputError("clusterName is empty, failed to delete the cluster.")
 	}
 
-	client := r.getRayClusterClient(DefaultNamespace)
+	if len(namespace) == 0 {
+		namespace = DefaultNamespace
+	}
+
+	client := r.getRayClusterClient(namespace)
 	cluster, err := getClusterByName(ctx, client, clusterName)
 	if err != nil {
 		return util.Wrap(err, "Get cluster failure")
