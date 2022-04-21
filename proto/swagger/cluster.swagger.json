@@ -20,27 +20,6 @@
   ],
   "paths": {
     "/apis/v1alpha1/clusters": {
-      "get": {
-        "summary": "Finds all Clusters. Supports pagination, and sorting on certain fields.",
-        "operationId": "ClusterService_ListCluster",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoListClustersResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "ClusterService"
-        ]
-      },
       "post": {
         "summary": "Creates a new Cluster.",
         "operationId": "ClusterService_CreateCluster",
@@ -156,6 +135,38 @@
             "description": "The namespace of the Cluster to be deleted.",
             "in": "query",
             "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ClusterService"
+        ]
+      }
+    },
+    "/apis/v1alpha1/clusters/{namespace}": {
+      "get": {
+        "summary": "Finds all Clusters. Supports pagination, and sorting on certain fields.",
+        "operationId": "ClusterService_ListCluster",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoListClustersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the Clusters to be retrieved.",
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
