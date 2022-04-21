@@ -117,8 +117,12 @@ func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, na
 	return getClusterByName(ctx, client, clusterName)
 }
 
-func (r *ResourceManager) ListClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error) {
-	rayClusterList, err := r.getRayClusterClient(DefaultNamespace).List(ctx, metav1.ListOptions{})
+func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error) {
+	if len(namespace) == 0 {
+		namespace = DefaultNamespace
+	}
+
+	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, util.Wrap(err, "List RayCluster failed")
 	}

@@ -49,7 +49,7 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 // Finds all Clusters.
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListClustersRequest) (*api.ListClustersResponse, error) {
-	clusters, err := s.resourceManager.ListClusters(ctx)
+	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
