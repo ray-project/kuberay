@@ -34,7 +34,7 @@ service ClusterService {
   // Finds a specific Cluster by ID.
   rpc GetCluster(GetClusterRequest) returns (Cluster) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/clusters/{id}"
+      get: "/apis/v1alpha1/clusters/{namespace}/{id}"
     };
   }
 
@@ -50,7 +50,7 @@ service ClusterService {
   // deleting the cluster.
   rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/clusters/{id}"
+      delete: "/apis/v1alpha1/clusters/{namespace}/{id}"
     };
   }
 }
