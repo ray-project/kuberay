@@ -43,7 +43,6 @@ spec:
               path: /metrics
               port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            initialDelaySeconds: {{ .Values.debug.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
           readinessProbe:
@@ -51,7 +50,6 @@ spec:
               path: /metrics
               port: http
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            initialDelaySeconds: {{ .Values.debug.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
           resources:
