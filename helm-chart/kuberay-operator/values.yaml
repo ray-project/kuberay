@@ -43,5 +43,15 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 5
+
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 5
+
 createCustomResource: true
 rbacEnable: true
