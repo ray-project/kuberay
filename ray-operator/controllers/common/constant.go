@@ -15,10 +15,12 @@ const (
 	DefaultClientPort    = 10001
 	DefaultRedisPort     = 6379
 	DefaultDashboardPort = 8265
+	DefaultMetricsPort   = 8080
 
 	DefaultClientPortName = "client"
 	DefaultRedisPortName  = "redis"
 	DefaultDashboardName  = "dashboard"
+	DefaultMetricsName    = "metrics"
 
 	// Check node if ready by checking the path exists or not
 	PodReadyFilepath = "POD_READY_FILEPATH"

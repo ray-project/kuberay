@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ray-monitor
+  namespace: prometheus-system
+  labels:
+    release: prometheus-operator
+    ray.io/node-type: head
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+      - ray-system
+  selector:
+    matchLabels:
+      ray.io/node-type: head
+  endpoints:
+    - port: metrics

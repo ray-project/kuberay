@@ -38,6 +38,18 @@ kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
 
+### Monitor
+
+We have add a parameter `--metrics-expose-port=8080` to open the port and expose metrics both for the ray cluster and our control plane. We also leverage the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to start the whole monitoring system.
+
+You can quickly deploy one by the following on your own kubernetes cluster by using the scripts in install:
+```shell
+./install/prometheus/install.sh
+```
+It will set up the prometheus stack and deploy the related service monitor in `config/prometheus`
+
+Then you can also use the json in `config/grafana` to generate the dashboards.
+
 ## Development
 
 Please read our [CONTRIBUTING](CONTRIBUTING.md) guide before making a pull request. Refer to our [DEVELOPMENT](./ray-operator/DEVELOPMENT.md) to build and run tests locally.

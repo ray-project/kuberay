@@ -62,6 +62,13 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.ServiceAccountName = instance.Name
 	}
 
+	// add metrics port for exposing to the promethues stack.
+	metricsPort := v1.ContainerPort{
+		Name:          "metrics",
+		ContainerPort: int32(DefaultMetricsPort),
+	}
+	podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
+
 	return podTemplate
 }
 
@@ -79,6 +86,13 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
+
+	// add metrics port for exposing to the promethues stack.
+	metricsPort := v1.ContainerPort{
+		Name:          "metrics",
+		ContainerPort: int32(DefaultMetricsPort),
+	}
+	podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
 
 	return podTemplate
 }
@@ -330,6 +344,12 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 			rayStartParams["address"] = address
 		}
 	}
+
+	// add metrics port for expose the metrics to the prometheus.
+	if _, ok := rayStartParams["metrics-export-port"]; !ok {
+		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
+	}
+
 	return rayStartParams
 }
 
