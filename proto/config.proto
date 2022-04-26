@@ -34,14 +34,14 @@ service ComputeTemplateService {
   // Finds a specific Cluster by ID.
   rpc GetComputeTemplate(GetComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/compute_templates/{id}"
+      get: "/apis/v1alpha1/compute_templates/{namespace}/{id}"
     };
   }
 
   // Finds all Clusters. Supports pagination, and sorting on certain fields.
   rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/compute_templates"
+      get: "/apis/v1alpha1/compute_templates/{namespace}"
     };
   }
 
@@ -50,7 +50,7 @@ service ComputeTemplateService {
   // deleting the Cluster.
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/compute_templates/{id}"
+      delete: "/apis/v1alpha1/compute_templates/{namespace}/{id}"
     };
   }
 }
@@ -65,9 +65,13 @@ message GetComputeTemplateRequest {
   string id = 1;
   // The name of the ComputeTemplate to be retrieved.
   string name = 2;
+  // The namespace of the ComputeTemplate to be retrieved.
+  string namespace =3;
 }
 
 message ListComputeTemplatesRequest {
+  // The namespace of the ComputeTemplates to be retrieved. 
+  string namespace =1;
   // TODO: support paganation later
 }
 
@@ -80,6 +84,8 @@ message DeleteComputeTemplateRequest {
   string id = 1;
   // The name of the ComputeTemplate to be deleted.
   string name = 2;
+  // The namespace of the ComputeTemplate to be deleted.
+  string namespace = 3;
 }
 
 // ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
@@ -88,14 +94,16 @@ message ComputeTemplate {
   string id = 1;
   // The name of the compute template
   string name = 2;
+  // The namespace of the compute template
+  string namespace = 3;
   // Number of cpus
-  uint32 cpu = 3;
+  uint32 cpu = 4;
   // Number of memory
-  uint32 memory = 4;
+  uint32 memory = 5;
   // Number of gpus
-  uint32 gpu = 5;
+  uint32 gpu = 6;
   // The detail gpu accelerator type
-  string gpu_accelerator = 6;
+  string gpu_accelerator = 7;
 }
 
 
@@ -111,28 +119,30 @@ service ImageTemplateService {
   // Finds a specific ImageTemplate by ID.
   rpc GetImageTemplate(GetImageTemplateRequest) returns (ImageTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/image_templates/{id}"
+      get: "/apis/v1alpha1/image_templates/{namespace}/{id}"
     };
   }
 
   // Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
   rpc ListImageTemplates(ListImageTemplatesRequest) returns (ListImageTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/image_templates"
+      get: "/apis/v1alpha1/image_templates/{namespace}"
     };
   }
 
   // Deletes an ImageTemplate.
   rpc DeleteImageTemplate(DeleteImageTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/image_templates/{id}"
+      delete: "/apis/v1alpha1/image_templates/{namespace}/{id}"
     };
   }
 }
 
 message CreateImageTemplateRequest {
-  // The Compute to be created.
+  // The ImageTemplate to be created.
   ImageTemplate image_template = 1;
+  // The namespace of the ImageTemplate to be created.
+  string namespace = 2;
 }
 
 message GetImageTemplateRequest {
@@ -140,9 +150,13 @@ message GetImageTemplateRequest {
   string id = 1;
   // The name of the ImageTemplate to be retrieved.
   string name = 2;
+  // The namespace of the ImageTemplate to be retrieved.
+  string namespace = 3;
 }
 
 message ListImageTemplatesRequest {
+  // The namespace of the ImageTemplates to be retrieved.
+  string namespace = 1;
   // TODO: support pagingation later
 }
 
@@ -154,8 +168,10 @@ message ListImageTemplatesResponse {
 message DeleteImageTemplateRequest {
   // The ID of the ImageTemplate to be deleted.
   string id = 1;
-  // The name of the ImageTemplate to be delete.
+  // The name of the ImageTemplate to be deleted.
   string name = 2;
+  // The namespace of the ImageTemplate to be deleted.
+  string namespace = 3;
 }
 
 // ImageTemplate can be used by worker group and workspce.
@@ -163,18 +179,20 @@ message DeleteImageTemplateRequest {
 message ImageTemplate {
   // The ID of the image template
   string name = 1;
+  // The namespace of the image template
+  string namespace = 2;
   // The base container image to be used for image building
-  string base_image = 2;
+  string base_image = 3;
   // The pip packages to install
-  repeated string pip_packages = 3;
+  repeated string pip_packages = 4;
   // The conda packages to install
-  repeated string conda_packages = 4;
+  repeated string conda_packages = 5;
   // The system packages to install
-  repeated string system_packages = 5;
+  repeated string system_packages = 6;
   // The environment variables to set
-  map<string, string> environment_variables = 6;
+  map<string, string> environment_variables = 7;
   // The post install commands to execute
-  string custom_commands = 7;
+  string custom_commands = 8;
   // Output. The result image generated
   string image = 9;
 }

@@ -68,7 +68,7 @@ func local_request_ComputeTemplateService_CreateComputeTemplate_0(ctx context.Co
 }
 
 var (
-	filter_ComputeTemplateService_GetComputeTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_ComputeTemplateService_GetComputeTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"namespace": 0, "id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_ComputeTemplateService_GetComputeTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ComputeTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -81,6 +81,17 @@ func request_ComputeTemplateService_GetComputeTemplate_0(ctx context.Context, ma
 		err error
 		_   = err
 	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
 
 	val, ok = pathParams["id"]
 	if !ok {
@@ -116,6 +127,17 @@ func local_request_ComputeTemplateService_GetComputeTemplate_0(ctx context.Conte
 		_   = err
 	)
 
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	val, ok = pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -143,6 +165,24 @@ func request_ComputeTemplateService_ListComputeTemplates_0(ctx context.Context, 
 	var protoReq ListComputeTemplatesRequest
 	var metadata runtime.ServerMetadata
 
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	msg, err := client.ListComputeTemplates(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
@@ -152,13 +192,31 @@ func local_request_ComputeTemplateService_ListComputeTemplates_0(ctx context.Con
 	var protoReq ListComputeTemplatesRequest
 	var metadata runtime.ServerMetadata
 
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	msg, err := server.ListComputeTemplates(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_ComputeTemplateService_DeleteComputeTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_ComputeTemplateService_DeleteComputeTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"namespace": 0, "id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_ComputeTemplateService_DeleteComputeTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ComputeTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -171,6 +229,17 @@ func request_ComputeTemplateService_DeleteComputeTemplate_0(ctx context.Context,
 		err error
 		_   = err
 	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
 
 	val, ok = pathParams["id"]
 	if !ok {
@@ -206,6 +275,17 @@ func local_request_ComputeTemplateService_DeleteComputeTemplate_0(ctx context.Co
 		_   = err
 	)
 
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	val, ok = pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -229,6 +309,10 @@ func local_request_ComputeTemplateService_DeleteComputeTemplate_0(ctx context.Co
 
 }
 
+var (
+	filter_ImageTemplateService_CreateImageTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"image_template": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+)
+
 func request_ImageTemplateService_CreateImageTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ImageTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CreateImageTemplateRequest
 	var metadata runtime.ServerMetadata
@@ -238,6 +322,13 @@ func request_ImageTemplateService_CreateImageTemplate_0(ctx context.Context, mar
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
 	}
 	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq.ImageTemplate); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ImageTemplateService_CreateImageTemplate_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -258,13 +349,20 @@ func local_request_ImageTemplateService_CreateImageTemplate_0(ctx context.Contex
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_ImageTemplateService_CreateImageTemplate_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
 	msg, err := server.CreateImageTemplate(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_ImageTemplateService_GetImageTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_ImageTemplateService_GetImageTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"namespace": 0, "id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_ImageTemplateService_GetImageTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ImageTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -277,6 +375,17 @@ func request_ImageTemplateService_GetImageTemplate_0(ctx context.Context, marsha
 		err error
 		_   = err
 	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
 
 	val, ok = pathParams["id"]
 	if !ok {
@@ -312,6 +421,17 @@ func local_request_ImageTemplateService_GetImageTemplate_0(ctx context.Context, 
 		_   = err
 	)
 
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	val, ok = pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -339,6 +459,24 @@ func request_ImageTemplateService_ListImageTemplates_0(ctx context.Context, mars
 	var protoReq ListImageTemplatesRequest
 	var metadata runtime.ServerMetadata
 
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	msg, err := client.ListImageTemplates(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
@@ -348,13 +486,31 @@ func local_request_ImageTemplateService_ListImageTemplates_0(ctx context.Context
 	var protoReq ListImageTemplatesRequest
 	var metadata runtime.ServerMetadata
 
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
+
 	msg, err := server.ListImageTemplates(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_ImageTemplateService_DeleteImageTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_ImageTemplateService_DeleteImageTemplate_0 = &utilities.DoubleArray{Encoding: map[string]int{"namespace": 0, "id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_ImageTemplateService_DeleteImageTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ImageTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -367,6 +523,17 @@ func request_ImageTemplateService_DeleteImageTemplate_0(ctx context.Context, mar
 		err error
 		_   = err
 	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
 
 	val, ok = pathParams["id"]
 	if !ok {
@@ -401,6 +568,17 @@ func local_request_ImageTemplateService_DeleteImageTemplate_0(ctx context.Contex
 		err error
 		_   = err
 	)
+
+	val, ok = pathParams["namespace"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "namespace")
+	}
+
+	protoReq.Namespace, err = runtime.String(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "namespace", err)
+	}
 
 	val, ok = pathParams["id"]
 	if !ok {
@@ -751,11 +929,11 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 var (
 	pattern_ComputeTemplateService_CreateComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "compute_templates"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ComputeTemplateService_GetComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "compute_templates", "id"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ComputeTemplateService_GetComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"apis", "v1alpha1", "compute_templates", "namespace", "id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ComputeTemplateService_ListComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "compute_templates"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ComputeTemplateService_ListComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "compute_templates", "namespace"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "compute_templates", "id"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"apis", "v1alpha1", "compute_templates", "namespace", "id"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -892,11 +1070,11 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 var (
 	pattern_ImageTemplateService_CreateImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "image_templates"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ImageTemplateService_GetImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "image_templates", "id"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ImageTemplateService_GetImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"apis", "v1alpha1", "image_templates", "namespace", "id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ImageTemplateService_ListImageTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "image_templates"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ImageTemplateService_ListImageTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "image_templates", "namespace"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_ImageTemplateService_DeleteImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "image_templates", "id"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_ImageTemplateService_DeleteImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"apis", "v1alpha1", "image_templates", "namespace", "id"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
