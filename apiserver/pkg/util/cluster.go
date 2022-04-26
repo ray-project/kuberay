@@ -320,11 +320,11 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 	// TODO: reserved for common parameters.
 }
 
-func NewComputeTemplate(runtime *api.ComputeTemplate, namespace string) (*v1.ConfigMap, error) {
+func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 	config := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runtime.Name,
-			Namespace: namespace,
+			Namespace: runtime.Namespace,
 			Labels: map[string]string{
 				"ray.io/config-type":      "compute-template",
 				"ray.io/compute-template": runtime.Name,
@@ -332,6 +332,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate, namespace string) (*v1.Con
 		},
 		Data: map[string]string{
 			"name":            runtime.Name,
+			"namespace":       runtime.Namespace,
 			"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
 			"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
 			"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),

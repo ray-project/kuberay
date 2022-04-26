@@ -24,30 +24,30 @@ type ComputeTemplateServer struct {
 
 func (s *ComputeTemplateServer) CreateComputeTemplate(ctx context.Context, request *api.CreateComputeTemplateRequest) (*api.ComputeTemplate, error) {
 	if err := ValidateCreateComputeTemplateRequest(request); err != nil {
-		return nil, util.Wrap(err, "Validate compute runtime request failed.")
+		return nil, util.Wrap(err, "Validate compute template runtime request failed.")
 	}
 
 	runtime, err := s.resourceManager.CreateComputeTemplate(ctx, request.ComputeTemplate)
 	if err != nil {
-		return nil, util.Wrap(err, "Create Compute Runtime failed.")
+		return nil, util.Wrap(err, "Create compute template Runtime failed.")
 	}
 
 	return model.FromKubeToAPIComputeTemplate(runtime), nil
 }
 
 func (s *ComputeTemplateServer) GetComputeTemplate(ctx context.Context, request *api.GetComputeTemplateRequest) (*api.ComputeTemplate, error) {
-	runtime, err := s.resourceManager.GetComputeTemplate(ctx, request.Name)
+	runtime, err := s.resourceManager.GetComputeTemplate(ctx, request.Name, request.Namespace)
 	if err != nil {
-		return nil, util.Wrap(err, "Get cluster runtime failed.")
+		return nil, util.Wrap(err, "Get compute template runtime failed.")
 	}
 
 	return model.FromKubeToAPIComputeTemplate(runtime), nil
 }
 
 func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, request *api.ListComputeTemplatesRequest) (*api.ListComputeTemplatesResponse, error) {
-	runtimes, err := s.resourceManager.ListComputeTemplates(ctx)
+	runtimes, err := s.resourceManager.ListComputeTemplates(ctx, request.Namespace)
 	if err != nil {
-		return nil, util.Wrap(err, "List cluster runtime failed.")
+		return nil, util.Wrap(err, "List compute templates runtime failed.")
 	}
 
 	return &api.ListComputeTemplatesResponse{
@@ -56,7 +56,7 @@ func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, reques
 }
 
 func (s *ComputeTemplateServer) DeleteComputeTemplate(ctx context.Context, request *api.DeleteComputeTemplateRequest) (*emptypb.Empty, error) {
-	if err := s.resourceManager.DeleteComputeTemplate(ctx, request.Name); err != nil {
+	if err := s.resourceManager.DeleteComputeTemplate(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
 	}
 
@@ -65,7 +65,11 @@ func (s *ComputeTemplateServer) DeleteComputeTemplate(ctx context.Context, reque
 
 func ValidateCreateComputeTemplateRequest(request *api.CreateComputeTemplateRequest) error {
 	if request.ComputeTemplate.Name == "" {
-		return util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
+	}
+
+	if request.ComputeTemplate.Namespace == "" {
+		return util.NewInvalidInputError("Compute template namespace is empty. Please specify a valid value.")
 	}
 
 	if request.ComputeTemplate.Cpu == 0 {

@@ -74,6 +74,7 @@ func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate 
 
 	runtime := &api.ComputeTemplate{}
 	runtime.Name = configMap.Name
+	runtime.Namespace = configMap.Namespace
 	runtime.Cpu = uint32(cpu)
 	runtime.Memory = uint32(memory)
 	runtime.Gpu = uint32(gpu)
