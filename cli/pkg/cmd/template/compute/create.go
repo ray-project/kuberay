@@ -13,6 +13,7 @@ import (
 
 type CreateOptions struct {
 	name           string
+	namespace      string
 	cpu            uint32
 	memory         uint32
 	gpu            uint32
@@ -33,6 +34,7 @@ func newCmdCreate() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.name, "name", "", "name of the compute template")
+	cmd.Flags().StringVar(&opts.namespace, "namespace", "ray-system", "kubernetes namespace where the compute template will be")
 	cmd.Flags().Uint32Var(&opts.cpu, "cpu", 1, "ray pod CPU")
 	cmd.Flags().Uint32Var(&opts.memory, "memory", 1, "ray pod memory in GB")
 	cmd.Flags().Uint32Var(&opts.gpu, "gpu", 0, "ray head GPU")
@@ -58,6 +60,7 @@ func createComputeTemplate(opts CreateOptions) error {
 
 	computeTemplate := &go_client.ComputeTemplate{
 		Name:           opts.name,
+		Namespace:      opts.namespace,
 		Cpu:            opts.cpu,
 		Memory:         opts.memory,
 		Gpu:            opts.gpu,
@@ -71,6 +74,6 @@ func createComputeTemplate(opts CreateOptions) error {
 		log.Fatalf("could not create compute template %v", err)
 	}
 
-	log.Printf("compute template %v is created", r.Id)
+	log.Printf("compute template %v is created in %v", r.Name, r.Namespace)
 	return nil
 }
