@@ -27,6 +27,20 @@ spec:
         name: ray-manager
         securityContext:
           allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 5
         resources:
           limits:
             cpu: 100m
