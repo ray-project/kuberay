@@ -19,41 +19,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha1/clusters": {
-      "post": {
-        "summary": "Creates a new Cluster.",
-        "operationId": "ClusterService_CreateCluster",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoCluster"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "description": "The Cluster to be created.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoCluster"
-            }
-          }
-        ],
-        "tags": [
-          "ClusterService"
-        ]
-      }
-    },
-    "/apis/v1alpha1/clusters/{namespace}": {
+    "/apis/v1alpha2/namespaces/{namespace}/clusters": {
       "get": {
         "summary": "Finds all Clusters. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListCluster",
@@ -74,7 +40,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the Clusters to be retrieved.",
+            "description": "The namespace of the clusters to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -83,9 +49,48 @@
         "tags": [
           "ClusterService"
         ]
+      },
+      "post": {
+        "summary": "Creates a new Cluster.",
+        "operationId": "ClusterService_CreateCluster",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoCluster"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the cluster to be created.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The cluster to be created.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoCluster"
+            }
+          }
+        ],
+        "tags": [
+          "ClusterService"
+        ]
       }
     },
-    "/apis/v1alpha1/clusters/{namespace}/{id}": {
+    "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}": {
       "get": {
         "summary": "Finds a specific Cluster by ID.",
         "operationId": "ClusterService_GetCluster",
@@ -106,23 +111,16 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the Cluster to be retrieved.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "description": "The ID of the Cluster to be retrieved.",
+            "description": "The namespace of the cluster to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the Cluster to be retrieved.",
-            "in": "query",
-            "required": false,
+            "description": "The name of the cluster to be retrieved.",
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -150,23 +148,16 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the Cluster to be deleted.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "description": "The ID of the cluster to be deleted.",
+            "description": "The namespace of the cluster to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the Cluster to be deleted.",
-            "in": "query",
-            "required": false,
+            "description": "The name of the cluster to be deleted.",
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -211,7 +202,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Required input field. Unique Cluster name provided by user."
+          "description": "Required input field. Unique cluster name provided by user."
         },
         "namespace": {
           "type": "string",
@@ -235,12 +226,12 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the Cluster created."
+          "description": "Output. The time that the cluster created."
         },
         "deletedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the Cluster deleted."
+          "description": "Output. The time that the cluster deleted."
         }
       }
     },
@@ -292,7 +283,7 @@
           "items": {
             "$ref": "#/definitions/protoCluster"
           },
-          "description": "A list of Clusters returned."
+          "description": "A list of clusters returned."
         }
       }
     },

@@ -26,7 +26,7 @@ service ClusterService {
   // Creates a new Cluster.
   rpc CreateCluster(CreateClusterRequest) returns (Cluster) {
     option (google.api.http) = {
-      post: "/apis/v1alpha1/clusters"
+      post: "/apis/v1alpha2/namespaces/{namespace}/clusters"
       body: "cluster"
     };
   }
@@ -34,14 +34,14 @@ service ClusterService {
   // Finds a specific Cluster by ID.
   rpc GetCluster(GetClusterRequest) returns (Cluster) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/clusters/{namespace}/{id}"
+      get: "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"
     };
   }
 
   // Finds all Clusters. Supports pagination, and sorting on certain fields.
   rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/clusters/{namespace}"
+      get: "/apis/v1alpha2/namespaces/{namespace}/clusters"
     };
   }
 
@@ -50,27 +50,27 @@ service ClusterService {
   // deleting the cluster.
   rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/clusters/{namespace}/{id}"
+      delete: "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"
     };
   }
 }
 
 message CreateClusterRequest {
-  // The Cluster to be created.
+  // The cluster to be created.
   Cluster cluster = 1;
+  // The namespace of the cluster to be created. 
+  string namespace = 2;
 }
 
 message GetClusterRequest {
-  // The ID of the Cluster to be retrieved.
-  string id = 1;
-  // The name of the Cluster to be retrieved.
-  string name = 2;
-  // The namespace of the Cluster to be retrieved.
-  string namespace = 3;
+  // The name of the cluster to be retrieved.
+  string name = 1;
+  // The namespace of the cluster to be retrieved.
+  string namespace = 2;
 }
 
 message ListClustersRequest {
-  // The namespace of the Clusters to be retrieved.
+  // The namespace of the clusters to be retrieved.
   string namespace = 1;
 
   // A page token to request the next page of results. The token is acquried
@@ -80,27 +80,25 @@ message ListClustersRequest {
 }
 
 message ListClustersResponse {
-  // A list of Clusters returned.
+  // A list of clusters returned.
   repeated Cluster clusters = 1;
 
-  // The total number of Clusters for the given query.
+  // The total number of clusters for the given query.
   // int32 total_size = 2;
 
-  // The token to list the next page of Clusters.
+  // The token to list the next page of clusters.
   // string next_page_token = 3;
 }
 
 message DeleteClusterRequest {
-  // The ID of the cluster to be deleted.
-  string id = 1;
-  // The name of the Cluster to be deleted.
-  string name = 2;
-  // The namespace of the Cluster to be deleted.
-  string namespace = 3;
+  // The name of the cluster to be deleted.
+  string name = 1;
+  // The namespace of the cluster to be deleted.
+  string namespace = 2;
 }
 
 message Cluster {
-  // Required input field. Unique Cluster name provided by user.
+  // Required input field. Unique cluster name provided by user.
   string name = 1;
 
   // Required input field. Cluster's namespace provided by user
@@ -124,10 +122,10 @@ message Cluster {
   // Required field. This field indicates ray cluster configuration
   ClusterSpec cluster_spec = 6;
 
-  // Output. The time that the Cluster created.
+  // Output. The time that the cluster created.
   google.protobuf.Timestamp created_at = 7;
 
-  // Output. The time that the Cluster deleted.
+  // Output. The time that the cluster deleted.
   google.protobuf.Timestamp deleted_at = 8;
 }
 
