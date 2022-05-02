@@ -29,6 +29,9 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 		return nil, util.Wrap(err, "Validate cluster request failed.")
 	}
 
+	// use the namespace in the request to override the namespace in the cluster definition
+	request.Cluster.Namespace = request.Namespace
+
 	cluster, err := s.resourceManager.CreateCluster(ctx, request.Cluster)
 	if err != nil {
 		return nil, util.Wrap(err, "Create Cluster failed.")
@@ -72,6 +75,10 @@ func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteCl
 }
 
 func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	if request.Cluster.Name == "" {
 		return util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
 	}

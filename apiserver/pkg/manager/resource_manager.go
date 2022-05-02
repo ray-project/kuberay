@@ -51,11 +51,6 @@ func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv
 
 // clusters
 func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error) {
-	namespace := apiCluster.Namespace
-	if len(namespace) == 0 {
-		namespace = DefaultNamespace
-	}
-
 	// populate cluster map
 	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiCluster)
 	if err != nil {
@@ -69,7 +64,7 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	clusterAt := r.clientManager.Time().Now().String()
 	rayCluster.Annotations["ray.io/creation-timestamp"] = clusterAt
 
-	newRayCluster, err := r.getRayClusterClient(namespace).Create(ctx, rayCluster.Get(), metav1.CreateOptions{})
+	newRayCluster, err := r.getRayClusterClient(apiCluster.Namespace).Create(ctx, rayCluster.Get(), metav1.CreateOptions{})
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to create a cluster for (%s/%s)", rayCluster.Namespace, rayCluster.Name)
 	}
@@ -106,11 +101,11 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 
 func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error) {
 	if len(clusterName) == 0 {
-		return nil, util.NewInvalidInputError("clusterName is empty, failed to get the cluster.")
+		return nil, util.NewInvalidInputError("Cluster name is empty, failed to get the cluster.")
 	}
 
 	if len(namespace) == 0 {
-		namespace = DefaultNamespace
+		return nil, util.NewInvalidInputError("Namespace is empty, failed to get the cluster.")
 	}
 
 	client := r.getRayClusterClient(namespace)
@@ -119,7 +114,7 @@ func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, na
 
 func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error) {
 	if len(namespace) == 0 {
-		namespace = DefaultNamespace
+		return nil, util.NewInvalidInputError("Namespace is empty, failed to list clusters.")
 	}
 
 	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{})
@@ -138,11 +133,11 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([
 
 func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string, namespace string) error {
 	if len(clusterName) == 0 {
-		return util.NewInvalidInputError("clusterName is empty, failed to delete the cluster.")
+		return util.NewInvalidInputError("Cluster name is empty, failed to delete the cluster.")
 	}
 
 	if len(namespace) == 0 {
-		namespace = DefaultNamespace
+		return util.NewInvalidInputError("Namespace is empty, failed to delete the cluster.")
 	}
 
 	client := r.getRayClusterClient(namespace)
