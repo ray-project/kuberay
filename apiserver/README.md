@@ -8,12 +8,13 @@ KubeRay APIServer provides the gRPC and HTTP API to manage kuberay resources.
 
 #### Create compute templates
 ```
-POST {{baseUrl}}/apis/v1alpha1/compute_templates
+POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 ```
 
 ```
 {
   "name": "default-template",
+  "namespace": "<namespace>",
   "cpu": 2,
   "memory": 4,
   "gpu": 1,
@@ -24,15 +25,15 @@ POST {{baseUrl}}/apis/v1alpha1/compute_templates
 #### List all compute templates
 
 ```
-GET {{baseUrl}}/apis/v1alpha1/compute_templates
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 ```
 
 ```
 {
     "compute_templates": [
         {
-            "id": "",
             "name": "default-template",
+            "namespace": "<namespace>",
             "cpu": 2,
             "memory": 4,
             "gpu": 1,
@@ -45,13 +46,13 @@ GET {{baseUrl}}/apis/v1alpha1/compute_templates
 #### Get compute template by name
 
 ```
-GET {{baseUrl}}/apis/v1alpha1/compute_templates/?name=<compute_template_name>
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates/<compute_template_name>
 ```
 
 #### Delete compute template by name
 
 ```
-DELETE {{baseUrl}}/apis/v1alpha1/compute_templates/?name=<compute_template_name>
+DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates/<compute_template_name>
 ```
 
 ### Clusters

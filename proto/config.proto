@@ -23,7 +23,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 };
 
 service ComputeTemplateService {
-  // Creates a new Cluster.
+  // Creates a new compute template.
   rpc CreateComputeTemplate(CreateComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
       post: "/apis/v1alpha2/compute_templates"
@@ -31,23 +31,21 @@ service ComputeTemplateService {
     };
   }
 
-  // Finds a specific Cluster by ID.
+  // Finds a specific compute template by its name and namespace.
   rpc GetComputeTemplate(GetComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
     };
   }
 
-  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates"
     };
   }
 
-  // Deletes an Cluster without deleting the Cluster's runs and jobs. To
-  // avoid unexpected behaviors, delete an Cluster's runs and jobs before
-  // deleting the Cluster.
+  // Deletes a compuate template by its name and namespace 
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
