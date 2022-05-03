@@ -1,15 +1,15 @@
-
 # Prometheus Monitor Service (Metrics)
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    control-plane: kuberay-operator
-  name: kuberay-operator-metrics-monitor
+    control-plane: kuberay-apiserver
+  name: kuberay-apiserver-metrics-monitor
   namespace: ray-system
 spec:
   endpoints:
     - path: /metrics
-      port: monitoring-port
+      port: http
   selector:
-    control-plane: kuberay-operator
+    matchLabels:
+      control-plane: kuberay-apiserver
