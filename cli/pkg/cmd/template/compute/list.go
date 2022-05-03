@@ -11,22 +11,35 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
+type ListOptions struct {
+	namespace string
+}
+
 func newCmdList() *cobra.Command {
+	opts := ListOptions{}
+
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all compute templates",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return listComputeTemplates()
+			return listComputeTemplates(opts)
 		},
+	}
+
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "",
+		"kubernetes namespace where the compute template is stored")
+	if err := cmd.MarkFlagRequired("namespace"); err != nil {
+		klog.Warning(err)
 	}
 
 	return cmd
 }
 
-func listComputeTemplates() error {
+func listComputeTemplates(opts ListOptions) error {
 	// Get gRPC connection
 	conn, err := cmdutil.GetGrpcConn()
 	if err != nil {
@@ -39,7 +52,9 @@ func listComputeTemplates() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r, err := client.ListComputeTemplates(ctx, &go_client.ListComputeTemplatesRequest{})
+	r, err := client.ListComputeTemplates(ctx, &go_client.ListComputeTemplatesRequest{
+		Namespace: opts.namespace,
+	})
 	if err != nil {
 		log.Fatalf("could not list compute template %v", err)
 	}

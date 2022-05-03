@@ -32,13 +32,15 @@ func newCmdCreate() *cobra.Command {
 			return createComputeTemplate(opts)
 		},
 	}
-
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "", "kubernetes namespace where the compute template will be stored")
 	cmd.Flags().StringVar(&opts.name, "name", "", "name of the compute template")
-	cmd.Flags().StringVar(&opts.namespace, "namespace", "ray-system", "kubernetes namespace where the compute template will be")
 	cmd.Flags().Uint32Var(&opts.cpu, "cpu", 1, "ray pod CPU")
 	cmd.Flags().Uint32Var(&opts.memory, "memory", 1, "ray pod memory in GB")
 	cmd.Flags().Uint32Var(&opts.gpu, "gpu", 0, "ray head GPU")
 	cmd.Flags().StringVar(&opts.gpuAccelerator, "gpu-accelerator", "", "GPU Accelerator type")
+	if err := cmd.MarkFlagRequired("namespace"); err != nil {
+		klog.Warning(err)
+	}
 	if err := cmd.MarkFlagRequired("name"); err != nil {
 		klog.Warning(err)
 	}
@@ -68,12 +70,13 @@ func createComputeTemplate(opts CreateOptions) error {
 	}
 
 	r, err := client.CreateComputeTemplate(ctx, &go_client.CreateComputeTemplateRequest{
+		Namespace:       opts.namespace,
 		ComputeTemplate: computeTemplate,
 	})
 	if err != nil {
 		log.Fatalf("could not create compute template %v", err)
 	}
 
-	log.Printf("compute template %v is created in %v", r.Name, r.Namespace)
+	log.Printf("compute template %v has been created in %v", r.Name, r.Namespace)
 	return nil
 }
