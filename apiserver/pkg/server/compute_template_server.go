@@ -27,6 +27,9 @@ func (s *ComputeTemplateServer) CreateComputeTemplate(ctx context.Context, reque
 		return nil, util.Wrap(err, "Validate compute template runtime request failed.")
 	}
 
+	// use the namespace in the request to override the namespace in the compute template definition
+	request.ComputeTemplate.Namespace = request.Namespace
+
 	runtime, err := s.resourceManager.CreateComputeTemplate(ctx, request.ComputeTemplate)
 	if err != nil {
 		return nil, util.Wrap(err, "Create compute template Runtime failed.")
@@ -64,6 +67,10 @@ func (s *ComputeTemplateServer) DeleteComputeTemplate(ctx context.Context, reque
 }
 
 func ValidateCreateComputeTemplateRequest(request *api.CreateComputeTemplateRequest) error {
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	if request.ComputeTemplate.Name == "" {
 		return util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
 	}
