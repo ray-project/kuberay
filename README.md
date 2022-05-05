@@ -17,7 +17,7 @@ KubeRay provides several tools to improve running and managing Ray's experience 
 
 ## Documentation
 
-You can view detailed documentation and guides at [https://github.com/ray-project/kuberay](https://github.com/ray-project/kuberay)
+You can view detailed documentation and guides at [https://ray-project.github.io/kuberay/](https://ray-project.github.io/kuberay/)
 
 ## Quick Start
 
