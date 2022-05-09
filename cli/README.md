@@ -54,33 +54,33 @@ Usage:
 kuberay cluster create [flags]
 
 Flags:
---environment string               environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION) (default "DEV")
---head-compute-tempalte string     compuate template name for ray head
---head-image string                ray head image
---head-service-type string         ray head service type (ClusterIP, NodePort, LoadBalancer) (default "ClusterIP")
---name string                      name of the cluster
---namespace string                 kubernetes namespace where the cluster will be (default "ray-system")
---user string                      SSO username of ray cluster creator
---version string                   version of the ray cluster (default "1.9.0")
---worker-compute-template string   compute template name of worker in the first worker group
---worker-group-name string         first worker group name
---worker-image string              image of worker in the first worker group
---worker-replicas uint32           pod replicas of workers in the first worker group (default 1)
+      --environment string               environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION) (default "DEV")
+      --head-compute-template string     compuate template name for ray head
+      --head-image string                ray head image
+      --head-service-type string         ray head service type (ClusterIP, NodePort, LoadBalancer) (default "ClusterIP")
+      --name string                      name of the cluster
+  -n, --namespace string                 kubernetes namespace where the cluster will be
+      --user string                      SSO username of ray cluster creator
+      --version string                   version of the ray cluster (default "1.9.0")
+      --worker-compute-template string   compute template name of worker in the first worker group
+      --worker-group-name string         first worker group name
+      --worker-image string              image of worker in the first worker group
+      --worker-replicas uint32           pod replicas of workers in the first worker group (default 1)
 ```
 
 > Known Limitation: Currently only one worker compute template is supported during creation. 
 
 #### Get a Ray Cluster
 
-`./kuberay cluster get <cluster name>`
+`./kuberay cluster get -n <namespace> <cluster name>`
 
 #### List Ray Clusters
 
-`./kuberay cluster list`
+`./kuberay cluster -n <namespace> list`
 
 #### Delete a Ray Cluster
 
-`./kuberay cluster delete <cluster name>`
+`./kuberay cluster delete -n <namespace> <cluster name>`
 
 ### Manage Ray Compute Template
 
