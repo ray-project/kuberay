@@ -21,23 +21,26 @@ spec:
       containers:
       - command:
         - /manager
-#        args:
-#        - --enable-leader-election
         image: kuberay/operator
+        args:
+        - --watch-namespace=ray-system
+#        - --enable-leader-election
         name: ray-manager
+        ports:
+        - containerPort: 8080
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
           httpGet:
             path: /metrics
-            port: http
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
           failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /metrics
-            port: http
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
           failureThreshold: 5

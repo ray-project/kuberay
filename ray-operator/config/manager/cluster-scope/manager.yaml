@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kuberay-operator
+  namespace: system
+  labels:
+    control-plane: kuberay-operator
+spec:
+  selector:
+    matchLabels:
+      control-plane: kuberay-operator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: kuberay-operator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: kuberay-operator
+      containers:
+      - command:
+        - /manager
+#        args:
+#        - --enable-leader-election
+        image: kuberay/operator
+        name: ray-manager
+        ports:
+        - containerPort: 8080
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 5
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+      terminationGracePeriodSeconds: 10

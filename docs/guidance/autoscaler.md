@@ -10,7 +10,7 @@ You can follow below steps for a quick deployment.
 ```
 git clone https://github.com/ray-project/kuberay.git
 cd kuberay
-kubectl apply -k manifests/cluster-scope-resources
+kubectl apply -k manifests/cluster-scope
 kubectl apply -k manifests/base
 ```
 
