@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 
@@ -21,7 +22,8 @@ const DefaultNamespace = "ray-system"
 type ResourceManagerInterface interface {
 	CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error)
 	GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error)
-	ListClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error)
+	ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error)
+	ListAllClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error)
 	DeleteCluster(ctx context.Context, clusterName string, namespace string) error
 	CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*v1.ConfigMap, error)
 	GetComputeTemplate(ctx context.Context, name string) (*v1.ConfigMap, error)
@@ -47,6 +49,10 @@ func (r *ResourceManager) getRayClusterClient(namespace string) rayiov1alpha1.Ra
 
 func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv1.ConfigMapInterface {
 	return r.clientManager.KubernetesClient().ConfigMapClient(namespace)
+}
+
+func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInterface {
+	return r.clientManager.KubernetesClient().NamespaceClient()
 }
 
 // clusters
@@ -119,7 +125,7 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([
 
 	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, util.Wrap(err, "List RayCluster failed")
+		return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
 	}
 
 	var result []*v1alpha1.RayCluster
@@ -128,6 +134,27 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([
 		result = append(result, &rayClusterList.Items[i])
 	}
 
+	return result, nil
+}
+
+func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error) {
+	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
+	}
+
+	var result []*v1alpha1.RayCluster
+	for _, namespace := range namespaces.Items {
+		rayClusterList, err := r.getRayClusterClient(namespace.Name).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace.Name))
+		}
+
+		length := len(rayClusterList.Items)
+		for i := 0; i < length; i++ {
+			result = append(result, &rayClusterList.Items[i])
+		}
+	}
 	return result, nil
 }
 

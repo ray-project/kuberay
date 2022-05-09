@@ -49,7 +49,7 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 	return model.FromCrdToApiCluster(cluster), nil
 }
 
-// Finds all Clusters.
+// Finds all Clusters in a given namespace.
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListClustersRequest) (*api.ListClustersResponse, error) {
 	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
@@ -58,6 +58,19 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	}
 
 	return &api.ListClustersResponse{
+		Clusters: model.FromCrdToApiClusters(clusters),
+	}, nil
+}
+
+// Finds all Clusters in all namespaces.
+// TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
+func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
+	clusters, err := s.resourceManager.ListAllClusters(ctx)
+	if err != nil {
+		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
+	}
+
+	return &api.ListAllClustersResponse{
 		Clusters: model.FromCrdToApiClusters(clusters),
 	}, nil
 }

@@ -15,6 +15,7 @@ import (
 type KubernetesClientInterface interface {
 	PodClient(namespace string) v1.PodInterface
 	ConfigMapClient(namespace string) v1.ConfigMapInterface
+	NamespaceClient() v1.NamespaceInterface
 }
 
 type KubernetesClient struct {
@@ -27,6 +28,10 @@ func (c *KubernetesClient) PodClient(namespace string) v1.PodInterface {
 
 func (c *KubernetesClient) ConfigMapClient(namespace string) v1.ConfigMapInterface {
 	return c.coreV1Client.ConfigMaps(namespace)
+}
+
+func (c *KubernetesClient) NamespaceClient() v1.NamespaceInterface {
+	return c.coreV1Client.Namespaces()
 }
 
 // CreateKubernetesCoreOrFatal creates a new client for the Kubernetes pod.

@@ -23,8 +23,10 @@ type ClusterServiceClient interface {
 	CreateCluster(ctx context.Context, in *CreateClusterRequest, opts ...grpc.CallOption) (*Cluster, error)
 	// Finds a specific Cluster by ID.
 	GetCluster(ctx context.Context, in *GetClusterRequest, opts ...grpc.CallOption) (*Cluster, error)
-	// Finds all Clusters. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
 	ListCluster(ctx context.Context, in *ListClustersRequest, opts ...grpc.CallOption) (*ListClustersResponse, error)
+	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+	ListAllClusters(ctx context.Context, in *ListAllClustersRequest, opts ...grpc.CallOption) (*ListAllClustersResponse, error)
 	// Deletes an cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before
 	// deleting the cluster.
@@ -66,6 +68,15 @@ func (c *clusterServiceClient) ListCluster(ctx context.Context, in *ListClusters
 	return out, nil
 }
 
+func (c *clusterServiceClient) ListAllClusters(ctx context.Context, in *ListAllClustersRequest, opts ...grpc.CallOption) (*ListAllClustersResponse, error) {
+	out := new(ListAllClustersResponse)
+	err := c.cc.Invoke(ctx, "/proto.ClusterService/ListAllClusters", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *clusterServiceClient) DeleteCluster(ctx context.Context, in *DeleteClusterRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, "/proto.ClusterService/DeleteCluster", in, out, opts...)
@@ -83,8 +94,10 @@ type ClusterServiceServer interface {
 	CreateCluster(context.Context, *CreateClusterRequest) (*Cluster, error)
 	// Finds a specific Cluster by ID.
 	GetCluster(context.Context, *GetClusterRequest) (*Cluster, error)
-	// Finds all Clusters. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
 	ListCluster(context.Context, *ListClustersRequest) (*ListClustersResponse, error)
+	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+	ListAllClusters(context.Context, *ListAllClustersRequest) (*ListAllClustersResponse, error)
 	// Deletes an cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before
 	// deleting the cluster.
@@ -104,6 +117,9 @@ func (UnimplementedClusterServiceServer) GetCluster(context.Context, *GetCluster
 }
 func (UnimplementedClusterServiceServer) ListCluster(context.Context, *ListClustersRequest) (*ListClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListCluster not implemented")
+}
+func (UnimplementedClusterServiceServer) ListAllClusters(context.Context, *ListAllClustersRequest) (*ListAllClustersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAllClusters not implemented")
 }
 func (UnimplementedClusterServiceServer) DeleteCluster(context.Context, *DeleteClusterRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCluster not implemented")
@@ -175,6 +191,24 @@ func _ClusterService_ListCluster_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClusterService_ListAllClusters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAllClustersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterServiceServer).ListAllClusters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.ClusterService/ListAllClusters",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterServiceServer).ListAllClusters(ctx, req.(*ListAllClustersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ClusterService_DeleteCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteClusterRequest)
 	if err := dec(in); err != nil {
@@ -211,6 +245,10 @@ var ClusterService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListCluster",
 			Handler:    _ClusterService_ListCluster_Handler,
+		},
+		{
+			MethodName: "ListAllClusters",
+			Handler:    _ClusterService_ListAllClusters_Handler,
 		},
 		{
 			MethodName: "DeleteCluster",

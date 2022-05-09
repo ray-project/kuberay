@@ -38,10 +38,17 @@ service ClusterService {
     };
   }
 
-  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/clusters"
+    };
+  }
+
+  // Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+  rpc ListAllClusters(ListAllClustersRequest) returns (ListAllClustersResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/clusters"
     };
   }
 
@@ -80,6 +87,24 @@ message ListClustersRequest {
 }
 
 message ListClustersResponse {
+  // A list of clusters returned.
+  repeated Cluster clusters = 1;
+
+  // The total number of clusters for the given query.
+  // int32 total_size = 2;
+
+  // The token to list the next page of clusters.
+  // string next_page_token = 3;
+}
+
+message ListAllClustersRequest {
+  // A page token to request the next page of results. The token is acquried
+  // from the nextPageToken field of the response from the previous
+  // ListCluster call or can be omitted when fetching the first page.
+  // TODO: support this later
+}
+
+message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
 

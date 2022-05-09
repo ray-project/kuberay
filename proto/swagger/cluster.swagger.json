@@ -19,9 +19,32 @@
     "application/json"
   ],
   "paths": {
+    "/apis/v1alpha2/clusters": {
+      "get": {
+        "summary": "Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.",
+        "operationId": "ClusterService_ListAllClusters",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoListAllClustersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ClusterService"
+        ]
+      }
+    },
     "/apis/v1alpha2/namespaces/{namespace}/clusters": {
       "get": {
-        "summary": "Finds all Clusters. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListCluster",
         "responses": {
           "200": {
@@ -272,6 +295,18 @@
             "type": "string"
           },
           "title": "Optional. The ray start parames of head node group"
+        }
+      }
+    },
+    "protoListAllClustersResponse": {
+      "type": "object",
+      "properties": {
+        "clusters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoCluster"
+          },
+          "description": "A list of clusters returned."
         }
       }
     },
