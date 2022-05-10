@@ -24,6 +24,10 @@ spec:
 #        args:
 #        - --enable-leader-election
         image: kuberay/operator
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
         name: ray-manager
         securityContext:
           allowPrivilegeEscalation: false
