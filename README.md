@@ -27,14 +27,12 @@ You can view detailed documentation and guides at [https://ray-project.github.io
 
 ```
 kubectl apply -k "github.com/ray-project/kuberay/manifests/cluster-scope"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
 ```
 
 #### Stable version
 
 ```
 kubectl apply -k "github.com/ray-project/kuberay/manifests/cluster-scope?ref=v0.2.0"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
 ```
 
 ### Use helm chart
