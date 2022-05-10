@@ -12,4 +12,5 @@ spec:
     - path: /metrics
       port: monitoring-port
   selector:
-    control-plane: kuberay-operator
+    matchLabels:
+      control-plane: kuberay-operator
