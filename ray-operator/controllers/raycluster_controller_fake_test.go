@@ -24,9 +24,11 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/common"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -43,15 +45,17 @@ import (
 )
 
 var (
-	namespaceStr     string
-	instanceName     string
-	headGroupNameStr string
-	groupNameStr     string
-	expectReplicaNum int32
-	testPods         []runtime.Object
-	testRayCluster   *rayiov1alpha1.RayCluster
-	workerSelector   labels.Selector
-	workersToDelete  []string
+	namespaceStr            string
+	instanceName            string
+	enableInTreeAutoscaling bool
+	headGroupNameStr        string
+	headGroupServiceAccount string
+	groupNameStr            string
+	expectReplicaNum        int32
+	testPods                []runtime.Object
+	testRayCluster          *rayiov1alpha1.RayCluster
+	workerSelector          labels.Selector
+	workersToDelete         []string
 )
 
 func setupTest(t *testing.T) {
@@ -61,7 +65,9 @@ func setupTest(t *testing.T) {
 
 	namespaceStr = "default"
 	instanceName = "raycluster-sample"
+	enableInTreeAutoscaling = true
 	headGroupNameStr = "head-group"
+	headGroupServiceAccount = "head-service-account"
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
 	workersToDelete = []string{"pod1", "pod2"}
@@ -152,7 +158,8 @@ func setupTest(t *testing.T) {
 			Namespace: namespaceStr,
 		},
 		Spec: rayiov1alpha1.RayClusterSpec{
-			RayVersion: "1.0",
+			RayVersion:              "1.0",
+			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				ServiceType: "ClusterIP",
 				Replicas:    pointer.Int32Ptr(1),
@@ -166,6 +173,7 @@ func setupTest(t *testing.T) {
 				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						ServiceAccountName: headGroupServiceAccount,
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
@@ -554,4 +562,34 @@ func getNotFailedPodItemNum(podList corev1.PodList) int {
 	}
 
 	return count
+}
+
+func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+
+	saNamespacedName := types.NamespacedName{
+		Name:      headGroupServiceAccount,
+		Namespace: namespaceStr,
+	}
+	sa := corev1.ServiceAccount{}
+	err := fakeClient.Get(context.Background(), saNamespacedName, &sa)
+
+	assert.True(t, errors.IsNotFound(err), "Head group service account should not exist yet")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile autoscaler ServiceAccount")
+
+	err = fakeClient.Get(context.Background(), saNamespacedName, &sa)
+
+	assert.Nil(t, err, "Fail to get head group ServiceAccount after reconciliation")
 }
