@@ -90,7 +90,18 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		Name:          "metrics",
 		ContainerPort: int32(DefaultMetricsPort),
 	}
-	podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
+	dupIndex := -1
+	for i, port := range podTemplate.Spec.Containers[0].Ports {
+		if port.Name == metricsPort.Name {
+			dupIndex = i
+			break
+		}
+	}
+	if dupIndex < 0 {
+		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
+	} else {
+		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
+	}
 
 	return podTemplate
 }
