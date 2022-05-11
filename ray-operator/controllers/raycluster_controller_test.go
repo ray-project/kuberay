@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	DefaultAttempts               = 4
-	DefaultSleepDurationInSeconds = 2
+	DefaultAttempts               = 8
+	DefaultSleepDurationInSeconds = 3
 )
 
 var _ = Context("Inside the default namespace", func() {
