@@ -108,6 +108,8 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool
 @[ -f $(1) ] || { \
 set -e ;\
+GO_VERSION_1_17_OR_HIGHER=$(shell echo `go version | cut -d ' ' -f 3 | cut -c 3- | cut -d '.' -f1-2`\>=1.17 | bc) ;\
+if [[ $$GO_VERSION_1_17_OR_HIGHER -eq 1 ]]; then echo "The Go version you're using is 1.17 or higher. Using 'go install' instead of 'go get'"; GOBIN=$(PROJECT_DIR)/bin go install $(2); fi ;\
 TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
