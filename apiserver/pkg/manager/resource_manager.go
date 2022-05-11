@@ -106,23 +106,11 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 }
 
 func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error) {
-	if len(clusterName) == 0 {
-		return nil, util.NewInvalidInputError("Cluster name is empty, failed to get the cluster.")
-	}
-
-	if len(namespace) == 0 {
-		return nil, util.NewInvalidInputError("Namespace is empty, failed to get the cluster.")
-	}
-
 	client := r.getRayClusterClient(namespace)
 	return getClusterByName(ctx, client, clusterName)
 }
 
 func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error) {
-	if len(namespace) == 0 {
-		return nil, util.NewInvalidInputError("Namespace is empty, failed to list clusters.")
-	}
-
 	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
@@ -159,14 +147,6 @@ func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*v1alpha1.RayC
 }
 
 func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string, namespace string) error {
-	if len(clusterName) == 0 {
-		return util.NewInvalidInputError("Cluster name is empty, failed to delete the cluster.")
-	}
-
-	if len(namespace) == 0 {
-		return util.NewInvalidInputError("Namespace is empty, failed to delete the cluster.")
-	}
-
 	client := r.getRayClusterClient(namespace)
 	cluster, err := getClusterByName(ctx, client, clusterName)
 	if err != nil {

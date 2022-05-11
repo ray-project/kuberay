@@ -42,6 +42,14 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 
 // Finds a specific Cluster by cluster name.
 func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterRequest) (*api.Cluster, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	cluster, err := s.resourceManager.GetCluster(ctx, request.Name, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "Get cluster failed.")
@@ -52,6 +60,10 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 // Finds all Clusters in a given namespace.
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListClustersRequest) (*api.ListClustersResponse, error) {
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
@@ -79,6 +91,14 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 // avoid unexpected behaviors, delete an Cluster's runs and jobs before
 // deleting the Cluster.
 func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*empty.Empty, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	// TODO: do we want to have some logics here to check cluster exist here? or put it inside resourceManager
 	if err := s.resourceManager.DeleteCluster(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
