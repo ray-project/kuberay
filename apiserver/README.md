@@ -1,6 +1,6 @@
 # KubeRay APIServer
 
-KubeRay APIServer provides the gRPC and HTTP API to manage kuberay resources. 
+KubeRay APIServer provides the gRPC and HTTP API to manage kuberay resources.
 
 ## Usage
 
@@ -48,7 +48,7 @@ GET {{baseUrl}}/apis/v1alpha1/compute_templates
 GET {{baseUrl}}/apis/v1alpha1/compute_templates/?name=<compute_template_name>
 ```
 
-#### Delete compute template by 
+#### Delete compute template by name
 
 ```
 DELETE {{baseUrl}}/apis/v1alpha1/compute_templates/?name=<compute_template_name>
@@ -56,17 +56,17 @@ DELETE {{baseUrl}}/apis/v1alpha1/compute_templates/?name=<compute_template_name>
 
 ### Clusters
 
-#### Create cluster
+#### Create cluster in a given namespace
 
 ```
-POST {{baseUrl}}/apis/v1alpha1/clusters
+POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
 ```
 
 payload
 ```
 {
   "name": "test-cluster",
-  "namespace": "ray-system",
+  "namespace": "<namespace>",
   "user": "jiaxin.shan",
   "version": "1.9.2",
   "environment": "DEV",
@@ -92,10 +92,10 @@ payload
 }
 ```
 
-#### List all clusters
+#### List all clusters in a given namespace
 
 ```
-GET {{baseUrl}}/apis/v1alpha1/clusters
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
 ```
 
 ```
@@ -103,7 +103,7 @@ GET {{baseUrl}}/apis/v1alpha1/clusters
     "clusters": [
         {
             "name": "test-cluster",
-            "namespace": "ray-system",
+            "namespace": "<namespace>",
             "user": "jiaxin.shan",
             "version": "1.9.2",
             "environment": "DEV",
@@ -139,15 +139,21 @@ GET {{baseUrl}}/apis/v1alpha1/clusters
 }
 ```
 
-#### Get cluster by name
+#### List all clusters in all namespaces
 
 ```
-GET {{baseUrl}}/apis/v1alpha1/clusters/?name=<cluster_name>
+GET {{baseUrl}}/apis/v1alpha2/clusters
+```
+
+#### Get cluster by its name and namespace
+
+```
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 ```
 
 
-#### Delete cluster by name
+#### Delete cluster by its name and namespace
 
 ```
-DELETE {{baseUrl}}/apis/v1alpha1/clusters/?name=<cluster_name>
+DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 ```

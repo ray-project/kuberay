@@ -29,6 +29,9 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 		return nil, util.Wrap(err, "Validate cluster request failed.")
 	}
 
+	// use the namespace in the request to override the namespace in the cluster definition
+	request.Cluster.Namespace = request.Namespace
+
 	cluster, err := s.resourceManager.CreateCluster(ctx, request.Cluster)
 	if err != nil {
 		return nil, util.Wrap(err, "Create Cluster failed.")
@@ -39,6 +42,14 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 
 // Finds a specific Cluster by cluster name.
 func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterRequest) (*api.Cluster, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	cluster, err := s.resourceManager.GetCluster(ctx, request.Name, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "Get cluster failed.")
@@ -46,10 +57,14 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 	return model.FromCrdToApiCluster(cluster), nil
 }
 
-// Finds all Clusters.
+// Finds all Clusters in a given namespace.
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListClustersRequest) (*api.ListClustersResponse, error) {
-	clusters, err := s.resourceManager.ListClusters(ctx)
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
+	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
@@ -59,10 +74,31 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	}, nil
 }
 
+// Finds all Clusters in all namespaces.
+// TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
+func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
+	clusters, err := s.resourceManager.ListAllClusters(ctx)
+	if err != nil {
+		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
+	}
+
+	return &api.ListAllClustersResponse{
+		Clusters: model.FromCrdToApiClusters(clusters),
+	}, nil
+}
+
 // Deletes an Cluster without deleting the Cluster's runs and jobs. To
 // avoid unexpected behaviors, delete an Cluster's runs and jobs before
 // deleting the Cluster.
 func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*empty.Empty, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	// TODO: do we want to have some logics here to check cluster exist here? or put it inside resourceManager
 	if err := s.resourceManager.DeleteCluster(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
@@ -72,6 +108,10 @@ func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteCl
 }
 
 func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	if request.Cluster.Name == "" {
 		return util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
 	}

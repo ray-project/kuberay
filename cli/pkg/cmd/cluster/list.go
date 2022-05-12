@@ -10,22 +10,35 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
+type ListOptions struct {
+	namespace string
+}
+
 func newCmdList() *cobra.Command {
+	opts := ListOptions{}
+
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all ray clusters",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return listCluster()
+			return listCluster(opts)
 		},
+	}
+
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "",
+		"kubernetes namespace where the cluster is provisioned")
+	if err := cmd.MarkFlagRequired("namespace"); err != nil {
+		klog.Warning(err)
 	}
 
 	return cmd
 }
 
-func listCluster() error {
+func listCluster(opts ListOptions) error {
 	// Get gRPC connection
 	conn, err := cmdutil.GetGrpcConn()
 	if err != nil {
@@ -38,7 +51,9 @@ func listCluster() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r, err := client.ListCluster(ctx, &go_client.ListClustersRequest{})
+	r, err := client.ListCluster(ctx, &go_client.ListClustersRequest{
+		Namespace: opts.namespace,
+	})
 	if err != nil {
 		log.Fatalf("could not list cluster clusters %v", err)
 	}

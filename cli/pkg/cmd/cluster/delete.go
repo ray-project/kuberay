@@ -8,6 +8,7 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
 type DeleteOptions struct {
@@ -26,8 +27,12 @@ func newCmdDelete() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "ray-system",
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "",
 		"kubernetes namespace where the cluster is provisioned")
+	if err := cmd.MarkFlagRequired("namespace"); err != nil {
+		klog.Warning(err)
+	}
+
 	return cmd
 }
 

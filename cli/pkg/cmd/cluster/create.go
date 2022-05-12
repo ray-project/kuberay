@@ -41,9 +41,8 @@ func newCmdCreate() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "", "kubernetes namespace where the cluster will be")
 	cmd.Flags().StringVar(&opts.name, "name", "", "name of the cluster")
-	cmd.Flags().StringVar(&opts.namespace, "namespace", "ray-system",
-		"kubernetes namespace where the cluster will be")
 	cmd.Flags().StringVar(&opts.environment, "environment", "DEV",
 		"environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION)")
 	cmd.Flags().StringVar(&opts.version, "version", "1.9.0", "version of the ray cluster")
@@ -55,6 +54,9 @@ func newCmdCreate() *cobra.Command {
 	cmd.Flags().StringVar(&opts.workerComputeTemplate, "worker-compute-template", "", "compute template name of worker in the first worker group")
 	cmd.Flags().StringVar(&opts.workerImage, "worker-image", "", "image of worker in the first worker group")
 	cmd.Flags().Uint32Var(&opts.workerReplicas, "worker-replicas", 1, "pod replicas of workers in the first worker group")
+	if err := cmd.MarkFlagRequired("namespace"); err != nil {
+		klog.Warning(err)
+	}
 	if err := cmd.MarkFlagRequired("name"); err != nil {
 		klog.Warning(err)
 	}
@@ -142,7 +144,8 @@ func createCluster(opts CreateOptions) error {
 	}
 
 	r, err := client.CreateCluster(ctx, &go_client.CreateClusterRequest{
-		Cluster: cluster,
+		Namespace: opts.namespace,
+		Cluster:   cluster,
 	})
 	if err != nil {
 		log.Fatalf("could not create cluster %v", err)
