@@ -184,19 +184,11 @@ func (r *ResourceManager) CreateComputeTemplate(ctx context.Context, runtime *ap
 }
 
 func (r *ResourceManager) GetComputeTemplate(ctx context.Context, name string, namespace string) (*v1.ConfigMap, error) {
-	if len(namespace) == 0 {
-		return nil, util.NewInvalidInputError("Namespace is empty, failed to get the compute template.")
-	}
-
 	client := r.getKubernetesConfigMapClient(namespace)
 	return getComputeTemplateByName(ctx, client, name)
 }
 
 func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace string) ([]*v1.ConfigMap, error) {
-	if len(namespace) == 0 {
-		return nil, util.NewInvalidInputError("Namespace is empty, failed to list compute templates.")
-	}
-
 	client := r.getKubernetesConfigMapClient(namespace)
 	configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
 	if err != nil {
@@ -212,11 +204,29 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace st
 	return result, nil
 }
 
-func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string, namespace string) error {
-	if len(namespace) == 0 {
-		return util.NewInvalidInputError("Namespace is empty, failed to delete the compute template.")
+func (r *ResourceManager) ListAllComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error) {
+	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
 	}
 
+	var result []*v1.ConfigMap
+	for _, namespace := range namespaces.Items {
+		client := r.getKubernetesConfigMapClient(namespace.Name)
+		configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
+		if err != nil {
+			return nil, util.Wrap(err, fmt.Sprintf("List compute templates failed in %s", namespace.Name))
+		}
+
+		length := len(configMapList.Items)
+		for i := 0; i < length; i++ {
+			result = append(result, &configMapList.Items[i])
+		}
+	}
+	return result, nil
+}
+
+func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string, namespace string) error {
 	client := r.getKubernetesConfigMapClient(namespace)
 
 	configMap, err := getComputeTemplateByName(ctx, client, name)

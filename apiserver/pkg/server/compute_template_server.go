@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
@@ -32,25 +33,37 @@ func (s *ComputeTemplateServer) CreateComputeTemplate(ctx context.Context, reque
 
 	runtime, err := s.resourceManager.CreateComputeTemplate(ctx, request.ComputeTemplate)
 	if err != nil {
-		return nil, util.Wrap(err, "Create compute template Runtime failed.")
+		return nil, util.Wrap(err, "Create compute template failed.")
 	}
 
 	return model.FromKubeToAPIComputeTemplate(runtime), nil
 }
 
 func (s *ComputeTemplateServer) GetComputeTemplate(ctx context.Context, request *api.GetComputeTemplateRequest) (*api.ComputeTemplate, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	runtime, err := s.resourceManager.GetComputeTemplate(ctx, request.Name, request.Namespace)
 	if err != nil {
-		return nil, util.Wrap(err, "Get compute template runtime failed.")
+		return nil, util.Wrap(err, "Get compute template failed.")
 	}
 
 	return model.FromKubeToAPIComputeTemplate(runtime), nil
 }
 
 func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, request *api.ListComputeTemplatesRequest) (*api.ListComputeTemplatesResponse, error) {
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	runtimes, err := s.resourceManager.ListComputeTemplates(ctx, request.Namespace)
 	if err != nil {
-		return nil, util.Wrap(err, "List compute templates runtime failed.")
+		return nil, util.Wrap(err, fmt.Sprintf("List compute templates in namespace %s failed.", request.Namespace))
 	}
 
 	return &api.ListComputeTemplatesResponse{
@@ -58,7 +71,26 @@ func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, reques
 	}, nil
 }
 
+func (s *ComputeTemplateServer) ListAllComputeTemplates(ctx context.Context, request *api.ListAllComputeTemplatesRequest) (*api.ListAllComputeTemplatesResponse, error) {
+	runtimes, err := s.resourceManager.ListAllComputeTemplates(ctx)
+	if err != nil {
+		return nil, util.Wrap(err, "List all compute templates from all namespaces failed.")
+	}
+
+	return &api.ListAllComputeTemplatesResponse{
+		ComputeTemplates: model.FromKubeToAPIComputeTemplates(runtimes),
+	}, nil
+}
+
 func (s *ComputeTemplateServer) DeleteComputeTemplate(ctx context.Context, request *api.DeleteComputeTemplateRequest) (*emptypb.Empty, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
 	if err := s.resourceManager.DeleteComputeTemplate(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
 	}
@@ -73,10 +105,6 @@ func ValidateCreateComputeTemplateRequest(request *api.CreateComputeTemplateRequ
 
 	if request.ComputeTemplate.Name == "" {
 		return util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
-	}
-
-	if request.ComputeTemplate.Namespace == "" {
-		return util.NewInvalidInputError("Compute template namespace is empty. Please specify a valid value.")
 	}
 
 	if request.ComputeTemplate.Cpu == 0 {

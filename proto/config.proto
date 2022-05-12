@@ -45,6 +45,13 @@ service ComputeTemplateService {
     };
   }
 
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/compute_templates"
+    };
+  }
+
   // Deletes a compuate template by its name and namespace 
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
@@ -74,6 +81,14 @@ message ListComputeTemplatesRequest {
 }
 
 message ListComputeTemplatesResponse {
+  repeated ComputeTemplate compute_templates = 1;
+}
+
+message ListAllComputeTemplatesRequest {
+  // TODO: support paganation later
+}
+
+message ListAllComputeTemplatesResponse {
   repeated ComputeTemplate compute_templates = 1;
 }
 
@@ -153,6 +168,15 @@ message ListImageTemplatesRequest {
 }
 
 message ListImageTemplatesResponse {
+  // A list of Compute returned.
+  repeated ImageTemplate image_templates = 1;
+}
+
+message ListAllImageTemplatesRequest {
+  // TODO: support pagingation later
+}
+
+message ListAllImageTemplatesResponse {
   // A list of Compute returned.
   repeated ImageTemplate image_templates = 1;
 }

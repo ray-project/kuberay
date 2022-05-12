@@ -6,7 +6,8 @@ KubeRay APIServer provides the gRPC and HTTP API to manage kuberay resources.
 
 ### Compute Template
 
-#### Create compute templates
+#### Create compute templates in a given namespace
+
 ```
 POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 ```
@@ -22,7 +23,7 @@ POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 }
 ```
 
-#### List all compute templates
+#### List all compute templates in a given namespace
 
 ```
 GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
@@ -41,6 +42,12 @@ GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
         }
     ]
 }
+```
+
+#### List all compute templates in all namespaces
+
+```
+GET {{baseUrl}}/apis/v1alpha2/compute_templates
 ```
 
 #### Get compute template by name

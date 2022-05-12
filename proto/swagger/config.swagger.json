@@ -23,8 +23,29 @@
   ],
   "paths": {
     "/apis/v1alpha2/compute_templates": {
+      "get": {
+        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "operationId": "ComputeTemplateService_ListAllComputeTemplates",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoListAllComputeTemplatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ComputeTemplateService"
+        ]
+      },
       "post": {
-        "summary": "Creates a new Cluster.",
+        "summary": "Creates a new compute template.",
         "operationId": "ComputeTemplateService_CreateComputeTemplate",
         "responses": {
           "200": {
@@ -106,7 +127,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/compute_templates": {
       "get": {
-        "summary": "Finds all Clusters. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListComputeTemplates",
         "responses": {
           "200": {
@@ -138,7 +159,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}": {
       "get": {
-        "summary": "Finds a specific Cluster by ID.",
+        "summary": "Finds a specific compute template by its name and namespace.",
         "operationId": "ComputeTemplateService_GetComputeTemplate",
         "responses": {
           "200": {
@@ -175,7 +196,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes an Cluster without deleting the Cluster's runs and jobs. To\navoid unexpected behaviors, delete an Cluster's runs and jobs before\ndeleting the Cluster.",
+        "summary": "Deletes a compuate template by its name and namespace",
         "operationId": "ComputeTemplateService_DeleteComputeTemplate",
         "responses": {
           "200": {
@@ -426,6 +447,17 @@
         }
       },
       "title": "ImageTemplate can be used by worker group and workspce.\nThey can be distinguish by different entrypoints"
+    },
+    "protoListAllComputeTemplatesResponse": {
+      "type": "object",
+      "properties": {
+        "computeTemplates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoComputeTemplate"
+          }
+        }
+      }
     },
     "protoListComputeTemplatesResponse": {
       "type": "object",

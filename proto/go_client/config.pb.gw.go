@@ -215,6 +215,24 @@ func local_request_ComputeTemplateService_ListComputeTemplates_0(ctx context.Con
 
 }
 
+func request_ComputeTemplateService_ListAllComputeTemplates_0(ctx context.Context, marshaler runtime.Marshaler, client ComputeTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListAllComputeTemplatesRequest
+	var metadata runtime.ServerMetadata
+
+	msg, err := client.ListAllComputeTemplates(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_ComputeTemplateService_ListAllComputeTemplates_0(ctx context.Context, marshaler runtime.Marshaler, server ComputeTemplateServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListAllComputeTemplatesRequest
+	var metadata runtime.ServerMetadata
+
+	msg, err := server.ListAllComputeTemplates(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_ComputeTemplateService_DeleteComputeTemplate_0(ctx context.Context, marshaler runtime.Marshaler, client ComputeTemplateServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq DeleteComputeTemplateRequest
 	var metadata runtime.ServerMetadata
@@ -624,6 +642,29 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 
 	})
 
+	mux.Handle("GET", pattern_ComputeTemplateService_ListAllComputeTemplates_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ComputeTemplateService_ListAllComputeTemplates_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_ComputeTemplateService_ListAllComputeTemplates_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("DELETE", pattern_ComputeTemplateService_DeleteComputeTemplate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -849,6 +890,26 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 
 	})
 
+	mux.Handle("GET", pattern_ComputeTemplateService_ListAllComputeTemplates_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ComputeTemplateService_ListAllComputeTemplates_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_ComputeTemplateService_ListAllComputeTemplates_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("DELETE", pattern_ComputeTemplateService_DeleteComputeTemplate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -879,6 +940,8 @@ var (
 
 	pattern_ComputeTemplateService_ListComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates"}, "", runtime.AssumeColonVerbOpt(true)))
 
+	pattern_ComputeTemplateService_ListAllComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "compute_templates"}, "", runtime.AssumeColonVerbOpt(true)))
+
 	pattern_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates", "name"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
@@ -888,6 +951,8 @@ var (
 	forward_ComputeTemplateService_GetComputeTemplate_0 = runtime.ForwardResponseMessage
 
 	forward_ComputeTemplateService_ListComputeTemplates_0 = runtime.ForwardResponseMessage
+
+	forward_ComputeTemplateService_ListAllComputeTemplates_0 = runtime.ForwardResponseMessage
 
 	forward_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.ForwardResponseMessage
 )
