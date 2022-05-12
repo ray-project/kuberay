@@ -7,7 +7,7 @@ This section walks through how to build and test the operator in a running Kuber
 software  | version | link
 :-------------  | :---------------:| -------------:
 kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.16+|[download](https://golang.org/dl/)
+go  | v1.16,17|[download](https://golang.org/dl/)
 docker   | 19.03+|[download](https://docs.docker.com/install/)
 
 The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
