@@ -8,7 +8,8 @@ helm repo update
 helm --namespace prometheus-system install prometheus-operator prometheus-community/kube-prometheus-stack --create-namespace 
 
 # set the place of monitor files
-monitor_dir=../../config/prometheus
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null && pwd)"
+monitor_dir=${DIR}/../../config/prometheus
 
 # start to install monitor
 pushd ${monitor_dir}
