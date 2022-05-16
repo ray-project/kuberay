@@ -51,54 +51,91 @@ head:
       name: log-volume
 
 
-worker:
-  groupName: workergroup
-  replicas: 1
-  type: worker
-  labels:
-    key: value
-  initArgs:
-    node-ip-address: $MY_POD_IP
-    redis-password: LetMeInRay
-    block: 'true'
-  containerEnv:
-    - name: MY_POD_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.podIP
-    - name: RAY_DISABLE_DOCKER_CPU_WARNING
-      value: "1"
-    - name: CPU_REQUEST
-      valueFrom:
-        resourceFieldRef:
-          containerName: ray-worker
-          resource: requests.cpu
-    - name: MY_POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
-  envFrom: []
-    # - secretRef:
-    #     name: my-env-secret
-  ports:
-    - containerPort: 80
-      protocol: TCP
-  resources: 
-    limits:
-      cpu: 1
-    requests:
-       cpu: 200m
-  annotations:
-    key: value
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+workers:
+  # 1st worker group definition.
+  # NOTES:
+  # The underlying infrastructure that each worker type definition is run on can be specified using the CPU and MEMORY requests and limits.
+  # To explicitely specify underlying compute node types, us the nodeSelector field with dictionary mapping {"agentpool" : #POOLNAME#}, where #POOLNAME# is the 
+  # name of the underlying Kubernetes cluster compute name. In cloud based solutions, the node pool is the level at which computer instance types are specified e.g. 
+  # number of cpu cores, amount of memory, whether there are gpus etc. 
+  worker_type_default:
+    groupName: workergroupdefault
+    replicas: 1
+    minReplicas: 0
+    maxReplicas: 4
+    type: worker
+    labels:
+      key: value
+    initArgs:
+      node-ip-address: $MY_POD_IP
+      redis-password: LetMeInRay
+      block: 'true'
+    containerEnv:
+      - name: MY_POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: RAY_DISABLE_DOCKER_CPU_WARNING
+        value: "1"
+      - name: CPU_REQUEST
+        valueFrom:
+          resourceFieldRef:
+            containerName: ray-worker
+            resource: requests.cpu
+      - name: CPU_LIMITS
+        valueFrom:
+          resourceFieldRef:
+            containerName: ray-worker
+            resource: limits.cpu
+      - name: MEMORY_REQUESTS
+        valueFrom:
+          resourceFieldRef:
+            containerName: ray-worker
+            resource: requests.memory
+      - name: MEMORY_LIMITS
+        valueFrom:
+          resourceFieldRef:
+            containerName: ray-worker
+            resource: limits.memory
+      - name: MY_POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    envFrom: []
+      # - secretRef:
+      #     name: my-env-secret
+    ports:
+      - containerPort: 80
+        protocol: TCP
+    # Resources section helps define what resources are available to the Ray cluster.
+    resources: 
+      limits:
+        cpu: 1
+      requests:
+        cpu: 200m
+    annotations:
+      key: value
+    # Use nodeSelector to specify specific node pools for deployment of these type of worker pods.
+    # e.g. {"agentpool" : "raypool"}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    volumes:
+      - name: log-volume
+        emptyDir: {}
+    volumeMounts:
+      - mountPath: /tmp/ray
+        name: log-volume
+  
+  # Repeat block above for additional worker types.
+  # e.g. 2nd definition of worker types
+  #worker_type_large:
+  #  groupName: workergroupdefault
+  #  replicas: 1
+  #  minReplicas: 0
+  #  maxReplicas: 4
+  #  type: worker
+  # ...
 
 headServiceSuffix: "ray-operator.svc"
 

@@ -41,43 +41,45 @@ spec:
 {{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
-  - rayStartParams:
-    {{- range $key, $val := .Values.worker.initArgs }}
+  {{- range $key, $val := .Values.workers }}
+  - groupName: {{ $val.groupName }}
+    rayStartParams:
+    {{- range $key, $val := $val.initArgs }}
       {{ $key }}: {{ $val | quote }}
     {{- end }}
-    replicas: {{ .Values.worker.replicas }}
-    minReplicas: {{ .Values.worker.miniReplicas | default 1 }}
-    maxReplicas: {{ .Values.worker.maxiReplicas | default 2147483647 }}
-    groupName: {{ .Values.worker.groupName }}
+    replicas: {{ $val.replicas }}
+    minReplicas: {{ $val.miniReplicas | default 1 }}
+    maxReplicas: {{ $val.maxiReplicas | default 2147483647 }}
     template:
       spec:
-        imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
+        imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
         initContainers:
           - name: init-myservice
             image: busybox:1.28
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
-          - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+          - volumeMounts: {{- toYaml $val.volumeMounts | nindent 12 }}
             name: ray-worker
-            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-            imagePullPolicy: {{ .Values.image.pullPolicy }}
-            resources: {{- toYaml .Values.worker.resources | nindent 14 }}
+            image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
+            imagePullPolicy: {{ $.Values.image.pullPolicy }}
+            resources: {{- toYaml $val.resources | nindent 14 }}
             env:
               - name: TYPE
                 value: worker
-            {{- toYaml .Values.worker.containerEnv | nindent 14}}
-            {{- with .Values.worker.envFrom }}
+            {{- toYaml $val.containerEnv | nindent 14}}
+            {{- with $val.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
-            ports: {{- toYaml .Values.worker.ports | nindent 14}}
-        volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
-        affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
-        tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
-        nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
+            ports: {{- toYaml $val.ports | nindent 14}}
+        volumes: {{- toYaml $val.volumes | nindent 10 }}
+        affinity: {{- toYaml $val.affinity | nindent 10 }}
+        tolerations: {{- toYaml $val.tolerations | nindent 10 }}
+        nodeSelector: {{- toYaml $val.nodeSelector | nindent 10 }}
       metadata:
-        annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
+        annotations: {{- toYaml $val.annotations | nindent 10 }}
         labels:
-          rayNodeType: {{ .Values.worker.type }}
-          groupName: {{ .Values.worker.groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" . }}
+          rayNodeType: {{ $val.type }}
+          groupName: {{ $val.groupName }}
+          rayCluster: {{ include "ray-cluster.fullname" $ }}
+  {{- end }} 
 {{ include "ray-cluster.labels" . | indent 10 }}
