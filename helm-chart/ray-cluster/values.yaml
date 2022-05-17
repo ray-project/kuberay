@@ -13,95 +13,156 @@ fullnameOverride: ""
 imagePullSecrets: []
   # - name: an-existing-secret
 
-head:
-  groupName: headgroup
-  replicas: 1
-  type: head
-  labels:
-    key: value
-  initArgs:
-    port: '6379'
-    redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
-    dashboard-host: '0.0.0.0'
-    num-cpus: '1' # can be auto-completed from the limits
-    node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
-    block: 'true'
-  containerEnv:
-    - name: MY_POD_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.podIP
-  envFrom: []
-    # - secretRef:
-    #     name: my-env-secret
-  resources:
-    limits:
-      cpu: 1
-    requests:
-       cpu: 200m
-  annotations: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  volumes:
-    - name: log-volume
-      emptyDir: { }
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+ray:
+  version: "1.11.0"
+  autoscaler:
+    inTree: false
+    serviceAccount:
+      create: true
+      name: autoscaler-sa
+      annotations: {}
+      labels: {}
+    image: rayproject/ray:413fe0
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1024Mi
+      limits:
+        cpu: 500m
+        memory: 1024Mi
+  # use volumeMounts.Optional.
+  # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+    volumeMounts:
+      - mountPath: /tmp/ray
+        name: log-volume
+  head:
+    replicas: 1
+    # Leave the following 3 lines at 0 if the head node should not do work.
+    num-cpus: 0
+    cpu:
+      request: 0
+      limit: 0
+    groupName: headgroup
+    type: head
+    dashboardPort: &dashPort 8265
+    initArgs:
+      port: '6379'
+      dashboard-host: '0.0.0.0'
+      dashboard-port: *dashPort
+      num-cpus: '1' # can be auto-completed from the limits
+      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+      block: 'true'
+    ports:
+      - containerPort: 8265
+        protocol: TCP
+      - containerPort: 6379
+        protocol: TCP
+    resources:
+      limits:
+        cpu: 1
+        memory: 5Gi
+      requests:
+        memory: 5Gi
+        cpu: 200m
+    containerEnv: []
+    envFrom: []
+    labels: {}
+    annotations: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    volumes:
+      - name: log-volume
+        emptyDir: { }
+    volumeMounts:
+      - mountPath: /tmp/ray
+        name: log-volume
 
+  workers:
+    # groupName is equivalent to the key of the map it's under e.g. cpuWorker has groupName cpuWorker
+    cpuWorker:
+      # name must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+      containerName: cpu-machine-learning
+      replicaCount: 1
+      minReplicas: 1
+      maxReplicas: 300
+      resources:
+        requests:
+          cpu: 1
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 512Mi
+      initArgs:
+        node-ip-address: $MY_POD_IP
+        block: 'true'
+        num-cpus: $CPU_LIMITS
+      containerEnv: []
+      envFrom: []
+      nodeSelector: {}
+      annotations: {}
+      labels: {}
+      tolerations: {}
+      affinity: {}
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      # use volumeMounts.Optional.
+      # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+      volumeMounts:
+        - mountPath: /tmp/ray
+          name: log-volume
+      volumes:
+        - name: log-volume
+          emptyDir: {}
 
-worker:
-  groupName: workergroup
-  replicas: 1
-  type: worker
-  labels:
-    key: value
-  initArgs:
-    node-ip-address: $MY_POD_IP
-    redis-password: LetMeInRay
-    block: 'true'
-  containerEnv:
-    - name: MY_POD_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.podIP
-    - name: RAY_DISABLE_DOCKER_CPU_WARNING
-      value: "1"
-    - name: CPU_REQUEST
-      valueFrom:
-        resourceFieldRef:
-          containerName: ray-worker
-          resource: requests.cpu
-    - name: MY_POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
-  envFrom: []
-    # - secretRef:
-    #     name: my-env-secret
-  ports:
-    - containerPort: 80
-      protocol: TCP
-  resources: 
-    limits:
-      cpu: 1
-    requests:
-       cpu: 200m
-  annotations:
-    key: value
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+    # Example gpu worker group for more details see:
+    # https://docs.ray.io/en/latest/cluster/kubernetes-gpu.html
+    gpuWorker:
+      # name must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+      containerName: gpu-machine-learning
+      replicaCount: 1
+      minReplicas: 1
+      maxReplicas: 3
+      resources:
+        requests:
+          cpu: 29
+          memory: 100Gi
+        limits:
+          cpu: 29
+          memory: 100Gi
+          nvidia.com/gpu: 1
+      initArgs:
+        node-ip-address: $MY_POD_IP
+        block: 'true'
+        num-cpus: $CPU_LIMITS
+        num-gpus: '1'
+      nodeSelector:
+        node.kubernetes.io/instance-type: g4dn.8xlarge
+        spot: "yes"
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Exists
+      annotations: {}
+      labels: {}
+      affinity: {}
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      # use volumeMounts.Optional.
+      # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+      volumeMounts:
+        - mountPath: /tmp/ray
+          name: log-volume
+      volumes:
+        - name: log-volume
+          emptyDir: {}
 
+# This does not seem to be in use yet.
 headServiceSuffix: "ray-operator.svc"
 
+# This does not seem to be in use.
 service:
   type: ClusterIP
   port: 8080
