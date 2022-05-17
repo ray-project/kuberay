@@ -22,38 +22,39 @@
 - name: AUTOSCALER_HEARTBEAT_TIMEOUT_S
   value: "240"
 {{ if .Values.ray.head.containerEnv }}
-{{ toYaml .Values.ray.head.containerEnv }}
+{{- toYaml .Values.ray.head.containerEnv }}
 {{ end }}
-{{ if .Values.ray.head.envFrom }}
-{{ toYaml .Values.ray.head.envFrom }}
-{{ end }}
-{{- end }}
 
-{{- define "{{ .Chart.Name }}.head.autoscaler" }}
+{{- if .Values.ray.head.envFrom -}}
+{{- toYaml .Values.ray.head.envFrom -}}
+{{ end }}
+{{- end -}}
+
+{{- define "{{ .Chart.Name }}.head.autoscaler" -}}
 # The Ray autoscaler sidecar to the head pod
 - name: autoscaler
   # TODO: Use released Ray version starting with Ray 1.12.0.
   image: {{ .Values.ray.autoscaler.image }}
   imagePullPolicy: IfNotPresent
   env:
-  - name: RAY_CLUSTER_NAMESPACE
-    valueFrom:
-      fieldRef:
-        fieldPath: metadata.namespace
-  - name: RAY_CLUSTER_NAME
-    # This value must match the metadata.name of the RayCluster CR.
-    # The autoscaler uses this env variable to determine which Ray CR to interact with.
-    # TODO: Match with CR name automatically via operator, Helm, and/or Kustomize.
-    value: {{ include "ray-cluster.fullname" . }}
+    - name: RAY_CLUSTER_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: RAY_CLUSTER_NAME
+      # This value must match the metadata.name of the RayCluster CR.
+      # The autoscaler uses this env variable to determine which Ray CR to interact with.
+      # TODO: Match with CR name automatically via operator, Helm, and/or Kustomize.
+      value: {{ include "ray-cluster.fullname" . }}
   command: ["ray"]
   args:
-  - "kuberay-autoscaler"
-  - "--cluster-name"
-  - "$(RAY_CLUSTER_NAME)"
-  - "--cluster-namespace"
-  - "$(RAY_CLUSTER_NAMESPACE)"
-  resources: {{- toYaml .Values.ray.autoscaler.resources | nindent 14 }}
-  volumeMounts: {{- toYaml .Values.ray.autoscaler.volumeMounts | nindent 12 }}
+    - "kuberay-autoscaler"
+    - "--cluster-name"
+    - "$(RAY_CLUSTER_NAME)"
+    - "--cluster-namespace"
+    - "$(RAY_CLUSTER_NAMESPACE)"
+  resources: {{- toYaml .Values.ray.autoscaler.resources | nindent 4 }}
+  volumeMounts: {{- toYaml .Values.ray.autoscaler.volumeMounts | nindent 4 }}
 {{- end }}
 
 {{- define "{{ .Chart.Name }}.worker.env" }}
@@ -92,12 +93,13 @@
 - name: TYPE
   value: worker
 {{ if $.containerEnv }}
-{{ toYaml $.containerEnv }}
+{{- toYaml $.containerEnv }}
 {{ end }}
-{{ if $.envFrom }}
-{{ toYaml $.envFrom }}
+
+{{- if $.envFrom -}}
+{{- toYaml $.envFrom }}
 {{ end }}
-{{- end }}
+{{- end -}}
 
 {{- define "{{ .Chart.Name }}.lifecycle" }}
   lifecycle:
@@ -151,6 +153,11 @@ imagePullPolicy: {{ .Values.image.pullPolicy }}
   #pod template
   template:
     metadata:
+      {{- if $val.annotations }}
+      # annotations for pod
+      # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+      annotations: {{- toYaml $val.annotations | nindent 10}}
+      {{- end }}
       labels:
         # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
         # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
@@ -158,11 +165,9 @@ imagePullPolicy: {{ .Values.image.pullPolicy }}
         rayNodeType: worker # will be injected if missing, must be head or worker
         groupName: {{ $key }} # will be injected if missing
         {{- include "ray-cluster.labels" $includeValues | nindent 8 }}
-      {{- if $val.annotations }}
-      # annotations for pod
-      # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
-      annotations: {{- toYaml $val.annotations | nindent 10}}
-      {{- end }}
+        {{- if $val.labels }}
+        {{- toYaml $val.labels | nindent 8 }}
+        {{- end }}
     spec:
       {{- if $ogValues.imagePullSecrets }}
       imagePullSecrets: {{- toYaml $ogValues.imagePullSecrets | nindent 10 }}
@@ -177,17 +182,25 @@ imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- include "{{ .Chart.Name }}.image" $includeValues | indent 10 }}
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
-          env:
-            {{- include "{{ .Chart.Name }}.worker.env" $val | indent 12 -}}
+          env: {{- include "{{ .Chart.Name }}.worker.env" $val | indent 12 -}}
           {{- include "{{ .Chart.Name }}.lifecycle" . | indent 8 }}
           resources: {{ toYaml $val.resources | nindent 12}}
-          ports:
-            {{- toYaml $val.ports | nindent 12 }}
-          volumeMounts:
-            {{- toYaml $val.volumeMounts | nindent 12 }}
+          ports: {{- toYaml $val.ports | nindent 12 }}
+          {{- if $val.volumeMounts }}
+          # use volumeMounts.Optional.
+          # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+          volumeMounts: {{- toYaml $val.volumeMounts | nindent 12 }}
+          {{- end -}}
+      {{- if $val.volumes }}
       # use volumes
       # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
-      volumes:
-        {{- toYaml $val.volumes | nindent 10 -}}
+      volumes: {{- toYaml $val.volumes | nindent 10 }}
+      {{- end -}}
+      {{- if $val.tolerations }}
+      tolerations: {{- toYaml $val.tolerations | nindent 10 }}
+      {{- end -}}
+      {{- if $val.affinity }}
+      affinity: {{- toYaml $val.affinity | nindent 10 }}
+      {{- end }}
 {{ end }}
 {{- end }}

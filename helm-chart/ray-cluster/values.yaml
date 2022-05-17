@@ -20,8 +20,8 @@ ray:
     serviceAccount:
       create: true
       name: autoscaler-sa
-      annotations: {}
       labels: {}
+      annotations: {}
     image: rayproject/ray:413fe0
     resources:
       requests:
@@ -30,8 +30,8 @@ ray:
       limits:
         cpu: 500m
         memory: 1024Mi
-  # use volumeMounts.Optional.
-  # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+    # use volumeMounts.Optional.
+    # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
@@ -69,11 +69,11 @@ ray:
     labels: {}
     annotations: {}
     nodeSelector: {}
-    tolerations: []
+    tolerations: {}
     affinity: {}
     volumes:
       - name: log-volume
-        emptyDir: { }
+        emptyDir: {}
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
@@ -99,16 +99,14 @@ ray:
         num-cpus: $CPU_LIMITS
       containerEnv: []
       envFrom: []
-      nodeSelector: {}
-      annotations: {}
       labels: {}
+      annotations: {}
+      nodeSelector: {}
       tolerations: {}
       affinity: {}
       ports:
         - containerPort: 80
           protocol: TCP
-      # use volumeMounts.Optional.
-      # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
       volumeMounts:
         - mountPath: /tmp/ray
           name: log-volume
@@ -144,14 +142,14 @@ ray:
         - effect: NoSchedule
           key: nvidia.com/gpu
           operator: Exists
-      annotations: {}
+      containerEnv: []
+      envFrom: []
       labels: {}
+      annotations: {}
       affinity: {}
       ports:
         - containerPort: 80
           protocol: TCP
-      # use volumeMounts.Optional.
-      # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
       volumeMounts:
         - mountPath: /tmp/ray
           name: log-volume

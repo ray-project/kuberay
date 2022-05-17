@@ -49,17 +49,12 @@ spec:
             image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.ray.head.resources | nindent 14 }}
-            env:
-              {{- include "{{ .Chart.Name }}.head.env" . | indent 14 }}
-            ports:
-              {{- toYaml .Values.ray.head.ports | nindent 14 }}
-            lifecycle:
-              preStop:
-                exec:
-                  command: ["/bin/sh","-c","ray stop"]
-            volumeMounts: {{- toYaml .Values.ray.head.volumeMounts | nindent 14 }}
-         {{- if not .Values.ray.autoscaler.inTree }}
-         {{- include "{{ .Chart.Name }}.head.autoscaler" . | nindent 10 }}
+            env: {{- include "{{ .Chart.Name }}.head.env" . | indent 14 }}
+            ports: {{- toYaml .Values.ray.head.ports | nindent 14 }}
+            {{- include "{{ .Chart.Name }}.lifecycle" . | indent 10 }}
+            volumeMounts: {{- toYaml .Values.ray.head.volumeMounts | nindent 14 -}}
+         {{- if not .Values.ray.autoscaler.inTree -}}
+         {{- include "{{ .Chart.Name }}.head.autoscaler" . | nindent 10 -}}
          {{- end }}
         {{- if .Values.ray.head.volumes }}
         volumes: {{- toYaml .Values.ray.head.volumes | nindent 10 }}
