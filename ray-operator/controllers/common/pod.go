@@ -43,7 +43,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
-		podTemplate.Spec.ServiceAccountName = instance.Name
+		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
 
 		// Note: Starting with the upcoming Ray 1.11.0, Ray will by default no longer use Redis
 		// should be possible to drop some of the logic around Redis passwords at that point.

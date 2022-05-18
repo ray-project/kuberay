@@ -95,7 +95,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
+		log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
@@ -578,7 +578,8 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 	}
 
 	serviceAccount := &corev1.ServiceAccount{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetHeadGroupServiceAccountName(instance)}
+
 	if err := r.Get(context.TODO(), namespacedName, serviceAccount); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
