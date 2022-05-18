@@ -37,7 +37,7 @@ ray:
         name: log-volume
   head:
     replicas: 1
-    num_cpus: &headCPU 0 # Leave the following at 0 if the head node should not do work.
+    num_cpus: &headCPU 0 # Leave the at 0 if the head node should not do work.
     groupName: headgroup
     type: head
     dashboardPort: &dashPort 8265
