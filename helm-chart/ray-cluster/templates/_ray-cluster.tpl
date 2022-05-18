@@ -1,8 +1,8 @@
 {{- define "{{ .Chart.Name }}.head.env" }}
 - name: CPU_REQUEST
-  value: {{ .Values.ray.head.cpu.request }}
+  value: {{ .Values.ray.head.num_cpus }}
 - name: CPU_LIMITS
-  value: {{ .Values.ray.head.cpu.limit }}
+  value: {{ .Values.ray.head.num_cpus }}
 - name: MEMORY_LIMITS
   valueFrom:
     resourceFieldRef:

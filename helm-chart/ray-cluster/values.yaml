@@ -37,11 +37,7 @@ ray:
         name: log-volume
   head:
     replicas: 1
-    # Leave the following 3 lines at 0 if the head node should not do work.
-    num-cpus: 0
-    cpu:
-      request: 0
-      limit: 0
+    num_cpus: &headCPU 0 # Leave the following at 0 if the head node should not do work.
     groupName: headgroup
     type: head
     dashboardPort: &dashPort 8265
@@ -49,7 +45,7 @@ ray:
       port: '6379'
       dashboard-host: '0.0.0.0'
       dashboard-port: *dashPort
-      num-cpus: '1' # can be auto-completed from the limits
+      num-cpus: *headCPU  # can be auto-completed from the limits (leave at 0 for no work done on head node)
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
     ports:
