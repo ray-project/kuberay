@@ -1,4 +1,4 @@
-package controllers
+package raycluster
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
+	common2 "github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/common"
-	_ "github.com/ray-project/kuberay/ray-operator/controllers/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
-
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -133,7 +133,7 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 	}
 
 	headIngresses := networkingv1.IngressList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	filterLabels := client.MatchingLabels{common2.RayClusterLabelKey: instance.Name}
 	if err := r.List(context.TODO(), &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 	}
 
 	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(*instance)
+		ingress, err := common2.BuildIngressForHeadService(*instance)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 
 func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster) error {
 	headServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	filterLabels := client.MatchingLabels{common2.RayClusterLabelKey: instance.Name}
 	if err := r.List(context.TODO(), &headServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 	// Create head service if there's no existing one in the cluster.
 	if headServices.Items == nil || len(headServices.Items) == 0 {
-		rayHeadSvc, err := common.BuildServiceForHeadPod(*instance)
+		rayHeadSvc, err := common2.BuildServiceForHeadPod(*instance)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster) error {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
+	filterLabels := client.MatchingLabels{common2.RayClusterLabelKey: instance.Name, common2.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
@@ -222,12 +222,12 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 	if len(headPods.Items) == 0 || headPods.Items == nil {
 		// create head pod
 		log.Info("reconcilePods ", "creating head pod for cluster", instance.Name)
-		common.CreatedClustersCounterInc(instance.Namespace)
+		common2.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(*instance); err != nil {
-			common.FailedClustersCounterInc(instance.Namespace)
+			common2.FailedClustersCounterInc(instance.Namespace)
 			return err
 		}
-		common.SuccessfulClustersCounterInc(instance.Namespace)
+		common2.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
 		log.Info("reconcilePods ", "more than 1 head pod found for cluster", instance.Name)
 		itemLength := len(headPods.Items)
@@ -249,7 +249,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		workerPods := corev1.PodList{}
-		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
+		filterLabels = client.MatchingLabels{common2.RayClusterLabelKey: instance.Name, common2.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 			return err
 		}
@@ -491,11 +491,11 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) corev1.Pod {
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
+	podName := strings.ToLower(instance.Name + common2.DashSymbol + string(rayiov1alpha1.HeadNode) + common2.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
-	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
+	podConf := common2.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
+	pod := common2.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -506,11 +506,11 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec) corev1.Pod {
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
+	podName := strings.ToLower(instance.Name + common2.DashSymbol + string(rayiov1alpha1.WorkerNode) + common2.DashSymbol + worker.GroupName + common2.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
-	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	podTemplateSpec := common2.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
+	pod := common2.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -586,7 +586,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 		}
 
 		// Create service account for autoscaler if there's no existing one in the cluster.
-		serviceAccount, err := common.BuildServiceAccount(instance)
+		serviceAccount, err := common2.BuildServiceAccount(instance)
 		if err != nil {
 			return err
 		}
@@ -627,7 +627,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayiov1alpha1.R
 		}
 
 		// Create role for autoscaler if there's no existing one in the cluster.
-		role, err := common.BuildRole(instance)
+		role, err := common2.BuildRole(instance)
 		if err != nil {
 			return err
 		}
@@ -668,7 +668,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 		}
 
 		// Create role bindings for autoscaler if there's no existing one in the cluster.
-		roleBinding, err := common.BuildRoleBinding(instance)
+		roleBinding, err := common2.BuildRoleBinding(instance)
 		if err != nil {
 			return err
 		}

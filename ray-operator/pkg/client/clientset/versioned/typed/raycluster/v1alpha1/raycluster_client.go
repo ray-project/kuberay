@@ -3,7 +3,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	v1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )

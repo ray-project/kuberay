@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster"
+
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -16,7 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,7 +52,7 @@ func main() {
 		"watch-namespace",
 		"",
 		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
-	flag.BoolVar(&controllers.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", false,
+	flag.BoolVar(&raycluster.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", false,
 		"Temporary feature flag - to be deleted after testing")
 	opts := zap.Options{
 		Development: true,
@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = controllers.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency); err != nil {
+	if err = raycluster.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RayCluster")
 		os.Exit(1)
 	}

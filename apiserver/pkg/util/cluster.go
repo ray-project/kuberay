@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayclusterapi "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	rayclusterapi "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
