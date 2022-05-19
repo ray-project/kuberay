@@ -6,7 +6,7 @@ import (
 	"context"
 	time "time"
 
-	rayclusterv1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	rayclusterv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	versioned "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/listers/raycluster/v1alpha1"

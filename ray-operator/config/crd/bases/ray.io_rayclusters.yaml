@@ -321,10 +321,53 @@ spec:
                                                     of {key,value} pairs.
                                                   type: object
                                               type: object
+                                            namespaceSelector:
+                                              description: A label query over the
+                                                set of namespaces that the term applies
+                                                to.
+                                              properties:
+                                                matchExpressions:
+                                                  description: matchExpressions is
+                                                    a list of label selector requirements.
+                                                    The requirements are ANDed.
+                                                  items:
+                                                    description: A label selector
+                                                      requirement is a selector that
+                                                      contains values, a key, and
+                                                      an operator that relates
+                                                    properties:
+                                                      key:
+                                                        description: key is the label
+                                                          key that the selector applies
+                                                          to.
+                                                        type: string
+                                                      operator:
+                                                        description: operator represents
+                                                          a key's relationship to
+                                                          a set of values.
+                                                        type: string
+                                                      values:
+                                                        description: values is an
+                                                          array of string values.
+                                                        items:
+                                                          type: string
+                                                        type: array
+                                                    required:
+                                                    - key
+                                                    - operator
+                                                    type: object
+                                                  type: array
+                                                matchLabels:
+                                                  additionalProperties:
+                                                    type: string
+                                                  description: matchLabels is a map
+                                                    of {key,value} pairs.
+                                                  type: object
+                                              type: object
                                             namespaces:
-                                              description: 'namespaces specifies which
-                                                namespaces the labelSelector applies
-                                                to (matches against); null or empty '
+                                              description: namespaces specifies a
+                                                static list of namespace names that
+                                                the term applies to.
                                               items:
                                                 type: string
                                               type: array
@@ -397,10 +440,51 @@ spec:
                                                 {key,value} pairs.
                                               type: object
                                           type: object
+                                        namespaceSelector:
+                                          description: A label query over the set
+                                            of namespaces that the term applies to.
+                                          properties:
+                                            matchExpressions:
+                                              description: matchExpressions is a list
+                                                of label selector requirements. The
+                                                requirements are ANDed.
+                                              items:
+                                                description: A label selector requirement
+                                                  is a selector that contains values,
+                                                  a key, and an operator that relates
+                                                properties:
+                                                  key:
+                                                    description: key is the label
+                                                      key that the selector applies
+                                                      to.
+                                                    type: string
+                                                  operator:
+                                                    description: operator represents
+                                                      a key's relationship to a set
+                                                      of values.
+                                                    type: string
+                                                  values:
+                                                    description: values is an array
+                                                      of string values.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                required:
+                                                - key
+                                                - operator
+                                                type: object
+                                              type: array
+                                            matchLabels:
+                                              additionalProperties:
+                                                type: string
+                                              description: matchLabels is a map of
+                                                {key,value} pairs.
+                                              type: object
+                                          type: object
                                         namespaces:
-                                          description: 'namespaces specifies which
-                                            namespaces the labelSelector applies to
-                                            (matches against); null or empty '
+                                          description: namespaces specifies a static
+                                            list of namespace names that the term
+                                            applies to.
                                           items:
                                             type: string
                                           type: array
@@ -473,10 +557,53 @@ spec:
                                                     of {key,value} pairs.
                                                   type: object
                                               type: object
+                                            namespaceSelector:
+                                              description: A label query over the
+                                                set of namespaces that the term applies
+                                                to.
+                                              properties:
+                                                matchExpressions:
+                                                  description: matchExpressions is
+                                                    a list of label selector requirements.
+                                                    The requirements are ANDed.
+                                                  items:
+                                                    description: A label selector
+                                                      requirement is a selector that
+                                                      contains values, a key, and
+                                                      an operator that relates
+                                                    properties:
+                                                      key:
+                                                        description: key is the label
+                                                          key that the selector applies
+                                                          to.
+                                                        type: string
+                                                      operator:
+                                                        description: operator represents
+                                                          a key's relationship to
+                                                          a set of values.
+                                                        type: string
+                                                      values:
+                                                        description: values is an
+                                                          array of string values.
+                                                        items:
+                                                          type: string
+                                                        type: array
+                                                    required:
+                                                    - key
+                                                    - operator
+                                                    type: object
+                                                  type: array
+                                                matchLabels:
+                                                  additionalProperties:
+                                                    type: string
+                                                  description: matchLabels is a map
+                                                    of {key,value} pairs.
+                                                  type: object
+                                              type: object
                                             namespaces:
-                                              description: 'namespaces specifies which
-                                                namespaces the labelSelector applies
-                                                to (matches against); null or empty '
+                                              description: namespaces specifies a
+                                                static list of namespace names that
+                                                the term applies to.
                                               items:
                                                 type: string
                                               type: array
@@ -549,10 +676,51 @@ spec:
                                                 {key,value} pairs.
                                               type: object
                                           type: object
+                                        namespaceSelector:
+                                          description: A label query over the set
+                                            of namespaces that the term applies to.
+                                          properties:
+                                            matchExpressions:
+                                              description: matchExpressions is a list
+                                                of label selector requirements. The
+                                                requirements are ANDed.
+                                              items:
+                                                description: A label selector requirement
+                                                  is a selector that contains values,
+                                                  a key, and an operator that relates
+                                                properties:
+                                                  key:
+                                                    description: key is the label
+                                                      key that the selector applies
+                                                      to.
+                                                    type: string
+                                                  operator:
+                                                    description: operator represents
+                                                      a key's relationship to a set
+                                                      of values.
+                                                    type: string
+                                                  values:
+                                                    description: values is an array
+                                                      of string values.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                required:
+                                                - key
+                                                - operator
+                                                type: object
+                                              type: array
+                                            matchLabels:
+                                              additionalProperties:
+                                                type: string
+                                              description: matchLabels is a map of
+                                                {key,value} pairs.
+                                              type: object
+                                          type: object
                                         namespaces:
-                                          description: 'namespaces specifies which
-                                            namespaces the labelSelector applies to
-                                            (matches against); null or empty '
+                                          description: namespaces specifies a static
+                                            list of namespace names that the term
+                                            applies to.
                                           items:
                                             type: string
                                           type: array
@@ -603,8 +771,8 @@ spec:
                                         type: string
                                       value:
                                         description: Variable references $(VAR_NAME)
-                                          are expanded using the previous defined
-                                          environment variables in the
+                                          are expanded using the previously defined
+                                          environment variables in t
                                         type: string
                                       valueFrom:
                                         description: Source for the environment variable's
@@ -749,9 +917,8 @@ spec:
                                         after a container is created.
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -811,8 +978,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -836,9 +1002,8 @@ spec:
                                         or management e
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -898,8 +1063,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -923,9 +1087,7 @@ spec:
                                     Container will be restarted if the probe fails.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -941,6 +1103,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -1022,6 +1201,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -1077,9 +1262,7 @@ spec:
                                     readiness.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -1095,6 +1278,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -1176,6 +1376,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -1209,8 +1415,8 @@ spec:
                                       type: object
                                   type: object
                                 securityContext:
-                                  description: 'Security options the pod should run
-                                    with. More info: https://kubernetes.'
+                                  description: SecurityContext defines the security
+                                    options the container should be run with.
                                   properties:
                                     allowPrivilegeEscalation:
                                       description: AllowPrivilegeEscalation controls
@@ -1311,6 +1517,11 @@ spec:
                                           description: GMSACredentialSpecName is the
                                             name of the GMSA credential spec to use.
                                           type: string
+                                        hostProcess:
+                                          description: HostProcess determines if a
+                                            container should be run as a 'Host Process'
+                                            container.
+                                          type: boolean
                                         runAsUserName:
                                           description: The UserName in Windows to
                                             run the entrypoint of the container process.
@@ -1322,9 +1533,7 @@ spec:
                                     has successfully initialized.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -1340,6 +1549,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -1421,6 +1647,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -1560,8 +1792,8 @@ spec:
                             description: List of ephemeral containers run in this
                               pod.
                             items:
-                              description: An EphemeralContainer is a container that
-                                may be added temporarily to an existing pod for user-initi
+                              description: An EphemeralContainer is a temporary container
+                                that you may add to an existing Pod for user-initiate
                               properties:
                                 args:
                                   description: Arguments to the entrypoint. The docker
@@ -1588,8 +1820,8 @@ spec:
                                         type: string
                                       value:
                                         description: Variable references $(VAR_NAME)
-                                          are expanded using the previous defined
-                                          environment variables in the
+                                          are expanded using the previously defined
+                                          environment variables in t
                                         type: string
                                       valueFrom:
                                         description: Source for the environment variable's
@@ -1733,9 +1965,8 @@ spec:
                                         after a container is created.
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -1795,8 +2026,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -1820,9 +2050,8 @@ spec:
                                         or management e
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -1882,8 +2111,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -1907,9 +2135,7 @@ spec:
                                     containers.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -1925,6 +2151,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -2006,6 +2249,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -2053,14 +2302,16 @@ spec:
                                     - containerPort
                                     type: object
                                   type: array
+                                  x-kubernetes-list-map-keys:
+                                  - containerPort
+                                  - protocol
+                                  x-kubernetes-list-type: map
                                 readinessProbe:
                                   description: Probes are not allowed for ephemeral
                                     containers.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -2076,6 +2327,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -2157,6 +2425,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -2190,8 +2464,9 @@ spec:
                                       type: object
                                   type: object
                                 securityContext:
-                                  description: SecurityContext is not allowed for
-                                    ephemeral containers.
+                                  description: 'Optional: SecurityContext defines
+                                    the security options the ephemeral container should
+                                    be run with.'
                                   properties:
                                     allowPrivilegeEscalation:
                                       description: AllowPrivilegeEscalation controls
@@ -2292,6 +2567,11 @@ spec:
                                           description: GMSACredentialSpecName is the
                                             name of the GMSA credential spec to use.
                                           type: string
+                                        hostProcess:
+                                          description: HostProcess determines if a
+                                            container should be run as a 'Host Process'
+                                            container.
+                                          type: boolean
                                         runAsUserName:
                                           description: The UserName in Windows to
                                             run the entrypoint of the container process.
@@ -2303,9 +2583,7 @@ spec:
                                     containers.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -2321,6 +2599,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -2402,6 +2697,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -2459,7 +2760,7 @@ spec:
                                   type: array
                                 volumeMounts:
                                   description: Pod volumes to mount into the container's
-                                    filesystem. Cannot be updated.
+                                    filesystem.
                                   items:
                                     description: VolumeMount describes a mounting
                                       of a Volume within a container.
@@ -2583,8 +2884,8 @@ spec:
                                         type: string
                                       value:
                                         description: Variable references $(VAR_NAME)
-                                          are expanded using the previous defined
-                                          environment variables in the
+                                          are expanded using the previously defined
+                                          environment variables in t
                                         type: string
                                       valueFrom:
                                         description: Source for the environment variable's
@@ -2729,9 +3030,8 @@ spec:
                                         after a container is created.
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -2791,8 +3091,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -2816,9 +3115,8 @@ spec:
                                         or management e
                                       properties:
                                         exec:
-                                          description: One and only one of the following
-                                            should be specified. Exec specifies the
-                                            action to take.
+                                          description: Exec specifies the action to
+                                            take.
                                           properties:
                                             command:
                                               description: 'Command is the command
@@ -2878,8 +3176,7 @@ spec:
                                           - port
                                           type: object
                                         tcpSocket:
-                                          description: TCPSocket specifies an action
-                                            involving a TCP port.
+                                          description: Deprecated.
                                           properties:
                                             host:
                                               description: 'Optional: Host name to
@@ -2903,9 +3200,7 @@ spec:
                                     Container will be restarted if the probe fails.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -2921,6 +3216,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -3002,6 +3314,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -3057,9 +3375,7 @@ spec:
                                     readiness.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -3075,6 +3391,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -3156,6 +3489,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -3189,8 +3528,8 @@ spec:
                                       type: object
                                   type: object
                                 securityContext:
-                                  description: 'Security options the pod should run
-                                    with. More info: https://kubernetes.'
+                                  description: SecurityContext defines the security
+                                    options the container should be run with.
                                   properties:
                                     allowPrivilegeEscalation:
                                       description: AllowPrivilegeEscalation controls
@@ -3291,6 +3630,11 @@ spec:
                                           description: GMSACredentialSpecName is the
                                             name of the GMSA credential spec to use.
                                           type: string
+                                        hostProcess:
+                                          description: HostProcess determines if a
+                                            container should be run as a 'Host Process'
+                                            container.
+                                          type: boolean
                                         runAsUserName:
                                           description: The UserName in Windows to
                                             run the entrypoint of the container process.
@@ -3302,9 +3646,7 @@ spec:
                                     has successfully initialized.
                                   properties:
                                     exec:
-                                      description: One and only one of the following
-                                        should be specified. Exec specifies the action
-                                        to take.
+                                      description: Exec specifies the action to take.
                                       properties:
                                         command:
                                           description: 'Command is the command line
@@ -3320,6 +3662,23 @@ spec:
                                         succeeded.
                                       format: int32
                                       type: integer
+                                    grpc:
+                                      description: GRPC specifies an action involving
+                                        a GRPC port.
+                                      properties:
+                                        port:
+                                          description: Port number of the gRPC service.
+                                            Number must be in the range 1 to 65535.
+                                          format: int32
+                                          type: integer
+                                        service:
+                                          description: Service is the name of the
+                                            service to place in the gRPC HealthCheckRequest
+                                            (see https://github.
+                                          type: string
+                                      required:
+                                      - port
+                                      type: object
                                     httpGet:
                                       description: HTTPGet specifies the http request
                                         to perform.
@@ -3401,6 +3760,12 @@ spec:
                                       required:
                                       - port
                                       type: object
+                                    terminationGracePeriodSeconds:
+                                      description: Optional duration in seconds the
+                                        pod needs to terminate gracefully upon probe
+                                        failure.
+                                      format: int64
+                                      type: integer
                                     timeoutSeconds:
                                       description: Number of seconds after which the
                                         probe times out. Defaults to 1 second. Minimum
@@ -3508,6 +3873,18 @@ spec:
                               type: string
                             description: NodeSelector is a selector which must be
                               true for the pod to fit on a node.
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          os:
+                            description: Specifies the OS of the containers in the
+                              pod.
+                            properties:
+                              name:
+                                description: Name is the name of the operating system.
+                                  The currently supported values are linux and windows.
+                                type: string
+                            required:
+                            - name
                             type: object
                           overhead:
                             additionalProperties:
@@ -3660,6 +4037,10 @@ spec:
                                     description: GMSACredentialSpecName is the name
                                       of the GMSA credential spec to use.
                                     type: string
+                                  hostProcess:
+                                    description: HostProcess determines if a container
+                                      should be run as a 'Host Process' container.
+                                    type: boolean
                                   runAsUserName:
                                     description: The UserName in Windows to run the
                                       entrypoint of the container process.
@@ -4119,13 +4500,8 @@ spec:
                                   type: object
                                 ephemeral:
                                   description: Ephemeral represents a volume that
-                                    is handled by a cluster storage driver (Alpha
-                                    feature).
+                                    is handled by a cluster storage driver.
                                   properties:
-                                    readOnly:
-                                      description: Specifies a read-only configuration
-                                        for the volume. Defaults to false (read/write).
-                                      type: boolean
                                     volumeClaimTemplate:
                                       description: Will be used to create a stand-alone
                                         PVC to provision the volume.
@@ -4183,10 +4559,31 @@ spec:
                                               - kind
                                               - name
                                               type: object
+                                            dataSourceRef:
+                                              description: Specifies the object from
+                                                which to populate the volume with
+                                                data, if a non-empty volume is desired.
+                                              properties:
+                                                apiGroup:
+                                                  description: APIGroup is the group
+                                                    for the resource being referenced.
+                                                  type: string
+                                                kind:
+                                                  description: Kind is the type of
+                                                    resource being referenced
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    resource being referenced
+                                                  type: string
+                                              required:
+                                              - kind
+                                              - name
+                                              type: object
                                             resources:
-                                              description: 'Resources represents the
+                                              description: Resources represents the
                                                 minimum resources the volume should
-                                                have. More info: https://kubernetes.'
+                                                have.
                                               properties:
                                                 limits:
                                                   additionalProperties:
@@ -4772,8 +5169,6 @@ spec:
                                             type: object
                                         type: object
                                       type: array
-                                  required:
-                                  - sources
                                   type: object
                                 quobyte:
                                   description: Quobyte represents a Quobyte mount
@@ -5330,11 +5725,54 @@ spec:
                                                       map of {key,value} pairs.
                                                     type: object
                                                 type: object
+                                              namespaceSelector:
+                                                description: A label query over the
+                                                  set of namespaces that the term
+                                                  applies to.
+                                                properties:
+                                                  matchExpressions:
+                                                    description: matchExpressions
+                                                      is a list of label selector
+                                                      requirements. The requirements
+                                                      are ANDed.
+                                                    items:
+                                                      description: A label selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                      properties:
+                                                        key:
+                                                          description: key is the
+                                                            label key that the selector
+                                                            applies to.
+                                                          type: string
+                                                        operator:
+                                                          description: operator represents
+                                                            a key's relationship to
+                                                            a set of values.
+                                                          type: string
+                                                        values:
+                                                          description: values is an
+                                                            array of string values.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: matchLabels is a
+                                                      map of {key,value} pairs.
+                                                    type: object
+                                                type: object
                                               namespaces:
-                                                description: 'namespaces specifies
-                                                  which namespaces the labelSelector
-                                                  applies to (matches against); null
-                                                  or empty '
+                                                description: namespaces specifies
+                                                  a static list of namespace names
+                                                  that the term applies to.
                                                 items:
                                                   type: string
                                                 type: array
@@ -5407,10 +5845,52 @@ spec:
                                                   of {key,value} pairs.
                                                 type: object
                                             type: object
+                                          namespaceSelector:
+                                            description: A label query over the set
+                                              of namespaces that the term applies
+                                              to.
+                                            properties:
+                                              matchExpressions:
+                                                description: matchExpressions is a
+                                                  list of label selector requirements.
+                                                  The requirements are ANDed.
+                                                items:
+                                                  description: A label selector requirement
+                                                    is a selector that contains values,
+                                                    a key, and an operator that relates
+                                                  properties:
+                                                    key:
+                                                      description: key is the label
+                                                        key that the selector applies
+                                                        to.
+                                                      type: string
+                                                    operator:
+                                                      description: operator represents
+                                                        a key's relationship to a
+                                                        set of values.
+                                                      type: string
+                                                    values:
+                                                      description: values is an array
+                                                        of string values.
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                  required:
+                                                  - key
+                                                  - operator
+                                                  type: object
+                                                type: array
+                                              matchLabels:
+                                                additionalProperties:
+                                                  type: string
+                                                description: matchLabels is a map
+                                                  of {key,value} pairs.
+                                                type: object
+                                            type: object
                                           namespaces:
-                                            description: 'namespaces specifies which
-                                              namespaces the labelSelector applies
-                                              to (matches against); null or empty '
+                                            description: namespaces specifies a static
+                                              list of namespace names that the term
+                                              applies to.
                                             items:
                                               type: string
                                             type: array
@@ -5485,11 +5965,54 @@ spec:
                                                       map of {key,value} pairs.
                                                     type: object
                                                 type: object
+                                              namespaceSelector:
+                                                description: A label query over the
+                                                  set of namespaces that the term
+                                                  applies to.
+                                                properties:
+                                                  matchExpressions:
+                                                    description: matchExpressions
+                                                      is a list of label selector
+                                                      requirements. The requirements
+                                                      are ANDed.
+                                                    items:
+                                                      description: A label selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                      properties:
+                                                        key:
+                                                          description: key is the
+                                                            label key that the selector
+                                                            applies to.
+                                                          type: string
+                                                        operator:
+                                                          description: operator represents
+                                                            a key's relationship to
+                                                            a set of values.
+                                                          type: string
+                                                        values:
+                                                          description: values is an
+                                                            array of string values.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: matchLabels is a
+                                                      map of {key,value} pairs.
+                                                    type: object
+                                                type: object
                                               namespaces:
-                                                description: 'namespaces specifies
-                                                  which namespaces the labelSelector
-                                                  applies to (matches against); null
-                                                  or empty '
+                                                description: namespaces specifies
+                                                  a static list of namespace names
+                                                  that the term applies to.
                                                 items:
                                                   type: string
                                                 type: array
@@ -5562,10 +6085,52 @@ spec:
                                                   of {key,value} pairs.
                                                 type: object
                                             type: object
+                                          namespaceSelector:
+                                            description: A label query over the set
+                                              of namespaces that the term applies
+                                              to.
+                                            properties:
+                                              matchExpressions:
+                                                description: matchExpressions is a
+                                                  list of label selector requirements.
+                                                  The requirements are ANDed.
+                                                items:
+                                                  description: A label selector requirement
+                                                    is a selector that contains values,
+                                                    a key, and an operator that relates
+                                                  properties:
+                                                    key:
+                                                      description: key is the label
+                                                        key that the selector applies
+                                                        to.
+                                                      type: string
+                                                    operator:
+                                                      description: operator represents
+                                                        a key's relationship to a
+                                                        set of values.
+                                                      type: string
+                                                    values:
+                                                      description: values is an array
+                                                        of string values.
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                  required:
+                                                  - key
+                                                  - operator
+                                                  type: object
+                                                type: array
+                                              matchLabels:
+                                                additionalProperties:
+                                                  type: string
+                                                description: matchLabels is a map
+                                                  of {key,value} pairs.
+                                                type: object
+                                            type: object
                                           namespaces:
-                                            description: 'namespaces specifies which
-                                              namespaces the labelSelector applies
-                                              to (matches against); null or empty '
+                                            description: namespaces specifies a static
+                                              list of namespace names that the term
+                                              applies to.
                                             items:
                                               type: string
                                             type: array
@@ -5617,8 +6182,8 @@ spec:
                                           type: string
                                         value:
                                           description: Variable references $(VAR_NAME)
-                                            are expanded using the previous defined
-                                            environment variables in the
+                                            are expanded using the previously defined
+                                            environment variables in t
                                           type: string
                                         valueFrom:
                                           description: Source for the environment
@@ -5765,9 +6330,8 @@ spec:
                                           after a container is created.
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -5828,8 +6392,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -5855,9 +6418,8 @@ spec:
                                           an API request or management e
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -5918,8 +6480,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -5945,9 +6506,8 @@ spec:
                                       Container will be restarted if the probe fails.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -5963,6 +6523,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -6044,6 +6621,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -6101,9 +6684,8 @@ spec:
                                       readiness.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -6119,6 +6701,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -6200,6 +6799,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -6234,8 +6839,8 @@ spec:
                                         type: object
                                     type: object
                                   securityContext:
-                                    description: 'Security options the pod should
-                                      run with. More info: https://kubernetes.'
+                                    description: SecurityContext defines the security
+                                      options the container should be run with.
                                     properties:
                                       allowPrivilegeEscalation:
                                         description: AllowPrivilegeEscalation controls
@@ -6337,6 +6942,11 @@ spec:
                                               the name of the GMSA credential spec
                                               to use.
                                             type: string
+                                          hostProcess:
+                                            description: HostProcess determines if
+                                              a container should be run as a 'Host
+                                              Process' container.
+                                            type: boolean
                                           runAsUserName:
                                             description: The UserName in Windows to
                                               run the entrypoint of the container
@@ -6349,9 +6959,8 @@ spec:
                                       has successfully initialized.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -6367,6 +6976,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -6448,6 +7074,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -6589,9 +7221,9 @@ spec:
                               description: List of ephemeral containers run in this
                                 pod.
                               items:
-                                description: An EphemeralContainer is a container
-                                  that may be added temporarily to an existing pod
-                                  for user-initi
+                                description: An EphemeralContainer is a temporary
+                                  container that you may add to an existing Pod for
+                                  user-initiate
                                 properties:
                                   args:
                                     description: Arguments to the entrypoint. The
@@ -6618,8 +7250,8 @@ spec:
                                           type: string
                                         value:
                                           description: Variable references $(VAR_NAME)
-                                            are expanded using the previous defined
-                                            environment variables in the
+                                            are expanded using the previously defined
+                                            environment variables in t
                                           type: string
                                         valueFrom:
                                           description: Source for the environment
@@ -6765,9 +7397,8 @@ spec:
                                           after a container is created.
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -6828,8 +7459,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -6855,9 +7485,8 @@ spec:
                                           an API request or management e
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -6918,8 +7547,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -6945,9 +7573,8 @@ spec:
                                       containers.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -6963,6 +7590,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -7044,6 +7688,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -7092,14 +7742,17 @@ spec:
                                       - containerPort
                                       type: object
                                     type: array
+                                    x-kubernetes-list-map-keys:
+                                    - containerPort
+                                    - protocol
+                                    x-kubernetes-list-type: map
                                   readinessProbe:
                                     description: Probes are not allowed for ephemeral
                                       containers.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -7115,6 +7768,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -7196,6 +7866,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -7230,8 +7906,9 @@ spec:
                                         type: object
                                     type: object
                                   securityContext:
-                                    description: SecurityContext is not allowed for
-                                      ephemeral containers.
+                                    description: 'Optional: SecurityContext defines
+                                      the security options the ephemeral container
+                                      should be run with.'
                                     properties:
                                       allowPrivilegeEscalation:
                                         description: AllowPrivilegeEscalation controls
@@ -7333,6 +8010,11 @@ spec:
                                               the name of the GMSA credential spec
                                               to use.
                                             type: string
+                                          hostProcess:
+                                            description: HostProcess determines if
+                                              a container should be run as a 'Host
+                                              Process' container.
+                                            type: boolean
                                           runAsUserName:
                                             description: The UserName in Windows to
                                               run the entrypoint of the container
@@ -7345,9 +8027,8 @@ spec:
                                       containers.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -7363,6 +8044,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -7444,6 +8142,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -7501,7 +8205,7 @@ spec:
                                     type: array
                                   volumeMounts:
                                     description: Pod volumes to mount into the container's
-                                      filesystem. Cannot be updated.
+                                      filesystem.
                                     items:
                                       description: VolumeMount describes a mounting
                                         of a Volume within a container.
@@ -7629,8 +8333,8 @@ spec:
                                           type: string
                                         value:
                                           description: Variable references $(VAR_NAME)
-                                            are expanded using the previous defined
-                                            environment variables in the
+                                            are expanded using the previously defined
+                                            environment variables in t
                                           type: string
                                         valueFrom:
                                           description: Source for the environment
@@ -7777,9 +8481,8 @@ spec:
                                           after a container is created.
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -7840,8 +8543,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -7867,9 +8569,8 @@ spec:
                                           an API request or management e
                                         properties:
                                           exec:
-                                            description: One and only one of the following
-                                              should be specified. Exec specifies
-                                              the action to take.
+                                            description: Exec specifies the action
+                                              to take.
                                             properties:
                                               command:
                                                 description: 'Command is the command
@@ -7930,8 +8631,7 @@ spec:
                                             - port
                                             type: object
                                           tcpSocket:
-                                            description: TCPSocket specifies an action
-                                              involving a TCP port.
+                                            description: Deprecated.
                                             properties:
                                               host:
                                                 description: 'Optional: Host name
@@ -7957,9 +8657,8 @@ spec:
                                       Container will be restarted if the probe fails.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -7975,6 +8674,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -8056,6 +8772,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -8113,9 +8835,8 @@ spec:
                                       readiness.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -8131,6 +8852,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -8212,6 +8950,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -8246,8 +8990,8 @@ spec:
                                         type: object
                                     type: object
                                   securityContext:
-                                    description: 'Security options the pod should
-                                      run with. More info: https://kubernetes.'
+                                    description: SecurityContext defines the security
+                                      options the container should be run with.
                                     properties:
                                       allowPrivilegeEscalation:
                                         description: AllowPrivilegeEscalation controls
@@ -8349,6 +9093,11 @@ spec:
                                               the name of the GMSA credential spec
                                               to use.
                                             type: string
+                                          hostProcess:
+                                            description: HostProcess determines if
+                                              a container should be run as a 'Host
+                                              Process' container.
+                                            type: boolean
                                           runAsUserName:
                                             description: The UserName in Windows to
                                               run the entrypoint of the container
@@ -8361,9 +9110,8 @@ spec:
                                       has successfully initialized.
                                     properties:
                                       exec:
-                                        description: One and only one of the following
-                                          should be specified. Exec specifies the
-                                          action to take.
+                                        description: Exec specifies the action to
+                                          take.
                                         properties:
                                           command:
                                             description: 'Command is the command line
@@ -8379,6 +9127,23 @@ spec:
                                           having succeeded.
                                         format: int32
                                         type: integer
+                                      grpc:
+                                        description: GRPC specifies an action involving
+                                          a GRPC port.
+                                        properties:
+                                          port:
+                                            description: Port number of the gRPC service.
+                                              Number must be in the range 1 to 65535.
+                                            format: int32
+                                            type: integer
+                                          service:
+                                            description: Service is the name of the
+                                              service to place in the gRPC HealthCheckRequest
+                                              (see https://github.
+                                            type: string
+                                        required:
+                                        - port
+                                        type: object
                                       httpGet:
                                         description: HTTPGet specifies the http request
                                           to perform.
@@ -8460,6 +9225,12 @@ spec:
                                         required:
                                         - port
                                         type: object
+                                      terminationGracePeriodSeconds:
+                                        description: Optional duration in seconds
+                                          the pod needs to terminate gracefully upon
+                                          probe failure.
+                                        format: int64
+                                        type: integer
                                       timeoutSeconds:
                                         description: Number of seconds after which
                                           the probe times out. Defaults to 1 second.
@@ -8568,6 +9339,18 @@ spec:
                                 type: string
                               description: NodeSelector is a selector which must be
                                 true for the pod to fit on a node.
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            os:
+                              description: Specifies the OS of the containers in the
+                                pod.
+                              properties:
+                                name:
+                                  description: Name is the name of the operating system.
+                                    The currently supported values are linux and windows.
+                                  type: string
+                              required:
+                              - name
                               type: object
                             overhead:
                               additionalProperties:
@@ -8720,6 +9503,10 @@ spec:
                                       description: GMSACredentialSpecName is the name
                                         of the GMSA credential spec to use.
                                       type: string
+                                    hostProcess:
+                                      description: HostProcess determines if a container
+                                        should be run as a 'Host Process' container.
+                                      type: boolean
                                     runAsUserName:
                                       description: The UserName in Windows to run
                                         the entrypoint of the container process.
@@ -9190,13 +9977,8 @@ spec:
                                     type: object
                                   ephemeral:
                                     description: Ephemeral represents a volume that
-                                      is handled by a cluster storage driver (Alpha
-                                      feature).
+                                      is handled by a cluster storage driver.
                                     properties:
-                                      readOnly:
-                                        description: Specifies a read-only configuration
-                                          for the volume. Defaults to false (read/write).
-                                        type: boolean
                                       volumeClaimTemplate:
                                         description: Will be used to create a stand-alone
                                           PVC to provision the volume.
@@ -9255,10 +10037,32 @@ spec:
                                                 - kind
                                                 - name
                                                 type: object
+                                              dataSourceRef:
+                                                description: Specifies the object
+                                                  from which to populate the volume
+                                                  with data, if a non-empty volume
+                                                  is desired.
+                                                properties:
+                                                  apiGroup:
+                                                    description: APIGroup is the group
+                                                      for the resource being referenced.
+                                                    type: string
+                                                  kind:
+                                                    description: Kind is the type
+                                                      of resource being referenced
+                                                    type: string
+                                                  name:
+                                                    description: Name is the name
+                                                      of resource being referenced
+                                                    type: string
+                                                required:
+                                                - kind
+                                                - name
+                                                type: object
                                               resources:
-                                                description: 'Resources represents
+                                                description: Resources represents
                                                   the minimum resources the volume
-                                                  should have. More info: https://kubernetes.'
+                                                  should have.
                                                 properties:
                                                   limits:
                                                     additionalProperties:
@@ -9857,8 +10661,6 @@ spec:
                                               type: object
                                           type: object
                                         type: array
-                                    required:
-                                    - sources
                                     type: object
                                   quobyte:
                                     description: Quobyte represents a Quobyte mount
