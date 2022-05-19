@@ -23,51 +23,60 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 };
 
 service ComputeTemplateService {
-  // Creates a new Cluster.
+  // Creates a new compute template.
   rpc CreateComputeTemplate(CreateComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
-      post: "/apis/v1alpha1/compute_templates"
+      post: "/apis/v1alpha2/compute_templates"
       body: "compute_template"
     };
   }
 
-  // Finds a specific Cluster by ID.
+  // Finds a specific compute template by its name and namespace.
   rpc GetComputeTemplate(GetComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/compute_templates/{id}"
+      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
     };
   }
 
-  // Finds all Clusters. Supports pagination, and sorting on certain fields.
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/compute_templates"
+      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates"
     };
   }
 
-  // Deletes an Cluster without deleting the Cluster's runs and jobs. To
-  // avoid unexpected behaviors, delete an Cluster's runs and jobs before
-  // deleting the Cluster.
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/compute_templates"
+    };
+  }
+
+  // Deletes a compuate template by its name and namespace 
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/compute_templates/{id}"
+      delete: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
     };
   }
 }
 
 message CreateComputeTemplateRequest {
-  // The ComputeTemplate to be created.
+  // The compute template to be created.
   ComputeTemplate compute_template = 1;
+  // The namespace of the compute template to be created
+  string namespace = 2;
 }
 
 message GetComputeTemplateRequest {
-  // The ID of the ComputeTemplate to be retrieved. reserved field for database layer query later
-  string id = 1;
   // The name of the ComputeTemplate to be retrieved.
-  string name = 2;
+  string name = 1;
+  // The namespace of the compute template to be retrieved.
+  string namespace = 2;
 }
 
 message ListComputeTemplatesRequest {
+  // The namespace of the compute templates to be retrieved. 
+  string namespace = 1;
   // TODO: support paganation later
 }
 
@@ -75,19 +84,27 @@ message ListComputeTemplatesResponse {
   repeated ComputeTemplate compute_templates = 1;
 }
 
+message ListAllComputeTemplatesRequest {
+  // TODO: support paganation later
+}
+
+message ListAllComputeTemplatesResponse {
+  repeated ComputeTemplate compute_templates = 1;
+}
+
 message DeleteComputeTemplateRequest {
-  // The ID of the ComputeTemplate to be deleted.
-  string id = 1;
-  // The name of the ComputeTemplate to be deleted.
-  string name = 2;
+  // The name of the compute template to be deleted.
+  string name = 1;
+  // The namespace of the compute template to be deleted.
+  string namespace = 2;
 }
 
 // ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
 message ComputeTemplate {
-  // The ID of the compute template
-  string id = 1;
   // The name of the compute template
-  string name = 2;
+  string name = 1;
+  // The namespace of the compute template
+  string namespace = 2;
   // Number of cpus
   uint32 cpu = 3;
   // Number of memory
@@ -103,7 +120,7 @@ service ImageTemplateService {
   // Creates a new ImageTemplate.
   rpc CreateImageTemplate(CreateImageTemplateRequest) returns (ImageTemplate) {
     option (google.api.http) = {
-      post: "/apis/v1alpha1/image_templates"
+      post: "/apis/v1alpha2/image_templates"
       body: "image_template"
     };
   }
@@ -111,38 +128,42 @@ service ImageTemplateService {
   // Finds a specific ImageTemplate by ID.
   rpc GetImageTemplate(GetImageTemplateRequest) returns (ImageTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/image_templates/{id}"
+      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
     };
   }
 
   // Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
   rpc ListImageTemplates(ListImageTemplatesRequest) returns (ListImageTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha1/image_templates"
+      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates"
     };
   }
 
   // Deletes an ImageTemplate.
   rpc DeleteImageTemplate(DeleteImageTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha1/image_templates/{id}"
+      delete: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
     };
   }
 }
 
 message CreateImageTemplateRequest {
-  // The Compute to be created.
+  // The image template to be created.
   ImageTemplate image_template = 1;
+  // The namespace of the image template to be created.
+  string namespace = 2;
 }
 
 message GetImageTemplateRequest {
-  // The ID of the ImageTemplate to be retrieved. reserved field for database layer query later
-  string id = 1;
-  // The name of the ImageTemplate to be retrieved.
-  string name = 2;
+  // The name of the image template to be retrieved.
+  string name = 1;
+  // The namespace of the image template to be retrieved.
+  string namespace = 2;
 }
 
 message ListImageTemplatesRequest {
+  // The namespace of the image templates to be retrieved.
+  string namespace = 1;
   // TODO: support pagingation later
 }
 
@@ -151,11 +172,20 @@ message ListImageTemplatesResponse {
   repeated ImageTemplate image_templates = 1;
 }
 
+message ListAllImageTemplatesRequest {
+  // TODO: support pagingation later
+}
+
+message ListAllImageTemplatesResponse {
+  // A list of Compute returned.
+  repeated ImageTemplate image_templates = 1;
+}
+
 message DeleteImageTemplateRequest {
-  // The ID of the ImageTemplate to be deleted.
-  string id = 1;
-  // The name of the ImageTemplate to be delete.
-  string name = 2;
+  // The name of the image template to be deleted.
+  string name = 1;
+  // The namespace of the image template to be deleted.
+  string namespace = 2;
 }
 
 // ImageTemplate can be used by worker group and workspce.
@@ -163,18 +193,20 @@ message DeleteImageTemplateRequest {
 message ImageTemplate {
   // The ID of the image template
   string name = 1;
+  // The namespace of the image template
+  string namespace = 2;
   // The base container image to be used for image building
-  string base_image = 2;
+  string base_image = 3;
   // The pip packages to install
-  repeated string pip_packages = 3;
+  repeated string pip_packages = 4;
   // The conda packages to install
-  repeated string conda_packages = 4;
+  repeated string conda_packages = 5;
   // The system packages to install
-  repeated string system_packages = 5;
+  repeated string system_packages = 6;
   // The environment variables to set
-  map<string, string> environment_variables = 6;
+  map<string, string> environment_variables = 7;
   // The post install commands to execute
-  string custom_commands = 7;
+  string custom_commands = 8;
   // Output. The result image generated
   string image = 9;
 }

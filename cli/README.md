@@ -95,17 +95,18 @@ Flags:
       --gpu-accelerator string   GPU Accelerator type
       --memory uint32            ray pod memory in GB (default 1)
       --name string              name of the compute template
+  -n, --namespace string         kubernetes namespace where the compute template will be stored
 
 ```
 
 #### Get a Ray Compute Template
-`./kuberay template compute get <compute template name>`
+`./kuberay template compute get -n <namespace> <compute template name>`
 
 #### List Ray Compute Templates
-`./kuberay template compute list`
+`./kuberay template compute list -n <namespace>`
 
 #### Delete a Ray Compute Template
-`./kuberay template compute delete <compute template name>`
+`./kuberay template compute delete -n <namespace> <compute template name>`
 
 ## End to end example
 
@@ -119,8 +120,8 @@ kubectl port-forward svc/kuberay-apiserver-service 8887:8887 -n ray-system
 Create compute templates
 
 ```
-./kuberay template compute create --cpu 2 --memory 4 --name "worker-template"
-./kuberay template compute create --cpu 1 --memory 2 --name "head-template"
+./kuberay template compute create -n <namespace> --cpu 2 --memory 4 --name "worker-template"
+./kuberay template compute create -n <namespace> --cpu 1 --memory 2 --name "head-template"
 ```
 
 List compute templates created
@@ -132,7 +133,7 @@ List compute templates created
 Create the cluster
 
 ```
-./kuberay cluster create --name test-cluster --user jiaxin.shan \
+./kuberay cluster create -n <namespace> --name test-cluster --user jiaxin.shan \
 --head-compute-template head-template \
 --head-image rayproject/ray:1.9.2 \
 --worker-group-name small-wg \
