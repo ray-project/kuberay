@@ -35,6 +35,18 @@ func NewReconciler(mgr manager.Manager) *RayServiceReconciler {
 //+kubebuilder:rbac:groups=rayservice.io,resources=rayservices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rayservice.io,resources=rayservices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=rayservice.io,resources=rayservices/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizer,verbs=update
+// +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=core,resources=serviceaccount,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

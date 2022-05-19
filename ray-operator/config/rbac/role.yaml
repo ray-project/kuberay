@@ -7,6 +7,15 @@ metadata:
   name: kuberay-operator
 rules:
 - apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
+- apiGroups:
   - ""
   resources:
   - events
@@ -45,8 +54,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - serviceaccount
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
-  - serviceaccounts
   verbs:
   - create
   - delete
@@ -116,45 +134,23 @@ rules:
   - patch
   - update
 - apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingressclasses
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - extensions
-  - networking.k8s.io
-  resources:
-  - ingresses
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - get
-  - list
-  - update
-- apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - roles
   - rolebindings
   verbs:
   - create
   - delete
   - get
   - list
-  - patch
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
   - update
   - watch
