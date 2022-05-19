@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster"
+	"github.com/ray-project/kuberay/ray-operator/controllers/rayservice"
 
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayservicev1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/rayservice/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -31,6 +33,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayiov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(rayservicev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -87,6 +90,10 @@ func main() {
 
 	if err = raycluster.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RayCluster")
+		os.Exit(1)
+	}
+	if err = rayservice.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RayService")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

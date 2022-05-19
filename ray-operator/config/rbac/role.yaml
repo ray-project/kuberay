@@ -56,6 +56,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - ray.io
   resources:
   - rayclusters
@@ -70,7 +78,39 @@ rules:
 - apiGroups:
   - ray.io
   resources:
+  - rayclusters/finalizer
+  verbs:
+  - update
+- apiGroups:
+  - ray.io
+  resources:
   - rayclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rayservice.io
+  resources:
+  - rayservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rayservice.io
+  resources:
+  - rayservices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rayservice.io
+  resources:
+  - rayservices/status
   verbs:
   - get
   - patch
