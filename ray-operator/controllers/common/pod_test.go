@@ -259,7 +259,7 @@ func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 }
 
 func TestBuildAutoscalerContainer(t *testing.T) {
-	actualContainer := BuildAutoscalerContainer(DefaultRedisPassword)
+	actualContainer := BuildAutoscalerContainer()
 	expectedContainer := autoscalerContainer
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
