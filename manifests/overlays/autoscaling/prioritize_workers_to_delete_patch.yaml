@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kuberay-operator
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - args: --prioritize-workers-to-delete
+
+  type: NodePort
