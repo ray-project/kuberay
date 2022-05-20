@@ -11,8 +11,12 @@ You can follow below steps for a quick deployment.
 git clone https://github.com/ray-project/kuberay.git
 cd kuberay
 kubectl apply -k manifests/cluster-scope-resources
-kubectl apply -k manifests/base
+kubectl apply -k manifests/overlays/autoscaling
 ```
+
+> Note: For compatibility with the Ray autoscaler, the KubeRay Operator's entrypoint
+> must include the flag `--prioritize-workers-to-delete`. The kustomization overlay
+> `manifests/overlays/autoscaling` provided in the last command above adds the necessary flag.
 
 ### Deploy a cluster with autoscaling enabled
 
@@ -69,11 +73,10 @@ Demands:
       enableInTreeAutoscaling: true
     ```
 
-2. head and work images are `rayproject/ray:413fe0`. This image was built based on [commit](https://github.com/ray-project/ray/commit/413fe08f8744d50b439717564709bc0af2f778f1) from master branch. 
-The reason we need to use a nightly version is because autoscaler needs to connect to Ray cluster. Due to ray [version requirements](https://docs.ray.io/en/latest/cluster/ray-client.html#versioning-requirements).
-We determine to use nightly version to make sure integration is working.
+2. The autoscaler image is `rayproject/ray:448f52` which reflects the latest changes from [Ray PR #24718](https://github.com/ray-project/ray/pull/24718/files) in the master branch.
 
-3. Autoscaler image is `kuberay/autoscaler:nightly` which is built from [commit](https://github.com/ray-project/ray/pull/22689/files).
+3. Autoscaling functionality is supported only for Ray version at least as new as 1.11.0. The autoscaler image used
+is compatible with all Ray versions >= 1.11.0.
 
 ### Test autoscaling
 

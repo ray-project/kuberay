@@ -1,3 +1,5 @@
+# This overlay patches in KubeRay operator configuration
+# necessary for Ray Autoscaler support.
 bases:
 - ../../base
 patches:
