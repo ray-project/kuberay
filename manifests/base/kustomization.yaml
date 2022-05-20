@@ -11,7 +11,7 @@ resources:
 images:
 - name: kuberay/apiserver
   newName: kuberay/apiserver
-  newTag: nightly  
+  newTag: nightly
 - name: kuberay/operator
   newName: kuberay/operator
   newTag: nightly
