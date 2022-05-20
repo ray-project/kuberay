@@ -150,7 +150,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	return pod
 }
 
-// BuildAutoscalerContainer build a ray autoscaler container which can be appended to head pod.
+// BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
 func BuildAutoscalerContainer() v1.Container {
 	container := v1.Container{
 		Name: "autoscaler",
@@ -177,10 +177,9 @@ func BuildAutoscalerContainer() v1.Container {
 			},
 		},
 		Command: []string{
-			"/home/ray/anaconda3/bin/python",
+			"ray",
 		},
 		Args: []string{
-			"ray",
 			"kuberay-autoscaler",
 			"--cluster-name",
 			"$(RAY_CLUSTER_NAME)",

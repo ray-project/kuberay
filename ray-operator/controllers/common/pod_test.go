@@ -130,10 +130,9 @@ var autoscalerContainer = v1.Container{
 		},
 	},
 	Command: []string{
-		"/home/ray/anaconda3/bin/python",
+		"ray",
 	},
 	Args: []string{
-		"ray",
 		"kuberay-autoscaler",
 		"--cluster-name",
 		"$(RAY_CLUSTER_NAME)",
