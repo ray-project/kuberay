@@ -54,7 +54,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		}
 
 		// inject autoscaler pod into head pod
-		container := BuildAutoscalerContainer(redisPasswd)
+		container := BuildAutoscalerContainer()
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
 		// set custom service account which can be authorized to talk with apiserver
 		podTemplate.Spec.ServiceAccountName = instance.Name
@@ -159,11 +159,12 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 }
 
 // BuildAutoscalerContainer build a ray autoscaler container which can be appended to head pod.
-func BuildAutoscalerContainer(redisPasswd string) v1.Container {
+func BuildAutoscalerContainer() v1.Container {
 	container := v1.Container{
 		Name: "autoscaler",
 		// TODO: choose right version based on instance.spec.Version
-		Image:           "kuberay/autoscaler:nightly",
+		// Current image reflects changes up to https://github.com/ray-project/ray/pull/24718
+		Image:           "rayproject/ray:448f52",
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
@@ -187,13 +188,12 @@ func BuildAutoscalerContainer(redisPasswd string) v1.Container {
 			"/home/ray/anaconda3/bin/python",
 		},
 		Args: []string{
-			"/home/ray/run_autoscaler_with_retries.py",
+			"ray",
+			"kuberay-autoscaler",
 			"--cluster-name",
 			"$(RAY_CLUSTER_NAME)",
 			"--cluster-namespace",
 			"$(RAY_CLUSTER_NAMESPACE)",
-			"--redis-password",
-			redisPasswd,
 		},
 		// TODO: make resource requirement configurable.
 		Resources: v1.ResourceRequirements{

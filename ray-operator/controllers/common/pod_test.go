@@ -109,7 +109,7 @@ var instance = rayiov1alpha1.RayCluster{
 
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
-	Image:           "kuberay/autoscaler:nightly",
+	Image:           "rayproject/ray:448f52",
 	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{
@@ -133,13 +133,12 @@ var autoscalerContainer = v1.Container{
 		"/home/ray/anaconda3/bin/python",
 	},
 	Args: []string{
-		"/home/ray/run_autoscaler_with_retries.py",
+		"ray",
+		"kuberay-autoscaler",
 		"--cluster-name",
 		"$(RAY_CLUSTER_NAME)",
 		"--cluster-namespace",
 		"$(RAY_CLUSTER_NAMESPACE)",
-		"--redis-password",
-		DefaultRedisPassword,
 	},
 	Resources: v1.ResourceRequirements{
 		Limits: v1.ResourceList{
