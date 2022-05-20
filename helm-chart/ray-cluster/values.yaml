@@ -14,9 +14,8 @@ imagePullSecrets: []
   # - name: an-existing-secret
 
 ray:
-  version: "1.11.0"
   autoscaler:
-    inTree: false
+    inTree: true
     serviceAccount:
       create: true
       name: autoscaler-sa
@@ -37,29 +36,29 @@ ray:
         name: log-volume
   head:
     replicas: 1
-    num_cpus: &headCPU 0 # Leave the at 0 if the head node should not do work.
+    num_cpus: &headCPU 1 # Set to 0 if the head node should not do work.
     groupName: headgroup
     type: head
-    dashboardPort: &dashPort 8265
+    dashboard:
+      access: true
+      port: 8265
     initArgs:
       port: '6379'
       dashboard-host: '0.0.0.0'
-      dashboard-port: *dashPort
       num-cpus: *headCPU  # can be auto-completed from the limits (leave at 0 for no work done on head node)
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
+      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
     ports:
-      - containerPort: 8265
-        protocol: TCP
       - containerPort: 6379
         protocol: TCP
     resources:
       limits:
         cpu: 1
-        memory: 5Gi
+        memory: 250Mi
       requests:
-        memory: 5Gi
         cpu: 200m
+        memory: 500Mi
     containerEnv: []
     envFrom: []
     labels: {}
@@ -78,7 +77,7 @@ ray:
     # groupName is equivalent to the key of the map it's under e.g. cpuWorker has groupName cpuWorker
     cpuWorker:
       # name must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-      containerName: cpu-machine-learning
+      containerName: ray-worker
       replicaCount: 1
       minReplicas: 1
       maxReplicas: 300
@@ -93,6 +92,7 @@ ray:
         node-ip-address: $MY_POD_IP
         block: 'true'
         num-cpus: $CPU_LIMITS
+        redis-password: LetMeInRay
       containerEnv: []
       envFrom: []
       labels: {}
@@ -110,48 +110,49 @@ ray:
         - name: log-volume
           emptyDir: {}
 
-    # Example gpu worker group for more details see:
-    # https://docs.ray.io/en/latest/cluster/kubernetes-gpu.html
-    gpuWorker:
-      # name must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-      containerName: gpu-machine-learning
-      replicaCount: 1
-      minReplicas: 1
-      maxReplicas: 3
-      resources:
-        requests:
-          cpu: 29
-          memory: 100Gi
-        limits:
-          cpu: 29
-          memory: 100Gi
-          nvidia.com/gpu: 1
-      initArgs:
-        node-ip-address: $MY_POD_IP
-        block: 'true'
-        num-cpus: $CPU_LIMITS
-        num-gpus: '1'
-      nodeSelector:
-        node.kubernetes.io/instance-type: g4dn.8xlarge
-        spot: "yes"
-      tolerations:
-        - effect: NoSchedule
-          key: nvidia.com/gpu
-          operator: Exists
-      containerEnv: []
-      envFrom: []
-      labels: {}
-      annotations: {}
-      affinity: {}
-      ports:
-        - containerPort: 80
-          protocol: TCP
-      volumeMounts:
-        - mountPath: /tmp/ray
-          name: log-volume
-      volumes:
-        - name: log-volume
-          emptyDir: {}
+    # Uncomment below for a GPU worker example with AWS
+    # # Example gpu worker group for more details see:
+    # # https://docs.ray.io/en/latest/cluster/kubernetes-gpu.html
+    # gpuWorker:
+    #   # name must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+    #   containerName: ray-gpu-worker
+    #   replicaCount: 1
+    #   minReplicas: 1
+    #   maxReplicas: 3
+    #   resources:
+    #     requests:
+    #       cpu: 29
+    #       memory: 100Gi
+    #     limits:
+    #       cpu: 29
+    #       memory: 100Gi
+    #       nvidia.com/gpu: 1
+    #   initArgs:
+    #     node-ip-address: $MY_POD_IP
+    #     block: 'true'
+    #     num-cpus: $CPU_LIMITS
+    #     num-gpus: '1'
+    #   nodeSelector:
+    #     node.kubernetes.io/instance-type: g4dn.8xlarge
+    #     spot: "yes"
+    #   tolerations:
+    #     - effect: NoSchedule
+    #       key: nvidia.com/gpu
+    #       operator: Exists
+    #   containerEnv: []
+    #   envFrom: []
+    #   labels: {}
+    #   annotations: {}
+    #   affinity: {}
+    #   ports:
+    #     - containerPort: 80
+    #       protocol: TCP
+    #   volumeMounts:
+    #     - mountPath: /tmp/ray
+    #       name: log-volume
+    #   volumes:
+    #     - name: log-volume
+    #       emptyDir: {}
 
 # This does not seem to be in use yet.
 headServiceSuffix: "ray-operator.svc"

@@ -1,8 +1,8 @@
 {{- define "{{ .Chart.Name }}.head.env" }}
 - name: CPU_REQUEST
-  value: {{ .Values.ray.head.num_cpus }}
+  value: "{{ .Values.ray.head.num_cpus }}"
 - name: CPU_LIMITS
-  value: {{ .Values.ray.head.num_cpus }}
+  value: "{{ .Values.ray.head.num_cpus }}"
 - name: MEMORY_LIMITS
   valueFrom:
     resourceFieldRef:
@@ -19,8 +19,6 @@
       fieldPath: status.podIP
 - name: TYPE
   value: head
-- name: AUTOSCALER_HEARTBEAT_TIMEOUT_S
-  value: "240"
 {{ if .Values.ray.head.containerEnv }}
 {{- toYaml .Values.ray.head.containerEnv }}
 {{ end }}

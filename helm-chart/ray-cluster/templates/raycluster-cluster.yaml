@@ -5,20 +5,22 @@ metadata:
 {{ include "ray-cluster.labels" . | indent 4 }}
   name: {{ include "ray-cluster.fullname" . }}
 spec:
-  rayVersion: {{ .Values.ray.version }}
+  {{- if not .Values.ray.autoscaler.inTree }}
   enableInTreeAutoscaling: {{ .Values.ray.autoscaler.inTree }}
+  {{- end }}
   headGroupSpec:
     serviceType: ClusterIP
     # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
     replicas: {{ .Values.ray.head.replicas }}
     rayStartParams:
-      {{- if .Values.ray.autoscaler.inTree }}
-        no-monitor: "true"
-      {{- else }}
-        no-monitor: "false"
-      {{- end }}
+      {{ if not .Values.ray.autoscaler.inTree }}
+      no-monitor: "false"
+      {{ end }}
+      {{- if .Values.ray.head.dashboard.access }}
+      dashboard-port: {{ .Values.ray.head.dashboard.port }}
+      {{ end }}
       {{- range $key, $val := .Values.ray.head.initArgs }}
-        {{ $key }}: {{ $val | quote }}
+      {{ $key }}: {{ $val | quote }}
       {{- end }}
     template:
       metadata:
@@ -50,7 +52,12 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.ray.head.resources | nindent 14 }}
             env: {{- include "{{ .Chart.Name }}.head.env" . | indent 14 }}
-            ports: {{- toYaml .Values.ray.head.ports | nindent 14 }}
+            ports:
+              {{ if .Values.ray.head.dashboard.access }}
+              - containerPort: {{ .Values.ray.head.dashboard.port }}
+                protocol: TCP
+              {{ end }}
+              {{- toYaml .Values.ray.head.ports | nindent 14 }}
             {{- include "{{ .Chart.Name }}.lifecycle" . | indent 10 }}
             volumeMounts: {{- toYaml .Values.ray.head.volumeMounts | nindent 14 -}}
          {{- if not .Values.ray.autoscaler.inTree -}}
