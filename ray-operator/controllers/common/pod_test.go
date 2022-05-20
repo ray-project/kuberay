@@ -226,14 +226,6 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 		t.Fatalf("Expected `%v` in `%v` but doesn't have the config", expectedResult, pod.Spec.Containers[0].Args[0])
 	}
 
-	actualResult = cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"]
-	targetContainer, err := utils.FilterContainerByName(pod.Spec.Containers, "autoscaler")
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-	if !utils.Contains(targetContainer.Args, actualResult) {
-		t.Fatalf("Expected redis password `%v` in `%v` but not found", targetContainer.Args, actualResult)
-	}
 }
 
 func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
