@@ -25,7 +25,7 @@ var instance = rayiov1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
-		RayVersion: "1.0.0",
+		RayVersion: "12.0.1",
 		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 			ServiceType: "ClusterIP",
 			Replicas:    pointer.Int32Ptr(1),
@@ -49,7 +49,7 @@ var instance = rayiov1alpha1.RayCluster{
 					Containers: []v1.Container{
 						{
 							Name:  "ray-head",
-							Image: "rayproject/ray:1.0.0",
+							Image: "rayproject/ray:12.0.1",
 							Env: []v1.EnvVar{
 								{
 									Name: "MY_POD_IP",
