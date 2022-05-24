@@ -8,7 +8,7 @@ const (
 	RayNodeLabelKey      = "ray.io/is-ray-node"
 	RayIDLabelKey        = "ray.io/identifier"
 
-	// Use as separator for pod name, for example, ray-small-size-worker-0
+	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 
 	// Use as default port

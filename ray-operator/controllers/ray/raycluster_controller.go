@@ -511,9 +511,9 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	svcName := utils.GenerateServiceName(instance.Name)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
 	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
-	// Set ray instance as the owner and controller
+	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
-		log.Error(err, "Failed to set controller reference for ray pod")
+		log.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
 	return pod
