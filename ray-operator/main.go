@@ -70,7 +70,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
-	if controllers.PrioritizeWorkersToDelete {
+	if raycluster.PrioritizeWorkersToDelete {
 		setupLog.Info("Feature flag prioritize-workers-to-delete is enabled.")
 	}
 
