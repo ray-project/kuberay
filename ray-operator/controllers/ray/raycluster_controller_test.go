@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package raycluster
+package ray
 
 import (
 	"context"
@@ -21,12 +21,12 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -50,7 +50,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	myRayCluster := &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "raycluster-sample",
+			Name:      "ray-sample",
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayClusterSpec{
@@ -131,13 +131,13 @@ var _ = Context("Inside the default namespace", func() {
 
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
 
-	Describe("When creating a raycluster", func() {
-		It("should create a raycluster object", func() {
+	Describe("When creating a ray", func() {
+		It("should create a ray object", func() {
 			err := k8sClient.Create(ctx, myRayCluster)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayCluster resource")
 		})
 
-		It("should see a raycluster object", func() {
+		It("should see a ray object", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -146,7 +146,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: "raycluster-sample-head-svc", Namespace: "default"}, svc),
+				getResourceFunc(ctx, client.ObjectKey{Name: "ray-sample-head-svc", Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
 		})
@@ -202,11 +202,11 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
-		It("should update a raycluster object deleting a random pod", func() {
+		It("should update a ray object deleting a random pod", func() {
 			// adding a scale down
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My ray = %v", myRayCluster)
 			rep := new(int32)
 			*rep = 2
 			myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
@@ -227,11 +227,11 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
-		It("should update a raycluster object", func() {
+		It("should update a ray object", func() {
 			// adding a scale strategy
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My ray = %v", myRayCluster)
 
 			podToDelete1 := workerPods.Items[0]
 			rep := new(int32)

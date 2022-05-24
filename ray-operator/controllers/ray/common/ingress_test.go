@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	"github.com/stretchr/testify/assert"
 
@@ -17,7 +17,7 @@ import (
 
 var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "ray-sample",
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
@@ -45,7 +45,7 @@ var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 
 var instanceWithIngressEnabledWithoutIngressClass = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "ray-sample",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{

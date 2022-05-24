@@ -1,4 +1,4 @@
-package raycluster
+package ray
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
-	_ "github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	log                       = logf.Log.WithName("raycluster-controller")
+	log                       = logf.Log.WithName("ray-controller")
 	DefaultRequeueDuration    = 2 * time.Second
 	PrioritizeWorkersToDelete bool
 )
@@ -48,7 +48,7 @@ func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
+		Recorder: mgr.GetEventRecorderFor("ray-controller"),
 	}
 }
 
@@ -79,7 +79,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("raycluster", request.NamespacedName)
+	_ = r.Log.WithValues("ray", request.NamespacedName)
 	log.Info("reconciling RayCluster", "cluster name", request.Name)
 
 	// Fetch the RayCluster instance
@@ -496,9 +496,9 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
 	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
-	// Set raycluster instance as the owner and controller
+	// Set ray instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
-		log.Error(err, "Failed to set controller reference for raycluster pod")
+		log.Error(err, "Failed to set controller reference for ray pod")
 	}
 
 	return pod
@@ -511,9 +511,9 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	svcName := utils.GenerateServiceName(instance.Name)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
 	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
-	// Set raycluster instance as the owner and controller
+	// Set ray instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
-		log.Error(err, "Failed to set controller reference for raycluster pod")
+		log.Error(err, "Failed to set controller reference for ray pod")
 	}
 
 	return pod
@@ -522,7 +522,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 // SetupWithManager builds the reconciler.
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
+		For(&rayiov1alpha1.RayCluster{}).Named("ray-controller").
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},

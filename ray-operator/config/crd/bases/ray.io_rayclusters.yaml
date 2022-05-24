@@ -13,7 +13,7 @@ spec:
     kind: RayCluster
     listKind: RayClusterList
     plural: rayclusters
-    singular: raycluster
+    singular: ray
   scope: Namespaced
   versions:
   - name: v1alpha1

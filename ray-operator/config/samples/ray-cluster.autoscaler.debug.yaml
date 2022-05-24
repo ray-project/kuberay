@@ -6,7 +6,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # An unique identifier for the head node and workers of this cluster.
-  name: raycluster-complete
+  name: ray-complete
 spec:
   rayVersion: '1.9.2'
   enableInTreeAutoscaling: false
@@ -96,7 +96,7 @@ spec:
             # This value must match the metadata.name of the RayCluster CR.
             # The autoscaler uses this env variable to determine which Ray CR to interact with.
             # TODO: Match with CR name automatically via operator, Helm, and/or Kustomize.
-            value: raycluster-complete
+            value: ray-complete
           command: ["/home/ray/anaconda3/bin/python"]
           args:
           - "/home/ray/run_autoscaler_with_retries.py"
@@ -133,9 +133,9 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - raycluster-complete-worker-small-group-bdtwh
-    #  - raycluster-complete-worker-small-group-hv457
-    #  - raycluster-complete-worker-small-group-k8tj7
+    #  - ray-complete-worker-small-group-bdtwh
+    #  - ray-complete-worker-small-group-hv457
+    #  - ray-complete-worker-small-group-k8tj7
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       redis-password: '5241590000000000'

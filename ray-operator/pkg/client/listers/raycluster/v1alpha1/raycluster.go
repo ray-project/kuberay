@@ -3,7 +3,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	v1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
@@ -77,7 +77,7 @@ func (s rayClusterNamespaceLister) Get(name string) (*v1alpha1.RayCluster, error
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("raycluster"), name)
+		return nil, errors.NewNotFound(v1alpha1.Resource("ray"), name)
 	}
 	return obj.(*v1alpha1.RayCluster), nil
 }

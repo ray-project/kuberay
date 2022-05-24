@@ -7,19 +7,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
 
 var instance = rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "ray-sample",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
@@ -39,7 +39,7 @@ var instance = rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
-						"ray.io/cluster": "raycluster-sample",
+						"ray.io/cluster": "ray-sample",
 						"ray.io/group":   "headgroup",
 					},
 				},
@@ -79,7 +79,7 @@ var instance = rayiov1alpha1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
 						Labels: map[string]string{
-							"ray.io/cluster": "raycluster-sample",
+							"ray.io/cluster": "ray-sample",
 							"ray.io/group":   "small-group",
 						},
 					},
@@ -191,7 +191,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --address=ray-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
 	}

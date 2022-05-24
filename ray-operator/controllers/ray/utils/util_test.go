@@ -5,7 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -61,7 +61,7 @@ func createSomePod() (pod *corev1.Pod) {
 			Kind:       "Pod",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "raycluster-sample-small-group-worker-0",
+			Name:      "ray-sample-small-group-worker-0",
 			Namespace: "default",
 		},
 	}
@@ -75,7 +75,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		"Ray cluster with head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "raycluster-sample",
+					Name:      "ray-sample",
 					Namespace: "default",
 				},
 				Spec: rayiov1alpha1.RayClusterSpec{
@@ -93,7 +93,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		"Ray cluster without head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "raycluster-sample",
+					Name:      "ray-sample",
 					Namespace: "default",
 				},
 				Spec: rayiov1alpha1.RayClusterSpec{
@@ -104,7 +104,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 					},
 				},
 			},
-			want: "raycluster-sample",
+			want: "ray-sample",
 		},
 	}
 

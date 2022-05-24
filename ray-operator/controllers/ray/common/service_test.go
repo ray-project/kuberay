@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	"github.com/stretchr/testify/assert"
 
@@ -15,7 +15,7 @@ import (
 
 var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "ray-sample",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
@@ -34,7 +34,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
-						"rayCluster": "raycluster-sample",
+						"rayCluster": "ray-sample",
 						"groupName":  "headgroup",
 					},
 				},

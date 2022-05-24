@@ -4,7 +4,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # An unique identifier for the head node and workers of this cluster.
-  name: raycluster-heterogeneous
+  name: ray-heterogeneous
 spec:
   rayVersion: '1.8.0'
   ######################headGroupSpecs#################################
@@ -32,9 +32,9 @@ spec:
     template:
       metadata:
         labels:
-          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
+          # custom labels. NOTE: do not define custom labels start with `ray.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: raycluster-heterogeneous # will be injected if missing
+          rayCluster: ray-heterogeneous # will be injected if missing
           rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod
@@ -92,7 +92,7 @@ spec:
     template:
       metadata:
         labels:
-          rayCluster: raycluster-heterogeneous # will be injected if missing
+          rayCluster: ray-heterogeneous # will be injected if missing
           rayNodeType: worker # will be injected if missing
           groupName: small-group # will be injected if missing
         # annotations for pod
@@ -156,7 +156,7 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
 #    scaleStrategy:
 #      workersToDelete:
-      #- raycluster-heterogeneous-worker-medium-group-7bv5h
+      #- ray-heterogeneous-worker-medium-group-7bv5h
     #  - worker-4k2ih 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
@@ -167,7 +167,7 @@ spec:
     template:
       metadata:
         labels:
-          rayCluster: raycluster-heterogeneous # will be injected if missing
+          rayCluster: ray-heterogeneous # will be injected if missing
           rayNodeType: worker # will be injected if missing
         # annotations for pod
         annotations:
@@ -177,7 +177,7 @@ spec:
         - name: init-myservice
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup raycluster-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+          command: ['sh', '-c', "until nslookup ray-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
           image: rayproject/ray:1.8.0
