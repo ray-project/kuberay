@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
-  name: ray-ingress
+  name: raycluster-ingress
 spec:
   rayVersion: '1.6.0' # should match the Ray version in the image of the containers
   headGroupSpec:

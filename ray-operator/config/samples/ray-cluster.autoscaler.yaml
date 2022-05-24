@@ -6,7 +6,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # An unique identifier for the head node and workers of this cluster.
-  name: ray-autoscaler
+  name: raycluster-autoscaler
 spec:
   rayVersion: 'nightly'
   enableInTreeAutoscaling: true
@@ -99,9 +99,9 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - ray-complete-worker-small-group-bdtwh
-    #  - ray-complete-worker-small-group-hv457
-    #  - ray-complete-worker-small-group-k8tj7
+    #  - raycluster-complete-worker-small-group-bdtwh
+    #  - raycluster-complete-worker-small-group-hv457
+    #  - raycluster-complete-worker-small-group-k8tj7
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       #redis-password: '5241590000000000'

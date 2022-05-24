@@ -17,7 +17,7 @@ import (
 
 var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "ray-sample",
+		Name:      "raycluster-sample",
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
@@ -45,7 +45,7 @@ var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 
 var instanceWithIngressEnabledWithoutIngressClass = &rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "ray-sample",
+		Name:      "raycluster-sample",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{

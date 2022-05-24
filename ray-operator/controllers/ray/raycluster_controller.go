@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	log                       = logf.Log.WithName("ray-controller")
+	log                       = logf.Log.WithName("raycluster-controller")
 	DefaultRequeueDuration    = 2 * time.Second
 	PrioritizeWorkersToDelete bool
 )
@@ -79,7 +79,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("ray", request.NamespacedName)
+	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	log.Info("reconciling RayCluster", "cluster name", request.Name)
 
 	// Fetch the RayCluster instance
@@ -496,9 +496,9 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
 	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
-	// Set ray instance as the owner and controller
+	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
-		log.Error(err, "Failed to set controller reference for ray pod")
+		log.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
 	return pod
@@ -522,7 +522,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 // SetupWithManager builds the reconciler.
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rayiov1alpha1.RayCluster{}).Named("ray-controller").
+		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},

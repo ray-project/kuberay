@@ -11,7 +11,7 @@ import (
 
 var myRayCluster = &RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "ray-sample",
+		Name:      "raycluster-sample",
 		Namespace: "default",
 	},
 	Spec: RayClusterSpec{
@@ -30,7 +30,7 @@ var myRayCluster = &RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
-						"rayCluster": "ray-sample",
+						"rayCluster": "raycluster-sample",
 						"groupName":  "headgroup",
 					},
 				},
@@ -71,7 +71,7 @@ var myRayCluster = &RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
 						Labels: map[string]string{
-							"rayCluster": "ray-sample",
+							"rayCluster": "raycluster-sample",
 							"groupName":  "small-group",
 						},
 					},

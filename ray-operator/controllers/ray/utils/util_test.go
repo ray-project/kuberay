@@ -61,7 +61,7 @@ func createSomePod() (pod *corev1.Pod) {
 			Kind:       "Pod",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ray-sample-small-group-worker-0",
+			Name:      "raycluster-sample-small-group-worker-0",
 			Namespace: "default",
 		},
 	}
@@ -75,7 +75,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		"Ray cluster with head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ray-sample",
+					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
 				Spec: rayiov1alpha1.RayClusterSpec{
@@ -93,7 +93,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		"Ray cluster without head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ray-sample",
+					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
 				Spec: rayiov1alpha1.RayClusterSpec{
@@ -104,7 +104,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 					},
 				},
 			},
-			want: "ray-sample",
+			want: "raycluster-sample",
 		},
 	}
 

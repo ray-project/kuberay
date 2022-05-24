@@ -82,27 +82,27 @@ configmap/ray-code created
 ```shell
 # Create a cluster.
 $ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
-ray.ray.io/ray-heterogeneous created
+raycluster.ray.io/raycluster-heterogeneous created
 
 # List running clusters.
 $ kubectl get rayclusters
 NAME                AGE
-ray-heterogeneous   2m48s
+raycluster-heterogeneous   2m48s
 
 # The created cluster should include a head pod, worker pod, and a head service.
 $ kubectl get pods
 NAME                                                 READY   STATUS    RESTARTS   AGE
-ray-heterogeneous-head-5r6qr                  1/1     Running   0          14m
-ray-heterogeneous-worker-medium-group-ljzzt   1/1     Running   0          14m
-ray-heterogeneous-worker-small-group-76qxb    1/1     Running   0          14m
-ray-heterogeneous-worker-small-group-dcl4d    1/1     Running   0          14m
+raycluster-heterogeneous-head-5r6qr                  1/1     Running   0          14m
+raycluster-heterogeneous-worker-medium-group-ljzzt   1/1     Running   0          14m
+raycluster-heterogeneous-worker-small-group-76qxb    1/1     Running   0          14m
+raycluster-heterogeneous-worker-small-group-dcl4d    1/1     Running   0          14m
 ```
 
 ```shell
 $ kubectl get services
 NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
 kubernetes                        ClusterIP   10.152.183.1   <none>        443/TCP   35d
-ray-heterogeneous-my-svc   ClusterIP   None           <none>        80/TCP    15m
+raycluster-heterogeneous-my-svc   ClusterIP   None           <none>        80/TCP    15m
 ```
 
 The logs of the head pod should show 4 nodes in the Ray cluster
@@ -112,7 +112,7 @@ Ray Nodes:  {'10.1.73.139', '10.1.73.138', '10.1.73.140', '10.1.73.141'}
 
 ```shell
 # check the logs of the head pod
-$ kubectl logs ray-heterogeneous-head-5r6qr
+$ kubectl logs raycluster-heterogeneous-head-5r6qr
 2020-11-18 09:23:32,069 INFO services.py:1092 -- View the Ray dashboard at http://10.1.73.141:8265
 2020-11-18 09:23:31,668 INFO scripts.py:467 -- Local node IP: 10.1.73.141
 2020-11-18 09:23:32,093 SUCC scripts.py:497 -- --------------------

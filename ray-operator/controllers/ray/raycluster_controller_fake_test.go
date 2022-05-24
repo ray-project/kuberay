@@ -65,7 +65,7 @@ func setupTest(t *testing.T) {
 	PrioritizeWorkersToDelete = true
 
 	namespaceStr = "default"
-	instanceName = "ray-sample"
+	instanceName = "raycluster-sample"
 	enableInTreeAutoscaling = true
 	headGroupNameStr = "head-group"
 	headGroupServiceAccount = "head-service-account"

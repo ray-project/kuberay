@@ -4,7 +4,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # An unique identifier for the head node and workers of this cluster.
-  name: ray-non-block
+  name: raycluster-non-block
 spec:
   rayVersion: '1.8.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
@@ -31,9 +31,9 @@ spec:
     template:
       metadata:
         labels:
-          # custom labels. NOTE: do not define custom labels start with `ray.`, they may be used in controller.
+          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: ray-sample # will be injected if missing
+          rayCluster: raycluster-sample # will be injected if missing
           rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod

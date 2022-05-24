@@ -4,7 +4,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # An unique identifier for the head node and workers of this cluster.
-  name: ray-complete
+  name: raycluster-complete
 spec:
   rayVersion: '1.11.0'
   ######################headGroupSpecs#################################
@@ -29,9 +29,9 @@ spec:
     template:
       metadata:
         labels:
-          # custom labels. NOTE: do not define custom labels start with `ray.`, they may be used in controller.
+          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: ray-sample # will be injected if missing
+          rayCluster: raycluster-sample # will be injected if missing
           rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod
@@ -92,9 +92,9 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - ray-complete-worker-small-group-bdtwh
-    #  - ray-complete-worker-small-group-hv457
-    #  - ray-complete-worker-small-group-k8tj7
+    #  - raycluster-complete-worker-small-group-bdtwh
+    #  - raycluster-complete-worker-small-group-hv457
+    #  - raycluster-complete-worker-small-group-k8tj7 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
       redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
@@ -104,7 +104,7 @@ spec:
     template:
       metadata:
         labels:
-          rayCluster: ray-complete # will be injected if missing
+          rayCluster: raycluster-complete # will be injected if missing
           rayNodeType: worker # will be injected if missing
           groupName: small-group # will be injected if missing
         # annotations for pod
