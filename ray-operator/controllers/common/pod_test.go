@@ -17,6 +17,8 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+var testMemoryLimit = resource.MustParse("1Gi")
+
 var instance = rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
@@ -61,11 +63,11 @@ var instance = rayiov1alpha1.RayCluster{
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceCPU:    resource.MustParse("1"),
-									v1.ResourceMemory: resource.MustParse("1Gi"),
+									v1.ResourceMemory: testMemoryLimit,
 								},
 								Limits: v1.ResourceList{
 									v1.ResourceCPU:    resource.MustParse("1"),
-									v1.ResourceMemory: resource.MustParse("1Gi"),
+									v1.ResourceMemory: testMemoryLimit,
 								},
 							},
 						},
@@ -120,6 +122,53 @@ var instance = rayiov1alpha1.RayCluster{
 var volumesNoAutoscaler = []v1.Volume{
 	{
 		Name: "shared-mem",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium:    v1.StorageMediumMemory,
+				SizeLimit: &testMemoryLimit,
+			},
+		},
+	},
+}
+
+var volumesWithAutoscaler = []v1.Volume{
+	{
+		Name: "shared-mem",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium:    v1.StorageMediumMemory,
+				SizeLimit: &testMemoryLimit,
+			},
+		},
+	},
+	{
+		Name: "ray-logs",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium: v1.StorageMediumDefault,
+			},
+		},
+	},
+}
+
+var volumeMountsNoAutoscaler = []v1.VolumeMount{
+	{
+		Name:      "shared-mem",
+		MountPath: "/dev/shm",
+		ReadOnly:  false,
+	},
+}
+
+var volumeMountsWithAutoscaler = []v1.VolumeMount{
+	{
+		Name:      "shared-mem",
+		MountPath: "/dev/shm",
+		ReadOnly:  false,
+	},
+	{
+		Name:      "ray-logs",
+		MountPath: "/tmp/ray",
+		ReadOnly:  false,
 	},
 }
 
@@ -200,6 +249,18 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	actualVolumes := pod.Spec.Volumes
+	expectedVolumes := volumesNoAutoscaler
+	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
+		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+	}
+
+	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
+	expectedVolumeMounts := volumeMountsNoAutoscaler
+	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
+		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+	}
+
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
@@ -247,6 +308,18 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	expectedResult = "--no-monitor"
 	if !strings.Contains(pod.Spec.Containers[0].Args[0], expectedResult) {
 		t.Fatalf("Expected `%v` in `%v` but doesn't have the config", expectedResult, pod.Spec.Containers[0].Args[0])
+	}
+
+	actualVolumes := pod.Spec.Volumes
+	expectedVolumes := volumesWithAutoscaler
+	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
+		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+	}
+
+	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
+	expectedVolumeMounts := volumeMountsWithAutoscaler
+	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
+		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
 	}
 
 }
