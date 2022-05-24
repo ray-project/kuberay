@@ -1,7 +1,8 @@
 package common
 
 import (
-	"github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +12,7 @@ import (
 func BuildServiceAccount(cluster *v1alpha1.RayCluster) (*v1.ServiceAccount, error) {
 	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
+			Name:      utils.GetHeadGroupServiceAccountName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				RayClusterLabelKey: cluster.Name,

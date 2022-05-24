@@ -43,9 +43,9 @@ def apply_kuberay_resources():
     shell_assert_success('kind load docker-image kuberay/operator:{}'.format(kuberay_sha))
     shell_assert_success('kind load docker-image kuberay/apiserver:{}'.format(kuberay_sha))
     shell_assert_success(
-        'kubectl apply -k manifests/cluster-scope-resources')
+        'kubectl create -k manifests/cluster-scope-resources')
     shell_assert_success(
-        'kubectl apply -k manifests/base')
+        'kubectl create -k manifests/base')
 
 
 def create_kuberay_cluster():

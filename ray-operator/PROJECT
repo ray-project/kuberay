@@ -1,0 +1,17 @@
+domain: io
+layout:
+- go.kubebuilder.io/v3
+multigroup: true
+projectName: ray-operator
+repo: github.com/ray-project/kuberay/ray-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: io
+  group: ray
+  kind: RayCluster
+  path: github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1
+  version: v1alpha1
+version: "3"

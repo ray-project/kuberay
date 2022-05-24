@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -164,4 +164,14 @@ func FilterContainerByName(containers []corev1.Container, name string) (corev1.C
 	}
 
 	return corev1.Container{}, fmt.Errorf("can not find container %s", name)
+}
+
+// GetHeadGroupServiceAccountName returns the head group service account if it exists.
+// Otherwise, it returns the name of the cluster itself.
+func GetHeadGroupServiceAccountName(cluster *rayiov1alpha1.RayCluster) string {
+	headGroupServiceAccountName := cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName
+	if headGroupServiceAccountName != "" {
+		return headGroupServiceAccountName
+	}
+	return cluster.Name
 }

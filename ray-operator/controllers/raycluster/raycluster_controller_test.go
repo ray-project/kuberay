@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package raycluster
 
 import (
 	"context"
@@ -21,12 +21,12 @@ import (
 	"reflect"
 	"time"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -46,6 +46,7 @@ const (
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
+	var enableInTreeAutoscaling = true
 
 	myRayCluster := &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -53,7 +54,8 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayClusterSpec{
-			RayVersion: "1.0",
+			RayVersion:              "1.0",
+			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				ServiceType: "ClusterIP",
 				Replicas:    pointer.Int32Ptr(1),
@@ -67,6 +69,7 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						ServiceAccountName: "head-service-account",
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
@@ -172,6 +175,14 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: pod.Name, Namespace: "default"}, pod),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My head pod = %v", pod)
 			Expect(pod.Status.Phase).Should(Or(Equal(v1.PodPending), Equal(v1.PodRunning)))
+		})
+
+		It("should create the head group's specified K8s ServiceAccount if it doesn't exist", func() {
+			saName := utils.GetHeadGroupServiceAccountName(myRayCluster)
+			sa := &corev1.ServiceAccount{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: saName, Namespace: "default"}, sa),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head group ServiceAccount = %v", saName)
 		})
 
 		It("should re-create a deleted worker", func() {

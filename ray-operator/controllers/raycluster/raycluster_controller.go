@@ -1,4 +1,4 @@
-package controllers
+package raycluster
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/common"
-	_ "github.com/ray-project/kuberay/ray-operator/controllers/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/utils"
-
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -95,7 +95,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		log.Info("RayCluser is being deleted, just ignore", "cluster name", request.Name)
+		log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
@@ -578,7 +578,8 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 	}
 
 	serviceAccount := &corev1.ServiceAccount{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetHeadGroupServiceAccountName(instance)}
+
 	if err := r.Get(context.TODO(), namespacedName, serviceAccount); err != nil {
 		if !errors.IsNotFound(err) {
 			return err

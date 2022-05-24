@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayclusterapi "github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	rayclusterapi "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -320,11 +320,11 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 	// TODO: reserved for common parameters.
 }
 
-func NewComputeTemplate(runtime *api.ComputeTemplate, namespace string) (*v1.ConfigMap, error) {
+func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 	config := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runtime.Name,
-			Namespace: namespace,
+			Namespace: runtime.Namespace,
 			Labels: map[string]string{
 				"ray.io/config-type":      "compute-template",
 				"ray.io/compute-template": runtime.Name,
@@ -332,6 +332,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate, namespace string) (*v1.Con
 		},
 		Data: map[string]string{
 			"name":            runtime.Name,
+			"namespace":       runtime.Namespace,
 			"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
 			"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
 			"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),

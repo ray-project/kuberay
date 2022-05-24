@@ -6,7 +6,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -74,6 +74,7 @@ func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate 
 
 	runtime := &api.ComputeTemplate{}
 	runtime.Name = configMap.Name
+	runtime.Namespace = configMap.Namespace
 	runtime.Cpu = uint32(cpu)
 	runtime.Memory = uint32(memory)
 	runtime.Gpu = uint32(gpu)

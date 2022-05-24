@@ -8,7 +8,7 @@ import (
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/api/raycluster/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,9 +26,9 @@ type ResourceManagerInterface interface {
 	ListAllClusters(ctx context.Context) ([]*v1alpha1.RayCluster, error)
 	DeleteCluster(ctx context.Context, clusterName string, namespace string) error
 	CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*v1.ConfigMap, error)
-	GetComputeTemplate(ctx context.Context, name string) (*v1.ConfigMap, error)
-	ListComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error)
-	DeleteComputeTemplate(ctx context.Context, name string) error
+	GetComputeTemplate(ctx context.Context, name string, namespace string) (*v1.ConfigMap, error)
+	ListComputeTemplates(ctx context.Context, namespace string) ([]*v1.ConfigMap, error)
+	DeleteComputeTemplate(ctx context.Context, name string, namespace string) error
 }
 
 type ResourceManager struct {
@@ -82,7 +82,7 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 	dict := map[string]*api.ComputeTemplate{}
 	// populate head compute template
 	name := cluster.ClusterSpec.HeadGroupSpec.ComputeTemplate
-	configMap, err := r.GetComputeTemplate(ctx, name)
+	configMap, err := r.GetComputeTemplate(ctx, name, cluster.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 	for _, spec := range cluster.ClusterSpec.WorkerGroupSepc {
 		name := spec.ComputeTemplate
 		if _, exist := dict[name]; !exist {
-			configMap, err := r.GetComputeTemplate(ctx, name)
+			configMap, err := r.GetComputeTemplate(ctx, name, cluster.Namespace)
 			if err != nil {
 				return nil, err
 			}
@@ -164,32 +164,32 @@ func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string,
 
 // Compute Runtimes
 func (r *ResourceManager) CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
-	_, err := r.GetComputeTemplate(ctx, runtime.Name)
+	_, err := r.GetComputeTemplate(ctx, runtime.Name, runtime.Namespace)
 	if err == nil {
-		return nil, util.NewAlreadyExistError("Compute template with name %s already exists in namespace %s", runtime.Name, DefaultNamespace)
+		return nil, util.NewAlreadyExistError("Compute template with name %s already exists in namespace %s", runtime.Name, runtime.Namespace)
 	}
 
-	computeTemplate, err := util.NewComputeTemplate(runtime, DefaultNamespace)
+	computeTemplate, err := util.NewComputeTemplate(runtime)
 	if err != nil {
-		return nil, util.NewInternalServerError(err, "Failed to convert compute runtime (%s/%s)", DefaultNamespace, runtime.Name)
+		return nil, util.NewInternalServerError(err, "Failed to convert compute runtime (%s/%s)", runtime.Namespace, runtime.Name)
 	}
 
-	client := r.getKubernetesConfigMapClient(DefaultNamespace)
+	client := r.getKubernetesConfigMapClient(runtime.Namespace)
 	newRuntime, err := client.Create(ctx, computeTemplate, metav1.CreateOptions{})
 	if err != nil {
-		return nil, util.NewInternalServerError(err, "Failed to create a compute runtime for (%s/%s)", DefaultNamespace, runtime.Name)
+		return nil, util.NewInternalServerError(err, "Failed to create a compute runtime for (%s/%s)", runtime.Namespace, runtime.Name)
 	}
 
 	return newRuntime, nil
 }
 
-func (r *ResourceManager) GetComputeTemplate(ctx context.Context, name string) (*v1.ConfigMap, error) {
-	client := r.getKubernetesConfigMapClient(DefaultNamespace)
+func (r *ResourceManager) GetComputeTemplate(ctx context.Context, name string, namespace string) (*v1.ConfigMap, error) {
+	client := r.getKubernetesConfigMapClient(namespace)
 	return getComputeTemplateByName(ctx, client, name)
 }
 
-func (r *ResourceManager) ListComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error) {
-	client := r.getKubernetesConfigMapClient(DefaultNamespace)
+func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace string) ([]*v1.ConfigMap, error) {
+	client := r.getKubernetesConfigMapClient(namespace)
 	configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
 	if err != nil {
 		return nil, util.Wrap(err, "List compute runtimes failed")
@@ -204,8 +204,30 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context) ([]*v1.Confi
 	return result, nil
 }
 
-func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string) error {
-	client := r.getKubernetesConfigMapClient(DefaultNamespace)
+func (r *ResourceManager) ListAllComputeTemplates(ctx context.Context) ([]*v1.ConfigMap, error) {
+	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
+	}
+
+	var result []*v1.ConfigMap
+	for _, namespace := range namespaces.Items {
+		client := r.getKubernetesConfigMapClient(namespace.Name)
+		configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
+		if err != nil {
+			return nil, util.Wrap(err, fmt.Sprintf("List compute templates failed in %s", namespace.Name))
+		}
+
+		length := len(configMapList.Items)
+		for i := 0; i < length; i++ {
+			result = append(result, &configMapList.Items[i])
+		}
+	}
+	return result, nil
+}
+
+func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string, namespace string) error {
+	client := r.getKubernetesConfigMapClient(namespace)
 
 	configMap, err := getComputeTemplateByName(ctx, client, name)
 	if err != nil {
