@@ -48,7 +48,7 @@ func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Recorder: mgr.GetEventRecorderFor("ray-controller"),
+		Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
 	}
 }
 

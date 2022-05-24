@@ -3,4 +3,5 @@
 # It should be run by config/default
 resources:
 - bases/ray.io_rayclusters.yaml
+- bases/ray.io_rayservices.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
