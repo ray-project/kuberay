@@ -190,7 +190,7 @@ func TestBuildPod(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName)
-	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, nil)
 
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
