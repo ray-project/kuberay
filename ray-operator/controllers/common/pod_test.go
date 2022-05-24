@@ -149,6 +149,12 @@ var autoscalerContainer = v1.Container{
 			v1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	},
+	VolumeMounts: []v1.VolumeMount{
+		{
+			MountPath: "/tmp/ray",
+			Name:      "ray-logs",
+		},
+	},
 }
 
 var trueFlag = true
