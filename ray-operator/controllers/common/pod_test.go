@@ -47,7 +47,7 @@ var instance = rayiov1alpha1.RayCluster{
 					Containers: []v1.Container{
 						{
 							Name:  "ray-head",
-							Image: "rayproject/autoscaler",
+							Image: "rayproject/ray:1.0.0",
 							Env: []v1.EnvVar{
 								{
 									Name: "MY_POD_IP",
@@ -56,6 +56,16 @@ var instance = rayiov1alpha1.RayCluster{
 											FieldPath: "status.podIP",
 										},
 									},
+								},
+							},
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("1"),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("1"),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
 								},
 							},
 						},
@@ -110,8 +120,7 @@ var instance = rayiov1alpha1.RayCluster{
 var volumesNoAutoscaler = []v1.Volume{
 	{
 		Name: "shared-mem",
-		VolumeSource: v1.
-	}
+	},
 }
 
 var autoscalerContainer = v1.Container{
