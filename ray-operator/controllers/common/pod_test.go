@@ -107,6 +107,13 @@ var instance = rayiov1alpha1.RayCluster{
 	},
 }
 
+var volumesNoAutoscaler = []v1.Volume{
+	{
+		Name: "shared-mem",
+		VolumeSource: v1.
+	}
+}
+
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
 	Image:           "rayproject/ray:448f52",

@@ -113,10 +113,10 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	index := getRayContainerIndex(pod)
 
 	//Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(&pod.Spec.Containers[index], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath)
+	addEmptyDir(&pod.Spec.Containers[index], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		//The Ray autoscaler communicates with the Ray head via a shared log directory.
-		addEmptyDir(&pod.Spec.Containers[index], &pod, RayLogVolumeName, RayLogVolumeMountPath)
+		addEmptyDir(&pod.Spec.Containers[index], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
 	if len(pod.Spec.InitContainers) > index {
@@ -416,20 +416,12 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 
 // addEmptyDir add an emptyDir to the shared memory mount point /dev/shm
 // this is to avoid: "The object store is using /tmp instead of /dev/shm because /dev/shm has only 67108864 bytes available. This may slow down performance!...""
-func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string) {
+func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string, storageMedium v1.StorageMedium) {
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		return
 	}
 	// 1) create a Volume of type emptyDir and add it to Volumes
-	emptyDirVolume := v1.Volume{
-		Name: volumeName,
-		VolumeSource: v1.VolumeSource{
-			EmptyDir: &v1.EmptyDirVolumeSource{
-				Medium:    v1.StorageMediumMemory,
-				SizeLimit: findMemoryReqOrLimit(*container),
-			},
-		},
-	}
+	emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
 
 	// 2) create a VolumeMount that uses the emptyDir
@@ -440,6 +432,29 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volume
 	}
 	if !checkIfVolumeMounted(container, pod, volumeMountPath) {
 		container.VolumeMounts = append(container.VolumeMounts, mountedVolume)
+	}
+}
+
+//Format an emptyDir volume.
+//When the storage medium is memory, set the size limit based on container resources.
+//For others media , don't set a size limit.
+func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMedium v1.StorageMedium) v1.Volume {
+	var sizeLimit *resource.Quantity
+	if storageMedium == v1.StorageMediumMemory {
+		//If using memory, set size limit based on primary container's resources.
+		sizeLimit = findMemoryReqOrLimit(*container)
+	} else {
+		//Otherwise, don't set a limit.
+		sizeLimit = nil
+	}
+	return v1.Volume{
+		Name: volumeName,
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium:    storageMedium,
+				SizeLimit: sizeLimit,
+			},
+		},
 	}
 }
 
