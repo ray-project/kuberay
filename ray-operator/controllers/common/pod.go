@@ -20,6 +20,8 @@ import (
 const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
+	RayLogVolumeName            = "ray-logs"
+	RayLogVolumeMountPath       = "/tmp/ray"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -50,7 +52,6 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
 		// set custom service account which can be authorized to talk with apiserver
 		podTemplate.Spec.ServiceAccountName = instance.Name
-
 	}
 
 	// add metrics port for exposing to the promethues stack.
@@ -100,7 +101,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -111,7 +112,12 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 	index := getRayContainerIndex(pod)
 
-	addEmptyDir(&pod.Spec.Containers[index], &pod)
+	//Add /dev/shm volumeMount for the object store to avoid performance degradation.
+	addEmptyDir(&pod.Spec.Containers[index], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath)
+	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
+		//The Ray autoscaler communicates with the Ray head via a shared log directory.
+		addEmptyDir(&pod.Spec.Containers[index], &pod, RayLogVolumeName, RayLogVolumeMountPath)
+	}
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
 	if len(pod.Spec.InitContainers) > index {
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
@@ -201,8 +207,8 @@ func BuildAutoscalerContainer() v1.Container {
 		// Needed to allow the Ray driver to pick up autoscaler events.
 		VolumeMounts: []v1.VolumeMount{
 			{
-				MountPath: "/tmp/ray",
-				Name:      "ray-logs",
+				MountPath: RayLogVolumeMountPath,
+				Name:      RayLogVolumeName,
 			},
 		},
 	}
@@ -256,7 +262,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 
 	for k, v := range ret {
 		if k == string(rayNodeType) {
-			// overriding invalide values for this label
+			// overriding invalid values for this label
 			if v != string(rayiov1alpha1.HeadNode) && v != string(rayiov1alpha1.WorkerNode) {
 				labels[k] = v
 			}
@@ -410,13 +416,13 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 
 // addEmptyDir add an emptyDir to the shared memory mount point /dev/shm
 // this is to avoid: "The object store is using /tmp instead of /dev/shm because /dev/shm has only 67108864 bytes available. This may slow down performance!...""
-func addEmptyDir(container *v1.Container, pod *v1.Pod) {
-	if checkIfVolumeMounted(container, pod) {
+func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string) {
+	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		return
 	}
 	// 1) create a Volume of type emptyDir and add it to Volumes
 	emptyDirVolume := v1.Volume{
-		Name: SharedMemoryVolumeName,
+		Name: volumeName,
 		VolumeSource: v1.VolumeSource{
 			EmptyDir: &v1.EmptyDirVolumeSource{
 				Medium:    v1.StorageMediumMemory,
@@ -424,24 +430,24 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod) {
 			},
 		},
 	}
-	if !checkIfVolumeMounted(container, pod) {
-		pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
-	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
 
 	// 2) create a VolumeMount that uses the emptyDir
 	mountedVolume := v1.VolumeMount{
-		MountPath: SharedMemoryVolumeMountPath,
-		Name:      SharedMemoryVolumeName,
+		MountPath: volumeMountPath,
+		Name:      volumeName,
 		ReadOnly:  false,
 	}
-	if !checkIfVolumeMounted(container, pod) {
+	if !checkIfVolumeMounted(container, pod, volumeMountPath) {
 		container.VolumeMounts = append(container.VolumeMounts, mountedVolume)
 	}
 }
 
-func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod) bool {
+//Checks if the container has a volumeMount with the given mount path and if
+//the pod has a matching Volume.
+func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
-		if mountedVol.MountPath == SharedMemoryVolumeMountPath {
+		if mountedVol.MountPath == volumeMountPath {
 			for _, podVolume := range pod.Spec.Volumes {
 				if mountedVol.Name == podVolume.Name {
 					// already mounted, nothing to do
