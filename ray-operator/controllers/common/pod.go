@@ -50,6 +50,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
 		// set custom service account which can be authorized to talk with apiserver
 		podTemplate.Spec.ServiceAccountName = instance.Name
+
 	}
 
 	// add metrics port for exposing to the promethues stack.
@@ -195,6 +196,13 @@ func BuildAutoscalerContainer() v1.Container {
 			Requests: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("256m"),
 				v1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+		},
+		// Needed to allow the Ray driver to pick up autoscaler events.
+		VolumeMounts: []v1.VolumeMount{
+			{
+				MountPath: "/tmp/ray",
+				Name:      "ray-logs",
 			},
 		},
 	}
