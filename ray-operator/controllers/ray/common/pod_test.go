@@ -397,6 +397,56 @@ func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	}
 }
 
+// If no service account is specified in the RayCluster,
+// the head pod's service account should be an empty string.
+func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
+	cluster := instance.DeepCopy()
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+
+	actualResult := pod.Spec.ServiceAccountName
+	expectedResult := ""
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+// If a service account is specified in the RayCluster and EnableInTreeAutoscaling is set to false,
+// the head pod's service account should be the same.
+func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
+	cluster := instance.DeepCopy()
+	serviceAccount := "head-service-account"
+	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+
+	actualResult := pod.Spec.ServiceAccountName
+	expectedResult := serviceAccount
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+// If a service account is specified in the RayCluster and EnableInTreeAutoscaling is set to true,
+// the head pod's service account should be the same.
+func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
+	cluster := instance.DeepCopy()
+	serviceAccount := "head-service-account"
+	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+
+	actualResult := pod.Spec.ServiceAccountName
+	expectedResult := serviceAccount
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
 func splitAndSort(s string) []string {
 	strs := strings.Split(s, " ")
 	result := make([]string, 0, len(strs))

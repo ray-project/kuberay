@@ -53,8 +53,6 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
-		// set custom service account which can be authorized to talk with apiserver
-		podTemplate.Spec.ServiceAccountName = instance.Name
 	}
 
 	// add metrics port for exposing to the promethues stack.
