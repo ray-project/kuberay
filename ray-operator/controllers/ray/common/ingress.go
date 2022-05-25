@@ -3,9 +3,9 @@ package common
 import (
 	"fmt"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
