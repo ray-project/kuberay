@@ -116,6 +116,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	addEmptyDir(&pod.Spec.Containers[index], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		//The Ray autoscaler communicates with the Ray head via a shared log directory.
+		//Specifically, we need a shared log volume to enable the event-logging functionality
+		//introduced in https://github.com/ray-project/ray/pull/13434.
 		addEmptyDir(&pod.Spec.Containers[index], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
