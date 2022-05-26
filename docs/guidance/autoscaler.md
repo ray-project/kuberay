@@ -64,8 +64,10 @@ Demands:
 
 #### Known issues and limitations
 
-1. operator will recognize following setting and automatically inject preconfigured autoscaler container to head pod.
-   The service account, role, role binding needed by autoscaler will be created by operator out-of-box.
+1. The operator will recognize the following setting and automatically inject a preconfigured autoscaler container to the head pod.
+   The service account, role, and role binding needed by the autoscaler will be created by the operator out-of-box.
+   The operator will also configure an empty-dir logging volume for the Ray head pod. The volume will be mounted into the Ray and
+   autoscaler containers; this is necessary to support the event logging introduced in [Ray PR #13434](https://github.com/ray-project/ray/pull/13434).
 
     ```
     spec:
