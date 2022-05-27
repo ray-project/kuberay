@@ -47,7 +47,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// set custom service account with proper roles bound.
 		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
 
-		// inject autoscaler pod into head pod
+		// inject autoscaler container into head pod
 		container := BuildAutoscalerContainer()
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
 		// set custom service account which can be authorized to talk with apiserver
