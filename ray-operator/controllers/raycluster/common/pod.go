@@ -22,6 +22,7 @@ const (
 	SharedMemoryVolumeMountPath = "/dev/shm"
 	RayLogVolumeName            = "ray-logs"
 	RayLogVolumeMountPath       = "/tmp/ray"
+	AutoscalerContainerName     = "autoscaler"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -110,32 +111,34 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	index := getRayContainerIndex(pod)
+	rayContainerIndex, rayContainer := getRayContainer(pod)
 
 	//Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(&pod.Spec.Containers[index], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
+	addEmptyDir(&rayContainer, &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		//The Ray autoscaler communicates with the Ray head via a shared log directory.
 		//Specifically, we need a shared log volume to enable the event-logging functionality
 		//introduced in https://github.com/ray-project/ray/pull/13434.
-		addEmptyDir(&pod.Spec.Containers[index], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
+		autoscalerContainer := getAutoscalerContainer(pod)
+		addEmptyDir(&rayContainer, &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
+		addEmptyDir(&autoscalerContainer, &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
-	cleanupInvalidVolumeMounts(&pod.Spec.Containers[index], &pod)
-	if len(pod.Spec.InitContainers) > index {
-		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[index], &pod)
+	cleanupInvalidVolumeMounts(&rayContainer, &pod)
+	if len(pod.Spec.InitContainers) > rayContainerIndex {
+		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[rayContainerIndex], &pod)
 	}
 
 	var cmd, args string
-	if len(pod.Spec.Containers[index].Command) > 0 {
-		cmd = convertCmdToString(pod.Spec.Containers[index].Command)
+	if len(rayContainer.Command) > 0 {
+		cmd = convertCmdToString(rayContainer.Command)
 	}
-	if len(pod.Spec.Containers[index].Args) > 0 {
-		cmd += convertCmdToString(pod.Spec.Containers[index].Args)
+	if len(rayContainer.Args) > 0 {
+		cmd += convertCmdToString(rayContainer.Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[index].Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, rayContainer.Resources)
 		// replacing the old command
-		pod.Spec.Containers[index].Command = []string{"/bin/bash", "-c", "--"}
+		rayContainer.Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
 			args = fmt.Sprintf("%s && %s", cont, cmd)
 		} else {
@@ -147,14 +150,14 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			args = args + " && sleep infinity"
 		}
 
-		pod.Spec.Containers[index].Args = []string{args}
+		rayContainer.Args = []string{args}
 	}
 
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod.Spec.Containers[index], rayNodeType, rayStartParams, svcName)
+	setContainerEnvVars(&rayContainer, rayNodeType, rayStartParams, svcName)
 
 	return pod
 }
@@ -162,7 +165,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 // BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
 func BuildAutoscalerContainer() v1.Container {
 	container := v1.Container{
-		Name: "autoscaler",
+		Name: AutoscalerContainerName,
 		// TODO: choose right version based on instance.spec.Version
 		// The currently used image reflects changes up to https://github.com/ray-project/ray/pull/24718
 		Image:           "rayproject/ray:448f52",
@@ -206,13 +209,6 @@ func BuildAutoscalerContainer() v1.Container {
 				v1.ResourceMemory: resource.MustParse("256Mi"),
 			},
 		},
-		// Needed to allow the Ray driver to pick up autoscaler events.
-		VolumeMounts: []v1.VolumeMount{
-			{
-				MountPath: RayLogVolumeMountPath,
-				Name:      RayLogVolumeName,
-			},
-		},
 	}
 	return container
 }
@@ -232,19 +228,32 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainerIndex(pod v1.Pod) (index int) {
-	// theoretically, a ray pod can have multiple containers.
+func getRayContainer(pod v1.Pod) (rayContainerIndex int, rayContainer v1.Container) {
+	// a ray pod can have multiple containers.
 	// we identify the ray container based on env var: RAY=true
 	// if the env var is missing, we choose containers[0].
 	for i, container := range pod.Spec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				return i
+				return i, container
 			}
 		}
 	}
 	// not found, use first container
-	return 0
+	return 0, pod.Spec.Containers[0]
+}
+
+func getAutoscalerContainer(pod v1.Pod) (rayContainer v1.Container) {
+	// we identify the autoscaler container based on its name
+	for _, container := range pod.Spec.Containers {
+		if container.Name == AutoscalerContainerName {
+			return container
+		}
+	}
+	// The autoscaler container should have been found, so this branch shouldn't be accessed.
+	// The unit tests cover correct formatting of the autoscaling container, so
+	// we don't need to bubble up an error here.
+	return v1.Container{}
 }
 
 // labelPod returns the labels for selecting the resources

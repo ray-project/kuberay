@@ -322,6 +322,18 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
 	}
 
+	// Make sure autoscaler container was formatted correctly.
+	numContainers := len(pod.Spec.Containers)
+	expectedNumContainers := 2
+	if !(numContainers == expectedNumContainers) {
+		t.Fatalf("Expected `%v` container but got `%v`", actualVolumes, expectedVolumes)
+	}
+	actualContainer := getAutoscalerContainer(pod)
+	expectedContainer := autoscalerContainer
+	if !reflect.DeepEqual(expectedContainer, actualContainer) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
+	}
+
 }
 
 func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
