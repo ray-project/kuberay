@@ -17,13 +17,15 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+var testMemoryLimit = resource.MustParse("1Gi")
+
 var instance = rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
-		RayVersion: "1.0.0",
+		RayVersion: "12.0.1",
 		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 			ServiceType: "ClusterIP",
 			Replicas:    pointer.Int32Ptr(1),
@@ -47,7 +49,7 @@ var instance = rayiov1alpha1.RayCluster{
 					Containers: []v1.Container{
 						{
 							Name:  "ray-head",
-							Image: "rayproject/autoscaler",
+							Image: "rayproject/ray:12.0.1",
 							Env: []v1.EnvVar{
 								{
 									Name: "MY_POD_IP",
@@ -56,6 +58,16 @@ var instance = rayiov1alpha1.RayCluster{
 											FieldPath: "status.podIP",
 										},
 									},
+								},
+							},
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("1"),
+									v1.ResourceMemory: testMemoryLimit,
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("1"),
+									v1.ResourceMemory: testMemoryLimit,
 								},
 							},
 						},
@@ -107,9 +119,62 @@ var instance = rayiov1alpha1.RayCluster{
 	},
 }
 
+var volumesNoAutoscaler = []v1.Volume{
+	{
+		Name: "shared-mem",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium:    v1.StorageMediumMemory,
+				SizeLimit: &testMemoryLimit,
+			},
+		},
+	},
+}
+
+var volumesWithAutoscaler = []v1.Volume{
+	{
+		Name: "shared-mem",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium:    v1.StorageMediumMemory,
+				SizeLimit: &testMemoryLimit,
+			},
+		},
+	},
+	{
+		Name: "ray-logs",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				Medium: v1.StorageMediumDefault,
+			},
+		},
+	},
+}
+
+var volumeMountsNoAutoscaler = []v1.VolumeMount{
+	{
+		Name:      "shared-mem",
+		MountPath: "/dev/shm",
+		ReadOnly:  false,
+	},
+}
+
+var volumeMountsWithAutoscaler = []v1.VolumeMount{
+	{
+		Name:      "shared-mem",
+		MountPath: "/dev/shm",
+		ReadOnly:  false,
+	},
+	{
+		Name:      "ray-logs",
+		MountPath: "/tmp/ray",
+		ReadOnly:  false,
+	},
+}
+
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
-	Image:           "kuberay/autoscaler:nightly",
+	Image:           "rayproject/ray:448f52",
 	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{
@@ -130,16 +195,14 @@ var autoscalerContainer = v1.Container{
 		},
 	},
 	Command: []string{
-		"/home/ray/anaconda3/bin/python",
+		"ray",
 	},
 	Args: []string{
-		"/home/ray/run_autoscaler_with_retries.py",
+		"kuberay-autoscaler",
 		"--cluster-name",
 		"$(RAY_CLUSTER_NAME)",
 		"--cluster-namespace",
 		"$(RAY_CLUSTER_NAMESPACE)",
-		"--redis-password",
-		DefaultRedisPassword,
 	},
 	Resources: v1.ResourceRequirements{
 		Limits: v1.ResourceList{
@@ -151,16 +214,24 @@ var autoscalerContainer = v1.Container{
 			v1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	},
+	VolumeMounts: []v1.VolumeMount{
+		{
+			MountPath: "/tmp/ray",
+			Name:      "ray-logs",
+		},
+	},
 }
 
 var trueFlag = true
 
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
+
+	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, nil)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -178,11 +249,23 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	actualVolumes := pod.Spec.Volumes
+	expectedVolumes := volumesNoAutoscaler
+	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumes, actualVolumes)
+	}
+
+	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
+	expectedVolumeMounts := volumeMountsNoAutoscaler
+	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
+	}
+
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName)
-	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, nil)
 
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
@@ -203,7 +286,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -227,14 +310,31 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 		t.Fatalf("Expected `%v` in `%v` but doesn't have the config", expectedResult, pod.Spec.Containers[0].Args[0])
 	}
 
-	actualResult = cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"]
-	targetContainer, err := utils.FilterContainerByName(pod.Spec.Containers, "autoscaler")
-	if err != nil {
-		t.Fatalf("error: %v", err)
+	actualVolumes := pod.Spec.Volumes
+	expectedVolumes := volumesWithAutoscaler
+	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
+		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
 	}
-	if !utils.Contains(targetContainer.Args, actualResult) {
-		t.Fatalf("Expected redis password `%v` in `%v` but not found", targetContainer.Args, actualResult)
+
+	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
+	expectedVolumeMounts := volumeMountsWithAutoscaler
+	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
 	}
+
+	// Make sure autoscaler container was formatted correctly.
+	numContainers := len(pod.Spec.Containers)
+	expectedNumContainers := 2
+	if !(numContainers == expectedNumContainers) {
+		t.Fatalf("Expected `%v` container but got `%v`", expectedNumContainers, numContainers)
+	}
+	index := getAutoscalerContainerIndex(pod)
+	actualContainer := pod.Spec.Containers[index]
+	expectedContainer := autoscalerContainer
+	if !reflect.DeepEqual(expectedContainer, actualContainer) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
+	}
+
 }
 
 func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
@@ -256,14 +356,6 @@ func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-}
-
-func TestBuildAutoscalerContainer(t *testing.T) {
-	actualContainer := BuildAutoscalerContainer(DefaultRedisPassword)
-	expectedContainer := autoscalerContainer
-	if !reflect.DeepEqual(expectedContainer, actualContainer) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
 	}
 }
 

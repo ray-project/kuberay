@@ -10,9 +10,13 @@ You can follow below steps for a quick deployment.
 ```
 git clone https://github.com/ray-project/kuberay.git
 cd kuberay
-kubectl apply -k manifests/cluster-scope-resources
-kubectl apply -k manifests/base
+kubectl create -k manifests/cluster-scope-resources
+kubectl apply -k manifests/overlays/autoscaling
 ```
+
+> Note: For compatibility with the Ray autoscaler, the KubeRay Operator's entrypoint
+> must include the flag `--prioritize-workers-to-delete`. The kustomization overlay
+> `manifests/overlays/autoscaling` provided in the last command above adds the necessary flag.
 
 ### Deploy a cluster with autoscaling enabled
 
@@ -60,8 +64,10 @@ Demands:
 
 #### Known issues and limitations
 
-1. operator will recognize following setting and automatically inject preconfigured autoscaler container to head pod.
-   The service account, role, role binding needed by autoscaler will be created by operator out-of-box.
+1. The operator will recognize the following setting and automatically inject a preconfigured autoscaler container to the head pod.
+   The service account, role, and role binding needed by the autoscaler will be created by the operator out-of-box.
+   The operator will also configure an empty-dir logging volume for the Ray head pod. The volume will be mounted into the Ray and
+   autoscaler containers; this is necessary to support the event logging introduced in [Ray PR #13434](https://github.com/ray-project/ray/pull/13434).
 
     ```
     spec:
@@ -69,11 +75,10 @@ Demands:
       enableInTreeAutoscaling: true
     ```
 
-2. head and work images are `rayproject/ray:413fe0`. This image was built based on [commit](https://github.com/ray-project/ray/commit/413fe08f8744d50b439717564709bc0af2f778f1) from master branch. 
-The reason we need to use a nightly version is because autoscaler needs to connect to Ray cluster. Due to ray [version requirements](https://docs.ray.io/en/latest/cluster/ray-client.html#versioning-requirements).
-We determine to use nightly version to make sure integration is working.
+2. The autoscaler image is `rayproject/ray:448f52` which reflects the latest changes from [Ray PR #24718](https://github.com/ray-project/ray/pull/24718/files) in the master branch.
 
-3. Autoscaler image is `kuberay/autoscaler:nightly` which is built from [commit](https://github.com/ray-project/ray/pull/22689/files).
+3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. The autoscaler image used
+is compatible with all Ray versions >= 1.11.0.
 
 ### Test autoscaling
 

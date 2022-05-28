@@ -495,7 +495,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName)
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -510,7 +510,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
