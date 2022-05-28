@@ -450,7 +450,7 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volume
 
 //Format an emptyDir volume.
 //When the storage medium is memory, set the size limit based on container resources.
-//For others media , don't set a size limit.
+//For other media, don't set a size limit.
 func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMedium v1.StorageMedium) v1.Volume {
 	var sizeLimit *resource.Quantity
 	if storageMedium == v1.StorageMediumMemory {
