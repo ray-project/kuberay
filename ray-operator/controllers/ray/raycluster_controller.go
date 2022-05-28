@@ -1,4 +1,4 @@
-package raycluster
+package ray
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/raycluster/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/raycluster/v1alpha1"
-	_ "github.com/ray-project/kuberay/ray-operator/controllers/raycluster/common"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
