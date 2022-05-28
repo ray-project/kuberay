@@ -236,11 +236,13 @@ func getRayContainerIndex(pod v1.Pod) (rayContainerIndex int) {
 	for i, container := range pod.Spec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
+				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
 				return i
 			}
 		}
 	}
 	// not found, use first container
+	log.Info("Head pod container with index 0 identified as Ray container.")
 	return 0
 }
 
@@ -252,10 +254,8 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 		}
 	}
 
-	// not found, use second container
-	// (This branch shouldn't be accessed -- the autoscaler container should be present.)
-	// (In any case, unit tests validate formatting of the autoscaler container.)
-	return 1
+	// This should be unreachable.
+	panic("Autoscaler container not found!")
 }
 
 // labelPod returns the labels for selecting the resources
