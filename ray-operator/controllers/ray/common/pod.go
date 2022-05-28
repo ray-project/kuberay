@@ -253,7 +253,7 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 	}
 
 	// not found, use second container
-	// (This code shouldn't be accessed.)
+	// (This branch shouldn't be accessed -- the autoscaler container should be present.)
 	// (In any case, unit tests validate formatting of the autoscaler container.)
 	return 1
 }
