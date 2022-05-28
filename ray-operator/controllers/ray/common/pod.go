@@ -113,13 +113,13 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 	rayContainerIndex := getRayContainerIndex(pod)
 
-	//Add /dev/shm volumeMount for the object store to avoid performance degradation.
+	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
-		//The Ray autoscaler writes logs which are read by the Ray head.
-		//We need a shared log volume to enable this information flow.
-		//Specifically, this is required for the event-logging functionality
-		//introduced in https://github.com/ray-project/ray/pull/13434.
+		// The Ray autoscaler writes logs which are read by the Ray head.
+		// We need a shared log volume to enable this information flow.
+		// Specifically, this is required for the event-logging functionality
+		// introduced in https://github.com/ray-project/ray/pull/13434.
 		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
 		addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
@@ -448,16 +448,16 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volume
 	container.VolumeMounts = append(container.VolumeMounts, mountedVolume)
 }
 
-//Format an emptyDir volume.
-//When the storage medium is memory, set the size limit based on container resources.
-//For other media, don't set a size limit.
+// Format an emptyDir volume.
+// When the storage medium is memory, set the size limit based on container resources.
+// For other media, don't set a size limit.
 func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMedium v1.StorageMedium) v1.Volume {
 	var sizeLimit *resource.Quantity
 	if storageMedium == v1.StorageMediumMemory {
-		//If using memory, set size limit based on primary container's resources.
+		// If using memory, set size limit based on primary container's resources.
 		sizeLimit = findMemoryReqOrLimit(*container)
 	} else {
-		//Otherwise, don't set a limit.
+		// Otherwise, don't set a limit.
 		sizeLimit = nil
 	}
 	return v1.Volume{
@@ -471,8 +471,8 @@ func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMediu
 	}
 }
 
-//Checks if the container has a volumeMount with the given mount path and if
-//the pod has a matching Volume.
+// Checks if the container has a volumeMount with the given mount path and if
+// the pod has a matching Volume.
 func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
 		if mountedVol.MountPath == volumeMountPath {
@@ -487,7 +487,7 @@ func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath 
 	return false
 }
 
-//Checks if a volume with the given name exists.
+// Checks if a volume with the given name exists.
 func checkIfVolumeExists(pod *v1.Pod, volumeName string) bool {
 	for _, podVolume := range pod.Spec.Volumes {
 		if podVolume.Name == volumeName {
