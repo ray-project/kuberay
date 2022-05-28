@@ -33,9 +33,9 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 	}
 }
 
-//+kubebuilder:rbac:groups=ray.io,resources=rayservices,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=ray.io,resources=rayservices/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=ray.io,resources=rayservices/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ray.io,resources=rayservices,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ray.io,resources=rayservices/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ray.io,resources=rayservices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizer,verbs=update
