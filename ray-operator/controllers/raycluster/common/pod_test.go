@@ -252,13 +252,13 @@ func TestBuildPod(t *testing.T) {
 	actualVolumes := pod.Spec.Volumes
 	expectedVolumes := volumesNoAutoscaler
 	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
-		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumes, actualVolumes)
 	}
 
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsNoAutoscaler
 	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
-		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
 	}
 
 	// testing worker pod
@@ -319,16 +319,17 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsWithAutoscaler
 	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
-		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
+		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
 	}
 
 	// Make sure autoscaler container was formatted correctly.
 	numContainers := len(pod.Spec.Containers)
 	expectedNumContainers := 2
 	if !(numContainers == expectedNumContainers) {
-		t.Fatalf("Expected `%v` container but got `%v`", actualVolumes, expectedVolumes)
+		t.Fatalf("Expected `%v` container but got `%v`", expectedVolumes, actualVolumes)
 	}
-	actualContainer := getAutoscalerContainer(pod)
+	index := getAutoscalerContainerIndex(pod)
+	actualContainer := pod.Spec.Containers[index]
 	expectedContainer := autoscalerContainer
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
@@ -355,14 +356,6 @@ func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-}
-
-func TestBuildAutoscalerContainer(t *testing.T) {
-	actualContainer := BuildAutoscalerContainer()
-	expectedContainer := autoscalerContainer
-	if !reflect.DeepEqual(expectedContainer, actualContainer) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
 	}
 }
 

@@ -111,34 +111,36 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex, rayContainer := getRayContainer(pod)
+	rayContainerIndex := getRayContainerIndex(pod)
 
 	//Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(&rayContainer, &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
+	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
-		//The Ray autoscaler communicates with the Ray head via a shared log directory.
-		//Specifically, we need a shared log volume to enable the event-logging functionality
+		//The Ray autoscaler writes logs which are read by the Ray head.
+		//We need a shared log volume to enable this information flow.
+		//Specifically, this is required for the event-logging functionality
 		//introduced in https://github.com/ray-project/ray/pull/13434.
-		autoscalerContainer := getAutoscalerContainer(pod)
-		addEmptyDir(&rayContainer, &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
-		addEmptyDir(&autoscalerContainer, &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
+		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
+		addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
+		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
-	cleanupInvalidVolumeMounts(&rayContainer, &pod)
+	cleanupInvalidVolumeMounts(&pod.Spec.Containers[rayContainerIndex], &pod)
+	fmt.Printf("%v", pod.Spec.Volumes)
 	if len(pod.Spec.InitContainers) > rayContainerIndex {
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[rayContainerIndex], &pod)
 	}
 
 	var cmd, args string
-	if len(rayContainer.Command) > 0 {
-		cmd = convertCmdToString(rayContainer.Command)
+	if len(pod.Spec.Containers[rayContainerIndex].Command) > 0 {
+		cmd = convertCmdToString(pod.Spec.Containers[rayContainerIndex].Command)
 	}
-	if len(rayContainer.Args) > 0 {
-		cmd += convertCmdToString(rayContainer.Args)
+	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
+		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, rayContainer.Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
 		// replacing the old command
-		rayContainer.Command = []string{"/bin/bash", "-c", "--"}
+		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
 			args = fmt.Sprintf("%s && %s", cont, cmd)
 		} else {
@@ -150,14 +152,14 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			args = args + " && sleep infinity"
 		}
 
-		rayContainer.Args = []string{args}
+		pod.Spec.Containers[rayContainerIndex].Args = []string{args}
 	}
 
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&rayContainer, rayNodeType, rayStartParams, svcName)
+	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
 
 	return pod
 }
@@ -228,32 +230,33 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainer(pod v1.Pod) (rayContainerIndex int, rayContainer v1.Container) {
+func getRayContainerIndex(pod v1.Pod) (rayContainerIndex int) {
 	// a ray pod can have multiple containers.
 	// we identify the ray container based on env var: RAY=true
 	// if the env var is missing, we choose containers[0].
 	for i, container := range pod.Spec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				return i, container
+				return i
 			}
 		}
 	}
 	// not found, use first container
-	return 0, pod.Spec.Containers[0]
+	return 0
 }
 
-func getAutoscalerContainer(pod v1.Pod) (rayContainer v1.Container) {
+func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 	// we identify the autoscaler container based on its name
-	for _, container := range pod.Spec.Containers {
+	for i, container := range pod.Spec.Containers {
 		if container.Name == AutoscalerContainerName {
-			return container
+			return i
 		}
 	}
-	// The autoscaler container should have been found, so this branch shouldn't be accessed.
-	// The unit tests cover correct formatting of the autoscaling container, so
-	// we don't need to bubble up an error here.
-	return v1.Container{}
+
+	// not found, use second container
+	// (This code shouldn't be accessed.)
+	// (In any case, unit tests validate formatting of the autoscaler container.)
+	return 1
 }
 
 // labelPod returns the labels for selecting the resources
@@ -425,25 +428,29 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 	return flags.String()
 }
 
-// addEmptyDir add an emptyDir to the shared memory mount point /dev/shm
-// this is to avoid: "The object store is using /tmp instead of /dev/shm because /dev/shm has only 67108864 bytes available. This may slow down performance!...""
+// addEmptyDir adds an emptyDir volume to the pod and a corresponding volume mount to the container
+// Used for a /dev/shm memory mount for object store and for a /tmp/ray disk mount for autoscaler logs.
 func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string, storageMedium v1.StorageMedium) {
+	fmt.Printf(">>>>>ENTERED FUNCTION!!!!!")
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		return
 	}
-	// 1) create a Volume of type emptyDir and add it to Volumes
-	emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
-	pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
+	fmt.Printf(">>>>>DOING STUFF!!!!!")
+	// 1) If needed, create a Volume of type emptyDir and add it to Volumes.
+	if !checkIfVolumeExists(pod, volumeName) {
+		fmt.Printf(">>>>>ADDING EMPTYDIR VOLUME!!!!!")
+		emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
+		fmt.Printf("%v", pod.Spec.Volumes)
+	}
 
-	// 2) create a VolumeMount that uses the emptyDir
+	// 2) Create a VolumeMount that uses the emptyDir.
 	mountedVolume := v1.VolumeMount{
 		MountPath: volumeMountPath,
 		Name:      volumeName,
 		ReadOnly:  false,
 	}
-	if !checkIfVolumeMounted(container, pod, volumeMountPath) {
-		container.VolumeMounts = append(container.VolumeMounts, mountedVolume)
-	}
+	container.VolumeMounts = append(container.VolumeMounts, mountedVolume)
 }
 
 //Format an emptyDir volume.
@@ -480,6 +487,16 @@ func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath 
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+//Checks if a volume with the given name exists.
+func checkIfVolumeExists(pod *v1.Pod, volumeName string) bool {
+	for _, podVolume := range pod.Spec.Volumes {
+		if podVolume.Name == volumeName {
+			return true
 		}
 	}
 	return false
