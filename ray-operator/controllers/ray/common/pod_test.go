@@ -326,7 +326,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	numContainers := len(pod.Spec.Containers)
 	expectedNumContainers := 2
 	if !(numContainers == expectedNumContainers) {
-		t.Fatalf("Expected `%v` container but got `%v`", expectedVolumes, actualVolumes)
+		t.Fatalf("Expected `%v` container but got `%v`", expectedNumContainers, numContainers)
 	}
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
