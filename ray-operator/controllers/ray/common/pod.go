@@ -125,7 +125,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[rayContainerIndex], &pod)
-	fmt.Printf("%v", pod.Spec.Volumes)
 	if len(pod.Spec.InitContainers) > rayContainerIndex {
 		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[rayContainerIndex], &pod)
 	}
@@ -431,17 +430,13 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 // addEmptyDir adds an emptyDir volume to the pod and a corresponding volume mount to the container
 // Used for a /dev/shm memory mount for object store and for a /tmp/ray disk mount for autoscaler logs.
 func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string, storageMedium v1.StorageMedium) {
-	fmt.Printf(">>>>>ENTERED FUNCTION!!!!!")
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		return
 	}
-	fmt.Printf(">>>>>DOING STUFF!!!!!")
 	// 1) If needed, create a Volume of type emptyDir and add it to Volumes.
 	if !checkIfVolumeExists(pod, volumeName) {
-		fmt.Printf(">>>>>ADDING EMPTYDIR VOLUME!!!!!")
 		emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
 		pod.Spec.Volumes = append(pod.Spec.Volumes, emptyDirVolume)
-		fmt.Printf("%v", pod.Spec.Volumes)
 	}
 
 	// 2) Create a VolumeMount that uses the emptyDir.
