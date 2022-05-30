@@ -20,6 +20,8 @@ type RayClusterSpec struct {
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -61,6 +63,25 @@ type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
+
+// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+type AutoscalerOptions struct {
+	// Resources specifies resource requests and limits for the autoscaler container.
+	// Default values: 256m CPU request, 512m CPU limit, 256Mi memory request, 512Mi memory limit.
+	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
+	// Image optionally overrides the autoscaler's container image. This override is for provided for testing and development use-cases.
+	Image *string `json:"image,omitempty"`
+	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+	// Defaults to 300 (five minutes).
+	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// UpscalineMode is "Default" or "Aggressive."
+	// Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+	// Aggressive: Upscaling is not rate-limited.
+	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Default;Aggressive
+type UpscalingMode string
 
 // The overall state of the Ray cluster.
 type ClusterState string
