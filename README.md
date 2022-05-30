@@ -37,6 +37,20 @@ kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resour
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
 ```
 
+#### Single Namespace version
+
+It is possible that the user can only access one single namespace while deploying KubeRay. To deploy KubeRay in a single namespace, the user
+can use these commands:
+
+```
+# Nightly version
+export KUBERAY_NAMESPACE=<my-awesome-namespace>; kustomize build github.com/ray-project/kuberay/manifests/base | envsubst | kubectl apply -f -
+
+# Stable version
+export KUBERAY_NAMESPACE=<my-awesome-namespace>; kustomize build github.com/ray-project/kuberay/manifests/base?ref=v0.2.0 | envsubst | kubectl apply -f -
+
+```
+
 ### Use helm chart
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
