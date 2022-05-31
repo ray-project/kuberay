@@ -61,6 +61,7 @@ def create_kuberay_cluster():
         f.write(raycluster_spec_buf)
         raycluster_spec_file = f.name
 
+    shell_assert_success('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=1600s')
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
 
