@@ -216,7 +216,7 @@ func BuildAutoscalerContainer() v1.Container {
 	return container
 }
 
-// Merge user the overrides in autoscalerOptions field into autoscaler container config.
+// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptions *rayiov1alpha1.AutoscalerOptions) {
 	if autoscalerOptions != nil {
 		if autoscalerOptions.Resources != nil {
