@@ -69,7 +69,7 @@ type AutoscalerOptions struct {
 	// Resources specifies resource requests and limits for the autoscaler container.
 	// Default values: 256m CPU request, 512m CPU limit, 256Mi memory request, 512Mi memory limit.
 	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
-	// Image optionally overrides the autoscaler's container image. This override is for provided for testing and development use-cases.
+	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
 	Image *string `json:"image,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 300 (five minutes).
