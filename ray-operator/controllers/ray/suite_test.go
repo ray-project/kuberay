@@ -19,8 +19,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

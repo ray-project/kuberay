@@ -1,0 +1,50 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.6.0
+  creationTimestamp: null
+  name: rayservices.ray.io
+spec:
+  group: ray.io
+  names:
+    kind: RayService
+    listKind: RayServiceList
+    plural: rayservices
+    singular: rayservice
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RayService is the Schema for the rayservices API
+        properties:
+          apiVersion:
+            description: APIVersion defines the versioned schema of this representation
+              of an object.
+            type: string
+          kind:
+            description: Kind is a string value representing the REST resource this
+              object represents.
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RayServiceSpec defines the desired state of RayService
+            type: object
+          status:
+            description: RayServiceStatus defines the observed state of RayService
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

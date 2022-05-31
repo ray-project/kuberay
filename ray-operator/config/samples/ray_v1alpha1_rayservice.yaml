@@ -1,0 +1,6 @@
+apiVersion: ray.io/v1alpha1
+kind: RayService
+metadata:
+  name: rayservice-sample
+spec:
+  # TODO(user): Add fields here

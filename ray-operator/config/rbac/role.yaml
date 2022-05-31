@@ -7,6 +7,15 @@ metadata:
   name: kuberay-operator
 rules:
 - apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
+- apiGroups:
   - ""
   resources:
   - events
@@ -45,8 +54,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - serviceaccount
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
-  - serviceaccounts
   verbs:
   - create
   - delete
@@ -55,6 +73,14 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - ray.io
   resources:
@@ -70,24 +96,21 @@ rules:
 - apiGroups:
   - ray.io
   resources:
+  - rayclusters/finalizer
+  verbs:
+  - update
+- apiGroups:
+  - ray.io
+  resources:
   - rayclusters/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - networking.k8s.io
+  - ray.io
   resources:
-  - ingressclasses
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - extensions
-  - networking.k8s.io
-  resources:
-  - ingresses
+  - rayservices
   verbs:
   - create
   - delete
@@ -97,24 +120,37 @@ rules:
   - update
   - watch
 - apiGroups:
-  - coordination.k8s.io
+  - ray.io
   resources:
-  - leases
+  - rayservices/finalizers
   verbs:
-  - create
+  - update
+- apiGroups:
+  - ray.io
+  resources:
+  - rayservices/status
+  verbs:
   - get
-  - list
+  - patch
   - update
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - roles
   - rolebindings
   verbs:
   - create
   - delete
   - get
   - list
-  - patch
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
   - update
   - watch
