@@ -334,7 +334,45 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
 	}
+}
 
+// Check that autoscaler container overrides work as expected.
+func TestBuildPodWithAutoscalerOptions(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+
+	customAutoscalerImage := "custom-autoscaler-xxx"
+	customTimeout := int32(100)
+	customUpscaling := "Aggressive"
+	customResources := v1.ResourceRequirements{
+		Requests: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("1"),
+			v1.ResourceMemory: testMemoryLimit,
+		},
+		Limits: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("1"),
+			v1.ResourceMemory: testMemoryLimit,
+		},
+	}
+
+	cluster.Spec.AutoscalerOptions = &rayiov1alpha1.AutoscalerOptions{
+		UpscalingMode:      (*rayiov1alpha1.UpscalingMode)(&customUpscaling),
+		IdleTimeoutSeconds: &customTimeout,
+		Image:              &customAutoscalerImage,
+		Resources:          &customResources,
+	}
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
+	expectedContainer := *autoscalerContainer.DeepCopy()
+	expectedContainer.Image = customAutoscalerImage
+	expectedContainer.Resources = customResources
+	index := getAutoscalerContainerIndex(pod)
+	actualContainer := pod.Spec.Containers[index]
+	if !reflect.DeepEqual(expectedContainer, actualContainer) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
+	}
 }
 
 func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
