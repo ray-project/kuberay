@@ -49,8 +49,10 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
 
 		// inject autoscaler container into head pod
-		container := BuildAutoscalerContainer()
-		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, container)
+		autoscalerContainer := BuildAutoscalerContainer()
+		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
+		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
+		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 		// set custom service account which can be authorized to talk with apiserver
 		podTemplate.Spec.ServiceAccountName = instance.Name
 	}
@@ -212,6 +214,18 @@ func BuildAutoscalerContainer() v1.Container {
 		},
 	}
 	return container
+}
+
+// Merge the user overrides from autoscalerOptions into the autoscaler container config.
+func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptions *rayiov1alpha1.AutoscalerOptions) {
+	if autoscalerOptions != nil {
+		if autoscalerOptions.Resources != nil {
+			autoscalerContainer.Resources = *autoscalerOptions.Resources
+		}
+		if autoscalerOptions.Image != nil {
+			autoscalerContainer.Image = *autoscalerOptions.Image
+		}
+	}
 }
 
 func isRayStartWithBlock(rayStartParams map[string]string) bool {
