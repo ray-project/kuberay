@@ -12,6 +12,9 @@ patches:
 - path: patch-cluster-role-binding.json
   target:
     kind: ClusterRoleBinding
+- path: patch-deployment.json
+  target:
+    kind: Deployment
 - path: patch-others.json
   target:
     version: v1
