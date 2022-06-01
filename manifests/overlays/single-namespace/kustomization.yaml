@@ -15,8 +15,7 @@ patches:
 - path: patch-deployment.json
   target:
     kind: Deployment
-    metadata:
-      name: kuberay-operator
+    name: kuberay-operator
 - path: patch-others.json
   target:
     version: v1

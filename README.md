@@ -40,7 +40,7 @@ kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
 #### Single Namespace version
 
 It is possible that the user can only access one single namespace while deploying KubeRay. To deploy KubeRay in a single namespace, the user
-can use these commands:
+can use following commands.
 
 ```
 # Nightly version
