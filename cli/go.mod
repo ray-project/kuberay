@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/cli
 
-go 1.17
+go 1.18
 
 require (
 	github.com/fatih/color v1.13.0
@@ -43,4 +43,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/ray-project/kuberay/proto => ../proto 
+replace github.com/ray-project/kuberay/proto => ../proto

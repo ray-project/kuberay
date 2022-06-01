@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/ray-operator
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.0
