@@ -44,10 +44,18 @@ can use these commands:
 
 ```
 # Nightly version
-export KUBERAY_NAMESPACE=<my-awesome-namespace>; kustomize build github.com/ray-project/kuberay/manifests/base | envsubst | kubectl apply -f -
+export KUBERAY_NAMESPACE=<my-awesome-namespace>
+# executed by cluster admin
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources" | envsubst | kubectl create -f -
+# executed by user
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace" | envsubst | kubectl apply -f -
 
 # Stable version
-export KUBERAY_NAMESPACE=<my-awesome-namespace>; kustomize build github.com/ray-project/kuberay/manifests/base?ref=v0.2.0 | envsubst | kubectl apply -f -
+export KUBERAY_NAMESPACE=<my-awesome-namespace>
+# executed by cluster admin
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources?ref=v0.2.0" | envsubst | kubectl create -f -
+# executed by user
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace?ref=v0.2.0" | envsubst | kubectl apply -f -
 
 ```
 
