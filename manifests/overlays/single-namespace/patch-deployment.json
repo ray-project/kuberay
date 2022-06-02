@@ -1,0 +1,7 @@
+[
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/containers/0/command",
+    "value": ["/manager", "-watch-namespace", "${KUBERAY_NAMESPACE}"]
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "op": "replace",
+    "path": "/kind",
+    "value": "Role"
+  },
+  {
+    "op": "replace",
+    "path": "/metadata/namespace",
+    "value": "${KUBERAY_NAMESPACE}"
+  }
+]
