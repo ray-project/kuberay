@@ -30,6 +30,45 @@ spec:
           spec:
             description: Specification of the desired behavior of the RayCluster.
             properties:
+              autoscalerOptions:
+                description: AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+                properties:
+                  idleTimeoutSeconds:
+                    description: IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not us
+                    format: int32
+                    type: integer
+                  image:
+                    description: Image optionally overrides the autoscaler's container image.
+                    type: string
+                  resources:
+                    description: Resources specifies resource requests and limits for the autoscaler container.
+                    properties:
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: 'Limits describes the maximum amount of compute resources allowed. More info: https://kubernetes.'
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: Requests describes the minimum amount of compute resources required.
+                        type: object
+                    type: object
+                  upscalingMode:
+                    description: UpscalineMode is "Default" or "Aggressive.
+                    enum:
+                    - Default
+                    - Aggressive
+                    type: string
+                type: object
               enableInTreeAutoscaling:
                 description: EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
                 type: boolean

@@ -41,10 +41,12 @@ help: ## Display this help.
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=kuberay-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	$(KUSTOMIZE) build config/crd > ../helm-chart/kuberay-operator/crds/crd.yaml
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+helm: manifests kustomize ## Sync the CRDs into the Helm chart
+	$(KUSTOMIZE) build config/crd > ../helm-chart/kuberay-operator/crds/crd.yaml
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
