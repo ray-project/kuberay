@@ -54,7 +54,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - serviceaccounts
+  - serviceaccount
   verbs:
   - create
   - delete
