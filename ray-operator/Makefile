@@ -45,6 +45,9 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+helm: manifests kustomize ## Sync the CRDs into the Helm chart
+	$(KUSTOMIZE) build config/crd > ../helm-chart/kuberay-operator/crds/crd.yaml
+
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
