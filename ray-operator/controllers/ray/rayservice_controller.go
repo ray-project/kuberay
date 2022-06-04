@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"math/rand"
 	"reflect"
 	"time"
 
@@ -344,7 +343,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 				if prevStatus.Status != "HEALTHY" {
 					serveStatuses.Statuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-					if time.Now().Sub(prevStatus.HealthLastUpdateTime.Time).Seconds() > 60 {
+					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > 60 {
 						isHealthy = false
 					}
 				}
@@ -355,12 +354,6 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 	rayServiceInstance.Status.ServeStatuses = *serveStatuses
 
 	r.Log.Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
-
-	rNum := rand.Intn(100)
-	if rNum < 10 {
-		r.Log.Info("getAndCheckServeStatus ", "rand", rNum)
-		isHealthy = false
-	}
 
 	return isHealthy, nil
 }
