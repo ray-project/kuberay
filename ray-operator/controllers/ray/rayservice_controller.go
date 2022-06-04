@@ -3,14 +3,15 @@ package ray
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"time"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
-	"time"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
