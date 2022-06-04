@@ -2,10 +2,11 @@ package utils
 
 import (
 	"bytes"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/json"
 	"net/http"
+
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 var (
