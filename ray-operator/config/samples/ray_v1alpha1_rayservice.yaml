@@ -33,7 +33,6 @@ spec:
           py_modules:
             - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
             - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
-  # TODO(user): Add fields here
   rayClusterConfig:
     rayVersion: '1.8.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
