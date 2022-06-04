@@ -2,12 +2,10 @@ package utils
 
 import (
 	"bytes"
-	"fmt"
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/json"
 	"net/http"
-	"reflect"
 )
 
 var (
@@ -55,17 +53,6 @@ func (r *RayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConfigSp
 
 	deploymentJson, err := json.Marshal(servingClusterDeployments)
 
-	var existDeploymentConfigJson string
-	if existDeploymentConfigJson, err = r.GetDeployments(); err != nil {
-		return err
-	}
-	existDeploymentConfig := ServingClusterDeployments{}
-	_ = json.Unmarshal([]byte(existDeploymentConfigJson), &existDeploymentConfig)
-
-	if reflect.DeepEqual(existDeploymentConfig, servingClusterDeployments) {
-		return nil
-	}
-
 	if err != nil {
 		return err
 	}
@@ -99,13 +86,12 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*rayv1alpha1.ServeStatuses,
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
 
 	var serveStatuses rayv1alpha1.ServeStatuses
-	_ = json.Unmarshal(body, &serveStatuses)
+	if err = json.Unmarshal(body, &serveStatuses); err != nil {
+		return nil, err
+	}
 
 	return &serveStatuses, nil
 }
