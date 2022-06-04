@@ -3,4 +3,95 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
+  serveConfigs:
+    - name: shallow
+      import_path: "test_env.shallow_import.ShallowClass"
+      num_replicas: 1
+      route_prefix: "/shallow"
+      ray_actor_options:
+        num_cpus: 0.1
+        runtime_env:
+          py_modules:
+            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
+            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
+    - name: deep
+      import_path: "test_env.subdir1.subdir2.deep_import.DeepClass"
+      num_replicas: 1
+      route_prefix: "/deep"
+      ray_actor_options:
+        num_cpus: 0.1
+        runtime_env:
+          py_modules:
+            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
+            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
+    - name: one
+      import_path: "test_module.test.one"
+      num_replicas: 1
+      ray_actor_options:
+        num_cpus: 0.1
+        runtime_env:
+          py_modules:
+            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
+            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
   # TODO(user): Add fields here
+  rayClusterConfig:
+    rayVersion: '1.8.0' # should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # head group template and specs, (perhaps 'group' is not needed in the name)
+    headGroupSpec:
+      # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
+      serviceType: ClusterIP
+      # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
+      replicas: 4
+      # logical group name, for this called head-group, also can be functional
+      # pod type head or worker
+      # rayNodeType: head # Not needed since it is under the headgroup
+      # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
+      rayStartParams:
+        port: '6379' # should match headService targetPort
+        #include_webui: 'true'
+        object-store-memory: '100000000'
+        redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
+        # webui_host: "10.1.2.60"
+        dashboard-host: '0.0.0.0'
+        num-cpus: '1' # can be auto-completed from the limits
+        node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+        block: 'true'
+      #pod template
+      template:
+        metadata:
+          labels:
+            # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
+            # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+            rayCluster: raycluster-sample # will be injected if missing
+            rayNodeType: head # will be injected if missing, must be head or wroker
+            groupName: headgroup # will be injected if missing
+          # annotations for pod
+          annotations:
+            key: value
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:1.12.0
+              #image: rayproject/ray:nightly
+              #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
+              env:
+                - name: MY_POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+              resources:
+                limits:
+                  cpu: 1
+                  memory: 2Gi
+                requests:
+                  cpu: 1
+                  memory: 2Gi
+              ports:
+                - containerPort: 6379
+                  name: redis
+                - containerPort: 8265 # Ray dashboard
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+
