@@ -4,6 +4,7 @@ COMMIT_SHA1     := $(shell git rev-parse HEAD )
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+# Golang forbids converting float from Json to struct. Need allowDangerousTypes=true to unblock build.
 CRD_OPTIONS ?= "crd:maxDescLen=100,trivialVersions=true,preserveUnknownFields=false,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
