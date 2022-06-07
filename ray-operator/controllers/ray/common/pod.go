@@ -30,7 +30,7 @@ const (
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
 )
 
-var log = logf.Log.WithName("RayCluster-Controller")
+var log = logf.Log.WithName("raycluster-common")
 
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
@@ -119,8 +119,33 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
+func ParseVersion(rayVersion string) (int, int, int, error) {
+	versions := strings.Split(rayVersion, ".")
+	if len(versions) <= 2 {
+		return 0, 0, 0, fmt.Errorf("invalid string")
+	}
+
+	var major int
+	var minor int
+	var patch int
+	var err error
+	if major, err = strconv.Atoi(versions[0]); err != nil {
+		return 0, 0, 0, err
+	}
+
+	if minor, err = strconv.Atoi(versions[1]); err != nil {
+		return 0, 0, 0, err
+	}
+
+	if patch, err = strconv.Atoi(versions[2]); err != nil {
+		return 0, 0, 0, err
+	}
+
+	return major, minor, patch, nil
+}
+
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, rayVersion string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -159,7 +184,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
-			args = fmt.Sprintf("%s && %s", cont, cmd)
+			// If 'ray start' has --block specified, commands after it will not get executed.
+			// so we need to put cmd before cont.
+			args = fmt.Sprintf("%s && %s", cmd, cont)
 		} else {
 			args = cont
 		}
@@ -177,6 +204,40 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 
 	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
+
+	// add health check for head node
+
+	// health check only works for 1.13
+	if major, minor, _, err := ParseVersion(rayVersion); err == nil && major*100+minor >= 113 {
+		if rayNodeType == rayiov1alpha1.HeadNode {
+			probe := &v1.Probe{}
+			if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+				pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+			}
+			probe = pod.Spec.Containers[rayContainerIndex].ReadinessProbe
+			if probe.Exec == nil && probe.HTTPGet == nil && probe.TCPSocket == nil {
+				probe.Exec = &v1.ExecAction{Command: []string{
+					"python", "-c",
+					"from ray._private.gcs_utils import check_health;import sys;" +
+						fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
+							DefaultRedisPort),
+				}}
+			}
+			if probe.InitialDelaySeconds == 0 {
+				probe.InitialDelaySeconds = 10
+			}
+			if probe.FailureThreshold == 0 {
+				// This number is set to 20 to make default tests happy
+				probe.FailureThreshold = 20
+			}
+		}
+
+		// add health check for worker node
+		if rayNodeType == rayiov1alpha1.WorkerNode && pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+			// TODO: add probe for worker node
+			pod.Spec.Containers[rayContainerIndex].ReadinessProbe = nil
+		}
+	}
 
 	return pod
 }
@@ -307,6 +368,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 		KubernetesApplicationNameLabelKey:  ApplicationName,
 		KubernetesCreatedByLabelKey:        ComponentName,
 		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
+		RayNodeHealthStateLabelKey:         "",
 	}
 
 	for k, v := range ret {
@@ -457,9 +519,11 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
+			"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
+			"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}

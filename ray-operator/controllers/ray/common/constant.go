@@ -9,6 +9,10 @@ const (
 	RayNodeLabelKey                    = "ray.io/is-ray-node"
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
+	RayNodeHealthStateLabelKey         = "ray.io/health-state"
+
+	// Pod health state values
+	PodUnhealthy = "Unhealthy"
 
 	EnableAgentServiceKey  = "ray.io/enableAgentService"
 	EnableAgentServiceTrue = "true"

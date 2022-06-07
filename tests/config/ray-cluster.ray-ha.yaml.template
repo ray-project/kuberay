@@ -1,0 +1,165 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: redis-config
+  labels:
+    app: redis
+data:
+  redis.conf: |-
+    dir /data
+    port 6379
+    bind 0.0.0.0
+    appendonly yes
+    protected-mode no
+    requirepass 5241590000000000
+    pidfile /data/redis-6379.pid
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:5.0.8
+          command:
+            - "sh"
+            - "-c"
+            - "redis-server /usr/local/etc/redis/redis.conf"
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+---
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: raycluster-external-redis
+spec:
+  rayVersion: '$ray_version'
+  headGroupSpec:
+    serviceType: ClusterIP
+    replicas: 1
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1'
+      node-ip-address: $$MY_POD_IP
+      block: 'true'
+    #pod template
+    template:
+      metadata:
+        labels:
+          rayCluster: raycluster-compatibility-test
+          rayNodeType: head
+          groupName: headgroup # will be injected if missing
+      spec:
+        containers:
+          - name: ray-head
+            image: $ray_image
+            env:
+              - name: MY_POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              # RAY_REDIS_ADDRESS can force ray to use external redis
+              - name: RAY_REDIS_ADDRESS
+                value: redis:6379
+            ports:
+              - containerPort: 6379
+                name: redis
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+  workerGroupSpecs:
+    # the pod replicas in this group typed worker
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 2
+      # logical group name, for this called small-group, also can be functional
+      groupName: small-group
+      rayStartParams:
+        node-ip-address: $$MY_POD_IP
+        block: 'true'
+      #pod template
+      template:
+        metadata:
+          labels:
+            rayCluster: raycluster-compatibility-test
+            rayNodeType: worker # will be injected if missing
+            groupName: small-group # will be injected if missing
+          # annotations for pod
+          annotations:
+            key: value
+        spec:
+          initContainers: # to avoid worker crashing before head service is created
+            - name: init-myservice
+              image: busybox:1.28
+              command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+          containers:
+            - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+              image: $ray_image
+              env:
+                - name: TYPE
+                  value: "worker"
+                - name:  RAY_DISABLE_DOCKER_CPU_WARNING
+                  value: "1"
+                - name: CPU_REQUEST
+                  valueFrom:
+                    resourceFieldRef:
+                      containerName: machine-learning
+                      resource: requests.cpu
+                - name: MY_POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: MY_POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+              ports:
+                - containerPort: 80
+              volumeMounts:
+                - mountPath: /var/log
+                  name: log-volume
+              resources:
+                limits:
+                  cpu: "1"
+                requests:
+                  cpu: "200m"
+          volumes:
+            - name: log-volume
+              emptyDir: {}

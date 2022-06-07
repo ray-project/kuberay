@@ -30,6 +30,19 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
+// IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
+func IsRunningAndReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
 func CheckName(s string) string {
 	maxLenght := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
