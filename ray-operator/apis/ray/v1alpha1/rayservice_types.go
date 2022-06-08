@@ -10,7 +10,6 @@ import (
 type ServiceStatus string
 
 const (
-	FailToGetRayService          ServiceStatus = "FailToGetRayService"
 	FailToGetOrCreateRayCluster  ServiceStatus = "FailToGetOrCreateRayCluster"
 	WaitForDashboard             ServiceStatus = "WaitForDashboard"
 	FailServeDeploy              ServiceStatus = "FailServeDeploy"
@@ -28,6 +27,7 @@ type RayServiceSpec struct {
 }
 
 // ServeConfigSpec defines the desired state of RayService
+// Reference to https://docs.ray.io/en/latest/ray-core/package-ref.html#ray-remote.
 type ServeConfigSpec struct {
 	Name                      string             `json:"name"`
 	ImportPath                string             `json:"importPath"`

@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -263,54 +262,34 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 }
 
 func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	headServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: rayCluster.Name}
-	if err := r.List(ctx, &headServices, client.InNamespace(rayCluster.Namespace), filterLabels); err != nil {
+	var headService *corev1.Service
+	if err := r.Get(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, headService); err != nil {
 		return "", err
 	}
 
-	dashboardURL := ""
+	r.Log.Info("reconcileServices ", "head service found", headService.Name)
+	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
+	servicePorts := headService.Spec.Ports
 
-	if headServices.Items != nil {
-		if len(headServices.Items) == 1 {
-			r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
-			// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
-			servicePorts := headServices.Items[0].Spec.Ports
+	dashboardPort := int32(-1)
 
-			dashboardPort := int32(-1)
-
-			for _, servicePort := range servicePorts {
-				if servicePort.Name == servicePortName {
-					dashboardPort = servicePort.Port
-					break
-				}
-			}
-
-			if dashboardPort == int32(-1) {
-				return "", fmtErrors.Errorf("dashboard port not found")
-			}
-
-			dashboardURL = fmt.Sprintf("%s.%s.svc.cluster.local:%v",
-				headServices.Items[0].Name,
-				headServices.Items[0].Namespace,
-				dashboardPort)
-			return dashboardURL, nil
-		}
-
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(headServices.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates head service found", len(headServices.Items))
-			return "", fmtErrors.Errorf("Duplicates head service found %v", len(headServices.Items))
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == servicePortName {
+			dashboardPort = servicePort.Port
+			break
 		}
 	}
 
-	// Rely on RayCluster controller to create head service.
-	if headServices.Items == nil || len(headServices.Items) == 0 {
-		return "", fmtErrors.Errorf("No head service found")
+	if dashboardPort == int32(-1) {
+		return "", fmtErrors.Errorf("dashboard port not found")
 	}
 
-	return "", nil
+	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
+		headService.Name,
+		headService.Namespace,
+		dashboardPort)
+
+	return dashboardURL, nil
 }
 
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, request ctrl.Request) bool {
