@@ -175,7 +175,7 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
 	Image:           "rayproject/ray:448f52",
-	ImagePullPolicy: v1.PullAlways,
+	ImagePullPolicy: v1.PullIfNotPresent,
 	Env: []v1.EnvVar{
 		{
 			Name: "RAY_CLUSTER_NAME",
@@ -344,8 +344,9 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	svcName := utils.GenerateServiceName(cluster.Name)
 
 	customAutoscalerImage := "custom-autoscaler-xxx"
+	customPullPolicy := v1.PullAlways
 	customTimeout := int32(100)
-	customUpscaling := "Aggressive"
+	customUpscaling := rayiov1alpha1.UpscalingMode("Aggressive")
 	customResources := v1.ResourceRequirements{
 		Requests: v1.ResourceList{
 			v1.ResourceCPU:    resource.MustParse("1"),
@@ -358,15 +359,17 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	}
 
 	cluster.Spec.AutoscalerOptions = &rayiov1alpha1.AutoscalerOptions{
-		UpscalingMode:      (*rayiov1alpha1.UpscalingMode)(&customUpscaling),
+		UpscalingMode:      &customUpscaling,
 		IdleTimeoutSeconds: &customTimeout,
 		Image:              &customAutoscalerImage,
+		ImagePullPolicy:    &customPullPolicy,
 		Resources:          &customResources,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
+	expectedContainer.ImagePullPolicy = customPullPolicy
 	expectedContainer.Resources = customResources
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]

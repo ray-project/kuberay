@@ -170,7 +170,7 @@ func BuildAutoscalerContainer() v1.Container {
 		// TODO: choose right version based on instance.spec.Version
 		// The currently used image reflects changes up to https://github.com/ray-project/ray/pull/24718
 		Image:           "rayproject/ray:448f52",
-		ImagePullPolicy: v1.PullAlways,
+		ImagePullPolicy: v1.PullIfNotPresent,
 		Env: []v1.EnvVar{
 			{
 				Name: "RAY_CLUSTER_NAME",
@@ -222,6 +222,9 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		}
 		if autoscalerOptions.Image != nil {
 			autoscalerContainer.Image = *autoscalerOptions.Image
+		}
+		if autoscalerOptions.ImagePullPolicy != nil {
+			autoscalerContainer.ImagePullPolicy = *autoscalerOptions.ImagePullPolicy
 		}
 	}
 }
