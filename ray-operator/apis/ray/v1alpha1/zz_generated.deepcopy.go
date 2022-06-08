@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -21,6 +21,11 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 	if in.Image != nil {
 		in, out := &in.Image, &out.Image
 		*out = new(string)
+		**out = **in
+	}
+	if in.ImagePullPolicy != nil {
+		in, out := &in.ImagePullPolicy, &out.ImagePullPolicy
+		*out = new(v1.PullPolicy)
 		**out = **in
 	}
 	if in.IdleTimeoutSeconds != nil {

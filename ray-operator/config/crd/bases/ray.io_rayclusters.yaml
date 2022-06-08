@@ -47,6 +47,10 @@ spec:
                     description: Image optionally overrides the autoscaler's container
                       image.
                     type: string
+                  imagePullPolicy:
+                    description: ImagePullPolicy optionally overrides the autoscaler
+                      container's image pull policy.
+                    type: string
                   resources:
                     description: Resources specifies resource requests and limits
                       for the autoscaler container.
