@@ -60,20 +60,24 @@ type RayActorOptionSpec struct {
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServiceStatus    ServiceStatus           `json:"serviceStatus,omitempty"`
-	ServeStatuses    ServeDeploymentStatuses `json:"serveDeploymentStatuses,omitempty"`
+	ServeStatuses    []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	RayClusterName   string                  `json:"rayClusterName,omitempty"`
 	RayClusterStatus RayClusterStatus        `json:"rayClusterStatus,omitempty"`
 }
 
-// ServeDeploymentStatuses defines the desired states of all Serve Deployments
+// ServeDeploymentStatuses defines the current states of all Serve Deployments
 type ServeDeploymentStatuses struct {
 	Statuses []ServeDeploymentStatus `json:"statuses,omitempty"`
 }
 
-// ServeDeploymentStatus defines the desired state of Serve Deployment
+// ServeDeploymentStatus defines the current state of Serve Deployment
 type ServeDeploymentStatus struct {
-	Name    string `json:"name,omitempty"`
-	Status  string `json:"status,omitempty"`
-	Message string `json:"message,omitempty"`
+	// Name, Status, Message are from Ray Dashboard to represent the state of a serve deployment.
+	Name string `json:"name,omitempty"`
+	// TODO: change status type to enum
+	Status         string      `json:"status,omitempty"`
+	Message        string      `json:"message,omitempty"`
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
 	HealthLastUpdateTime metav1.Time `json:"healthLastUpdateTime,omitempty"`

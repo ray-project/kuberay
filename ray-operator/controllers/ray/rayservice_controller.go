@@ -6,15 +6,17 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/uuid"
+	cmap "github.com/orcaman/concurrent-map"
+
+	"github.com/go-logr/logr"
+	fmtErrors "github.com/pkg/errors"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/go-logr/logr"
-	fmtErrors "github.com/pkg/errors"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -27,11 +29,15 @@ import (
 )
 
 var (
-	rayServiceLog                             = logf.Log.WithName("rayservice-controller")
+	rayServiceLog = logf.Log.WithName("rayservice-controller")
+)
+
+const (
 	RayServiceDefaultRequeueDuration          = 2 * time.Second
 	RayServiceRestartRequeueDuration          = 10 * time.Second
 	RayServeDeploymentUnhealthSecondThreshold = 60.0
-	rayClusterSuffix                          = "-raycluster"
+	rayClusterSuffix                          = "-raycluster-"
+	servicePortName                           = "dashboard"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -41,17 +47,17 @@ type RayServiceReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	// Now Ray dashboard does not cache serve deployment config. To avoid updating the same config repeatedly, cache the Serve Deployment config in this map.
-	ServeDeploymentConfigMap map[types.NamespacedName]rayv1alpha1.RayServiceSpec
+	ServeDeploymentConfigs cmap.ConcurrentMap
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
 func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 	return &RayServiceReconciler{
-		Client:                   mgr.GetClient(),
-		Scheme:                   mgr.GetScheme(),
-		Log:                      ctrl.Log.WithName("controllers").WithName("RayService"),
-		Recorder:                 mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeDeploymentConfigMap: make(map[types.NamespacedName]rayv1alpha1.RayServiceSpec),
+		Client:                 mgr.GetClient(),
+		Scheme:                 mgr.GetScheme(),
+		Log:                    ctrl.Log.WithName("controllers").WithName("RayService"),
+		Recorder:               mgr.GetEventRecorderFor("rayservice-controller"),
+		ServeDeploymentConfigs: cmap.New(),
 	}
 }
 
@@ -89,7 +95,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	var rayServiceInstance *rayv1alpha1.RayService
 
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailToGetRayService, err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -133,12 +138,13 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{}, err
 		}
 	} else {
+		rayServiceInstance.Status.RayClusterName = ""
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		delete(r.ServeDeploymentConfigMap, request.NamespacedName)
+		r.ServeDeploymentConfigs.Remove(request.NamespacedName.String())
 
 		// restart raycluster
 		if err := r.Delete(ctx, rayClusterInstance); err != nil {
@@ -185,9 +191,16 @@ func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstan
 
 func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, error) {
 	// Update ray cluster
+	var rayClusterInstanceName string
+	if rayServiceInstance.Status.RayClusterName != "" {
+		rayClusterInstanceName = rayServiceInstance.Status.RayClusterName
+	} else {
+		rayClusterInstanceName = rayServiceInstance.Name + rayClusterSuffix + uuid.New().String()
+	}
+
 	rayClusterNamespacedName := types.NamespacedName{
 		Namespace: rayServiceInstance.Namespace,
-		Name:      rayServiceInstance.Name + rayClusterSuffix,
+		Name:      rayClusterInstanceName,
 	}
 
 	rayClusterInstance := &rayv1alpha1.RayCluster{}
@@ -197,6 +210,7 @@ func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context
 		rayClusterInstance.Spec = rayServiceInstance.Spec.RayClusterSpec
 
 		r.Log.Info("Update ray cluster spec")
+		// TODO: Check which config fields can be handled by RayCluster controller. For other fields, need to start a new RayCluster.
 		if err := r.Update(ctx, rayClusterInstance); err != nil {
 			r.Log.Error(err, "Fail to update ray cluster instance!")
 			// Error updating the RayCluster object.
@@ -215,11 +229,13 @@ func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context
 			// Error creating the RayCluster object - requeue the request.
 			return nil, err
 		}
+		// Update RayCluster name in RayService state.
+		rayServiceInstance.Status.RayClusterName = rayClusterInstanceName
 		r.Log.V(1).Info("created rayCluster for rayService run", "rayCluster", rayClusterInstance)
 	} else {
 		r.Log.Error(err, "Get request rayCluster instance error!")
 		// Error reading the RayCluster object - requeue the request.
-		return nil, client.IgnoreNotFound(err)
+		return nil, err
 	}
 
 	return rayClusterInstance, nil
@@ -264,7 +280,7 @@ func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster
 			dashboardPort := int32(-1)
 
 			for _, servicePort := range servicePorts {
-				if servicePort.Name == "dashboard" {
+				if servicePort.Name == servicePortName {
 					dashboardPort = servicePort.Port
 					break
 				}
@@ -298,16 +314,22 @@ func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster
 }
 
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, request ctrl.Request) bool {
-	existConfig, exist := r.ServeDeploymentConfigMap[request.NamespacedName]
+	existConfigObj, exist := r.ServeDeploymentConfigs.Get(request.NamespacedName.String())
+
+	if !exist {
+		r.Log.Info("shouldUpdate value, config does not exist")
+		return true
+	}
+
+	existConfig, ok := existConfigObj.(rayv1alpha1.RayServiceSpec)
 
 	shouldUpdate := false
 
-	if !exist || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) || len(rayServiceInstance.Status.ServeStatuses.Statuses) != len(existConfig.ServeConfigSpecs) {
+	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) || len(rayServiceInstance.Status.ServeStatuses) != len(existConfig.ServeConfigSpecs) {
 		shouldUpdate = true
 	}
-	r.Log.Info("shouldUpdate value", "shouldUpdate", shouldUpdate)
 
-	log.V(1).Info("status check", "len(rayServiceInstance.Status.ServeDeploymentStatuses.Statuses) ", len(rayServiceInstance.Status.ServeStatuses.Statuses), "len(existConfig.ServeConfigSpecs)", len(existConfig.ServeConfigSpecs))
+	r.Log.Info("shouldUpdate value", "shouldUpdate", shouldUpdate)
 
 	return shouldUpdate
 }
@@ -319,7 +341,7 @@ func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1al
 		return err
 	}
 
-	r.ServeDeploymentConfigMap[request.NamespacedName] = rayServiceInstance.Spec
+	r.ServeDeploymentConfigs.Set(request.NamespacedName.String(), rayServiceInstance.Spec)
 	return nil
 }
 
@@ -333,12 +355,13 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 
 	statusMap := make(map[string]rayv1alpha1.ServeDeploymentStatus)
 
-	for _, status := range rayServiceInstance.Status.ServeStatuses.Statuses {
+	for _, status := range rayServiceInstance.Status.ServeStatuses {
 		statusMap[status.Name] = status
 	}
 
 	isHealthy := true
 	for i := 0; i < len(serveStatuses.Statuses); i++ {
+		serveStatuses.Statuses[i].LastUpdateTime = metav1.Now()
 		serveStatuses.Statuses[i].HealthLastUpdateTime = metav1.Now()
 		if serveStatuses.Statuses[i].Status != "HEALTHY" {
 			prevStatus, exist := statusMap[serveStatuses.Statuses[i].Name]
@@ -354,7 +377,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 		}
 	}
 
-	rayServiceInstance.Status.ServeStatuses = *serveStatuses
+	rayServiceInstance.Status.ServeStatuses = serveStatuses.Statuses
 
 	r.Log.Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
 
