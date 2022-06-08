@@ -175,7 +175,7 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
 	Image:           "rayproject/ray:448f52",
-	ImagePullPolicy: v1.PullIfNotPresent,
+	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{
 			Name: "RAY_CLUSTER_NAME",
@@ -344,7 +344,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	svcName := utils.GenerateServiceName(cluster.Name)
 
 	customAutoscalerImage := "custom-autoscaler-xxx"
-	customPullPolicy := v1.PullAlways
+	customPullPolicy := v1.PullIfNotPresent
 	customTimeout := int32(100)
 	customUpscaling := rayiov1alpha1.UpscalingMode("Aggressive")
 	customResources := v1.ResourceRequirements{
