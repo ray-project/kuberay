@@ -38,10 +38,10 @@ type ServeConfigSpec struct {
 	MaxConcurrentQueries      *int32             `json:"maxConcurrentQueries,omitempty"`
 	UserConfig                map[string]string  `json:"userConfig,omitempty"`
 	AutoscalingConfig         map[string]string  `json:"autoscalingConfig,omitempty"`
-	GracefulShutdownWaitLoopS *float64           `json:"gracefulShutdownWaitLoopS,omitempty"`
-	GracefulShutdownTimeoutS  *float64           `json:"gracefulShutdownTimeoutS,omitempty"`
-	HealthCheckPeriodS        *float64           `json:"healthCheckPeriodS,omitempty"`
-	HealthCheckTimeoutS       *float64           `json:"healthCheckTimeoutS,omitempty"`
+	GracefulShutdownWaitLoopS *int32             `json:"gracefulShutdownWaitLoopS,omitempty"`
+	GracefulShutdownTimeoutS  *int32             `json:"gracefulShutdownTimeoutS,omitempty"`
+	HealthCheckPeriodS        *int32             `json:"healthCheckPeriodS,omitempty"`
+	HealthCheckTimeoutS       *int32             `json:"healthCheckTimeoutS,omitempty"`
 	RayActorOptions           RayActorOptionSpec `json:"rayActorOptions,omitempty"`
 }
 
