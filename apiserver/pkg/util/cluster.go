@@ -153,7 +153,7 @@ func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, compute
 	if computeRuntime.GetGpu() != 0 {
 		gpu := computeRuntime.GetGpu()
 		accelerator := "nvidia.com/gpu"
-		if len(computeRuntime.GetGpuAccelerator()) == 0 {
+		if len(computeRuntime.GetGpuAccelerator()) != 0 {
 			accelerator = computeRuntime.GetGpuAccelerator()
 		}
 
@@ -294,7 +294,7 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 	if computeRuntime.GetGpu() != 0 {
 		gpu := computeRuntime.GetGpu()
 		accelerator := "nvidia.com/gpu"
-		if len(computeRuntime.GetGpuAccelerator()) == 0 {
+		if len(computeRuntime.GetGpuAccelerator()) != 0 {
 			accelerator = computeRuntime.GetGpuAccelerator()
 		}
 
