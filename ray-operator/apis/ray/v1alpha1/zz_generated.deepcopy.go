@@ -23,6 +23,11 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.ImagePullPolicy != nil {
+		in, out := &in.ImagePullPolicy, &out.ImagePullPolicy
+		*out = new(v1.PullPolicy)
+		**out = **in
+	}
 	if in.IdleTimeoutSeconds != nil {
 		in, out := &in.IdleTimeoutSeconds, &out.IdleTimeoutSeconds
 		*out = new(int32)

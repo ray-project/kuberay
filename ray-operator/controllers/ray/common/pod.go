@@ -223,6 +223,9 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		if autoscalerOptions.Image != nil {
 			autoscalerContainer.Image = *autoscalerOptions.Image
 		}
+		if autoscalerOptions.ImagePullPolicy != nil {
+			autoscalerContainer.ImagePullPolicy = *autoscalerOptions.ImagePullPolicy
+		}
 	}
 }
 
