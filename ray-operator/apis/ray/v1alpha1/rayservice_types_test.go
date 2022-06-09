@@ -12,8 +12,8 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var numReplicas int32
-var numCpus float64
+var numReplicas int32 = 1
+var numCpus = 0.1
 
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
@@ -364,8 +364,6 @@ var expected = `{
 }`
 
 func TestMarshallingRayService(t *testing.T) {
-	numReplicas = 1
-	numCpus = 0.1
 	// marshal successfully
 	myRayServiceJson, err := json.Marshal(&myRayService)
 	if err != nil {
