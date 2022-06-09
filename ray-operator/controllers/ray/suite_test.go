@@ -84,7 +84,10 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
 
 	err = NewReconciler(mgr).SetupWithManager(mgr, 1)
-	Expect(err).NotTo(HaveOccurred(), "failed to setup controller")
+	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
+
+	err = NewRayServiceReconciler(mgr).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())

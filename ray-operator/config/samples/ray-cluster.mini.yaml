@@ -6,7 +6,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
+  rayVersion: '1.12.1' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -19,10 +19,9 @@ spec:
     # rayNodeType: head # Not needed since it is under the headgroup
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
-      port: '6379' # should match headService targetPort
+      port: '6379' # should match container port named gcs-server
       #include_webui: 'true'
       object-store-memory: '100000000'
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       # webui_host: "10.1.2.60"
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
@@ -43,7 +42,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.8.0
+          image: rayproject/ray:1.12.1
           #image: rayproject/ray:nightly
           #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
           env:
@@ -60,7 +59,7 @@ spec:
               memory: 2Gi
           ports:
           - containerPort: 6379
-            name: redis
+            name: gcs-server
           - containerPort: 8265 # Ray dashboard
             name: dashboard
           - containerPort: 10001
