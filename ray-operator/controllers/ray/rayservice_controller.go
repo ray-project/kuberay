@@ -33,11 +33,11 @@ var (
 )
 
 const (
-	RayServiceDefaultRequeueDuration          = 2 * time.Second
-	RayServiceRestartRequeueDuration          = 10 * time.Second
-	RayServeDeploymentUnhealthSecondThreshold = 60.0
-	rayClusterSuffix                          = "-raycluster-"
-	servicePortName                           = "dashboard"
+	RayServiceDefaultRequeueDuration           = 2 * time.Second
+	RayServiceRestartRequeueDuration           = 10 * time.Second
+	RayServeDeploymentUnhealthySecondThreshold = 60.0
+	rayClusterSuffix                           = "-raycluster-"
+	servicePortName                            = "dashboard"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -351,7 +351,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 				if prevStatus.Status != "HEALTHY" {
 					serveStatuses.Statuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > RayServeDeploymentUnhealthSecondThreshold {
+					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > RayServeDeploymentUnhealthySecondThreshold {
 						isHealthy = false
 					}
 				}
