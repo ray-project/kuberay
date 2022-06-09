@@ -54,6 +54,8 @@ func main() {
 		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
 	flag.BoolVar(&ray.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", false,
 		"Temporary feature flag - to be deleted after testing")
+	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
+		"Forced cluster upgrade flag")
 	opts := zap.Options{
 		Development: true,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -72,6 +74,9 @@ func main() {
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
 	if ray.PrioritizeWorkersToDelete {
 		setupLog.Info("Feature flag prioritize-workers-to-delete is enabled.")
+	}
+	if ray.ForcedClusterUpgrade {
+		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
