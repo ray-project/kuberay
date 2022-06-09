@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	. "github.com/onsi/ginkgo"
@@ -38,7 +40,6 @@ import (
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
-	var enableInTreeAutoscaling = true
 
 	var numReplicas int32
 	var numCpus float64
@@ -61,36 +62,71 @@ var _ = Context("Inside the default namespace", func() {
 						NumCpus: &numCpus,
 						RuntimeEnv: map[string][]string{
 							"py_modules": {
-								"https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip",
-								"https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip",
+								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
+								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
+							},
+						},
+					},
+				},
+				{
+					Name:        "deep",
+					ImportPath:  "test_env.subdir1.subdir2.deep_import.DeepClass",
+					NumReplicas: &numReplicas,
+					RoutePrefix: "/deep",
+					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+						NumCpus: &numCpus,
+						RuntimeEnv: map[string][]string{
+							"py_modules": {
+								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
+								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
+							},
+						},
+					},
+				},
+				{
+					Name:        "one",
+					ImportPath:  "test_module.test.one",
+					NumReplicas: &numReplicas,
+					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+						NumCpus: &numCpus,
+						RuntimeEnv: map[string][]string{
+							"py_modules": {
+								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
+								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
 							},
 						},
 					},
 				},
 			},
 			RayClusterSpec: rayiov1alpha1.RayClusterSpec{
-				RayVersion:              "1.0",
-				EnableInTreeAutoscaling: &enableInTreeAutoscaling,
+				RayVersion: "1.12.1",
 				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
-					ServiceType: "ClusterIP",
+					ServiceType: corev1.ServiceTypeClusterIP,
 					Replicas:    pointer.Int32Ptr(1),
 					RayStartParams: map[string]string{
 						"port":                "6379",
-						"object-manager-port": "12345",
-						"node-manager-port":   "12346",
 						"object-store-memory": "100000000",
-						"redis-password":      "LetMeInRay",
+						"dashboard-host":      "0.0.0.0",
 						"num-cpus":            "1",
+						"node-ip-address":     "127.0.0.1",
+						"block":               "true",
 					},
 					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"rayCluster":  "raycluster-sample",
+								"rayNodeType": "head",
+								"groupName":   "headgroup",
+							},
+							Annotations: map[string]string{
+								"key": "value",
+							},
+						},
 						Spec: corev1.PodSpec{
-							ServiceAccountName: "head-service-account",
 							Containers: []corev1.Container{
 								{
-									Name:    "ray-head",
-									Image:   "rayproject/autoscaler",
-									Command: []string{"python"},
-									Args:    []string{"/opt/code.py"},
+									Name:  "ray-head",
+									Image: "rayproject/ray:1.12.1",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -99,6 +135,30 @@ var _ = Context("Inside the default namespace", func() {
 													FieldPath: "status.podIP",
 												},
 											},
+										},
+									},
+									Resources: corev1.ResourceRequirements{
+										Limits: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("1"),
+											corev1.ResourceMemory: resource.MustParse("2Gi"),
+										},
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("1"),
+											corev1.ResourceMemory: resource.MustParse("2Gi"),
+										},
+									},
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          "gcs-server",
+											ContainerPort: 6379,
+										},
+										{
+											Name:          "dashboard",
+											ContainerPort: 8265,
+										},
+										{
+											Name:          "head",
+											ContainerPort: 10001,
 										},
 									},
 								},
@@ -113,16 +173,22 @@ var _ = Context("Inside the default namespace", func() {
 						MaxReplicas: pointer.Int32Ptr(10000),
 						GroupName:   "small-group",
 						RayStartParams: map[string]string{
-							"port":           "6379",
-							"redis-password": "LetMeInRay",
-							"num-cpus":       "1",
+							"port":     "6379",
+							"num-cpus": "1",
 						},
 						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Namespace: "default",
+								Labels: map[string]string{
+									"rayCluster": "raycluster-sample",
+									"groupName":  "small-group",
+								},
+							},
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/autoscaler",
+										Image:   "rayproject/ray:1.12.1",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
