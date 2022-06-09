@@ -12,8 +12,8 @@ spec:
         numCpus: 0.1
         runtimeEnv:
           py_modules:
-            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
-            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
     - name: deep
       importPath: "test_env.subdir1.subdir2.deep_import.DeepClass"
       numReplicas: 1
@@ -22,8 +22,8 @@ spec:
         numCpus: 0.1
         runtimeEnv:
           py_modules:
-            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
-            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
     - name: one
       importPath: "test_module.test.one"
       numReplicas: 1
@@ -31,8 +31,8 @@ spec:
         numCpus: 0.1
         runtimeEnv:
           py_modules:
-            - "https://github.com/shrekris-anyscale/test_deploy_group/archive/HEAD.zip"
-            - "https://github.com/shrekris-anyscale/test_module/archive/HEAD.zip"
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
   rayClusterConfig:
     rayVersion: '1.12.1' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
