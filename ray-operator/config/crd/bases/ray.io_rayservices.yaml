@@ -11472,19 +11472,24 @@ spec:
                   this file'
                 items:
                   description: ServeConfigSpec defines the desired state of RayService
+                    Reference to https://docs.ray.
                   properties:
                     autoscalingConfig:
                       additionalProperties:
                         type: string
                       type: object
                     gracefulShutdownTimeoutS:
-                      type: number
+                      format: int32
+                      type: integer
                     gracefulShutdownWaitLoopS:
-                      type: number
+                      format: int32
+                      type: integer
                     healthCheckPeriodS:
-                      type: number
+                      format: int32
+                      type: integer
                     healthCheckTimeoutS:
-                      type: number
+                      format: int32
+                      type: integer
                     importPath:
                       type: string
                     initArgs:
@@ -11545,6 +11550,8 @@ spec:
           status:
             description: RayServiceStatus defines the observed state of RayService
             properties:
+              rayClusterName:
+                type: string
               rayClusterStatus:
                 description: RayClusterStatus defines the observed state of RayCluster
                 properties:
@@ -11580,27 +11587,28 @@ spec:
                     type: string
                 type: object
               serveDeploymentStatuses:
-                description: ServeDeploymentStatuses defines the desired states of
-                  all Serve Deployments
-                properties:
-                  statuses:
-                    items:
-                      description: ServeDeploymentStatus defines the desired state
-                        of Serve Deployment
-                      properties:
-                        healthLastUpdateTime:
-                          description: Keep track of how long the service is healthy.
-                          format: date-time
-                          type: string
-                        message:
-                          type: string
-                        name:
-                          type: string
-                        status:
-                          type: string
-                      type: object
-                    type: array
-                type: object
+                items:
+                  description: ServeDeploymentStatus defines the current state of
+                    Serve Deployment
+                  properties:
+                    healthLastUpdateTime:
+                      description: Keep track of how long the service is healthy.
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    name:
+                      description: Name, Status, Message are from Ray Dashboard to
+                        represent the state of a serve deployment.
+                      type: string
+                    status:
+                      description: 'TODO: change status type to enum'
+                      type: string
+                  type: object
+                type: array
               serviceStatus:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'

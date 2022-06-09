@@ -6,7 +6,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/util/rand"
+
 	cmap "github.com/orcaman/concurrent-map"
 
 	"github.com/go-logr/logr"
@@ -103,6 +104,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	log.Info("Updated RayCluster")
+
 	rayServiceInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
 	var clientURL string
@@ -183,7 +186,7 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, status rayv1alpha1.ServiceStatus, err error) error {
 	rayServiceInstance.Status.ServiceStatus = status
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
+		return fmtErrors.Errorf("combined error: \n %v \n %v", err, errStatus)
 	}
 	return err
 }
@@ -194,8 +197,10 @@ func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context
 	if rayServiceInstance.Status.RayClusterName != "" {
 		rayClusterInstanceName = rayServiceInstance.Status.RayClusterName
 	} else {
-		rayClusterInstanceName = rayServiceInstance.Name + rayClusterSuffix + uuid.New().String()
+		rayClusterInstanceName = fmt.Sprintf("%s%s%s", rayServiceInstance.Name, rayClusterSuffix, rand.String(5))
 	}
+
+	r.Log.Info("getOrCreateRayClusterInstance", "rayClusterInstanceName", rayClusterInstanceName)
 
 	rayClusterNamespacedName := types.NamespacedName{
 		Namespace: rayServiceInstance.Namespace,
@@ -217,7 +222,7 @@ func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context
 		}
 	} else if errors.IsNotFound(err) {
 		r.Log.Info("Not found rayCluster, creating rayCluster!")
-		rayClusterInstance, err = r.constructRayClusterForRayService(rayServiceInstance)
+		rayClusterInstance, err = r.constructRayClusterForRayService(rayServiceInstance, rayClusterInstanceName)
 		if err != nil {
 			r.Log.Error(err, "unable to construct rayCluster from spec")
 			// Error construct the RayCluster object - requeue the request.
@@ -240,14 +245,12 @@ func (r *RayServiceReconciler) getOrCreateRayClusterInstance(ctx context.Context
 	return rayClusterInstance, nil
 }
 
-func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, error) {
-	name := fmt.Sprintf("%s%s", rayService.Name, rayClusterSuffix)
-
+func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv1alpha1.RayService, rayClusterName string) (*rayv1alpha1.RayCluster, error) {
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayService.Labels,
 			Annotations: rayService.Annotations,
-			Name:        name,
+			Name:        rayClusterName,
 			Namespace:   rayService.Namespace,
 		},
 		Spec: *rayService.Spec.RayClusterSpec.DeepCopy(),
@@ -262,8 +265,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 }
 
 func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	var headService *corev1.Service
-	if err := r.Get(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, headService); err != nil {
+	headService := &corev1.Service{}
+	if err := r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayCluster.Name), Namespace: rayCluster.Namespace}, headService); err != nil {
 		return "", err
 	}
 
