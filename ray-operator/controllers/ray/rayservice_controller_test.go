@@ -17,13 +17,17 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +47,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	myRayService := &rayiov1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "raycluster-sample",
+			Name:      "rayservice-sample",
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayServiceSpec{
@@ -153,12 +157,24 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 		})
 
-		It("should see one serve deployment", func() {
+		It("should create a raycluster object", func() {
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
-				time.Second*30, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
-			Expect(len(myRayService.Status.ServeStatuses), 1)
-			Expect(myRayService.Status.ServeStatuses[0].Name, "shallow")
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.RayClusterName)
+			myRayCluster := &rayiov1alpha1.RayCluster{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.RayClusterName, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+		})
+
+		It("should create more than 1 worker", func() {
+			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.RayClusterName, common.RayNodeGroupLabelKey: "small-group"}
+			Eventually(
+				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
+			if len(workerPods.Items) > 0 {
+				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(v1.PodRunning), Equal(v1.PodPending)))
+			}
 		})
 
 		It("should update a rayservice object", func() {
@@ -177,3 +193,12 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
+
+func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
+	return func() (string, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
+			return "", err
+		}
+		return rayService.Status.RayClusterName, nil
+	}
+}
