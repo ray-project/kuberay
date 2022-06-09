@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	DefaultAttempts               = 8
+	DefaultAttempts               = 16
 	DefaultSleepDurationInSeconds = 3
 )
 
@@ -206,7 +206,7 @@ var _ = Context("Inside the default namespace", func() {
 			// adding a scale down
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				time.Second*5, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
 			rep := new(int32)
 			*rep = 2
 			myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
