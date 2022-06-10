@@ -35,8 +35,10 @@ type HeadGroupSpec struct {
 	Replicas *int32 `json:"replicas"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
-	// Template is the eaxct pod template used in K8s depoyments, statefulsets, etc.
+	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
 	Template v1.PodTemplateSpec `json:"template"`
+	// RayResources is a string-int map specifying custom resources and resource overrides.
+	RayResources map[string]int32 `json:"rayResources"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
