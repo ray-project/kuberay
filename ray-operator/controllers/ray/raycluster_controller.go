@@ -40,6 +40,7 @@ var (
 	log                       = logf.Log.WithName("raycluster-controller")
 	DefaultRequeueDuration    = 2 * time.Second
 	PrioritizeWorkersToDelete bool
+	ForcedClusterUpgrade      bool
 )
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -246,6 +247,44 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 	}
+
+	if ForcedClusterUpgrade {
+		if len(headPods.Items) == 1 {
+			// head node amount is exactly 1, but we need to check if it has been changed
+			res := utils.PodNotMatchingTemplate(headPods.Items[0], instance.Spec.HeadGroupSpec.Template)
+			if res {
+				log.Info(fmt.Sprintf("need to delete old head pod %s", headPods.Items[0].Name))
+				if err := r.Delete(context.TODO(), &headPods.Items[0]); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
+		// check if WorkerGroupSpecs has been changed and we need to kill worker pods
+		for _, worker := range instance.Spec.WorkerGroupSpecs {
+			workerPods := corev1.PodList{}
+			filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
+			if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+				return err
+			}
+			updatedWorkerPods := false
+			for _, item := range workerPods.Items {
+				if utils.PodNotMatchingTemplate(item, worker.Template) {
+					log.Info(fmt.Sprintf("need to delete old worker pod %s", item.Name))
+					if err := r.Delete(context.TODO(), &item); err != nil {
+						log.Info(fmt.Sprintf("error deleting worker pod %s", item.Name))
+						return err
+					}
+					updatedWorkerPods = true
+				}
+			}
+			if updatedWorkerPods {
+				return nil
+			}
+		}
+	}
+
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		workerPods := corev1.PodList{}
