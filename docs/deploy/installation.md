@@ -1,6 +1,5 @@
 ## Installation
 
-
 #### Nightly version
 
 ```
