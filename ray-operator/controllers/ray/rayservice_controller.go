@@ -3,10 +3,11 @@ package ray
 import (
 	"context"
 	"fmt"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	networkingv1 "k8s.io/api/networking/v1"
 	"reflect"
 	"time"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
@@ -228,7 +229,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	// Clean up RayCluster serve deployment configs.
-	for key, _ := range r.ServeDeploymentConfigs.Items() {
+	for key := range r.ServeDeploymentConfigs.Items() {
 		if key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.RayClusterName) || key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName) {
 			continue
 		}
