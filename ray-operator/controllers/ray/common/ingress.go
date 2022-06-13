@@ -80,3 +80,17 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 
 	return ingress, nil
 }
+
+func BuildServiceIngressForHeadService(service rayiov1alpha1.RayService, cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
+	ingress, err := BuildIngressForHeadService(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	ingress.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
+	ingress.ObjectMeta.Namespace = service.Namespace
+	ingress.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
+	ingress.ObjectMeta.Labels[RayIDLabelKey] = utils.GenerateIdentifier(service.Name, rayiov1alpha1.HeadNode)
+
+	return ingress, nil
+}

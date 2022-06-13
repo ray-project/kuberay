@@ -2,6 +2,7 @@ package common
 
 const (
 	// Belows used as label key
+	RayServiceLabelKey   = "ray.io/service"
 	RayClusterLabelKey   = "ray.io/cluster"
 	RayNodeTypeLabelKey  = "ray.io/node-type"
 	RayNodeGroupLabelKey = "ray.io/group"

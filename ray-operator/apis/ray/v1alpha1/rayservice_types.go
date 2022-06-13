@@ -17,6 +17,7 @@ const (
 	Running                      ServiceStatus = "Running"
 	Restarting                   ServiceStatus = "Restarting"
 	FailDeleteRayCluster         ServiceStatus = "FailDeleteRayCluster"
+	FailUpdateIngress            ServiceStatus = "FailUpdateIngress"
 )
 
 // RayServiceSpec defines the desired state of RayService
@@ -59,10 +60,21 @@ type RayActorOptionSpec struct {
 // RayServiceStatus defines the observed state of RayService
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServiceStatus    ServiceStatus           `json:"serviceStatus,omitempty"`
-	ServeStatuses    []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	RayClusterName   string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	ServiceStatus           ServiceStatus           `json:"serviceStatus,omitempty"`
+	ServeStatuses           []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashBoardStatus         DashBoardStatus         `json:"dashBoardStatus,omitempty"`
+	RayClusterName          string                  `json:"rayClusterName,omitempty"`
+	PreparingRayClusterName string                  `json:"preparingRayClusterName,omitempty"`
+	RayClusterStatus        RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+}
+
+// DashBoardStatus defines the current states of Ray Dashboard
+type DashBoardStatus struct {
+	IsHealthy      bool        `json:"isHealthy,omitempty"`
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Keep track of how long the service is healthy.
+	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	HealthLastUpdateTime metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 // ServeDeploymentStatuses defines the current states of all Serve Deployments
