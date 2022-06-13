@@ -3,4 +3,93 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  # TODO(user): Add fields here
+  serveConfigs:
+    - name: shallow
+      importPath: "test_env.shallow_import.ShallowClass"
+      numReplicas: 1
+      routePrefix: "/shallow"
+      rayActorOptions:
+        numCpus: 0.1
+        runtimeEnv:
+          py_modules:
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
+    - name: deep
+      importPath: "test_env.subdir1.subdir2.deep_import.DeepClass"
+      numReplicas: 1
+      routePrefix: "/deep"
+      rayActorOptions:
+        numCpus: 0.1
+        runtimeEnv:
+          py_modules:
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
+    - name: one
+      importPath: "test_module.test.one"
+      numReplicas: 1
+      rayActorOptions:
+        numCpus: 0.1
+        runtimeEnv:
+          py_modules:
+            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
+            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
+  rayClusterConfig:
+    rayVersion: '1.12.1' # should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # head group template and specs, (perhaps 'group' is not needed in the name)
+    headGroupSpec:
+      # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
+      serviceType: ClusterIP
+      # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
+      replicas: 1
+      # logical group name, for this called head-group, also can be functional
+      # pod type head or worker
+      # rayNodeType: head # Not needed since it is under the headgroup
+      # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
+      rayStartParams:
+        port: '6379' # should match container port named gcs-server
+        #include_webui: 'true'
+        object-store-memory: '100000000'
+        # webui_host: "10.1.2.60"
+        dashboard-host: '0.0.0.0'
+        num-cpus: '1' # can be auto-completed from the limits
+        node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+        block: 'true'
+      #pod template
+      template:
+        metadata:
+          labels:
+            # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
+            # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+            rayCluster: raycluster-sample # will be injected if missing
+            rayNodeType: head # will be injected if missing, must be head or wroker
+            groupName: headgroup # will be injected if missing
+          # annotations for pod
+          annotations:
+            key: value
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:1.12.1
+              #image: rayproject/ray:nightly
+              #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
+              env:
+                - name: MY_POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+              resources:
+                limits:
+                  cpu: 1
+                  memory: 2Gi
+                requests:
+                  cpu: 1
+                  memory: 2Gi
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265 # Ray dashboard
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+

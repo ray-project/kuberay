@@ -83,6 +83,16 @@ func setupTest(t *testing.T) {
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-head",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"python"},
+						Args:    []string{"/opt/code.py"},
+					},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: v1.PodRunning,
 			},
@@ -94,6 +104,16 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayClusterLabelKey:   instanceName,
 					common.RayNodeGroupLabelKey: groupNameStr,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-worker",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"echo"},
+						Args:    []string{"Hello Ray"},
+					},
 				},
 			},
 			Status: corev1.PodStatus{
@@ -109,6 +129,16 @@ func setupTest(t *testing.T) {
 					common.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-worker",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"echo"},
+						Args:    []string{"Hello Ray"},
+					},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: v1.PodRunning,
 			},
@@ -120,6 +150,16 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayClusterLabelKey:   instanceName,
 					common.RayNodeGroupLabelKey: groupNameStr,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-worker",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"echo"},
+						Args:    []string{"Hello Ray"},
+					},
 				},
 			},
 			Status: corev1.PodStatus{
@@ -135,6 +175,16 @@ func setupTest(t *testing.T) {
 					common.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-worker",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"echo"},
+						Args:    []string{"Hello Ray"},
+					},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: v1.PodRunning,
 			},
@@ -146,6 +196,16 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayClusterLabelKey:   instanceName,
 					common.RayNodeGroupLabelKey: groupNameStr,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:    "ray-worker",
+						Image:   "rayproject/autoscaler",
+						Command: []string{"echo"},
+						Args:    []string{"Hello Ray"},
+					},
 				},
 			},
 			Status: corev1.PodStatus{

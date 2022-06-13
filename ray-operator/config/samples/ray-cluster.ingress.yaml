@@ -5,14 +5,13 @@ metadata:
     kubernetes.io/ingress.class: nginx
   name: raycluster-ingress
 spec:
-  rayVersion: '1.6.0' # should match the Ray version in the image of the containers
+  rayVersion: '1.12.1' # should match the Ray version in the image of the containers
   headGroupSpec:
     serviceType: NodePort
     enableIngress: true
     replicas: 1
     rayStartParams:
       port: '6379'
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
       node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
@@ -21,7 +20,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.9.2
+          image: rayproject/ray:1.12.1
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -29,7 +28,7 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
-            name: redis
+            name: gcs-server
           - containerPort: 8265 # Ray dashboard
             name: dashboard
           - containerPort: 10001
