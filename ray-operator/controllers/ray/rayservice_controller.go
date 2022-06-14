@@ -136,7 +136,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, request)
 
 	if shouldUpdate {
-		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, request); err != nil {
+		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, rayClusterInstance.Name, request); err != nil {
 			if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
 				log.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markUnhealthyRestart(rayServiceInstance)
@@ -405,14 +405,14 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	return shouldUpdate
 }
 
-func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClient, request ctrl.Request) error {
+func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClient, clusterName string, request ctrl.Request) error {
 	r.Log.Info("shouldUpdate")
 	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeConfigSpecs); err != nil {
 		r.Log.Error(err, "fail to update deployment")
 		return err
 	}
 
-	r.ServeDeploymentConfigs.Set(request.NamespacedName.String(), rayServiceInstance.Spec)
+	r.ServeDeploymentConfigs.Set(r.generateConfigKey(rayServiceInstance, clusterName), rayServiceInstance.Spec)
 	return nil
 }
 
@@ -476,6 +476,7 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 
 	if err == nil {
 		// Update Ingress
+		headIngress.Spec = ingress.Spec
 		if updateErr := r.Update(ctx, ingress); updateErr != nil {
 			r.Log.Error(updateErr, "Ingress Update error!", "Ingress.Error", updateErr)
 			return updateErr
@@ -543,7 +544,8 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 	if err == nil {
 		// Update Ingress
-		if updateErr := r.Update(ctx, rayHeadSvc); updateErr != nil {
+		headService.Spec = rayHeadSvc.Spec
+		if updateErr := r.Update(ctx, headService); updateErr != nil {
 			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
 			return updateErr
 		}
