@@ -26,6 +26,9 @@ jobs:
         # Default value should work for both pull_request and merge(push) event.
         ref: ${{github.event.pull_request.head.sha}}
 
+    - name: Install goimports
+      run: go get golang.org/x/tools/cmd/goimports
+
     - name: Run gofmt
       uses: Jerome1337/gofmt-action@v1.0.4
       with:
@@ -74,9 +77,6 @@ jobs:
         args: --timeout=3m
         skip-go-installation: true
         skip-pkg-cache: true
-
-    - name: Install goimports
-      run: go get golang.org/x/tools/cmd/goimports
 
     - name: Run goimports
       run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ ray-operator/ cli/ | tee goimports.out)" || { cat goimports.out && exit 1; }
