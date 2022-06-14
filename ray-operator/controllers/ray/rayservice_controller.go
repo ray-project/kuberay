@@ -39,7 +39,6 @@ const (
 	RayServeDeploymentUnhealthySecondThreshold = 300.0
 	RayDashboardUnhealthySecondThreshold       = 600.0
 	servicePortName                            = "dashboard"
-	restartClusterMark                         = "restartCluster"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -292,7 +291,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	if shouldGeneratePreparingRayClusterName {
-		rayServiceInstance.Status.PreparingRayClusterName = utils.GenerateRayClusterName(rayServiceInstance.Name)
+		r.markRestart(rayServiceInstance)
 		r.Log.Info("reconcileRayCluster 3", "rayServiceInstance.Status.PreparingRayClusterName", rayServiceInstance.Status.PreparingRayClusterName)
 		return runningRayCluster, nil, nil
 	}
@@ -563,7 +562,7 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance 
 func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1alpha1.RayService) {
 	r.Log.Info("Current cluster is unhealthy, prepare to restart.")
 	rayServiceInstance.Status = rayv1alpha1.RayServiceStatus{
-		RayClusterName:          rayServiceInstance.Name,
+		RayClusterName:          rayServiceInstance.Status.RayClusterName,
 		PreparingRayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 		ServiceStatus:           rayv1alpha1.Restarting,
 	}
