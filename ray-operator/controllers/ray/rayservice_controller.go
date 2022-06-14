@@ -113,9 +113,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	rayServiceLog.Info("Done reconcileRayCluster")
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		rayServiceLog.Error(err, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
+		rayServiceLog.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
 		return ctrl.Result{}, err
 	}
+	r.Log.Info("reconcileRayCluster", "rayServiceInstance update version", rayServiceInstance)
 	rayServiceLog.Info("Done reconcileRayCluster update status")
 
 	rayClusterInstance := runningRayClusterInstance
@@ -246,6 +247,12 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return nil, nil, err
 	}
 
+	runningRayCluster = nil
+	preparingRayCluster = nil
+	r.Log.Info("------------------------------reconcileRayCluster------------------------------")
+	r.Log.Info("reconcileRayCluster", "rayServiceInstance", rayServiceInstance)
+	r.Log.Info("reconcileRayCluster", "rayClusterList", rayClusterList)
+	r.Log.Info("------------------------------reconcileRayCluster------------------------------")
 	// Clean up RayCluster instances.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name == rayServiceInstance.Status.RayClusterName {
@@ -253,9 +260,32 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		} else if rayClusterInstance.Name == rayServiceInstance.Status.PreparingRayClusterName {
 			preparingRayCluster = &rayClusterInstance
 		} else {
-			r.Log.Info("reconcileRayCluster", "delete ray cluster", rayClusterInstance)
-			if err := r.Delete(ctx, &rayClusterInstance); err != nil {
-				return nil, nil, err
+			r.Log.Info("reconcileRayCluster", "should delete ray cluster", rayClusterInstance)
+			//if err := r.Delete(ctx, &rayClusterInstance); err != nil {
+			//	return nil, nil, err
+			//}
+		}
+	}
+
+	if preparingRayCluster == nil {
+		for _, rayClusterInstance := range rayClusterList.Items {
+			if reflect.DeepEqual(rayClusterInstance.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+				preparingRayCluster = &rayClusterInstance
+				break
+			}
+		}
+	}
+
+	if preparingRayCluster != nil {
+		for _, rayClusterInstance := range rayClusterList.Items {
+			if rayClusterInstance.Name != rayServiceInstance.Status.RayClusterName &&
+				rayClusterInstance.Name != rayServiceInstance.Status.PreparingRayClusterName &&
+				rayClusterInstance.Name != preparingRayCluster.Name {
+
+				r.Log.Info("reconcileRayCluster", "Really delete ray cluster", rayClusterInstance)
+				if err := r.Delete(ctx, &rayClusterInstance); err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 	}
@@ -275,16 +305,20 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	// Check whether to create a new RayCluster.
 	if rayServiceInstance.Status.PreparingRayClusterName == restartClusterMark {
 		shouldPrepareNewRayCluster = true
+		r.Log.Info("reconcileRayCluster 1")
 	} else if preparingRayCluster != nil {
 		if !reflect.DeepEqual(preparingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 			shouldPrepareNewRayCluster = true
+			r.Log.Info("reconcileRayCluster 2", "preparingRayCluster.Spec", preparingRayCluster.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
 		}
 	} else if runningRayCluster != nil {
 		if !reflect.DeepEqual(runningRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 			shouldPrepareNewRayCluster = true
+			r.Log.Info("reconcileRayCluster 3")
 		}
 	} else {
 		shouldPrepareNewRayCluster = true
+		r.Log.Info("reconcileRayCluster 4")
 	}
 
 	if shouldPrepareNewRayCluster {
@@ -358,7 +392,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 			Name:        rayClusterName,
 			Namespace:   rayService.Namespace,
 		},
-		Spec: *rayService.Spec.RayClusterSpec.DeepCopy(),
+		Spec: rayService.Spec.RayClusterSpec,
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
