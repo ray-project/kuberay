@@ -23,4 +23,13 @@ resources:
   kind: RayService
   path: github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: io
+  group: ray
+  kind: RayJob
+  path: github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1
+  version: v1alpha1
 version: "3"
