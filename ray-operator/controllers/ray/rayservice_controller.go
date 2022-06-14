@@ -94,7 +94,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rayservice", request.NamespacedName)
-	log.Info("reconciling RayService", "service NamespacedName", request.NamespacedName)
+	rayServiceLog.Info("reconciling RayService", "service NamespacedName", request.NamespacedName)
 
 	// Get serving cluster instance
 	var err error
@@ -111,20 +111,22 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	rayServiceLog.Info("Done reconcileRayCluster")
+
 	rayClusterInstance := runningRayClusterInstance
 	servingRayClusterInstance := runningRayClusterInstance
 	if preparingRayClusterInstance != nil {
 		rayClusterInstance = preparingRayClusterInstance
 	}
 
-	log.Info("Updated RayCluster")
+	rayServiceLog.Info("Updated RayCluster")
 
 	rayServiceInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
 	var clientURL string
 	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
-			log.Info("Dashboard is unhealthy, restart the cluster.")
+			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markUnhealthyRestart(rayServiceInstance)
 		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForDashboard, err)
@@ -139,7 +141,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if shouldUpdate {
 		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, rayClusterInstance.Name, request); err != nil {
 			if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
-				log.Info("Dashboard is unhealthy, restart the cluster.")
+				rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markUnhealthyRestart(rayServiceInstance)
 			}
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailServeDeploy, err)
@@ -150,7 +152,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	var isHealthy bool
 	if isHealthy, err = r.getAndCheckServeStatus(rayServiceInstance, rayDashboardClient); err != nil {
 		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
-			log.Info("Dashboard is unhealthy, restart the cluster.")
+			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markUnhealthyRestart(rayServiceInstance)
 		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailGetServeDeploymentStatus, err)
@@ -159,7 +161,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	r.updateAndCheckDashboardStatus(rayServiceInstance, true)
 
-	log.Info("Check serve health", "isHealthy", isHealthy)
+	rayServiceLog.Info("Check serve health", "isHealthy", isHealthy)
 
 	if isHealthy {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
@@ -178,17 +180,24 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		log.V(1).Info("Mark cluster as unhealthy", "rayCluster", rayClusterInstance)
+		rayServiceLog.V(1).Info("Mark cluster as unhealthy", "rayCluster", rayClusterInstance)
 		// Wait a while for the cluster delete
 		return ctrl.Result{RequeueAfter: RayServiceRestartRequeueDuration}, nil
 	}
 
-	if err := r.reconcileIngress(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
-		return ctrl.Result{}, err
+	if rayClusterInstance != nil {
+		if err := r.reconcileIngress(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
+			return ctrl.Result{}, err
+		}
+		if err := r.reconcileServices(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateService, err)
+			return ctrl.Result{}, err
+		}
 	}
-	if err := r.reconcileServices(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateService, err)
+
+	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
+		rayServiceLog.Error(err, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
 		return ctrl.Result{}, err
 	}
 
@@ -207,9 +216,9 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 	rayServiceInstance := &rayv1alpha1.RayService{}
 	if err := r.Get(ctx, request.NamespacedName, rayServiceInstance); err != nil {
 		if errors.IsNotFound(err) {
-			rayServiceLog.Info("Read request instance not found error!")
+			r.Log.Info("Read request instance not found error!")
 		} else {
-			rayServiceLog.Error(err, "Read request instance error!")
+			r.Log.Error(err, "Read request instance error!")
 		}
 		// Error reading the object - requeue the request.
 		return nil, err
@@ -406,7 +415,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClient, clusterName string, request ctrl.Request) error {
-	r.Log.Info("shouldUpdate")
+	r.Log.Info("updateServeDeployment")
 	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeConfigSpecs); err != nil {
 		r.Log.Error(err, "fail to update deployment")
 		return err

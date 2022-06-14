@@ -6,4 +6,4 @@ kind: Kustomization
 images:
 - name: kuberay/operator
   newName: brucezhang90/bruce-docker-repo
-  newTag: ha
+  newTag: ha_v1
