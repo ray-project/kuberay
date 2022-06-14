@@ -48,6 +48,7 @@ func BuildServiceServiceForHeadPod(rayService rayiov1alpha1.RayService, rayClust
 
 	service.ObjectMeta.Name = utils.GenerateServiceName(rayService.Name)
 	service.ObjectMeta.Namespace = rayService.Namespace
+	delete(service.ObjectMeta.Labels, RayClusterLabelKey)
 	service.ObjectMeta.Labels[RayServiceLabelKey] = rayService.Name
 	service.ObjectMeta.Labels[RayIDLabelKey] = utils.GenerateIdentifier(rayService.Name, rayiov1alpha1.HeadNode)
 

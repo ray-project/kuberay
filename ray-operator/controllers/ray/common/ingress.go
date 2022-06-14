@@ -89,6 +89,7 @@ func BuildServiceIngressForHeadService(service rayiov1alpha1.RayService, cluster
 
 	ingress.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
 	ingress.ObjectMeta.Namespace = service.Namespace
+	delete(service.ObjectMeta.Labels, RayClusterLabelKey)
 	ingress.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
 	ingress.ObjectMeta.Labels[RayIDLabelKey] = utils.GenerateIdentifier(service.Name, rayiov1alpha1.HeadNode)
 

@@ -163,7 +163,9 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	if isHealthy {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
-		r.updateRayClusterHealthInfo(rayServiceInstance, rayClusterInstance.Name)
+		if r.allServeDeploymentsHealthy(rayServiceInstance) {
+			r.updateRayClusterHealthInfo(rayServiceInstance, rayClusterInstance.Name)
+		}
 		// If the rayClusterInstance is healthy, update servingRayClusterInstance.
 		servingRayClusterInstance = rayClusterInstance
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
@@ -275,10 +277,6 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	// Update the status.
-	if runningRayCluster != nil {
-		rayServiceInstance.Status.RayClusterName = runningRayCluster.Name
-	}
-
 	if preparingRayCluster != nil {
 		rayServiceInstance.Status.PreparingRayClusterName = preparingRayCluster.Name
 	}
@@ -454,6 +452,22 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 	r.Log.Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
 
 	return isHealthy, nil
+}
+
+func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *rayv1alpha1.RayService) bool {
+	// Check if the serve deployment number is correct.
+	if len(rayServiceInstance.Status.ServeStatuses) != len(rayServiceInstance.Spec.ServeConfigSpecs) {
+		return false
+	}
+
+	// Check if all the service deployments are healthy.
+	for _, status := range rayServiceInstance.Status.ServeStatuses {
+		if status.Status != "HEALTHY" {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
