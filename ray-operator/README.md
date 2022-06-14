@@ -68,9 +68,9 @@ There are three example config files to deploy RayClusters included here:
 
 Sample  | Description
 ------------- | -------------
-[ray-cluster.mini.yaml](config/samples/ray-cluster.mini.yaml)   | Small example consisting of 1 head pod.
-[ray-cluster.heterogeneous.yaml](config/samples/ray-cluster.heterogeneous.yaml)  | Example with heterogenous worker types. 1 head pod and 2 worker pods, each of which has a different resource quota.
-[ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resouce properties.
+[ray-cluster.mini.yaml](../../ray-operator/config/samples/ray-cluster.mini.yaml)   | Small example consisting of 1 head pod.
+[ray-cluster.heterogeneous.yaml](../../ray-operator/config/samples/ray-cluster.heterogeneous.yaml)  | Example with heterogenous worker types. 1 head pod and 2 worker pods, each of which has a different resource quota.
+[ray-cluster.complete.yaml](../../ray-operator/config/samples/ray-cluster.complete.yaml)  | Shows all available custom resouce properties.
 
 ```shell
 # Create a configmap with a hello world Ray code.
