@@ -51,6 +51,10 @@ spec:
                         description: Image optionally overrides the autoscaler's container
                           image.
                         type: string
+                      imagePullPolicy:
+                        description: ImagePullPolicy optionally overrides the autoscaler
+                          container's image pull policy.
+                        type: string
                       resources:
                         description: Resources specifies resource requests and limits
                           for the autoscaler container.
@@ -11550,6 +11554,21 @@ spec:
           status:
             description: RayServiceStatus defines the observed state of RayService
             properties:
+              dashBoardStatus:
+                description: DashBoardStatus defines the current states of Ray Dashboard
+                properties:
+                  healthLastUpdateTime:
+                    description: Keep track of how long the service is healthy.
+                    format: date-time
+                    type: string
+                  isHealthy:
+                    type: boolean
+                  lastUpdateTime:
+                    format: date-time
+                    type: string
+                type: object
+              preparingRayClusterName:
+                type: string
               rayClusterName:
                 type: string
               rayClusterStatus:

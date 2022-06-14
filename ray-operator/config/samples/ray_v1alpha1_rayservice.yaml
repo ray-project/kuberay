@@ -2,6 +2,8 @@ apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
   name: rayservice-sample
+  annotations:
+    kubernetes.io/ingress.class: nginx
 spec:
   serveConfigs:
     - name: shallow
