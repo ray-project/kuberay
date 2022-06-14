@@ -75,6 +75,7 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 	if !ok {
 		logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
 	} else {
+		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
 		ingress.Spec.IngressClassName = &ingressClassName
 	}
 
