@@ -52,7 +52,7 @@ service ComputeTemplateService {
     };
   }
 
-  // Deletes a compuate template by its name and namespace 
+  // Deletes a compute template by its name and namespace 
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
