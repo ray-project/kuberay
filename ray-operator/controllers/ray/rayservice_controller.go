@@ -188,7 +188,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileServices(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
+		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateService, err)
 		return ctrl.Result{}, err
 	}
 
@@ -199,6 +199,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1alpha1.RayService{}).
+		Owns(&rayv1alpha1.RayCluster{}).
 		Complete(r)
 }
 
@@ -238,6 +239,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		} else if rayClusterInstance.Name == rayServiceInstance.Status.PreparingRayClusterName {
 			preparingRayCluster = &rayClusterInstance
 		} else {
+			r.Log.Info("reconcileRayCluster", "delete ray cluster", rayClusterInstance)
 			if err := r.Delete(ctx, &rayClusterInstance); err != nil {
 				return nil, nil, err
 			}
@@ -470,7 +472,6 @@ func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *ra
 }
 
 func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
-	// Enable ingress for RayService by default.
 	if rayClusterInstance.Spec.HeadGroupSpec.EnableIngress == nil || !*rayClusterInstance.Spec.HeadGroupSpec.EnableIngress {
 		return nil
 	}
@@ -481,12 +482,10 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 		return err
 	}
 	ingress.Name = utils.CheckName(ingress.Name)
-	if err := ctrl.SetControllerReference(rayServiceInstance, ingress, r.Scheme); err != nil {
-		return err
-	}
+
 	// Get Ingress instance.
 	headIngress := &networkingv1.Ingress{}
-	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateIngressName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headIngress)
+	err = r.Get(ctx, client.ObjectKey{Name: ingress.Name, Namespace: rayServiceInstance.Namespace}, headIngress)
 
 	if err == nil {
 		// Update Ingress
@@ -497,6 +496,9 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 		}
 	} else if errors.IsNotFound(err) {
 		// Create Ingress
+		if err := ctrl.SetControllerReference(rayServiceInstance, ingress, r.Scheme); err != nil {
+			return err
+		}
 		if createErr := r.Create(ctx, ingress); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
 				log.Info("Ingress already exists,no need to create")
@@ -549,22 +551,25 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		return err
 	}
 	rayHeadSvc.Name = utils.CheckName(rayHeadSvc.Name)
-	if err := ctrl.SetControllerReference(rayServiceInstance, rayHeadSvc, r.Scheme); err != nil {
-		return err
-	}
+
 	// Get Service instance.
 	headService := &corev1.Service{}
-	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headService)
+	err = r.Get(ctx, client.ObjectKey{Name: rayHeadSvc.Name, Namespace: rayServiceInstance.Namespace}, headService)
 
 	if err == nil {
 		// Update Service
 		headService.Spec = rayHeadSvc.Spec
+		r.Log.Info("reconcileServices", "update service", headService)
 		if updateErr := r.Update(ctx, headService); updateErr != nil {
 			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
 		// Create Service
+		r.Log.Info("reconcileServices", "create service", rayHeadSvc)
+		if err := ctrl.SetControllerReference(rayServiceInstance, rayHeadSvc, r.Scheme); err != nil {
+			return err
+		}
 		if createErr := r.Create(ctx, rayHeadSvc); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
 				log.Info("rayHeadSvc already exists,no need to create")
