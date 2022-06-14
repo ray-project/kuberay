@@ -112,6 +112,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	rayServiceLog.Info("Done reconcileRayCluster")
+	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
+		rayServiceLog.Error(err, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
+		return ctrl.Result{}, err
+	}
+	rayServiceLog.Info("Done reconcileRayCluster update status")
 
 	rayClusterInstance := runningRayClusterInstance
 	servingRayClusterInstance := runningRayClusterInstance
@@ -255,6 +260,8 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		}
 	}
 
+	r.Log.Info("reconcileRayCluster", "r.ServeDeploymentConfigs.Items()", r.ServeDeploymentConfigs.Items())
+
 	// Clean up RayCluster serve deployment configs.
 	for key := range r.ServeDeploymentConfigs.Items() {
 		if key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.RayClusterName) || key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName) {
@@ -364,7 +371,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 
 func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
 	headService := &corev1.Service{}
-	if err := r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayCluster.Name), Namespace: rayCluster.Namespace}, headService); err != nil {
+	headServiceName := utils.CheckName(utils.GenerateServiceName(rayCluster.Name))
+	if err := r.Get(ctx, client.ObjectKey{Name: headServiceName, Namespace: rayCluster.Namespace}, headService); err != nil {
 		return "", err
 	}
 
