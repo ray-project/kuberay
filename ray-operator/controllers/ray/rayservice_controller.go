@@ -9,8 +9,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	networkingv1 "k8s.io/api/networking/v1"
 
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	cmap "github.com/orcaman/concurrent-map"
 
 	"github.com/go-logr/logr"
@@ -38,9 +36,9 @@ var (
 const (
 	RayServiceDefaultRequeueDuration           = 2 * time.Second
 	RayServiceRestartRequeueDuration           = 10 * time.Second
-	RayServeDeploymentUnhealthySecondThreshold = 60.0
-	RayDashboardUnhealthySecondThreshold       = 180.0
-	rayClusterSuffix                           = "-raycluster-"
+	RayServeDeploymentUnhealthySecondThreshold = 300.0
+	RayDashboardUnhealthySecondThreshold       = 600.0
+	RayClusterSuffix                           = "-raycluster-"
 	servicePortName                            = "dashboard"
 	restartClusterMark                         = "restartCluster"
 )
@@ -133,7 +131,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
-			r.markUnhealthyRestart(rayServiceInstance)
+			r.markRestart(rayServiceInstance)
 		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForDashboard, err)
 		return ctrl.Result{}, err
@@ -148,7 +146,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, rayClusterInstance.Name, request); err != nil {
 			if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
 				rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
-				r.markUnhealthyRestart(rayServiceInstance)
+				r.markRestart(rayServiceInstance)
 			}
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailServeDeploy, err)
 			return ctrl.Result{}, err
@@ -159,7 +157,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if isHealthy, err = r.getAndCheckServeStatus(rayServiceInstance, rayDashboardClient); err != nil {
 		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
-			r.markUnhealthyRestart(rayServiceInstance)
+			r.markRestart(rayServiceInstance)
 		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailGetServeDeploymentStatus, err)
 		return ctrl.Result{}, err
@@ -180,7 +178,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{}, err
 		}
 	} else {
-		r.markUnhealthyRestart(rayServiceInstance)
+		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{}, err
@@ -240,19 +238,24 @@ func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstan
 	return err
 }
 
-func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (runningRayCluster *rayv1alpha1.RayCluster, preparingRayCluster *rayv1alpha1.RayCluster, err error) {
+func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, *rayv1alpha1.RayCluster, error) {
+	// check if preparing is empty or not.
+	// Preparing is empty, check if running spec diff
+	// preparing not empty do preparing update.
+
 	rayClusterList := rayv1alpha1.RayClusterList{}
 	filterLabels := client.MatchingLabels{common.RayServiceLabelKey: rayServiceInstance.Name}
-	if err := r.List(ctx, &rayClusterList, client.InNamespace(rayServiceInstance.Namespace), filterLabels); err != nil {
+	var err error
+	if err = r.List(ctx, &rayClusterList, client.InNamespace(rayServiceInstance.Namespace), filterLabels); err != nil {
 		return nil, nil, err
 	}
 
-	runningRayCluster = nil
-	preparingRayCluster = nil
-	r.Log.Info("------------------------------reconcileRayCluster------------------------------")
-	r.Log.Info("reconcileRayCluster", "rayServiceInstance", rayServiceInstance)
-	r.Log.Info("reconcileRayCluster", "rayClusterList", rayClusterList)
-	r.Log.Info("------------------------------reconcileRayCluster------------------------------")
+	var runningRayCluster *rayv1alpha1.RayCluster
+	var preparingRayCluster *rayv1alpha1.RayCluster
+	//r.Log.Info("------------------------------reconcileRayCluster------------------------------")
+	//r.Log.Info("reconcileRayCluster", "rayServiceInstance", rayServiceInstance)
+	//r.Log.Info("reconcileRayCluster", "rayClusterList", rayClusterList)
+	//r.Log.Info("------------------------------reconcileRayCluster------------------------------")
 	// Clean up RayCluster instances.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name == rayServiceInstance.Status.RayClusterName {
@@ -260,86 +263,60 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		} else if rayClusterInstance.Name == rayServiceInstance.Status.PreparingRayClusterName {
 			preparingRayCluster = &rayClusterInstance
 		} else {
-			r.Log.Info("reconcileRayCluster", "should delete ray cluster", rayClusterInstance)
-			//if err := r.Delete(ctx, &rayClusterInstance); err != nil {
-			//	return nil, nil, err
-			//}
-		}
-	}
-
-	if preparingRayCluster == nil {
-		for _, rayClusterInstance := range rayClusterList.Items {
-			if reflect.DeepEqual(rayClusterInstance.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-				preparingRayCluster = &rayClusterInstance
-				break
-			}
-		}
-	}
-
-	if preparingRayCluster != nil {
-		for _, rayClusterInstance := range rayClusterList.Items {
-			if rayClusterInstance.Name != rayServiceInstance.Status.RayClusterName &&
-				rayClusterInstance.Name != rayServiceInstance.Status.PreparingRayClusterName &&
-				rayClusterInstance.Name != preparingRayCluster.Name {
-
-				r.Log.Info("reconcileRayCluster", "Really delete ray cluster", rayClusterInstance)
-				if err := r.Delete(ctx, &rayClusterInstance); err != nil {
-					return nil, nil, err
-				}
+			r.Log.Info("reconcileRayCluster", "delete ray cluster", rayClusterInstance)
+			if err := r.Delete(ctx, &rayClusterInstance); err != nil {
+				return nil, nil, err
 			}
 		}
 	}
 
 	r.Log.Info("reconcileRayCluster", "r.ServeDeploymentConfigs.Items()", r.ServeDeploymentConfigs.Items())
 
+	runningConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.RayClusterName)
+	preparingConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName)
 	// Clean up RayCluster serve deployment configs.
 	for key := range r.ServeDeploymentConfigs.Items() {
-		if key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.RayClusterName) || key == r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName) {
+		if key == runningConfigKey || key == preparingConfigKey {
 			continue
 		}
 		r.ServeDeploymentConfigs.Remove(key)
 	}
 
-	shouldPrepareNewRayCluster := false
+	shouldGeneratePreparingRayClusterName := false
 
-	// Check whether to create a new RayCluster.
-	if rayServiceInstance.Status.PreparingRayClusterName == restartClusterMark {
-		shouldPrepareNewRayCluster = true
+	if rayServiceInstance.Status.PreparingRayClusterName == "" {
 		r.Log.Info("reconcileRayCluster 1")
-	} else if preparingRayCluster != nil {
-		if !reflect.DeepEqual(preparingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-			shouldPrepareNewRayCluster = true
-			r.Log.Info("reconcileRayCluster 2", "preparingRayCluster.Spec", preparingRayCluster.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
+		if runningRayCluster == nil || !reflect.DeepEqual(runningRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+			r.Log.Info("reconcileRayCluster 2")
+			shouldGeneratePreparingRayClusterName = true
 		}
-	} else if runningRayCluster != nil {
-		if !reflect.DeepEqual(runningRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-			shouldPrepareNewRayCluster = true
-			r.Log.Info("reconcileRayCluster 3")
-		}
-	} else {
-		shouldPrepareNewRayCluster = true
-		r.Log.Info("reconcileRayCluster 4")
 	}
 
-	if shouldPrepareNewRayCluster {
-		preparingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance)
+	if shouldGeneratePreparingRayClusterName {
+		rayServiceInstance.Status.PreparingRayClusterName = utils.GenerateRayClusterName(rayServiceInstance.Name)
+		r.Log.Info("reconcileRayCluster 3", "rayServiceInstance.Status.PreparingRayClusterName", rayServiceInstance.Status.PreparingRayClusterName)
+		return runningRayCluster, nil, nil
+	}
+
+	shouldCreatePreparingRayCluster := false
+
+	// Check whether to create a new RayCluster.
+	if preparingRayCluster == nil || !reflect.DeepEqual(preparingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+		r.Log.Info("reconcileRayCluster 4", "preparingRayCluster", preparingRayCluster, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
+		shouldCreatePreparingRayCluster = true
+	}
+
+	if shouldCreatePreparingRayCluster {
+		preparingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// Update the status.
-	if preparingRayCluster != nil {
-		rayServiceInstance.Status.PreparingRayClusterName = preparingRayCluster.Name
-	}
-
 	return runningRayCluster, preparingRayCluster, nil
 }
 
-func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, error) {
-	// Generate ray cluster name
-	rayClusterInstanceName := fmt.Sprintf("%s%s%s", rayServiceInstance.Name, rayClusterSuffix, rand.String(5))
-
+func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstanceName string) (*rayv1alpha1.RayCluster, error) {
 	r.Log.Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterInstanceName)
 
 	rayClusterNamespacedName := types.NamespacedName{
@@ -352,8 +329,13 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	if err == nil {
 		// Should not reach here unless the rand generation conflict.
-		r.Log.Error(fmt.Errorf("ERROR"), "Ray cluster already exists")
-	} else if errors.IsNotFound(err) {
+		r.Log.Info("Ray cluster already exists, config changes, need to restart, delete the preparing one now.")
+		if delErr := r.Delete(ctx, rayClusterInstance); delErr != nil {
+			return nil, delErr
+		}
+	}
+
+	if errors.IsNotFound(err) {
 		r.Log.Info("Not found rayCluster, creating rayCluster!")
 		rayClusterInstance, err = r.constructRayClusterForRayService(rayServiceInstance, rayClusterInstanceName)
 		if err != nil {
@@ -366,8 +348,6 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 			// Error creating the RayCluster object - requeue the request.
 			return nil, err
 		}
-		// Update RayCluster name in RayService state.
-		rayServiceInstance.Status.PreparingRayClusterName = rayClusterInstanceName
 		r.Log.V(1).Info("created rayCluster for rayService run", "rayCluster", rayClusterInstance)
 	} else {
 		r.Log.Error(err, "Get request rayCluster instance error!")
@@ -581,9 +561,13 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance 
 	return time.Since(rayServiceInstance.Status.DashBoardStatus.HealthLastUpdateTime.Time).Seconds() <= RayDashboardUnhealthySecondThreshold
 }
 
-func (r *RayServiceReconciler) markUnhealthyRestart(rayServiceInstance *rayv1alpha1.RayService) {
+func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1alpha1.RayService) {
 	r.Log.Info("Current cluster is unhealthy, prepare to restart.")
-	rayServiceInstance.Status.PreparingRayClusterName = restartClusterMark
+	rayServiceInstance.Status = rayv1alpha1.RayServiceStatus{
+		RayClusterName:          rayServiceInstance.Name,
+		PreparingRayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
+		ServiceStatus:           rayv1alpha1.Restarting,
+	}
 }
 
 func (r *RayServiceReconciler) updateRayClusterHealthInfo(rayServiceInstance *rayv1alpha1.RayService, healthyClusterName string) {
