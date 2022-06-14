@@ -38,7 +38,6 @@ const (
 	RayServiceRestartRequeueDuration           = 10 * time.Second
 	RayServeDeploymentUnhealthySecondThreshold = 300.0
 	RayDashboardUnhealthySecondThreshold       = 600.0
-	RayClusterSuffix                           = "-raycluster-"
 	servicePortName                            = "dashboard"
 	restartClusterMark                         = "restartCluster"
 )
