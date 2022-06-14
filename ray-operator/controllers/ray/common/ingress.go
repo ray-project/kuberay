@@ -52,7 +52,7 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateServiceName(cluster.Name),
+			Name:        utils.GenerateIngressName(cluster.Name),
 			Namespace:   cluster.Namespace,
 			Labels:      labels,
 			Annotations: annotation,

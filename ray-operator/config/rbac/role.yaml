@@ -82,6 +82,16 @@ rules:
   - patch
   - update
 - apiGroups:
+  - ingresses.networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ray.io
   resources:
   - rayclusters

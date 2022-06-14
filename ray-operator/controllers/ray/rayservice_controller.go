@@ -78,6 +78,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=ingresses.networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
@@ -472,7 +473,7 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 	}
 	// Get Ingress instance.
 	headIngress := &networkingv1.Ingress{}
-	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headIngress)
+	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateIngressName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headIngress)
 
 	if err == nil {
 		// Update Ingress
@@ -543,14 +544,14 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headService)
 
 	if err == nil {
-		// Update Ingress
+		// Update Service
 		headService.Spec = rayHeadSvc.Spec
 		if updateErr := r.Update(ctx, headService); updateErr != nil {
 			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
-		// Create Ingress
+		// Create Service
 		if createErr := r.Create(ctx, rayHeadSvc); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
 				log.Info("rayHeadSvc already exists,no need to create")
