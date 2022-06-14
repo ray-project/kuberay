@@ -112,7 +112,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		rayServiceLog.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
 		return ctrl.Result{}, err
 	}
-	r.Log.Info("reconcileRayCluster", "rayServiceInstance update version", rayServiceInstance)
+
+	if rayServiceInstance.Status.PreparingRayClusterName != "" && preparingRayClusterInstance == nil {
+		r.Log.Info("Enter next loop to create new ray cluster.")
+		return ctrl.Result{}, nil
+	}
+
 	rayServiceLog.Info("Done reconcileRayCluster update status")
 
 	rayClusterInstance := runningRayClusterInstance
@@ -237,10 +242,6 @@ func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstan
 }
 
 func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, *rayv1alpha1.RayCluster, error) {
-	// check if preparing is empty or not.
-	// Preparing is empty, check if running spec diff
-	// preparing not empty do preparing update.
-
 	rayClusterList := rayv1alpha1.RayClusterList{}
 	filterLabels := client.MatchingLabels{common.RayServiceLabelKey: rayServiceInstance.Name}
 	var err error
@@ -269,15 +270,13 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	preparingRayCluster := &rayv1alpha1.RayCluster{}
-	if rayServiceInstance.Status.RayClusterName != "" {
+	if rayServiceInstance.Status.PreparingRayClusterName != "" {
 		if err = r.Get(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PreparingRayClusterName, Namespace: rayServiceInstance.Namespace}, preparingRayCluster); err != nil {
 			preparingRayCluster = nil
 		}
 	} else {
 		preparingRayCluster = nil
 	}
-
-	r.Log.Info("reconcileRayCluster", "r.ServeDeploymentConfigs.Items()", r.ServeDeploymentConfigs.Items())
 
 	runningConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.RayClusterName)
 	preparingConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PreparingRayClusterName)
@@ -286,22 +285,20 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		if key == runningConfigKey || key == preparingConfigKey {
 			continue
 		}
+		r.Log.Info("reconcileRayCluster removing config", "runningConfigKey", runningConfigKey, "preparingConfigKey", preparingConfigKey, "removekey", key)
 		r.ServeDeploymentConfigs.Remove(key)
 	}
 
 	shouldGeneratePreparingRayClusterName := false
 
 	if rayServiceInstance.Status.PreparingRayClusterName == "" {
-		r.Log.Info("reconcileRayCluster 1")
 		if runningRayCluster == nil || !reflect.DeepEqual(runningRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-			r.Log.Info("reconcileRayCluster 2", "runningRayCluster == nil", runningRayCluster == nil)
 			shouldGeneratePreparingRayClusterName = true
 		}
 	}
 
 	if shouldGeneratePreparingRayClusterName {
 		r.markRestart(rayServiceInstance)
-		r.Log.Info("reconcileRayCluster 3", "rayServiceInstance.Status.PreparingRayClusterName", rayServiceInstance.Status.PreparingRayClusterName)
 		return runningRayCluster, nil, nil
 	}
 
@@ -309,7 +306,6 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		shouldCreatePreparingRayCluster := false
 		// Check whether to create a new RayCluster.
 		if preparingRayCluster == nil || !reflect.DeepEqual(preparingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-			r.Log.Info("reconcileRayCluster 4", "preparingRayCluster", preparingRayCluster, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
 			shouldCreatePreparingRayCluster = true
 		}
 
@@ -571,12 +567,13 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance 
 }
 
 func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1alpha1.RayService) {
-	r.Log.Info("Current cluster is unhealthy, prepare to restart.")
+	r.Log.Info("Current cluster is unhealthy, prepare to restart.", "pre rayServiceInstance.Status", rayServiceInstance.Status)
 	rayServiceInstance.Status = rayv1alpha1.RayServiceStatus{
 		RayClusterName:          rayServiceInstance.Status.RayClusterName,
 		PreparingRayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 		ServiceStatus:           rayv1alpha1.Restarting,
 	}
+	r.Log.Info("Current cluster is unhealthy, prepare to restart.", "rayServiceInstance.Status", rayServiceInstance.Status)
 }
 
 func (r *RayServiceReconciler) updateRayClusterHealthInfo(rayServiceInstance *rayv1alpha1.RayService, healthyClusterName string) {
@@ -602,14 +599,14 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	if err == nil {
 		// Update Service
 		headService.Spec = rayHeadSvc.Spec
-		r.Log.Info("reconcileServices", "update service", headService)
+		r.Log.Info("reconcileServices update service")
 		if updateErr := r.Update(ctx, headService); updateErr != nil {
 			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
 		// Create Service
-		r.Log.Info("reconcileServices", "create service", rayHeadSvc)
+		r.Log.Info("reconcileServices create service")
 		if err := ctrl.SetControllerReference(rayServiceInstance, rayHeadSvc, r.Scheme); err != nil {
 			return err
 		}
