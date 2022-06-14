@@ -300,7 +300,6 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	if err == nil {
 		// Should not reach here unless the rand generation conflict.
-		rayClusterInstance.Spec = rayServiceInstance.Spec.RayClusterSpec
 		r.Log.Error(fmt.Errorf("ERROR"), "Ray cluster already exists")
 	} else if errors.IsNotFound(err) {
 		r.Log.Info("Not found rayCluster, creating rayCluster!")
