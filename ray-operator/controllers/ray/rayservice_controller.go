@@ -39,6 +39,7 @@ const (
 	RayServiceDefaultRequeueDuration           = 2 * time.Second
 	RayServiceRestartRequeueDuration           = 10 * time.Second
 	RayServeDeploymentUnhealthySecondThreshold = 60.0
+	RayDashboardUnhealthySecondThreshold       = 180.0
 	rayClusterSuffix                           = "-raycluster-"
 	servicePortName                            = "dashboard"
 	restartClusterMark                         = "restartCluster"
@@ -110,7 +111,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	rayClusterInstance := runningRayClusterInstance
-	ingressRayClusterInstance := runningRayClusterInstance
+	servingRayClusterInstance := runningRayClusterInstance
 	if preparingRayClusterInstance != nil {
 		rayClusterInstance = preparingRayClusterInstance
 	}
@@ -129,8 +130,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	r.updateAndCheckDashboardStatus(rayServiceInstance, true)
-
 	rayDashboardClient := utils.RayDashboardClient{}
 	rayDashboardClient.InitClient(clientURL)
 
@@ -138,6 +137,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	if shouldUpdate {
 		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, request); err != nil {
+			if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
+				log.Info("Dashboard is unhealthy, restart the cluster.")
+				r.markUnhealthyRestart(rayServiceInstance)
+			}
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailServeDeploy, err)
 			return ctrl.Result{}, err
 		}
@@ -145,17 +148,23 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	var isHealthy bool
 	if isHealthy, err = r.getAndCheckServeStatus(rayServiceInstance, rayDashboardClient); err != nil {
+		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
+			log.Info("Dashboard is unhealthy, restart the cluster.")
+			r.markUnhealthyRestart(rayServiceInstance)
+		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailGetServeDeploymentStatus, err)
 		return ctrl.Result{}, err
 	}
+
+	r.updateAndCheckDashboardStatus(rayServiceInstance, true)
 
 	log.Info("Check serve health", "isHealthy", isHealthy)
 
 	if isHealthy {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
 		r.updateRayClusterHealthInfo(rayServiceInstance, rayClusterInstance.Name)
-		// If the rayClusterInstance is healthy, update ingressRayClusterInstance.
-		ingressRayClusterInstance = rayClusterInstance
+		// If the rayClusterInstance is healthy, update servingRayClusterInstance.
+		servingRayClusterInstance = rayClusterInstance
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -171,7 +180,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: RayServiceRestartRequeueDuration}, nil
 	}
 
-	if err := r.reconcileIngress(ctx, rayServiceInstance, ingressRayClusterInstance); err != nil {
+	if err := r.reconcileIngress(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
+		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
+		return ctrl.Result{}, err
+	}
+	if err := r.reconcileServices(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
 		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
 		return ctrl.Result{}, err
 	}
@@ -346,7 +359,7 @@ func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster
 		return "", err
 	}
 
-	r.Log.Info("reconcileServices ", "head service found", headService.Name)
+	r.Log.Info("fetchDashboardURL ", "head service found", headService.Name)
 	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
 	servicePorts := headService.Spec.Ports
 
@@ -444,6 +457,10 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 
 func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	// Enable ingress for RayService by default.
+	if rayClusterInstance.Spec.HeadGroupSpec.EnableIngress == nil || !*rayClusterInstance.Spec.HeadGroupSpec.EnableIngress {
+		return nil
+	}
+
 	// Creat Ingress Struct.
 	ingress, err := common.BuildServiceIngressForHeadService(*rayServiceInstance, *rayClusterInstance)
 	if err != nil {
@@ -493,7 +510,7 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance 
 		rayServiceInstance.Status.DashBoardStatus.HealthLastUpdateTime = metav1.Now()
 	}
 
-	return time.Since(rayServiceInstance.Status.DashBoardStatus.HealthLastUpdateTime.Time).Seconds() <= RayServeDeploymentUnhealthySecondThreshold
+	return time.Since(rayServiceInstance.Status.DashBoardStatus.HealthLastUpdateTime.Time).Seconds() <= RayDashboardUnhealthySecondThreshold
 }
 
 func (r *RayServiceReconciler) markUnhealthyRestart(rayServiceInstance *rayv1alpha1.RayService) {
@@ -508,4 +525,42 @@ func (r *RayServiceReconciler) updateRayClusterHealthInfo(rayServiceInstance *ra
 	} else {
 		rayServiceInstance.Status.PreparingRayClusterName = ""
 	}
+}
+
+func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
+	// Creat Service Struct.
+	rayHeadSvc, err := common.BuildServiceServiceForHeadPod(*rayServiceInstance, *rayClusterInstance)
+	if err != nil {
+		return err
+	}
+	rayHeadSvc.Name = utils.CheckName(rayHeadSvc.Name)
+	if err := ctrl.SetControllerReference(rayServiceInstance, rayHeadSvc, r.Scheme); err != nil {
+		return err
+	}
+	// Get Service instance.
+	headService := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: utils.GenerateServiceName(rayServiceInstance.Name), Namespace: rayServiceInstance.Namespace}, headService)
+
+	if err == nil {
+		// Update Ingress
+		if updateErr := r.Update(ctx, rayHeadSvc); updateErr != nil {
+			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
+			return updateErr
+		}
+	} else if errors.IsNotFound(err) {
+		// Create Ingress
+		if createErr := r.Create(ctx, rayHeadSvc); createErr != nil {
+			if errors.IsAlreadyExists(createErr) {
+				log.Info("rayHeadSvc already exists,no need to create")
+				return nil
+			}
+			r.Log.Error(createErr, "rayHeadSvc create error!", "rayHeadSvc.Error", createErr)
+			return createErr
+		}
+	} else {
+		r.Log.Error(err, "rayHeadSvc get error!")
+		return err
+	}
+
+	return nil
 }

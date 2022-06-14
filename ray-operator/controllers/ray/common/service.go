@@ -38,6 +38,22 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 	return service, nil
 }
 
+// BuildServiceServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
+// the worker nodes to connect to the head node.
+func BuildServiceServiceForHeadPod(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+	service, err := BuildServiceForHeadPod(rayCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	service.ObjectMeta.Name = utils.GenerateServiceName(rayService.Name)
+	service.ObjectMeta.Namespace = rayService.Namespace
+	service.ObjectMeta.Labels[RayServiceLabelKey] = rayService.Name
+	service.ObjectMeta.Labels[RayIDLabelKey] = utils.GenerateIdentifier(rayService.Name, rayiov1alpha1.HeadNode)
+
+	return service, nil
+}
+
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 	ports, err := getPortsFromCluster(cluster)

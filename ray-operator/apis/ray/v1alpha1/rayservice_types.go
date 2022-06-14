@@ -18,6 +18,7 @@ const (
 	Restarting                   ServiceStatus = "Restarting"
 	FailDeleteRayCluster         ServiceStatus = "FailDeleteRayCluster"
 	FailUpdateIngress            ServiceStatus = "FailUpdateIngress"
+	FailUpdateService            ServiceStatus = "FailUpdateService"
 )
 
 // RayServiceSpec defines the desired state of RayService
