@@ -82,13 +82,35 @@ rules:
   - patch
   - update
 - apiGroups:
-  - ingresses.networking.k8s.io
+  - extensions
   resources:
   - ingresses
   verbs:
   - create
+  - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingressclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
   - update
   - watch
 - apiGroups:

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -74,7 +76,9 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
-// +kubebuilder:rbac:groups=ingresses.networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
+// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
@@ -216,6 +220,10 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1alpha1.RayService{}).
 		Owns(&rayv1alpha1.RayCluster{}).
+		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &rayv1alpha1.RayService{},
+		}).
 		Complete(r)
 }
 
@@ -253,7 +261,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PreparingRayClusterName {
 			r.Log.Info("reconcileRayCluster", "delete ray cluster", rayClusterInstance)
-			if err := r.Delete(ctx, &rayClusterInstance); err != nil {
+			if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -334,7 +342,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	if err == nil {
 		// Should not reach here unless the rand generation conflict.
 		r.Log.Info("Ray cluster already exists, config changes, need to restart, delete the preparing one now.")
-		if delErr := r.Delete(ctx, rayClusterInstance); delErr != nil {
+		if delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); delErr != nil {
 			return nil, delErr
 		}
 	}
