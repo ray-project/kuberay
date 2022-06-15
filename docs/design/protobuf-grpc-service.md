@@ -104,40 +104,18 @@ message GetClusterRequest {
 message ListClustersRequest {
   // The namespace of the clusters to be retrieved.
   string namespace = 1;
-
-  // A page token to request the next page of results. The token is acquried
-  // from the nextPageToken field of the response from the previous
-  // ListCluster call or can be omitted when fetching the first page.
-  // TODO: support this later
 }
 
 message ListClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
-
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
 }
 
-message ListAllClustersRequest {
-  // A page token to request the next page of results. The token is acquried
-  // from the nextPageToken field of the response from the previous
-  // ListCluster call or can be omitted when fetching the first page.
-  // TODO: support this later
-}
+message ListAllClustersRequest {}
 
 message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
-
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
 }
 
 message DeleteClusterRequest {
