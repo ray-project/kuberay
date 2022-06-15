@@ -53,13 +53,6 @@ kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namesp
 # executed by user
 kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace" | envsubst | kubectl apply -f -
 
-# Stable version
-export KUBERAY_NAMESPACE=<my-awesome-namespace>
-# executed by cluster admin
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources?ref=v0.2.0" | envsubst | kubectl create -f -
-# executed by user
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace?ref=v0.2.0" | envsubst | kubectl apply -f -
-
 ```
 
 ### Use helm chart
