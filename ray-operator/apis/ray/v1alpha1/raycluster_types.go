@@ -58,6 +58,8 @@ type WorkerGroupSpec struct {
 	Template v1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
+	// RayResources is a string-int map specifying custom resources and resource overrides.
+	RayResources map[string]int32 `json:"rayResources,omitempty"`
 }
 
 // ScaleStrategy to remove workers

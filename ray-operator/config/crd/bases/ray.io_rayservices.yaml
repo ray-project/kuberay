@@ -5739,6 +5739,13 @@ spec:
                           description: MinReplicas defaults to 1
                           format: int32
                           type: integer
+                        rayResources:
+                          additionalProperties:
+                            format: int32
+                            type: integer
+                          description: RayResources is a string-int map specifying
+                            custom resources and resource overrides.
+                          type: object
                         rayStartParams:
                           additionalProperties:
                             type: string
