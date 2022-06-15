@@ -114,6 +114,9 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
+	if err := r.reconcileRayResources(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 	if err := r.reconcilePods(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -200,6 +203,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		}
 	}
 
+	return nil
+}
+
+// Update the rayResources field based on user-provided rayStartParams and ray container resources
+func (r *RayClusterReconciler) reconcileRayResources(instance *rayiov1alpha1.RayCluster) error {
 	return nil
 }
 
