@@ -82,7 +82,10 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 	return ingress, nil
 }
 
-func BuildServiceIngressForHeadService(service rayiov1alpha1.RayService, cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
+// BuildIngressForRayService Builds the ingress for head service dashboard for RayService.
+// This is used to expose dashboard for external traffic.
+// RayService controller updates the ingress whenever a new RayCluster serves the traffic.
+func BuildIngressForRayService(service rayiov1alpha1.RayService, cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
 	ingress, err := BuildIngressForHeadService(cluster)
 	if err != nil {
 		return nil, err

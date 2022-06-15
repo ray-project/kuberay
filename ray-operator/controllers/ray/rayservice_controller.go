@@ -521,7 +521,7 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 	}
 
 	// Creat Ingress Struct.
-	ingress, err := common.BuildServiceIngressForHeadService(*rayServiceInstance, *rayClusterInstance)
+	ingress, err := common.BuildIngressForRayService(*rayServiceInstance, *rayClusterInstance)
 	if err != nil {
 		return err
 	}
@@ -594,7 +594,7 @@ func (r *RayServiceReconciler) updateRayClusterHealthInfo(rayServiceInstance *ra
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	// Creat Service Struct.
-	rayHeadSvc, err := common.BuildServiceServiceForHeadPod(*rayServiceInstance, *rayClusterInstance)
+	rayHeadSvc, err := common.BuildServiceForRayService(*rayServiceInstance, *rayClusterInstance)
 	if err != nil {
 		return err
 	}

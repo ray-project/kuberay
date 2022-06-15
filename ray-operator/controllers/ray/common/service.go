@@ -38,9 +38,10 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 	return service, nil
 }
 
-// BuildServiceServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
+// BuildServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceServiceForHeadPod(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+// RayService controller updates the service whenever a new RayCluster serves the traffic.
+func BuildServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	service, err := BuildServiceForHeadPod(rayCluster)
 	if err != nil {
 		return nil, err
