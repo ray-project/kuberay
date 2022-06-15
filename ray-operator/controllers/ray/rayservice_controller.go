@@ -136,7 +136,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	var clientURL string
 	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
-		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
+		if !r.updateAndCheckDashboardStatus(rayServiceInstance, false) {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
 		}
@@ -151,7 +151,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	if shouldUpdate {
 		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, rayClusterInstance.Name, request); err != nil {
-			if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
+			if !r.updateAndCheckDashboardStatus(rayServiceInstance, false) {
 				rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markRestart(rayServiceInstance)
 			}
@@ -162,7 +162,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	var isHealthy bool
 	if isHealthy, err = r.getAndCheckServeStatus(rayServiceInstance, rayDashboardClient); err != nil {
-		if r.updateAndCheckDashboardStatus(rayServiceInstance, false) == false {
+		if !r.updateAndCheckDashboardStatus(rayServiceInstance, false) {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
 		}
