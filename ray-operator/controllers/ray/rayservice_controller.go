@@ -527,8 +527,9 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 
 	isHealthy := true
 	for i := 0; i < len(serveStatuses.Statuses); i++ {
-		serveStatuses.Statuses[i].LastUpdateTime = metav1.Now()
-		serveStatuses.Statuses[i].HealthLastUpdateTime = metav1.Now()
+		timeNow := metav1.Now()
+		serveStatuses.Statuses[i].LastUpdateTime = &timeNow
+		serveStatuses.Statuses[i].HealthLastUpdateTime = &timeNow
 		if serveStatuses.Statuses[i].Status != "HEALTHY" {
 			prevStatus, exist := statusMap[serveStatuses.Statuses[i].Name]
 			if exist {
@@ -577,10 +578,11 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 
 // Return true if healthy, otherwise false.
 func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance *rayv1alpha1.RayService, isHealthy bool) bool {
-	rayServiceInstance.Status.DashboardStatus.LastUpdateTime = metav1.Now()
+	timeNow := metav1.Now()
+	rayServiceInstance.Status.DashboardStatus.LastUpdateTime = &timeNow
 	rayServiceInstance.Status.DashboardStatus.IsHealthy = isHealthy
 	if rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime.IsZero() || isHealthy {
-		rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime = metav1.Now()
+		rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime = &timeNow
 	}
 
 	return time.Since(rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= RayDashboardUnhealthySecondThreshold

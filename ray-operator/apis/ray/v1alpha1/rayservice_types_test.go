@@ -357,8 +357,11 @@ var expected = `{
       }
    },
    "status":{
+      "dashboardStatus":{
+         
+      },
       "rayClusterStatus":{
-         "lastUpdateTime":null
+         
       }
    }
 }`

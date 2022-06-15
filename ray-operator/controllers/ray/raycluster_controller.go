@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 	"time"
 
@@ -605,7 +606,8 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 
 	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.
-	instance.Status.LastUpdateTime.Time = time.Now()
+	timeNow := metav1.Now()
+	instance.Status.LastUpdateTime = &timeNow
 	if err := r.Status().Update(context.Background(), instance); err != nil {
 		return err
 	}

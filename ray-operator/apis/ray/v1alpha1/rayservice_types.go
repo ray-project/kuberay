@@ -72,11 +72,11 @@ type RayServiceStatus struct {
 
 // DashboardStatus defines the current states of Ray Dashboard
 type DashboardStatus struct {
-	IsHealthy      bool        `json:"isHealthy,omitempty"`
-	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	IsHealthy      bool         `json:"isHealthy,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 // ServeDeploymentStatuses defines the current states of all Serve Deployments
@@ -89,12 +89,12 @@ type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard to represent the state of a serve deployment.
 	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
-	Status         string      `json:"status,omitempty"`
-	Message        string      `json:"message,omitempty"`
-	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	Status         string       `json:"status,omitempty"`
+	Message        string       `json:"message,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
