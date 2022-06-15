@@ -95,6 +95,13 @@ spec:
                     description: EnableIngress indicates whether operator should create
                       ingress object for head service or not.
                     type: boolean
+                  rayResources:
+                    additionalProperties:
+                      format: int32
+                      type: integer
+                    description: RayResources is a string-int map specifying custom
+                      resources and resource overrides.
+                    type: object
                   rayStartParams:
                     additionalProperties:
                       type: string
@@ -110,7 +117,7 @@ spec:
                       service.
                     type: string
                   template:
-                    description: Template is the eaxct pod template used in K8s depoyments,
+                    description: Template is the exact pod template used in K8s deployments,
                       statefulsets, etc.
                     properties:
                       metadata:
@@ -5467,6 +5474,7 @@ spec:
                         type: object
                     type: object
                 required:
+                - rayResources
                 - rayStartParams
                 - replicas
                 - serviceType
