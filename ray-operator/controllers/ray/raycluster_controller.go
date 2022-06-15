@@ -508,8 +508,7 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
-	replica := corev1.Pod{}
-	replica = pod
+	replica := pod
 	if err := r.Create(context.TODO(), &replica); err != nil {
 		if errors.IsAlreadyExists(err) {
 			fetchedPod := corev1.Pod{}

@@ -178,16 +178,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	rayServiceLog.Info("Check serve health", "isHealthy", isHealthy)
 
-	servingRayClusterInstance := activeRayClusterInstance // RayCluster instance which serves traffics.
-
 	if isHealthy {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
 		if r.allServeDeploymentsHealthy(rayServiceInstance) {
 			// Preparing RayCluster is ready.
 			r.updateRayClusterInfo(rayServiceInstance, rayClusterInstance.Name)
 		}
-
-		servingRayClusterInstance = rayClusterInstance
 	} else {
 		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
@@ -200,12 +196,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: RayServiceRestartRequeueDuration}, nil
 	}
 
-	if servingRayClusterInstance != nil {
-		if err := r.reconcileIngress(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
+	if rayClusterInstance != nil {
+		if err := r.reconcileIngress(ctx, rayServiceInstance, rayClusterInstance); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateIngress, err)
 			return ctrl.Result{}, err
 		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, servingRayClusterInstance); err != nil {
+		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailUpdateService, err)
 			return ctrl.Result{}, err
 		}
