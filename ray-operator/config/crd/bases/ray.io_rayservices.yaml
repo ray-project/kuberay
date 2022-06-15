@@ -11554,6 +11554,8 @@ spec:
           status:
             description: RayServiceStatus defines the observed state of RayService
             properties:
+              activeRayClusterName:
+                type: string
               dashboardStatus:
                 description: DashboardStatus defines the current states of Ray Dashboard
                 properties:
@@ -11568,8 +11570,8 @@ spec:
                     type: string
                 type: object
               preparingRayClusterName:
-                type: string
-              rayClusterName:
+                description: Preparing RayCluster Name indicates a RayCluster will
+                  be created or is under creating.
                 type: string
               rayClusterStatus:
                 description: RayClusterStatus defines the observed state of RayCluster
