@@ -5713,7 +5713,6 @@ spec:
                             type: object
                         type: object
                     required:
-                    - rayResources
                     - rayStartParams
                     - replicas
                     - serviceType
