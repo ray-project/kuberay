@@ -61,16 +61,17 @@ type RayActorOptionSpec struct {
 // RayServiceStatus defines the observed state of RayService
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServiceStatus           ServiceStatus           `json:"serviceStatus,omitempty"`
-	ServeStatuses           []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashBoardStatus         DashBoardStatus         `json:"dashBoardStatus,omitempty"`
-	RayClusterName          string                  `json:"rayClusterName,omitempty"`
-	PreparingRayClusterName string                  `json:"preparingRayClusterName,omitempty"`
-	RayClusterStatus        RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	ServiceStatus        ServiceStatus           `json:"serviceStatus,omitempty"`
+	ServeStatuses        []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashboardStatus      DashboardStatus         `json:"dashboardStatus,omitempty"`
+	ActiveRayClusterName string                  `json:"activeRayClusterName,omitempty"`
+	// Preparing RayCluster Name indicates a RayCluster will be created or is under creating.
+	PreparingRayClusterName string           `json:"preparingRayClusterName,omitempty"`
+	RayClusterStatus        RayClusterStatus `json:"rayClusterStatus,omitempty"`
 }
 
-// DashBoardStatus defines the current states of Ray Dashboard
-type DashBoardStatus struct {
+// DashboardStatus defines the current states of Ray Dashboard
+type DashboardStatus struct {
 	IsHealthy      bool        `json:"isHealthy,omitempty"`
 	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.

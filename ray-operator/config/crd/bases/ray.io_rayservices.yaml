@@ -11554,8 +11554,8 @@ spec:
           status:
             description: RayServiceStatus defines the observed state of RayService
             properties:
-              dashBoardStatus:
-                description: DashBoardStatus defines the current states of Ray Dashboard
+              dashboardStatus:
+                description: DashboardStatus defines the current states of Ray Dashboard
                 properties:
                   healthLastUpdateTime:
                     description: Keep track of how long the service is healthy.
