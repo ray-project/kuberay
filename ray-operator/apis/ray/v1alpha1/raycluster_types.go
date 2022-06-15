@@ -38,7 +38,7 @@ type HeadGroupSpec struct {
 	// Template is the exact pod template used in K8s deployments, statefulsets, etc.
 	Template v1.PodTemplateSpec `json:"template"`
 	// RayResources is a string-int map specifying custom resources and resource overrides.
-	RayResources map[string]int32 `json:"rayResources"`
+	RayResources map[string]int32 `json:"rayResources,omitempty"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
