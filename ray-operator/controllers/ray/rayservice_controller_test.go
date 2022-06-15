@@ -226,15 +226,15 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a raycluster object", func() {
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
 			myRayCluster := &rayiov1alpha1.RayCluster{}
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveRayClusterName, Namespace: "default"}, myRayCluster),
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.PreparingRayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 		})
 
 		It("should create more than 1 worker", func() {
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.ActiveRayClusterName, common.RayNodeGroupLabelKey: "small-group"}
+			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.PreparingRayClusterName, common.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -265,6 +265,6 @@ func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RaySer
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
 		}
-		return rayService.Status.ActiveRayClusterName, nil
+		return rayService.Status.PreparingRayClusterName, nil
 	}
 }
