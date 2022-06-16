@@ -58,8 +58,8 @@ type WorkerGroupSpec struct {
 	Template v1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
-	// RayResources is a string-int map specifying custom resources and resource overrides.
-	RayResources map[string]int32 `json:"rayResources,omitempty"`
+	// RayResources specifies Ray custom resource capacities and resource capacity overrides.
+	RayResources RayResources `json:"rayResources,omitempty"`
 }
 
 // ScaleStrategy to remove workers
@@ -92,6 +92,9 @@ type UpscalingMode string
 // The overall state of the Ray cluster.
 type ClusterState string
 
+// A map of Ray resource names to integer resource capacities
+type RayResources map[string]int32
+
 const (
 	Ready     ClusterState = "ready"
 	UnHealthy ClusterState = "unHealthy"
@@ -114,7 +117,14 @@ type RayClusterStatus struct {
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
-	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	LastUpdateTime      metav1.Time   `json:"lastUpdateTime,omitempty"`
+	HeadStatus          GroupStatus   `json:"headStatus,omitempty"`
+	WorkerGroupStatuses []GroupStatus `json:"workerGroupStatuses,omitempty"`
+}
+
+type GroupStatus struct {
+	//DetectedRayResources is the map of resource name to Ray resource capacity for the members of the head or worker group.
+	DetectedRayResources RayResources `json:"detectedRayResources,omitempty"`
 }
 
 // RayNodeType  the type of a ray node: head/worker

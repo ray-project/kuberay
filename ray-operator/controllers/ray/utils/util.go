@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -233,4 +234,34 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 		}
 	}
 	return false
+}
+
+//Expresses a JSON Patch operation.
+type PatchOperation struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
+// Encapsulates common aspects of HeadGroupSpec and WorkerGroupSpec.
+type GroupSpecParams struct {
+	RayStartParams map[string]string
+	Template       v1.PodTemplateSpec
+	RayResources   map[string]int32
+}
+
+func GetGroupSpecParamsFromHead(headGroupSpec rayiov1alpha1.HeadGroupSpec) GroupSpecParams {
+	return GroupSpecParams{
+		RayStartParams: headGroupSpec.RayStartParams,
+		Template:       headGroupSpec.Template,
+		RayResources:   headGroupSpec.RayResources,
+	}
+}
+
+func getGroupSpecParamsFromWorker(workerGroupSpec rayiov1alpha1.WorkerGroupSpec) GroupSpecParams {
+	return GroupSpecParams{
+		RayStartParams: workerGroupSpec.RayStartParams,
+		Template:       workerGroupSpec.Template,
+		RayResources:   workerGroupSpec.RayResources,
+	}
 }
