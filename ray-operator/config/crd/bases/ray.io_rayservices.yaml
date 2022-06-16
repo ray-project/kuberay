@@ -11569,9 +11569,9 @@ spec:
                     format: date-time
                     type: string
                 type: object
-              preparingRayClusterName:
-                description: Preparing RayCluster Name indicates a RayCluster will
-                  be created or is under creating.
+              pendingRayClusterName:
+                description: Pending RayCluster Name indicates a RayCluster will be
+                  created or is under creating.
                 type: string
               rayClusterStatus:
                 description: RayClusterStatus defines the observed state of RayCluster

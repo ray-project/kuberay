@@ -65,9 +65,9 @@ type RayServiceStatus struct {
 	ServeStatuses        []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
 	DashboardStatus      DashboardStatus         `json:"dashboardStatus,omitempty"`
 	ActiveRayClusterName string                  `json:"activeRayClusterName,omitempty"`
-	// Preparing RayCluster Name indicates a RayCluster will be created or is under creating.
-	PreparingRayClusterName string           `json:"preparingRayClusterName,omitempty"`
-	RayClusterStatus        RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	// Pending RayCluster Name indicates a RayCluster will be created or is under creating.
+	PendingRayClusterName string           `json:"pendingRayClusterName,omitempty"`
+	RayClusterStatus      RayClusterStatus `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard

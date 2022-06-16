@@ -291,18 +291,18 @@ var _ = Context("Inside the default namespace", func() {
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
-				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
+				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PendingRayClusterName)
 
 			ServeDeploymentUnhealthySecondThreshold = orignialServeDeploymentUnhealthySecondThreshold
-			preparingRayClusterName := myRayService.Status.PreparingRayClusterName
+			pendingRayClusterName := myRayService.Status.PendingRayClusterName
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "My new RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
+				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "My new RayCluster name  = %v", myRayService.Status.PendingRayClusterName)
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Equal(preparingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
+				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
 		})
 	})
 })
@@ -359,7 +359,7 @@ func getPreparingRayClusterNameFunc(ctx context.Context, rayService *rayiov1alph
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
 		}
-		return rayService.Status.PreparingRayClusterName, nil
+		return rayService.Status.PendingRayClusterName, nil
 	}
 }
 
