@@ -219,6 +219,8 @@ var _ = Context("Inside the default namespace", func() {
 		return &fakeRayDashboardClient
 	}
 
+	myRayCluster := &rayiov1alpha1.RayCluster{}
+
 	Describe("When creating a rayservice", func() {
 		It("should create a rayservice object", func() {
 			err := k8sClient.Create(ctx, myRayService)
@@ -234,15 +236,15 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a raycluster object", func() {
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
-			myRayCluster := &rayiov1alpha1.RayCluster{}
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
+
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.PreparingRayClusterName, Namespace: "default"}, myRayCluster),
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveRayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 		})
 
 		It("should create more than 1 worker", func() {
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.PreparingRayClusterName, common.RayNodeGroupLabelKey: "small-group"}
+			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.ActiveRayClusterName, common.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -251,7 +253,13 @@ var _ = Context("Inside the default namespace", func() {
 			}
 		})
 
-		It("should update a rayservice object", func() {
+		It("Dashboard should be healthy", func() {
+			Eventually(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService status = %v", myRayService.Status)
+		})
+
+		It("should update a rayservice object and switch to new Ray Cluster", func() {
 			// adding a scale strategy
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
@@ -264,6 +272,37 @@ var _ = Context("Inside the default namespace", func() {
 			myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
 
 			Expect(k8sClient.Update(ctx, myRayService)).Should(Succeed(), "failed to update test RayService resource")
+
+			// Confirm switch to a new Ray Cluster.
+			Eventually(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Not(Equal(myRayCluster.Name)), "My new RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
+
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveRayClusterName, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+		})
+
+		It("Should detect unhealthy status and try to switch to new RayCluster.", func() {
+			// Set a wrong serve status with unhealthy.
+			orignialServeDeploymentUnhealthySecondThreshold := ServeDeploymentUnhealthySecondThreshold
+			ServeDeploymentUnhealthySecondThreshold = 5
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UNHEALTHY"))
+
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, myRayService),
+				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
+
+			ServeDeploymentUnhealthySecondThreshold = orignialServeDeploymentUnhealthySecondThreshold
+			preparingRayClusterName := myRayService.Status.PreparingRayClusterName
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "My new RayCluster name  = %v", myRayService.Status.PreparingRayClusterName)
+			Eventually(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Equal(preparingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveRayClusterName)
 		})
 	})
 })
@@ -271,36 +310,39 @@ var _ = Context("Inside the default namespace", func() {
 func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	client := utils.FakeRayDashboardClient{}
 
-	timeNow := metav1.Now()
+	client.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+
+	return client
+}
+
+func generateServeStatus(time metav1.Time, status string) rayiov1alpha1.ServeDeploymentStatuses {
 	serveStatuses := rayiov1alpha1.ServeDeploymentStatuses{
 		Statuses: []rayiov1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "shallow",
-				Status:               "HEALTHY",
+				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
+				LastUpdateTime:       &time,
+				HealthLastUpdateTime: &time,
 			},
 			{
 				Name:                 "deep",
-				Status:               "HEALTHY",
+				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
+				LastUpdateTime:       &time,
+				HealthLastUpdateTime: &time,
 			},
 			{
 				Name:                 "one",
-				Status:               "HEALTHY",
+				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
+				LastUpdateTime:       &time,
+				HealthLastUpdateTime: &time,
 			},
 		},
 	}
 
-	client.SetServeStatus(serveStatuses)
-
-	return client
+	return serveStatuses
 }
 
 func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
@@ -308,6 +350,33 @@ func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RaySer
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
 		}
+		return rayService.Status.ActiveRayClusterName, nil
+	}
+}
+
+func getPreparingRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
+	return func() (string, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
+			return "", err
+		}
 		return rayService.Status.PreparingRayClusterName, nil
+	}
+}
+
+func checkServiceHealth(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (bool, error) {
+	return func() (bool, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
+			return false, err
+		}
+
+		healthy := true
+
+		healthy = healthy && rayService.Status.DashboardStatus.IsHealthy
+		healthy = healthy && (len(rayService.Status.ServeStatuses) == 3)
+		healthy = healthy && rayService.Status.ServeStatuses[0].Status == "HEALTHY"
+		healthy = healthy && rayService.Status.ServeStatuses[1].Status == "HEALTHY"
+		healthy = healthy && rayService.Status.ServeStatuses[2].Status == "HEALTHY"
+
+		return healthy, nil
 	}
 }

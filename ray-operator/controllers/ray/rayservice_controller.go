@@ -33,15 +33,15 @@ import (
 )
 
 var (
-	rayServiceLog = logf.Log.WithName("rayservice-controller")
+	rayServiceLog                           = logf.Log.WithName("rayservice-controller")
+	ServeDeploymentUnhealthySecondThreshold = 60.0 // Move to var for unit testing.
 )
 
 const (
-	RayServiceDefaultRequeueDuration           = 2 * time.Second
-	RayServiceRestartRequeueDuration           = 10 * time.Second
-	RayServeDeploymentUnhealthySecondThreshold = 60.0
-	RayDashboardUnhealthySecondThreshold       = 60.0
-	servicePortName                            = "dashboard"
+	ServiceDefaultRequeueDuration     = 2 * time.Second
+	ServiceRestartRequeueDuration     = 10 * time.Second
+	DashboardUnhealthySecondThreshold = 60.0
+	servicePortName                   = "dashboard"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -193,7 +193,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 		rayServiceLog.V(1).Info("Mark cluster as unhealthy", "rayCluster", rayClusterInstance)
 		// Wait a while for the cluster delete
-		return ctrl.Result{RequeueAfter: RayServiceRestartRequeueDuration}, nil
+		return ctrl.Result{RequeueAfter: ServiceRestartRequeueDuration}, nil
 	}
 
 	if rayClusterInstance != nil {
@@ -212,7 +212,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{RequeueAfter: RayServiceDefaultRequeueDuration}, nil
+	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -536,7 +536,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 				if prevStatus.Status != "HEALTHY" {
 					serveStatuses.Statuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > RayServeDeploymentUnhealthySecondThreshold {
+					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > ServeDeploymentUnhealthySecondThreshold {
 						isHealthy = false
 					}
 				}
@@ -585,7 +585,7 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceInstance 
 		rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime = &timeNow
 	}
 
-	return time.Since(rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= RayDashboardUnhealthySecondThreshold
+	return time.Since(rayServiceInstance.Status.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= DashboardUnhealthySecondThreshold
 }
 
 func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1alpha1.RayService) {
