@@ -47,6 +47,21 @@ type ServingClusterDeployments struct {
 	Deployments []ServeConfigSpec `json:"deployments,omitempty"`
 }
 
+type RayDashboardClientInterface interface {
+	InitClient(url string)
+	GetDeployments() (string, error)
+	UpdateDeployments(specs []rayv1alpha1.ServeConfigSpec) error
+	GetDeploymentsStatus() (*rayv1alpha1.ServeDeploymentStatuses, error)
+	convertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
+}
+
+// GetRayDashboardClientFunc Used for unit tests.
+var GetRayDashboardClientFunc = GetRayDashboardClient
+
+func GetRayDashboardClient() RayDashboardClientInterface {
+	return &RayDashboardClient{}
+}
+
 type RayDashboardClient struct {
 	client       http.Client
 	dashboardURL string

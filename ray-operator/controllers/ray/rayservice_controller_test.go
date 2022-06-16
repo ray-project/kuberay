@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -211,6 +213,12 @@ var _ = Context("Inside the default namespace", func() {
 		},
 	}
 
+	fakeRayDashboardClient := prepareFakeRayDashboardClient()
+
+	utils.GetRayDashboardClientFunc = func() utils.RayDashboardClientInterface {
+		return &fakeRayDashboardClient
+	}
+
 	Describe("When creating a rayservice", func() {
 		It("should create a rayservice object", func() {
 			err := k8sClient.Create(ctx, myRayService)
@@ -259,6 +267,41 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
+
+func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
+	client := utils.FakeRayDashboardClient{}
+
+	timeNow := metav1.Now()
+	serveStatuses := rayiov1alpha1.ServeDeploymentStatuses{
+		Statuses: []rayiov1alpha1.ServeDeploymentStatus{
+			{
+				Name:                 "shallow",
+				Status:               "HEALTHY",
+				Message:              "",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+			},
+			{
+				Name:                 "deep",
+				Status:               "HEALTHY",
+				Message:              "",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+			},
+			{
+				Name:                 "one",
+				Status:               "HEALTHY",
+				Message:              "",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+			},
+		},
+	}
+
+	client.SetServeStatus(serveStatuses)
+
+	return client
+}
 
 func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
 	return func() (string, error) {
