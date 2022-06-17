@@ -19,12 +19,15 @@ func buildRayResourcePatch(instance rayiov1alpha1.RayCluster) ([]byte, error) {
 		headGroupSpec.Template,
 		headGroupSpec.RayResources,
 	)
-	if !reflect.DeepEqual(headDetectedRayResources, instance.Status.HeadStatus) {
+	previousHeadDetectedRayResources := instance.Status.HeadStatus.DetectedRayResources
+	// If the detected Ray resources we just computed don't match the status,
+	// add a patch operation to update the detected Ray resources.
+	if !reflect.DeepEqual(headDetectedRayResources, previousHeadDetectedRayResources) {
 		patch_slice = append(
 			patch_slice,
 			utils.PatchOperation{
 				Op:    "add",
-				Path:  "/status/headGroupStatus/rayResources",
+				Path:  "/status/headGroupStatus/detectedRayResources",
 				Value: headDetectedRayResources,
 			},
 		)
@@ -36,7 +39,8 @@ func buildRayResourcePatch(instance rayiov1alpha1.RayCluster) ([]byte, error) {
 			workerGroupSpec.Template,
 			workerGroupSpec.RayResources,
 		)
-		if true {
+		previousWorkerDetectedRayResources := instance.Status.WorkerGroupStatuses[i].DetectedRayResources
+		if !reflect.DeepEqual(workerDetectedRayResources, previousWorkerDetectedRayResources) {
 			patch_slice = append(
 				patch_slice,
 				utils.PatchOperation{
@@ -45,6 +49,10 @@ func buildRayResourcePatch(instance rayiov1alpha1.RayCluster) ([]byte, error) {
 					Value: workerDetectedRayResources,
 				},
 			)
+		}
+
+		if workerGroupSpec.GroupName != instance.Status.WorkerGroupStatuses[i].GroupName {
+			return 0
 		}
 	}
 	patch_bytes, err := json.Marshal(patch_slice)

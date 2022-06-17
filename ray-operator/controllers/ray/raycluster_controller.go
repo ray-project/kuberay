@@ -114,14 +114,18 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileRayResources(instance); err != nil {
+
+	// Compute group statuses now, because some of this info is needed to reconcile pods.
+	headStatus, workerGroupStatuses, err := r.computePodStatuses(instance)
+	if err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcilePods(instance); err != nil {
+
+	if err := r.reconcilePods(instance, headStatus, workerGroupStatuses); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
-	if err := r.updateStatus(instance); err != nil {
+	if err := r.updateStatus(instance, headStatus, workerGroupStatuses); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Update status not found error", "cluster name", request.Name)
 		} else {
@@ -207,11 +211,27 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 }
 
 // Update the rayResources field based on user-provided rayStartParams and ray container resources
-func (r *RayClusterReconciler) reconcileRayResources(instance *rayiov1alpha1.RayCluster) error {
-	return nil
+func (r *RayClusterReconciler) computePodStatuses(instance *rayiov1alpha1.RayCluster) (
+	headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus, err error,
+) {
+	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
+		detectedRayResources = util.computeRayResources(
+			workerGroupSpec.RayStartParams,
+			workerGroupSpec.Template,
+			workerGroupSpec.RayResources,
+		)
+		workerGroupStatus := rayiov1alpha1.GroupStatus{
+			GroupName:            workerGroupSpec.GroupName,
+			DetectedRayResources: detectedRayResources,
+		}
+		workerGroupStatuses = append(workerStatuses, workerGroupStatus)
+	}
+	return rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{}, nil
 }
 
-func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) reconcilePods(
+	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatus []rayiov1alpha1.GroupStatus,
+) error {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
@@ -582,7 +602,9 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Complete(r)
 }
 
-func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) updateStatus(
+	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
+) error {
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{"rayClusterName": instance.Name}
 	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -608,6 +630,9 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	if instance.Status.MaxWorkerReplicas != count {
 		instance.Status.MaxWorkerReplicas = count
 	}
+
+	instance.Status.HeadStatus = headStatus
+	instance.Status.WorkerGroupStatuses = workerGroupStatuses
 
 	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.

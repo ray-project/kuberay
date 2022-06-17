@@ -123,7 +123,9 @@ type RayClusterStatus struct {
 }
 
 type GroupStatus struct {
-	//DetectedRayResources is the map of resource name to Ray resource capacity for the members of the head or worker group.
+	// Name of the group. Can be empty in the case of the head "group".
+	GroupName string `json:"groupName,omitempty"`
+	// DetectedRayResources is the map of resource name to Ray resource capacity for the members of the head or worker group.
 	DetectedRayResources RayResources `json:"detectedRayResources,omitempty"`
 }
 

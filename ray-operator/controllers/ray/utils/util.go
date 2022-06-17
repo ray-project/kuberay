@@ -265,3 +265,30 @@ func getGroupSpecParamsFromWorker(workerGroupSpec rayiov1alpha1.WorkerGroupSpec)
 		RayResources:   workerGroupSpec.RayResources,
 	}
 }
+
+// Updates the user-specified rayResource spec with data from the rayStartParams and the pod template.
+// Data from rayResources overrides data from rayStartParams.
+// Data from rayStartParams overrides data from the podTemplate.
+func computeRayResources(
+	rayStartParams map[string]string, podTemplate v1.PodTemplateSpec, rayResourceSpec rayiov1alpha1.RayResources,
+) (updatedRayResources rayiov1alpha1.RayResources) {
+	if _, ok := rayResourceSpec["CPU"]; ok {
+		updatedRayResources["CPU"] = rayResources["CPU"]
+	}
+	else {
+		updatedRayResources["CPU"] = computeCPU(rayStartParams, podTemplate)
+	}
+	if _, ok := rayResourceSpec["GPU"]; ok {
+		updatedRayResources["GPU"] = rayResources["GPU"]
+	}
+	else {
+		updatedRayResources["GPU"] = computeGPU(rayStartParams, podTemplate)
+	}
+	if _, ok := rayResourceSpec["memory"]; ok {
+		updatedRayResources["memory"] = rayResources["memory"]
+	}
+	else {
+		updatedRayResources["memory"] = computeGPU(rayStartParams, podTemplate)
+	}
+	return updatedRayResources
+}
