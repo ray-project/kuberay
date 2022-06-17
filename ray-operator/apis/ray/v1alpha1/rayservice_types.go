@@ -10,15 +10,14 @@ import (
 type ServiceStatus string
 
 const (
-	FailToGetOrCreateRayCluster  ServiceStatus = "FailToGetOrCreateRayCluster"
-	WaitForDashboard             ServiceStatus = "WaitForDashboard"
-	FailServeDeploy              ServiceStatus = "FailServeDeploy"
-	FailGetServeDeploymentStatus ServiceStatus = "FailGetServeDeploymentStatus"
-	Running                      ServiceStatus = "Running"
-	Restarting                   ServiceStatus = "Restarting"
-	FailedToDeleteRayCluster     ServiceStatus = "FailedToDeleteRayCluster"
-	FailedToUpdateIngress        ServiceStatus = "FailedToUpdateIngress"
-	FailedToUpdateService        ServiceStatus = "FailedToUpdateService"
+	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
+	WaitForDashboard                 ServiceStatus = "WaitForDashboard"
+	FailedServeDeploy                ServiceStatus = "FailedServeDeploy"
+	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
+	Running                          ServiceStatus = "Running"
+	Restarting                       ServiceStatus = "Restarting"
+	FailedToUpdateIngress            ServiceStatus = "FailedToUpdateIngress"
+	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
 // RayServiceSpec defines the desired state of RayService
@@ -63,7 +62,8 @@ type RayServiceStatuses struct {
 	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
 	// Pending Service Status indicates a RayCluster will be created or is under creating.
 	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
-	ServiceStatus        ServiceStatus    `json:"serviceStatus,omitempty"`
+	// ServiceStatus indicates the current RayService status.
+	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
 }
 
 type RayServiceStatus struct {

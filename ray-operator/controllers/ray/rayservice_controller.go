@@ -109,7 +109,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	var activeRayClusterInstance *rayv1alpha1.RayCluster
 	var pendingRayClusterInstance *rayv1alpha1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailToGetOrCreateRayCluster, err)
+		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToGetOrCreateRayCluster, err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -727,7 +727,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 				rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markRestart(rayServiceInstance)
 			}
-			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailServeDeploy, err)
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedServeDeploy, err)
 			return ctrl.Result{}, false, err
 		}
 	}
@@ -738,7 +738,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
 		}
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailGetServeDeploymentStatus, err)
+		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToGetServeDeploymentStatus, err)
 		return ctrl.Result{}, false, err
 	}
 
