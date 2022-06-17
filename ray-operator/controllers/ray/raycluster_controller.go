@@ -207,34 +207,6 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 	return nil
 }
 
-// Update the rayResources field based on user-provided rayStartParams and ray container resources
-func (r *RayClusterReconciler) computePodStatuses(instance *rayiov1alpha1.RayCluster) (
-	headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
-) {
-	headGroupSpec := instance.Spec.HeadGroupSpec
-	detectedRayResources := utils.ComputeRayResources(
-		headGroupSpec.RayResources,
-		headGroupSpec.RayStartParams,
-		headGroupSpec.Template,
-	)
-	headStatus = rayiov1alpha1.GroupStatus{
-		DetectedRayResources: detectedRayResources,
-	}
-	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
-		detectedRayResources = utils.ComputeRayResources(
-			workerGroupSpec.RayResources,
-			workerGroupSpec.RayStartParams,
-			workerGroupSpec.Template,
-		)
-		workerGroupStatus := rayiov1alpha1.GroupStatus{
-			GroupName:            workerGroupSpec.GroupName,
-			DetectedRayResources: detectedRayResources,
-		}
-		workerGroupStatuses = append(workerGroupStatuses, workerGroupStatus)
-	}
-	return headStatus, workerGroupStatuses
-}
-
 func (r *RayClusterReconciler) reconcilePods(
 	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatus []rayiov1alpha1.GroupStatus,
 ) error {
