@@ -236,11 +236,41 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 	return false
 }
 
+// Update the rayResources field based on user-provided rayStartParams and ray container resources
+func ComputePodStatuses(instance *rayiov1alpha1.RayCluster) (
+	headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
+) {
+	headGroupSpec := instance.Spec.HeadGroupSpec
+	detectedRayResources := computeRayResources(
+		headGroupSpec.RayResources,
+		headGroupSpec.RayStartParams,
+		headGroupSpec.Template,
+	)
+	headStatus = rayiov1alpha1.GroupStatus{
+		DetectedRayResources: detectedRayResources,
+	}
+	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
+		detectedRayResources = computeRayResources(
+			workerGroupSpec.RayResources,
+			workerGroupSpec.RayStartParams,
+			workerGroupSpec.Template,
+		)
+		workerGroupStatus := rayiov1alpha1.GroupStatus{
+			GroupName:            workerGroupSpec.GroupName,
+			DetectedRayResources: detectedRayResources,
+		}
+		workerGroupStatuses = append(workerGroupStatuses, workerGroupStatus)
+	}
+	return headStatus, workerGroupStatuses
+}
+
 // Updates the user-specified rayResource spec with data from the rayStartParams and the pod template.
 // Data from rayResources overrides data from rayStartParams.
 // Data from rayStartParams overrides data from the podTemplate.
 func computeRayResources(
-	rayStartParams map[string]string, podTemplate v1.PodTemplateSpec, rayResourceSpec rayiov1alpha1.RayResources,
+	rayResourceSpec rayiov1alpha1.RayResources,
+	rayStartParams map[string]string,
+	podTemplate v1.PodTemplateSpec,
 ) (updatedRayResources rayiov1alpha1.RayResources) {
 	if _, ok := rayResourceSpec["CPU"]; ok {
 		updatedRayResources["CPU"] = rayResourceSpec["CPU"]

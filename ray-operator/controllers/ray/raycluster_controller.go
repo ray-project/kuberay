@@ -116,10 +116,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Compute group statuses now, because some of this info is needed to reconcile pods.
-	headStatus, workerGroupStatuses, err := r.computePodStatuses(instance)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-	}
+	headStatus, workerGroupStatuses := utils.ComputePodStatuses(instance)
 
 	if err := r.reconcilePods(instance, headStatus, workerGroupStatuses); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -212,21 +209,30 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 // Update the rayResources field based on user-provided rayStartParams and ray container resources
 func (r *RayClusterReconciler) computePodStatuses(instance *rayiov1alpha1.RayCluster) (
-	headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus, err error,
+	headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
 ) {
+	headGroupSpec := instance.Spec.HeadGroupSpec
+	detectedRayResources := utils.ComputeRayResources(
+		headGroupSpec.RayResources,
+		headGroupSpec.RayStartParams,
+		headGroupSpec.Template,
+	)
+	headStatus = rayiov1alpha1.GroupStatus{
+		DetectedRayResources: detectedRayResources,
+	}
 	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
-		detectedRayResources = util.computeRayResources(
+		detectedRayResources = utils.ComputeRayResources(
+			workerGroupSpec.RayResources,
 			workerGroupSpec.RayStartParams,
 			workerGroupSpec.Template,
-			workerGroupSpec.RayResources,
 		)
 		workerGroupStatus := rayiov1alpha1.GroupStatus{
 			GroupName:            workerGroupSpec.GroupName,
 			DetectedRayResources: detectedRayResources,
 		}
-		workerGroupStatuses = append(workerStatuses, workerGroupStatus)
+		workerGroupStatuses = append(workerGroupStatuses, workerGroupStatus)
 	}
-	return rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{}, nil
+	return headStatus, workerGroupStatuses
 }
 
 func (r *RayClusterReconciler) reconcilePods(
