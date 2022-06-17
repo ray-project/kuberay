@@ -169,7 +169,7 @@ func BuildAutoscalerContainer() v1.Container {
 		Name: AutoscalerContainerName,
 		// TODO: choose right version based on instance.spec.Version
 		// The currently used image reflects changes up to https://github.com/ray-project/ray/pull/24718
-		Image:           "rayproject/ray:448f52",
+		Image:           "rayproject/ray:836b08",
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
