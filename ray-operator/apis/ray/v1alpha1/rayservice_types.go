@@ -16,9 +16,9 @@ const (
 	FailGetServeDeploymentStatus ServiceStatus = "FailGetServeDeploymentStatus"
 	Running                      ServiceStatus = "Running"
 	Restarting                   ServiceStatus = "Restarting"
-	FailDeleteRayCluster         ServiceStatus = "FailDeleteRayCluster"
-	FailUpdateIngress            ServiceStatus = "FailUpdateIngress"
-	FailUpdateService            ServiceStatus = "FailUpdateService"
+	FailedToDeleteRayCluster     ServiceStatus = "FailedToDeleteRayCluster"
+	FailedToUpdateIngress        ServiceStatus = "FailedToUpdateIngress"
+	FailedToUpdateService        ServiceStatus = "FailedToUpdateService"
 )
 
 // RayServiceSpec defines the desired state of RayService
@@ -58,16 +58,20 @@ type RayActorOptionSpec struct {
 	AcceleratorType   string              `json:"acceleratorType,omitempty"`
 }
 
-// RayServiceStatus defines the observed state of RayService
+// RayServiceStatuses defines the observed state of RayService
+type RayServiceStatuses struct {
+	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
+	// Pending Service Status indicates a RayCluster will be created or is under creating.
+	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
+	ServiceStatus        ServiceStatus    `json:"serviceStatus,omitempty"`
+}
+
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServiceStatus        ServiceStatus           `json:"serviceStatus,omitempty"`
-	ServeStatuses        []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus      DashboardStatus         `json:"dashboardStatus,omitempty"`
-	ActiveRayClusterName string                  `json:"activeRayClusterName,omitempty"`
-	// Pending RayCluster Name indicates a RayCluster will be created or is under creating.
-	PendingRayClusterName string           `json:"pendingRayClusterName,omitempty"`
-	RayClusterStatus      RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	ServeStatuses    []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashboardStatus  DashboardStatus         `json:"dashboardStatus,omitempty"`
+	RayClusterName   string                  `json:"rayClusterName,omitempty"`
+	RayClusterStatus RayClusterStatus        `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
@@ -105,8 +109,8 @@ type RayService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   RayServiceSpec   `json:"spec,omitempty"`
-	Status RayServiceStatus `json:"status,omitempty"`
+	Spec   RayServiceSpec     `json:"spec,omitempty"`
+	Status RayServiceStatuses `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

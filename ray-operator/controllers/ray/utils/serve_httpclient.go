@@ -91,7 +91,6 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 }
 
 func (r *RayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConfigSpec) error {
-
 	servingClusterDeployments := ServingClusterDeployments{
 		Deployments: r.convertServeConfig(specs),
 	}
