@@ -5504,8 +5504,8 @@ spec:
                       additionalProperties:
                         format: int32
                         type: integer
-                      description: RayResources is a string-int map specifying custom
-                        resources and resource overrides.
+                      description: RayResources specifies Ray custom resource capacities
+                        and resource capacity overrides.
                       type: object
                     rayStartParams:
                       additionalProperties:
@@ -11001,6 +11001,20 @@ spec:
                   claimed by the user at the cluster level.
                 format: int32
                 type: integer
+              headStatus:
+                properties:
+                  detectedRayResources:
+                    additionalProperties:
+                      format: int32
+                      type: integer
+                    description: DetectedRayResources is the map of resource name
+                      to Ray resource capacity for the members of the hea
+                    type: object
+                  groupName:
+                    description: Name of the group. Can be empty in the case of the
+                      head "group".
+                    type: string
+                type: object
               lastUpdateTime:
                 description: LastUpdateTime indicates last update timestamp for this
                   cluster status.
@@ -11021,6 +11035,22 @@ spec:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerat'
                 type: string
+              workerGroupStatuses:
+                items:
+                  properties:
+                    detectedRayResources:
+                      additionalProperties:
+                        format: int32
+                        type: integer
+                      description: DetectedRayResources is the map of resource name
+                        to Ray resource capacity for the members of the hea
+                      type: object
+                    groupName:
+                      description: Name of the group. Can be empty in the case of
+                        the head "group".
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true
