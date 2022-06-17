@@ -43,6 +43,12 @@ type RayActorOptionSpec struct {
 	AcceleratorType   string              `json:"accelerator_type,omitempty"`
 }
 
+// ServeDeploymentStatuses defines the current states of all Serve Deployments.
+type ServeDeploymentStatuses struct {
+	ApplicationStatus  rayv1alpha1.AppStatus               `json:"app_status,omitempty"`
+	DeploymentStatuses []rayv1alpha1.ServeDeploymentStatus `json:"deployment_statuses,omitempty"`
+}
+
 type ServingClusterDeployments struct {
 	Deployments []ServeConfigSpec `json:"deployments,omitempty"`
 }
@@ -51,7 +57,7 @@ type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments() (string, error)
 	UpdateDeployments(specs []rayv1alpha1.ServeConfigSpec) error
-	GetDeploymentsStatus() (*rayv1alpha1.ServeDeploymentStatuses, error)
+	GetDeploymentsStatus() (*ServeDeploymentStatuses, error)
 	convertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 }
 
@@ -117,7 +123,7 @@ func (r *RayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConfigSp
 	return nil
 }
 
-func (r *RayDashboardClient) GetDeploymentsStatus() (*rayv1alpha1.ServeDeploymentStatuses, error) {
+func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, error) {
 	req, err := http.NewRequest("GET", r.dashboardURL+StatusPath, nil)
 	if err != nil {
 		return nil, err
@@ -132,7 +138,7 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*rayv1alpha1.ServeDeploymen
 
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	var serveStatuses rayv1alpha1.ServeDeploymentStatuses
+	var serveStatuses ServeDeploymentStatuses
 	if err = json.Unmarshal(body, &serveStatuses); err != nil {
 		return nil, err
 	}

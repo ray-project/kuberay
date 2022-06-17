@@ -11556,6 +11556,22 @@ spec:
             properties:
               activeServiceStatus:
                 properties:
+                  appStatus:
+                    description: 'Important: Run "make" to regenerate code after modifying
+                      this file'
+                    properties:
+                      healthLastUpdateTime:
+                        description: Keep track of how long the service is healthy.
+                        format: date-time
+                        type: string
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                    type: object
                   dashboardStatus:
                     description: DashboardStatus defines the current states of Ray
                       Dashboard
@@ -11607,8 +11623,6 @@ spec:
                         type: string
                     type: object
                   serveDeploymentStatuses:
-                    description: 'Important: Run "make" to regenerate code after modifying
-                      this file'
                     items:
                       description: ServeDeploymentStatus defines the current state
                         of Serve Deployment
@@ -11636,6 +11650,22 @@ spec:
                 description: Pending Service Status indicates a RayCluster will be
                   created or is under creating.
                 properties:
+                  appStatus:
+                    description: 'Important: Run "make" to regenerate code after modifying
+                      this file'
+                    properties:
+                      healthLastUpdateTime:
+                        description: Keep track of how long the service is healthy.
+                        format: date-time
+                        type: string
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                    type: object
                   dashboardStatus:
                     description: DashboardStatus defines the current states of Ray
                       Dashboard
@@ -11687,8 +11717,6 @@ spec:
                         type: string
                     type: object
                   serveDeploymentStatuses:
-                    description: 'Important: Run "make" to regenerate code after modifying
-                      this file'
                     items:
                       description: ServeDeploymentStatus defines the current state
                         of Serve Deployment
@@ -11713,6 +11741,7 @@ spec:
                     type: array
                 type: object
               serviceStatus:
+                description: ServiceStatus indicates the current RayService status.
                 type: string
             type: object
         type: object

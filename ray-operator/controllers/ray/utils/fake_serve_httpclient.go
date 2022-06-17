@@ -10,7 +10,7 @@ import (
 type FakeRayDashboardClient struct {
 	client        http.Client
 	dashboardURL  string
-	serveStatuses rayv1alpha1.ServeDeploymentStatuses
+	serveStatuses ServeDeploymentStatuses
 }
 
 func (r *FakeRayDashboardClient) InitClient(url string) {
@@ -27,7 +27,7 @@ func (r *FakeRayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConf
 	return nil
 }
 
-func (r *FakeRayDashboardClient) GetDeploymentsStatus() (*rayv1alpha1.ServeDeploymentStatuses, error) {
+func (r *FakeRayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, error) {
 	return &r.serveStatuses, nil
 }
 
@@ -64,6 +64,6 @@ func (r *FakeRayDashboardClient) convertServeConfig(specs []rayv1alpha1.ServeCon
 	return serveConfigToSend
 }
 
-func (r *FakeRayDashboardClient) SetServeStatus(status rayv1alpha1.ServeDeploymentStatuses) {
+func (r *FakeRayDashboardClient) SetServeStatus(status ServeDeploymentStatuses) {
 	r.serveStatuses = status
 }

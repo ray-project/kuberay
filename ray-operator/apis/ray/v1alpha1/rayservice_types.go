@@ -68,10 +68,11 @@ type RayServiceStatuses struct {
 
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeStatuses    []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus  DashboardStatus         `json:"dashboardStatus,omitempty"`
-	RayClusterName   string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
+	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
+	RayClusterName    string                  `json:"rayClusterName,omitempty"`
+	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
@@ -83,9 +84,13 @@ type DashboardStatus struct {
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
-// ServeDeploymentStatuses defines the current states of all Serve Deployments
-type ServeDeploymentStatuses struct {
-	Statuses []ServeDeploymentStatus `json:"statuses,omitempty"`
+type AppStatus struct {
+	Status         string       `json:"status,omitempty"`
+	Message        string       `json:"message,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Keep track of how long the service is healthy.
+	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of Serve Deployment

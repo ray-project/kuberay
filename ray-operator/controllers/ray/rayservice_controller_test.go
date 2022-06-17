@@ -315,9 +315,9 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	return client
 }
 
-func generateServeStatus(time metav1.Time, status string) rayiov1alpha1.ServeDeploymentStatuses {
-	serveStatuses := rayiov1alpha1.ServeDeploymentStatuses{
-		Statuses: []rayiov1alpha1.ServeDeploymentStatus{
+func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
+	serveStatuses := utils.ServeDeploymentStatuses{
+		DeploymentStatuses: []rayiov1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "shallow",
 				Status:               status,

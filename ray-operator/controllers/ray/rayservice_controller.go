@@ -487,7 +487,7 @@ func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1al
 }
 
 func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1alpha1.RayService, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus) (bool, error) {
-	var serveStatuses *rayv1alpha1.ServeDeploymentStatuses
+	var serveStatuses *utils.ServeDeploymentStatuses
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(); err != nil {
 		r.Log.Error(err, "fail to get deployment status")
@@ -501,17 +501,17 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 	}
 
 	isHealthy := true
-	for i := 0; i < len(serveStatuses.Statuses); i++ {
-		timeNow := metav1.Now()
-		serveStatuses.Statuses[i].LastUpdateTime = &timeNow
-		serveStatuses.Statuses[i].HealthLastUpdateTime = &timeNow
-		if serveStatuses.Statuses[i].Status != "HEALTHY" {
-			prevStatus, exist := statusMap[serveStatuses.Statuses[i].Name]
+	timeNow := metav1.Now()
+	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
+		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
+		serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = &timeNow
+		if serveStatuses.DeploymentStatuses[i].Status != "HEALTHY" {
+			prevStatus, exist := statusMap[serveStatuses.DeploymentStatuses[i].Name]
 			if exist {
 				if prevStatus.Status != "HEALTHY" {
-					serveStatuses.Statuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
+					serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-					if time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > ServeDeploymentUnhealthySecondThreshold {
+					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > ServeDeploymentUnhealthySecondThreshold {
 						isHealthy = false
 					}
 				}
@@ -519,7 +519,22 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 		}
 	}
 
-	rayServiceServeStatus.ServeStatuses = serveStatuses.Statuses
+	//Check app status.
+	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
+	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
+	if serveStatuses.ApplicationStatus.Status != "HEALTHY" {
+		// Check previously app status.
+		if rayServiceServeStatus.ApplicationStatus.Status != "HEALTHY" {
+			serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
+
+			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil && time.Since(rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime.Time).Seconds() > ServeDeploymentUnhealthySecondThreshold {
+				isHealthy = false
+			}
+		}
+	}
+
+	rayServiceServeStatus.ServeStatuses = serveStatuses.DeploymentStatuses
+	rayServiceServeStatus.ApplicationStatus = serveStatuses.ApplicationStatus
 
 	r.Log.V(1).Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
 
