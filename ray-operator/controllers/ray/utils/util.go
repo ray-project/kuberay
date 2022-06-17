@@ -14,7 +14,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var rayClusterLog = logf.Log.WithName("RayCluster-Controller")
 
 // IsCreated returns true if pod has been created and is maintained by the API server
 func IsCreated(pod *corev1.Pod) bool {
@@ -267,38 +270,77 @@ func ComputePodStatuses(instance *rayiov1alpha1.RayCluster) (
 // Updates the user-specified rayResource spec with data from the rayStartParams and the pod template.
 // Data from rayResources overrides data from rayStartParams.
 // Data from rayStartParams overrides data from the podTemplate.
+// If CPU, GPU, or memory is not present in the returned resource map, Ray will attempt to
+// infer these upon "ray start".
 func computeRayResources(
 	rayResourceSpec rayiov1alpha1.RayResources,
 	rayStartParams map[string]string,
 	podTemplate v1.PodTemplateSpec,
 ) (updatedRayResources rayiov1alpha1.RayResources) {
 	updatedRayResources = make(rayiov1alpha1.RayResources)
-	if _, ok := rayResourceSpec["CPU"]; ok {
-		updatedRayResources["CPU"] = rayResourceSpec["CPU"]
+
+	// Compute CPU
+	if cpu_spec, ok := rayResourceSpec["CPU"]; ok {
+		updatedRayResources["CPU"] = cpu_spec
 	} else {
-		updatedRayResources["CPU"] = computeCPU(rayStartParams, podTemplate)
+		num_cpu, err := computeCPU(rayStartParams, rayContainerResources)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to compute CPU.")
+		} else if num_cpu > 0 {
+			updatedRayResources["CPU"] = num_cpu
+		}
 	}
-	if _, ok := rayResourceSpec["GPU"]; ok {
-		updatedRayResources["GPU"] = rayResourceSpec["GPU"]
+
+	// Compute GPU
+	if gpu_spec, ok := rayResourceSpec["GPU"]; ok {
+		updatedRayResources["GPU"] = gpu_spec
 	} else {
-		updatedRayResources["GPU"] = computeGPU(rayStartParams, podTemplate)
+		num_gpu, err := computeGPU(rayStartParams, rayContainerResources)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to compute CPU.")
+		} else if num_gpu > 0 {
+			updatedRayResources["GPU"] = num_gpu
+		}
 	}
-	if _, ok := rayResourceSpec["memory"]; ok {
-		updatedRayResources["memory"] = rayResourceSpec["memory"]
+
+	// Compute memory
+	if memory_spec, ok := rayResourceSpec["memory"]; ok {
+		updatedRayResources["memory"] = memory_spec
 	} else {
-		updatedRayResources["memory"] = computeMemory(rayStartParams, podTemplate)
+		memory, err := computeMemory(rayStartParams, rayContainerResources)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to compute CPU.")
+		} else if memory > 0 {
+			updatedRayResources["memory"] = memory
+		}
 	}
 	return updatedRayResources
 }
 
-func computeCPU(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) int32 {
-	return 1
+func computeCPU(rayStartParams map[string]string, v1.ResourceRequirements) (int32, error) {
+	// Try using the num-cpus rayStartParam.
+	if cpuParam, ok := rayStartParams["num-cpus"]; ok {
+		cpuInt, err := strconv.Atoi(cpuParam)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to parse num-cpus rayStartParam.")
+		} else {
+			return int32(cpuInt), nil
+		}
+	}
+
+	// If we couldn't read CPU from the rayStartParams, trying getting the CPU count from the
+	// pod Template.
+
+	// Identify the Ray container.
+
+	// Pass.
+	return 1, nil
 }
 
-func computeGPU(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) int32 {
-	return 1
+func computeGPU(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) (int32, error) {
+	return 1, nil
 }
 
-func computeMemory(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) int32 {
-	return 1
+func computeMemory(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) (int32, error) {
+	return 1, nil
 }
