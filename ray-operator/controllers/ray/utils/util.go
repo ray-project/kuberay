@@ -272,6 +272,7 @@ func computeRayResources(
 	rayStartParams map[string]string,
 	podTemplate v1.PodTemplateSpec,
 ) (updatedRayResources rayiov1alpha1.RayResources) {
+	updatedRayResources = make(rayiov1alpha1.RayResources)
 	if _, ok := rayResourceSpec["CPU"]; ok {
 		updatedRayResources["CPU"] = rayResourceSpec["CPU"]
 	} else {
