@@ -358,6 +358,7 @@ var expected = `{
    },
    "status":{
       "rayClusterStatus":{
+	     "headStatus": {},
          "lastUpdateTime":null
       }
    }
