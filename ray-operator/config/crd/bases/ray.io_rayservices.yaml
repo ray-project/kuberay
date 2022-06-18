@@ -101,7 +101,7 @@ spec:
                         type: boolean
                       rayResources:
                         additionalProperties:
-                          format: int32
+                          format: int64
                           type: integer
                         description: RayResources is a string-int map specifying custom
                           resources and resource overrides.
@@ -5741,7 +5741,7 @@ spec:
                           type: integer
                         rayResources:
                           additionalProperties:
-                            format: int32
+                            format: int64
                             type: integer
                           description: RayResources specifies Ray custom resource
                             capacities and resource capacity overrides.
@@ -11587,7 +11587,7 @@ spec:
                     properties:
                       detectedRayResources:
                         additionalProperties:
-                          format: int32
+                          format: int64
                           type: integer
                         description: DetectedRayResources is the map of resource name
                           to Ray resource capacity for the members of the hea
@@ -11622,7 +11622,7 @@ spec:
                       properties:
                         detectedRayResources:
                           additionalProperties:
-                            format: int32
+                            format: int64
                             type: integer
                           description: DetectedRayResources is the map of resource
                             name to Ray resource capacity for the members of the hea
