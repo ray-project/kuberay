@@ -46,6 +46,8 @@ var _ = Context("Inside the default namespace", func() {
 	numReplicas = 1
 	numCpus = 0.1
 
+	runtimeEnvStr := "py_modules:\n  - \"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip\"\n  - \"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip\""
+
 	myRayService := &rayiov1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayservice-sample",
@@ -59,13 +61,8 @@ var _ = Context("Inside the default namespace", func() {
 					NumReplicas: &numReplicas,
 					RoutePrefix: "/shallow",
 					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
-						},
+						NumCpus:    &numCpus,
+						RuntimeEnv: runtimeEnvStr,
 					},
 				},
 				{
@@ -74,13 +71,8 @@ var _ = Context("Inside the default namespace", func() {
 					NumReplicas: &numReplicas,
 					RoutePrefix: "/deep",
 					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
-						},
+						NumCpus:    &numCpus,
+						RuntimeEnv: runtimeEnvStr,
 					},
 				},
 				{
@@ -88,13 +80,8 @@ var _ = Context("Inside the default namespace", func() {
 					ImportPath:  "test_module.test.one",
 					NumReplicas: &numReplicas,
 					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
-						},
+						NumCpus:    &numCpus,
+						RuntimeEnv: runtimeEnvStr,
 					},
 				},
 			},

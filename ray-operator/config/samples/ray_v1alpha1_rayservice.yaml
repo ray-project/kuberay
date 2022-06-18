@@ -10,7 +10,7 @@ spec:
       routePrefix: "/shallow"
       rayActorOptions:
         numCpus: 0.1
-        runtimeEnv:
+        runtimeEnv: |
           py_modules:
             - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
             - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
@@ -20,7 +20,7 @@ spec:
       routePrefix: "/deep"
       rayActorOptions:
         numCpus: 0.1
-        runtimeEnv:
+        runtimeEnv: |
           py_modules:
             - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
             - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
@@ -29,7 +29,7 @@ spec:
       numReplicas: 1
       rayActorOptions:
         numCpus: 0.1
-        runtimeEnv:
+        runtimeEnv: |
           py_modules:
             - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
             - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"

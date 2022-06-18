@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"net/http"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -34,13 +35,13 @@ type ServeConfigSpec struct {
 
 // RayActorOptionSpec defines the desired state of RayActor, used by Ray Dashboard.
 type RayActorOptionSpec struct {
-	RuntimeEnv        map[string][]string `json:"runtime_env,omitempty"`
-	NumCpus           *float64            `json:"num_cpus,omitempty"`
-	NumGpus           *float64            `json:"num_gpus,omitempty"`
-	Memory            *int32              `json:"memory,omitempty"`
-	ObjectStoreMemory *int32              `json:"object_store_memory,omitempty"`
-	Resources         map[string]string   `json:"resources,omitempty"`
-	AcceleratorType   string              `json:"accelerator_type,omitempty"`
+	RuntimeEnv        map[string]interface{} `json:"runtime_env,omitempty"`
+	NumCpus           *float64               `json:"num_cpus,omitempty"`
+	NumGpus           *float64               `json:"num_gpus,omitempty"`
+	Memory            *int32                 `json:"memory,omitempty"`
+	ObjectStoreMemory *int32                 `json:"object_store_memory,omitempty"`
+	Resources         map[string]string      `json:"resources,omitempty"`
+	AcceleratorType   string                 `json:"accelerator_type,omitempty"`
 }
 
 type ServingClusterDeployments struct {
@@ -130,6 +131,10 @@ func (r *RayDashboardClient) convertServeConfig(specs []rayv1alpha1.ServeConfigS
 	serveConfigToSend := make([]ServeConfigSpec, len(specs))
 
 	for i, config := range specs {
+
+		runtimeEnv := make(map[string]interface{})
+		_ = yaml.Unmarshal([]byte(config.RayActorOptions.RuntimeEnv), &runtimeEnv)
+
 		serveConfigToSend[i] = ServeConfigSpec{
 			Name:                      config.Name,
 			ImportPath:                config.ImportPath,
@@ -145,7 +150,7 @@ func (r *RayDashboardClient) convertServeConfig(specs []rayv1alpha1.ServeConfigS
 			HealthCheckPeriodS:        config.HealthCheckPeriodS,
 			HealthCheckTimeoutS:       config.GracefulShutdownTimeoutS,
 			RayActorOptions: RayActorOptionSpec{
-				RuntimeEnv:        config.RayActorOptions.RuntimeEnv,
+				RuntimeEnv:        runtimeEnv,
 				NumCpus:           config.RayActorOptions.NumCpus,
 				NumGpus:           config.RayActorOptions.NumGpus,
 				Memory:            config.RayActorOptions.Memory,

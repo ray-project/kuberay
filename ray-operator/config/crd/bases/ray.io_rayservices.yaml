@@ -51,6 +51,10 @@ spec:
                         description: Image optionally overrides the autoscaler's container
                           image.
                         type: string
+                      imagePullPolicy:
+                        description: ImagePullPolicy optionally overrides the autoscaler
+                          container's image pull policy.
+                        type: string
                       resources:
                         description: Resources specifies resource requests and limits
                           for the autoscaler container.
@@ -11529,11 +11533,7 @@ spec:
                             type: string
                           type: object
                         runtimeEnv:
-                          additionalProperties:
-                            items:
-                              type: string
-                            type: array
-                          type: object
+                          type: string
                       type: object
                     routePrefix:
                       type: string

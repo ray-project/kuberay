@@ -14,6 +14,7 @@ import (
 
 var numReplicas int32 = 1
 var numCpus = 0.1
+var runtimeEnvStr = "py_modules:\n  - \"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip\"\n  - \"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip\""
 
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
@@ -28,13 +29,8 @@ var myRayService = &RayService{
 				NumReplicas: &numReplicas,
 				RoutePrefix: "/shallow",
 				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
-					},
+					NumCpus:    &numCpus,
+					RuntimeEnv: runtimeEnvStr,
 				},
 			},
 			{
@@ -43,13 +39,8 @@ var myRayService = &RayService{
 				NumReplicas: &numReplicas,
 				RoutePrefix: "/deep",
 				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
-					},
+					NumCpus:    &numCpus,
+					RuntimeEnv: runtimeEnvStr,
 				},
 			},
 			{
@@ -57,13 +48,8 @@ var myRayService = &RayService{
 				ImportPath:  "test_module.test.one",
 				NumReplicas: &numReplicas,
 				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
-					},
+					NumCpus:    &numCpus,
+					RuntimeEnv: runtimeEnvStr,
 				},
 			},
 		},
@@ -194,12 +180,7 @@ var expected = `{
             "numReplicas":1,
             "routePrefix":"/shallow",
             "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
+               "runtimeEnv":"py_modules:\n  - \"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip\"\n  - \"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip\"",
                "numCpus":0.1
             }
          },
@@ -209,12 +190,7 @@ var expected = `{
             "numReplicas":1,
             "routePrefix":"/deep",
             "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
+               "runtimeEnv":"py_modules:\n  - \"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip\"\n  - \"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip\"",
                "numCpus":0.1
             }
          },
@@ -223,12 +199,7 @@ var expected = `{
             "importPath":"test_module.test.one",
             "numReplicas":1,
             "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
+               "runtimeEnv":"py_modules:\n  - \"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip\"\n  - \"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip\"",
                "numCpus":0.1
             }
          }

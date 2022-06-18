@@ -47,13 +47,13 @@ type ServeConfigSpec struct {
 
 // RayActorOptionSpec defines the desired state of RayActor
 type RayActorOptionSpec struct {
-	RuntimeEnv        map[string][]string `json:"runtimeEnv,omitempty"`
-	NumCpus           *float64            `json:"numCpus,omitempty"`
-	NumGpus           *float64            `json:"numGpus,omitempty"`
-	Memory            *int32              `json:"memory,omitempty"`
-	ObjectStoreMemory *int32              `json:"objectStoreMemory,omitempty"`
-	Resources         map[string]string   `json:"resources,omitempty"`
-	AcceleratorType   string              `json:"acceleratorType,omitempty"`
+	RuntimeEnv        string            `json:"runtimeEnv,omitempty"`
+	NumCpus           *float64          `json:"numCpus,omitempty"`
+	NumGpus           *float64          `json:"numGpus,omitempty"`
+	Memory            *int32            `json:"memory,omitempty"`
+	ObjectStoreMemory *int32            `json:"objectStoreMemory,omitempty"`
+	Resources         map[string]string `json:"resources,omitempty"`
+	AcceleratorType   string            `json:"acceleratorType,omitempty"`
 }
 
 // RayServiceStatus defines the observed state of RayService
