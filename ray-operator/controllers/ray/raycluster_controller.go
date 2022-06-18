@@ -116,7 +116,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Compute group statuses now, because some of this info is needed to reconcile pods.
-	headStatus, workerGroupStatuses := utils.ComputePodStatuses(instance)
+	headStatus, workerGroupStatuses := utils.ComputeGroupStatuses(instance)
 
 	if err := r.reconcilePods(instance, headStatus, workerGroupStatuses); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
