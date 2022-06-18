@@ -10,7 +10,6 @@ import (
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/sirupsen/logrus"
-	"github.com/tebeka/selenium/log"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -410,12 +409,12 @@ func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
 	for i, container := range podSpec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
+				rayClusterLog.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
 				return i
 			}
 		}
 	}
 	// not found, use first container
-	log.Info("Head pod container with index 0 identified as Ray container.")
+	rayClusterLog.Info("Head pod container with index 0 identified as Ray container.")
 	return 0
 }
