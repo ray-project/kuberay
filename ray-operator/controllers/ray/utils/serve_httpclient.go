@@ -3,8 +3,9 @@ package utils
 import (
 	"bytes"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"net/http"
+
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/json"
