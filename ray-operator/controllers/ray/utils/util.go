@@ -51,11 +51,11 @@ func CheckName(s string) string {
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
-	maxLenght := 63
+	maxLength := 63
 
-	if len(s) > maxLenght {
+	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}
@@ -279,15 +279,16 @@ func computeRayResources(
 ) (updatedRayResources rayiov1alpha1.RayResources) {
 
 	updatedRayResources = make(rayiov1alpha1.RayResources)
+	// Copy user CPU,GPU,memory overrides and custom resources.
+	for key, value := range rayResourceSpec {
+		updatedRayResources[key] = value
+	}
 
 	rayContainerIndex := GetRayContainerIndex(podTemplate.Spec)
 	rayContainerResources := podTemplate.Spec.Containers[rayContainerIndex].Resources
 
-	// Compute CPU
-	if cpu_spec, ok := rayResourceSpec["CPU"]; ok {
-		// Prioritize user-specified override.
-		updatedRayResources["CPU"] = cpu_spec
-	} else {
+	// Compute CPU unless user has already provided an override.
+	if _, ok := updatedRayResources["CPU"]; !ok {
 		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		num_cpu, err := computeCPU(rayStartParams, rayContainerResources)
 		if err != nil {
@@ -297,11 +298,8 @@ func computeRayResources(
 		}
 	}
 
-	// Compute GPU
-	if gpu_spec, ok := rayResourceSpec["GPU"]; ok {
-		// Prioritize user-specified override.
-		updatedRayResources["GPU"] = gpu_spec
-	} else {
+	// Compute GPU unless user has already provided an override.
+	if _, ok := rayResourceSpec["GPU"]; !ok {
 		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		num_gpu, err := computeGPU(rayStartParams, rayContainerResources)
 		if err != nil {
@@ -311,11 +309,8 @@ func computeRayResources(
 		}
 	}
 
-	// Compute memory
-	if memory_spec, ok := rayResourceSpec["memory"]; ok {
-		// Prioritize user-specified override.
-		updatedRayResources["memory"] = memory_spec
-	} else {
+	// Compute memory unless user has already provided an override.
+	if _, ok := rayResourceSpec["memory"]; !ok {
 		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		memory, err := computeMemory(rayStartParams, rayContainerResources)
 		if err != nil {
