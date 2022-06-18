@@ -111,7 +111,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := getRayContainerIndex(pod)
+	rayContainerIndex := GetRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -120,7 +120,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
 		// introduced in https://github.com/ray-project/ray/pull/13434.
-		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
+		autoscalerContainerIndex := getAutoscalerContainerIndex(pod.Spec)
 		addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
@@ -244,11 +244,11 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainerIndex(pod v1.Pod) (rayContainerIndex int) {
+func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
 	// a ray pod can have multiple containers.
 	// we identify the ray container based on env var: RAY=true
 	// if the env var is missing, we choose containers[0].
-	for i, container := range pod.Spec.Containers {
+	for i, container := range podSpec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
 				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
@@ -261,9 +261,9 @@ func getRayContainerIndex(pod v1.Pod) (rayContainerIndex int) {
 	return 0
 }
 
-func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
+func getAutoscalerContainerIndex(podSpec v1.PodSpec) (autoscalerContainerIndex int) {
 	// we identify the autoscaler container based on its name
-	for i, container := range pod.Spec.Containers {
+	for i, container := range podSpec.Containers {
 		if container.Name == AutoscalerContainerName {
 			return i
 		}

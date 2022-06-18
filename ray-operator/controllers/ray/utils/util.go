@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,11 +27,11 @@ func IsCreated(pod *corev1.Pod) bool {
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
 func CheckName(s string) string {
-	maxLenght := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
 
-	if len(s) > maxLenght {
+	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
 		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}
@@ -278,11 +279,15 @@ func computeRayResources(
 	podTemplate v1.PodTemplateSpec,
 ) (updatedRayResources rayiov1alpha1.RayResources) {
 	updatedRayResources = make(rayiov1alpha1.RayResources)
+	rayContainerIndex := common.GetRayContainerIndex(podTemplate.Spec)
+	rayContainerResources := podTemplate.Spec.Containers[rayContainerIndex].Resources
 
 	// Compute CPU
 	if cpu_spec, ok := rayResourceSpec["CPU"]; ok {
+		// Prioritize user-specified override.
 		updatedRayResources["CPU"] = cpu_spec
 	} else {
+		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		num_cpu, err := computeCPU(rayStartParams, rayContainerResources)
 		if err != nil {
 			rayClusterLog.Error(err, "Failed to compute CPU.")
@@ -293,8 +298,10 @@ func computeRayResources(
 
 	// Compute GPU
 	if gpu_spec, ok := rayResourceSpec["GPU"]; ok {
+		// Prioritize user-specified override.
 		updatedRayResources["GPU"] = gpu_spec
 	} else {
+		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		num_gpu, err := computeGPU(rayStartParams, rayContainerResources)
 		if err != nil {
 			rayClusterLog.Error(err, "Failed to compute CPU.")
@@ -305,8 +312,10 @@ func computeRayResources(
 
 	// Compute memory
 	if memory_spec, ok := rayResourceSpec["memory"]; ok {
+		// Prioritize user-specified override.
 		updatedRayResources["memory"] = memory_spec
 	} else {
+		// If override is not specified, look at rayStartParams and the the Ray container's resources.
 		memory, err := computeMemory(rayStartParams, rayContainerResources)
 		if err != nil {
 			rayClusterLog.Error(err, "Failed to compute CPU.")
@@ -317,30 +326,77 @@ func computeRayResources(
 	return updatedRayResources
 }
 
-func computeCPU(rayStartParams map[string]string, v1.ResourceRequirements) (int32, error) {
+func computeCPU(rayStartParams map[string]string, rayContainerResources v1.ResourceRequirements) (int64, error) {
 	// Try using the num-cpus rayStartParam.
 	if cpuParam, ok := rayStartParams["num-cpus"]; ok {
-		cpuInt, err := strconv.Atoi(cpuParam)
+		cpuInt, err := strconv.ParseInt(cpuParam, 10, 64)
 		if err != nil {
 			rayClusterLog.Error(err, "Failed to parse num-cpus rayStartParam.")
 		} else {
-			return int32(cpuInt), nil
+			return cpuInt, nil
 		}
 	}
 
 	// If we couldn't read CPU from the rayStartParams, trying getting the CPU count from the
-	// pod Template.
+	// container resources.
+	cpuQuantity := rayContainerResources.Limits[v1.ResourceCPU]
+	if !cpuQuantity.IsZero() {
+		return cpuQuantity.Value(), nil
+	}
 
-	// Identify the Ray container.
-
-	// Pass.
-	return 1, nil
+	// The user might not have set CPU limits for the Ray container.
+	// That's not adviseable, but we don't consider it an error.
+	// Return a 0 value, which will be ignored by the caller of this function.
+	return 0, nil
 }
 
-func computeGPU(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) (int32, error) {
-	return 1, nil
+func computeGPU(rayStartParams map[string]string, rayContainerResources v1.ResourceRequirements) (int64, error) {
+	// Try using the num-gpus rayStartParam.
+	if gpuParam, ok := rayStartParams["num-gpus"]; ok {
+		gpuInt, err := strconv.ParseInt(gpuParam, 10, 64)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to parse num-cpus rayStartParam.")
+		} else {
+			return int64(gpuInt), nil
+		}
+	}
+
+	// If we couldn't read GPU from the rayStartParams, trying getting the GPU count from the
+	// container resources.
+
+	// Scan for resource names containing gpu, e.g. "nvidia.com/gpu".
+	for resourceName, resourceQuantity := range rayContainerResources.Limits {
+		if strings.Contains(string(resourceName), "gpu") {
+			// For now, we only support one GPU type.
+			// Return the first match for a GPU quantity.
+			return int64(resourceQuantity.Value()), nil
+		}
+	}
+
+	// No GPUs specified. Return a 0 value, which will be ignored by the caller of this function.
+	return 0, nil
 }
 
-func computeMemory(rayStartParams map[string]string, podTemplate v1.PodTemplateSpec) (int32, error) {
-	return 1, nil
+func computeMemory(rayStartParams map[string]string, rayContainerResources v1.ResourceRequirements) (int64, error) {
+	// First look in the memory rayStartParam.
+	if memoryParam, ok := rayStartParams["memory"]; ok {
+		memoryInt, err := strconv.ParseInt(memoryParam, 10, 64)
+		if err != nil {
+			rayClusterLog.Error(err, "Failed to parse memory rayStartParam.")
+		} else {
+			return memoryInt, nil
+		}
+	}
+
+	// If we couldn't read CPU from the rayStartParams, trying getting the CPU count from the
+	// container resources.
+	memoryQuantity := rayContainerResources.Limits[v1.ResourceMemory]
+	if !memoryQuantity.IsZero() {
+		return memoryQuantity.Value(), nil
+	}
+
+	// The user might not have set memory limits for the Ray container.
+	// That's very inadviseable, but we don't consider it an error.
+	// Return a 0 value, which will be ignored by the caller of this function.
+	return 0, nil
 }

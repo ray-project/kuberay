@@ -38,7 +38,7 @@ type HeadGroupSpec struct {
 	// Template is the exact pod template used in K8s deployments, statefulsets, etc.
 	Template v1.PodTemplateSpec `json:"template"`
 	// RayResources is a string-int map specifying custom resources and resource overrides.
-	RayResources map[string]int32 `json:"rayResources,omitempty"`
+	RayResources RayResources `json:"rayResources,omitempty"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
@@ -92,8 +92,9 @@ type UpscalingMode string
 // The overall state of the Ray cluster.
 type ClusterState string
 
-// A map of Ray resource names to integer resource capacities
-type RayResources map[string]int32
+// A map of Ray resource names to integer resource capacities.
+// (int64 is chosen to accommodate specifying memory in bytes)
+type RayResources map[string]int64
 
 const (
 	Ready     ClusterState = "ready"
