@@ -95,7 +95,7 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 	in.Template.DeepCopyInto(&out.Template)
 	if in.RayResources != nil {
 		in, out := &in.RayResources, &out.RayResources
-		*out = make(map[string]int32, len(*in))
+		*out = make(RayResources, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}

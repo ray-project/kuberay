@@ -9,8 +9,8 @@ import (
 	"unicode"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/sirupsen/logrus"
+	"github.com/tebeka/selenium/log"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -278,8 +278,10 @@ func computeRayResources(
 	rayStartParams map[string]string,
 	podTemplate v1.PodTemplateSpec,
 ) (updatedRayResources rayiov1alpha1.RayResources) {
+
 	updatedRayResources = make(rayiov1alpha1.RayResources)
-	rayContainerIndex := common.GetRayContainerIndex(podTemplate.Spec)
+
+	rayContainerIndex := GetRayContainerIndex(podTemplate.Spec)
 	rayContainerResources := podTemplate.Spec.Containers[rayContainerIndex].Resources
 
 	// Compute CPU
@@ -399,4 +401,21 @@ func computeMemory(rayStartParams map[string]string, rayContainerResources v1.Re
 	// That's very inadviseable, but we don't consider it an error.
 	// Return a 0 value, which will be ignored by the caller of this function.
 	return 0, nil
+}
+
+func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
+	// a ray pod can have multiple containers.
+	// we identify the ray container based on env var: RAY=true
+	// if the env var is missing, we choose containers[0].
+	for i, container := range podSpec.Containers {
+		for _, env := range container.Env {
+			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
+				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
+				return i
+			}
+		}
+	}
+	// not found, use first container
+	log.Info("Head pod container with index 0 identified as Ray container.")
+	return 0
 }

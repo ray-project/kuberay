@@ -101,7 +101,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-// BuildPod a pod config
+// BuildPod builds and returns a pod config
 func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -111,7 +111,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := GetRayContainerIndex(pod.Spec)
+	rayContainerIndex := utils.GetRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -242,23 +242,6 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 		fmt.Fprintf(cmdAggr, " %s ", v)
 	}
 	return cmdAggr.String()
-}
-
-func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
-	// a ray pod can have multiple containers.
-	// we identify the ray container based on env var: RAY=true
-	// if the env var is missing, we choose containers[0].
-	for i, container := range podSpec.Containers {
-		for _, env := range container.Env {
-			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
-				return i
-			}
-		}
-	}
-	// not found, use first container
-	log.Info("Head pod container with index 0 identified as Ray container.")
-	return 0
 }
 
 func getAutoscalerContainerIndex(podSpec v1.PodSpec) (autoscalerContainerIndex int) {
