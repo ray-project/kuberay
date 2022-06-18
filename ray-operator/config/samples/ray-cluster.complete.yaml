@@ -20,7 +20,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayResources:
       FLEEBS: 10
-      GPU: 15
     rayStartParams:
       port: '6379'
       object-store-memory: '100000000'
@@ -79,6 +78,7 @@ spec:
             limits:
               cpu: "2"
               memory: "1G"
+              nvidia.com/gpu: "5"
             requests:
               cpu: "500m"
               memory: "512Mi"
