@@ -208,7 +208,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 }
 
 func (r *RayClusterReconciler) reconcilePods(
-	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatus []rayiov1alpha1.GroupStatus,
+	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
 ) error {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
@@ -230,7 +230,8 @@ func (r *RayClusterReconciler) reconcilePods(
 		// create head pod
 		log.Info("reconcilePods ", "creating head pod for cluster", instance.Name)
 		common.CreatedClustersCounterInc(instance.Namespace)
-		if err := r.createHeadPod(*instance); err != nil {
+		headRayResources := headStatus.DetectedRayResources
+		if err := r.createHeadPod(*instance, headRayResources); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
 			return err
 		}
@@ -292,7 +293,7 @@ func (r *RayClusterReconciler) reconcilePods(
 	}
 
 	// Reconcile worker pods now
-	for _, worker := range instance.Spec.WorkerGroupSpecs {
+	for i, worker := range instance.Spec.WorkerGroupSpecs {
 		workerPods := corev1.PodList{}
 		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -339,7 +340,8 @@ func (r *RayClusterReconciler) reconcilePods(
 			var i int32
 			for i = 0; i < diff; i++ {
 				log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				if err := r.createWorkerPod(*instance, worker); err != nil {
+				workerRayResources := workerGroupStatuses[i].DetectedRayResources
+				if err := r.createWorkerPod(*instance, worker, workerRayResources); err != nil {
 					return err
 				}
 			}
@@ -476,9 +478,9 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, rayResources rayiov1alpha1.RayResources) error {
 	// build the pod then create it
-	pod := r.buildHeadPod(instance)
+	pod := r.buildHeadPod(instance, rayResources)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -504,9 +506,9 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 	return nil
 }
 
-func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec) error {
+func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, rayResources rayiov1alpha1.RayResources) error {
 	// build the pod then create it
-	pod := r.buildWorkerPod(instance, worker)
+	pod := r.buildWorkerPod(instance, worker, rayResources)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -535,12 +537,12 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 }
 
 // Build head instance pod(s).
-func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) corev1.Pod {
+func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster, rayResources rayiov1alpha1.RayResources) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, rayResources)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -550,12 +552,12 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 }
 
 // Build worker instance pods.
-func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec) corev1.Pod {
+func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, rayResources rayiov1alpha1.RayResources) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, rayResources)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
