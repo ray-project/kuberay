@@ -166,6 +166,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - ray.io
+  resources:
+  - workspaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ray.io
+  resources:
+  - workspaces/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ray.io
+  resources:
+  - workspaces/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - rolebindings

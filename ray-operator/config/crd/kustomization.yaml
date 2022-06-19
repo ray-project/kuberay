@@ -4,4 +4,5 @@
 resources:
 - bases/ray.io_rayclusters.yaml
 - bases/ray.io_rayservices.yaml
+- bases/ray.io_workspaces.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
