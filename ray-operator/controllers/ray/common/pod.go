@@ -112,7 +112,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	rayContainerIndex := getRayContainerIndex(podTemplateSpec.Spec)
 	rayContainerResources := podTemplateSpec.Spec.Containers[rayContainerIndex].Resources
 
-	// Update user-provide rayResource spec with data from rayStartParams.
+	// Update user-provide rayResource spec with data from rayStartParams and the
+	// pod spec.
 	detectedRayResources = utils.ComputeRayResources(
 		rayResourceSpec,
 		rayStartParams,
