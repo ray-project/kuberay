@@ -35,4 +35,8 @@ const (
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
+
+	// Workspace label keys
+	WorkspaceNameLabelKey            = "ray.io/workspace-name"
+	WorkspaceStatefulSetNameLabelKey = "ray.io/workspace-statefulset"
 )
