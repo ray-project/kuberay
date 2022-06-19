@@ -2,10 +2,12 @@ package common
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/alessio/shellescape"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -101,8 +103,21 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-// BuildPod builds and returns a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, rayResources rayiov1alpha1.RayResources) (aPod v1.Pod) {
+// BuildPod builds a pod config. Returns the pod config `Pod` and an updated rayResources map
+// `detectedRayResources`.
+// The returned `Pod` will be used to create Ray pods.
+// The map `detectedRayResources` is used internally in this method as part of the Ray start entrypoint.
+// This map is also returned so that it can be placed in RayCluster.status later in the reconcile iteration.
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, rayResourceSpec rayiov1alpha1.RayResources) (aPod v1.Pod, detectedRayResources rayiov1alpha1.RayResources) {
+	rayContainerIndex := getRayContainerIndex(podTemplateSpec.Spec)
+	rayContainerResources := podTemplateSpec.Spec.Containers[rayContainerIndex].Resources
+
+	// Update user-provide rayResource spec with data from rayStartParams.
+	detectedRayResources = utils.ComputeRayResources(
+		rayResourceSpec,
+		rayStartParams,
+		rayContainerResources,
+	)
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -111,7 +126,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := utils.GetRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -120,7 +134,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
 		// introduced in https://github.com/ray-project/ray/pull/13434.
-		autoscalerContainerIndex := getAutoscalerContainerIndex(pod.Spec)
+		autoscalerContainerIndex := getAutoscalerContainerIndex(podTemplateSpec.Spec)
 		addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
@@ -137,7 +151,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, detectedRayResources)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -146,8 +160,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			args = cont
 		}
 
+		// TODO (Dmitri) Always append block?
 		if !isRayStartWithBlock(rayStartParams) {
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
+
+			// TODO (Dmitri) TRAP interrupt and terminate signals for faster pod termination?
 			args = args + " && sleep infinity"
 		}
 
@@ -160,7 +177,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
 
-	return pod
+	return pod, rayResourceSpec
 }
 
 // BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
@@ -242,6 +259,23 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 		fmt.Fprintf(cmdAggr, " %s ", v)
 	}
 	return cmdAggr.String()
+}
+
+func getRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
+	// a ray pod can have multiple containers.
+	// we identify the ray container based on env var: RAY=true
+	// if the env var is missing, we choose containers[0].
+	for i, container := range podSpec.Containers {
+		for _, env := range container.Env {
+			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
+				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
+				return i
+			}
+		}
+	}
+	// not found, use first container
+	log.Info("Head pod container with index 0 identified as Ray container.")
+	return 0
 }
 
 func getAutoscalerContainerIndex(podSpec v1.PodSpec) (autoscalerContainerIndex int) {
@@ -378,39 +412,39 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
-	if _, ok := rayStartParams["num-cpus"]; !ok {
-		cpu := resource.Limits[v1.ResourceCPU]
-		if !cpu.IsZero() {
-			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
-		}
-	}
-
-	if _, ok := rayStartParams["memory"]; !ok {
-		memory := resource.Limits[v1.ResourceMemory]
-		if !memory.IsZero() {
-			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
-		}
-	}
-
-	if _, ok := rayStartParams["num-gpus"]; !ok {
-		gpu := resource.Limits["gpu"]
-		if !gpu.IsZero() {
-			rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
-		}
-	}
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, detectedRayResources rayiov1alpha1.RayResources) (fullCmd string) {
 
 	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
+	var rayStartCmd string
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
+		// TODO (Dmitri) Panic? Pass an error up the call stack?
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
+		return ""
 	}
-	return ""
+
+	fullCmd = withResourceOverride(rayStartCmd, detectedRayResources)
+	return fullCmd
+}
+
+// Adds rayResourceOverride env variable to the Ray start command.
+// This is a Golang port of the corresponding Ray autoscaler logic:
+// https://github.com/ray-project/ray/blob/3de4657caedefc9b25f18e92565ddf1bd3bcb74d/python/ray/autoscaler/_private/command_runner.py#L100-L101
+func withResourceOverride(rayStartCmd string, detectedRayResources rayiov1alpha1.RayResources) (fullCmd string) {
+	resourceJSON, err := json.Marshal(detectedRayResources)
+	if err != nil {
+		// TODO (Dmitri) Pass error up the call stack.
+		log.Error(err, "Failed to parse Ray resources.")
+		return rayStartCmd
+	}
+	quotedResourceJSON := shellescape.Quote(string(resourceJSON))
+	fullCmd = fmt.Sprintf("export RAY_OVERRIDE_RESOURCES=%v;", quotedResourceJSON)
+	return fullCmd
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
