@@ -75,7 +75,7 @@ Demands:
       enableInTreeAutoscaling: true
     ```
 
-2. The autoscaler image is `rayproject/ray:448f52` which reflects the latest changes from [Ray PR #24718](https://github.com/ray-project/ray/pull/24718/files) in the master branch.
+2. The autoscaler image is `rayproject/ray:836b08` which reflects the latest changes from [Ray PR #24718](https://github.com/ray-project/ray/pull/24718/files) in the master branch.
 
 3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. The autoscaler image used
 is compatible with all Ray versions >= 1.11.0.
