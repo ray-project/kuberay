@@ -207,14 +207,15 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 	return nil
 }
 
+// Reconcile pods. Return detected Ray resources for later insertion into RayCluster.status.
 func (r *RayClusterReconciler) reconcilePods(
 	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
-) error {
+) (headDetectedRayResources rayiov1alpha1.RayResources, workerDetectedRayResources []rayiov1alpha1.RayResources, err error) {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
+		return nil, nil, err
 	}
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
@@ -223,7 +224,7 @@ func (r *RayClusterReconciler) reconcilePods(
 		if headPod.Status.Phase == v1.PodRunning || headPod.Status.Phase == v1.PodPending {
 			log.Info("reconcilePods", "head pod is up and running... checking workers", headPod.Name)
 		} else {
-			return fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
+			return nil, nil, fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
 		}
 	}
 	if len(headPods.Items) == 0 || headPods.Items == nil {
@@ -233,7 +234,7 @@ func (r *RayClusterReconciler) reconcilePods(
 		headRayResources := headStatus.DetectedRayResources
 		if err := r.createHeadPod(*instance, headRayResources); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
-			return err
+			return nil, nil, err
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
@@ -250,7 +251,7 @@ func (r *RayClusterReconciler) reconcilePods(
 		// delete all the extra head pod pods
 		for _, extraHeadPodToDelete := range headPods.Items {
 			if err := r.Delete(context.TODO(), &extraHeadPodToDelete); err != nil {
-				return err
+				return nil, nil, err
 			}
 		}
 	}
@@ -478,9 +479,9 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, rayResources rayiov1alpha1.RayResources) error {
+func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) error {
 	// build the pod then create it
-	pod := r.buildHeadPod(instance, rayResources)
+	pod := r.buildHeadPod(instance)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,

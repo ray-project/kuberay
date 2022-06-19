@@ -255,7 +255,7 @@ func ComputeGroupStatuses(instance *rayiov1alpha1.RayCluster) (
 
 	// Worker group statuses
 	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
-		detectedRayResources = computeRayResources(
+		detectedRayResources = ComputeRayResources(
 			workerGroupSpec.RayResources,
 			workerGroupSpec.RayStartParams,
 			workerGroupSpec.Template,
