@@ -63,7 +63,7 @@ func BuildRoleBinding(cluster *v1alpha1.RayCluster) (*rbacv1.RoleBinding, error)
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Name:      cluster.Name,
+				Name:      utils.GetHeadGroupServiceAccountName(cluster),
 				Namespace: cluster.Namespace,
 			},
 		},

@@ -38,6 +38,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -653,4 +654,34 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 	err = fakeClient.Get(context.Background(), saNamespacedName, &sa)
 
 	assert.Nil(t, err, "Fail to get head group ServiceAccount after reconciliation")
+}
+
+func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+
+	rbNamespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+	rb := rbacv1.RoleBinding{}
+	err := fakeClient.Get(context.Background(), rbNamespacedName, &rb)
+
+	assert.True(t, errors.IsNotFound(err), "autoscaler RoleBinding should not exist yet")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	err = testRayClusterReconciler.reconcileAutoscalerRoleBinding(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile autoscaler RoleBinding")
+
+	err = fakeClient.Get(context.Background(), rbNamespacedName, &rb)
+
+	assert.Nil(t, err, "Fail to get autoscaler RoleBinding after reconciliation")
 }
