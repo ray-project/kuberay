@@ -9,7 +9,6 @@ import (
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 )
 
 func TestBefore(t *testing.T) {
@@ -28,7 +27,7 @@ func TestBefore(t *testing.T) {
 
 func TestStatus(t *testing.T) {
 	pod := createSomePod()
-	pod.Status.Phase = v1.PodPending
+	pod.Status.Phase = corev1.PodPending
 	if !IsCreated(pod) {
 		t.Fail()
 	}
@@ -152,7 +151,7 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 			Namespace: namespaceStr,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
 					Name:    "ray-head",
 					Image:   "rayproject/autoscaler",
@@ -162,7 +161,7 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase: v1.PodRunning,
+			Phase: corev1.PodRunning,
 		},
 	}
 
@@ -214,7 +213,7 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 			Namespace: namespaceStr,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
 					Name:    "ray-worker",
 					Image:   "rayproject/autoscaler",
@@ -224,7 +223,7 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase: v1.PodRunning,
+			Phase: corev1.PodRunning,
 		},
 	}
 
@@ -238,14 +237,14 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("500m"),
-							v1.ResourceMemory: resource.MustParse("512Mi"),
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("256m"),
-							v1.ResourceMemory: resource.MustParse("256Mi"),
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 					},
 				},
@@ -259,38 +258,38 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 			Namespace: namespaceStr,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
 					Name:    "ray-worker",
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("500m"),
-							v1.ResourceMemory: resource.MustParse("512Mi"),
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("256m"),
-							v1.ResourceMemory: resource.MustParse("256Mi"),
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 					},
 				},
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase: v1.PodRunning,
+			Phase: corev1.PodRunning,
 		},
 	}
 
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching")
 
-	pod.Spec.Containers[0].Resources.Limits[v1.ResourceCPU] = resource.MustParse("50m")
+	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("50m")
 
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
 
-	pod.Spec.Containers[0].Resources.Limits[v1.ResourceCPU] = resource.MustParse("500m")
-	pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU] = resource.MustParse("250m")
+	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("500m")
+	pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("250m")
 
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
 }

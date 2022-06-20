@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
@@ -85,7 +84,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-head",
 						Image:   "rayproject/autoscaler",
@@ -95,7 +94,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 		&corev1.Pod{
@@ -108,7 +107,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
 						Image:   "rayproject/autoscaler",
@@ -118,7 +117,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 		&corev1.Pod{
@@ -131,7 +130,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
 						Image:   "rayproject/autoscaler",
@@ -141,7 +140,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 		&corev1.Pod{
@@ -154,7 +153,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
 						Image:   "rayproject/autoscaler",
@@ -164,7 +163,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 		&corev1.Pod{
@@ -177,7 +176,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
 						Image:   "rayproject/autoscaler",
@@ -187,7 +186,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 		&corev1.Pod{
@@ -200,7 +199,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
 						Image:   "rayproject/autoscaler",
@@ -210,7 +209,7 @@ func setupTest(t *testing.T) {
 				},
 			},
 			Status: corev1.PodStatus{
-				Phase: v1.PodRunning,
+				Phase: corev1.PodRunning,
 			},
 		},
 	}
@@ -495,8 +494,8 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate 2 pod container crash.
-	podList.Items[3].Status.Phase = v1.PodFailed
-	podList.Items[4].Status.Phase = v1.PodFailed
+	podList.Items[3].Status.Phase = corev1.PodFailed
+	podList.Items[4].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(context.Background(), &podList.Items[3])
 	assert.Nil(t, err, "Fail to get update pod status")
 	err = fakeClient.Update(context.Background(), &podList.Items[4])
@@ -542,7 +541,7 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate 1 pod container crash.
-	podList.Items[3].Status.Phase = v1.PodFailed
+	podList.Items[3].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(context.Background(), &podList.Items[3])
 	assert.Nil(t, err, "Fail to get update pod status")
 
@@ -586,7 +585,7 @@ func TestReconcile_UpdateLocalWorkersToDelete_OK(t *testing.T) {
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate 1 pod container crash.
-	podList.Items[1].Status.Phase = v1.PodFailed
+	podList.Items[1].Status.Phase = corev1.PodFailed
 	runningPodsItems := append(podList.Items[:1], podList.Items[2:]...)
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -618,7 +617,7 @@ func contains(slice []string, item string) bool {
 func getNotFailedPodItemNum(podList corev1.PodList) int {
 	count := 0
 	for _, aPod := range podList.Items {
-		if aPod.Status.Phase != v1.PodFailed {
+		if aPod.Status.Phase != corev1.PodFailed {
 			count++
 		}
 	}
