@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -115,14 +116,15 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
-	// Compute group statuses now, because some of this info is needed to reconcile pods.
-	headStatus, workerGroupStatuses := utils.ComputeGroupStatuses(instance)
+	// Derive pod configuration from RayCluster CR (no K8s API calls).
+	rayPodConfig := r.buildRayPodConfig(instance)
 
-	if err := r.reconcilePods(instance, headStatus, workerGroupStatuses); err != nil {
+	// Apply configuration built above where needed (by making K8s API calls).
+	if err := r.reconcilePods(instance, rayPodConfig.HeadPod, rayPodConfig.WorkerPods); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
-	if err := r.updateStatus(instance, headStatus, workerGroupStatuses); err != nil {
+	if err := r.updateStatus(instance, rayPodConfig.HeadRayResources, rayPodConfig.WorkerRayResources); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Update status not found error", "cluster name", request.Name)
 		} else {
@@ -207,15 +209,26 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 	return nil
 }
 
-// Reconcile pods. Return detected Ray resources for later insertion into RayCluster.status.
+func (r *RayClusterReconciler) buildRayPodConfig(instance *rayiov1alpha1.RayCluster) common.RayPodConfig {
+	headPod, headRayResources := r.buildHeadPod(*instance)
+	workerPods, workerRayResources := r.buildWorkerPods(*instance)
+	return common.RayPodConfig{
+		HeadPod:            headPod,
+		HeadRayResources:   headRayResources,
+		WorkerPods:         workerPods,
+		WorkerRayResources: workerRayResources,
+	}
+}
+
+// Reconcile pods.
 func (r *RayClusterReconciler) reconcilePods(
-	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
-) (headDetectedRayResources rayiov1alpha1.RayResources, workerDetectedRayResources []rayiov1alpha1.RayResources, err error) {
+	instance *rayiov1alpha1.RayCluster, headPodConfig v1.Pod, workerPodConfigs []v1.Pod,
+) error {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return nil, nil, err
+		return err
 	}
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
@@ -224,17 +237,16 @@ func (r *RayClusterReconciler) reconcilePods(
 		if headPod.Status.Phase == v1.PodRunning || headPod.Status.Phase == v1.PodPending {
 			log.Info("reconcilePods", "head pod is up and running... checking workers", headPod.Name)
 		} else {
-			return nil, nil, fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
+			return fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
 		}
 	}
 	if len(headPods.Items) == 0 || headPods.Items == nil {
 		// create head pod
 		log.Info("reconcilePods ", "creating head pod for cluster", instance.Name)
 		common.CreatedClustersCounterInc(instance.Namespace)
-		headRayResources := headStatus.DetectedRayResources
-		if err := r.createHeadPod(*instance, headRayResources); err != nil {
+		if err := r.createHeadPod(*instance, headPodConfig); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
-			return nil, nil, err
+			return err
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
@@ -251,7 +263,7 @@ func (r *RayClusterReconciler) reconcilePods(
 		// delete all the extra head pod pods
 		for _, extraHeadPodToDelete := range headPods.Items {
 			if err := r.Delete(context.TODO(), &extraHeadPodToDelete); err != nil {
-				return nil, nil, err
+				return err
 			}
 		}
 	}
@@ -294,7 +306,7 @@ func (r *RayClusterReconciler) reconcilePods(
 	}
 
 	// Reconcile worker pods now
-	for i, worker := range instance.Spec.WorkerGroupSpecs {
+	for workerIndex, worker := range instance.Spec.WorkerGroupSpecs {
 		workerPods := corev1.PodList{}
 		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -341,8 +353,8 @@ func (r *RayClusterReconciler) reconcilePods(
 			var i int32
 			for i = 0; i < diff; i++ {
 				log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				workerRayResources := workerGroupStatuses[i].DetectedRayResources
-				if err := r.createWorkerPod(*instance, worker, workerRayResources); err != nil {
+				workerPodConfig := workerPodConfig[workerIndex]
+				if err := r.createWorkerPod(*instance, workerPod); err != nil {
 					return err
 				}
 			}
@@ -479,16 +491,28 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) error {
-	// build the pod then create it
-	pod := r.buildHeadPod(instance)
+func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, headPod v1.Pod) error {
+	// TODO (Dmitri) There's a lot of duplicated code between head and worker functions in this file
+	// and pod.go. Deduplicate and reuse?
 	podIdentifier := types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
+		Name:      headPod.Name,
+		Namespace: headPod.Namespace,
 	}
 
-	log.Info("createHeadPod", "head pod with name", pod.GenerateName)
-	if err := r.Create(context.TODO(), &pod); err != nil {
+	// Consistency check.
+	if headPod.Name != "" {
+		return fmt.Errorf("Ray pods should be created with metadata.generateName, not metadata.Name.")
+	}
+
+	// TODO (Dmitri) "name" and "generateName" are conflated in variable names, comments, log messages.
+	// Make the distinction clearer.
+	log.Info("createHeadPod", "head pod with name", headPod.GenerateName)
+	if err := r.Create(context.TODO(), &headPod); err != nil {
+		// TODO (Dmitri) The pod is created with generateName, so we can't get a conflict on creation.
+		// (The API server will generate a unique name.)
+		// Also, headPod.Name is the empty string, so the Get below would fail.
+		// (headPod.GenerateName is set but headPod.Name is not.)
+		// Remove this logic?
 		if errors.IsAlreadyExists(err) {
 			fetchedPod := corev1.Pod{}
 			// the pod might be in terminating state, we need to check
@@ -498,24 +522,29 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 					return err
 				}
 			}
-			log.Info("Creating pod", "Pod already exists", pod.Name)
+			log.Info("Creating pod", "Pod already exists", headPod.Name)
 		} else {
 			return err
 		}
 	}
-	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created head pod %s", pod.Name)
+	// TODO (Dmitri) Going down the callstack, `instance` was first passed by reference, then dereferenced and passed by value.
+	// In the next line `instance` is again passed by reference.
+	// Always pass the RayCluster `instance` by reference for consistency?
+	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created head pod %s", headPod.Name)
 	return nil
 }
 
-func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, rayResources rayiov1alpha1.RayResources) error {
-	// build the pod then create it
-	pod := r.buildWorkerPod(instance, worker, rayResources)
+func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster, workerPod v1.Pod) error {
 	podIdentifier := types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
+		Name:      workerPod.Name,
+		Namespace: workerPod.Namespace,
+	}
+	// Consistency check.
+	if workerPod.Name != "" {
+		return fmt.Errorf("Ray pods should be created with metadata.generateName, not metadata.Name.")
 	}
 	replica := corev1.Pod{}
-	replica = pod
+	replica = workerPod
 	if err := r.Create(context.TODO(), &replica); err != nil {
 		if errors.IsAlreadyExists(err) {
 			fetchedPod := corev1.Pod{}
@@ -526,14 +555,14 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 					return err
 				}
 			}
-			log.Info("Creating pod", "Pod already exists", pod.Name)
+			log.Info("Creating pod", "Pod already exists", workerPod.Name)
 		} else {
-			log.Error(fmt.Errorf("createWorkerPod error"), "error creating pod", "pod", pod, "err = ", err)
+			log.Error(fmt.Errorf("createWorkerPod error"), "error creating pod", "pod", workerPod, "err = ", err)
 			return err
 		}
 	}
-	log.Info("Created pod", "Pod ", pod.GenerateName)
-	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created worker pod %s", pod.Name)
+	log.Info("Created pod", "Pod ", workerPod.GenerateName)
+	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created worker pod %s", workerPod.Name)
 	return nil
 }
 
@@ -553,6 +582,15 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) (
 	}
 
 	return pod, detectedRayResources
+}
+
+func (r *RayClusterReconciler) buildWorkerPods(instance rayiov1alpha1.RayCluster) (workerPods []corev1.Pod, workerResourceList []rayiov1alpha1.RayResources) {
+	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
+		workerPod, workerRayResources := r.buildWorkerPod(instance, workerGroupSpec)
+		workerPods = append(workerPods, workerPod)
+		workerResourceList = append(workerResourceList, workerRayResources)
+	}
+	return workerPods, workerResourceList
 }
 
 // Build worker instance pods.
@@ -588,7 +626,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 }
 
 func (r *RayClusterReconciler) updateStatus(
-	instance *rayiov1alpha1.RayCluster, headStatus rayiov1alpha1.GroupStatus, workerGroupStatuses []rayiov1alpha1.GroupStatus,
+	instance *rayiov1alpha1.RayCluster, headRayResources rayiov1alpha1.RayResources, workerRayResources []rayiov1alpha1.RayResources,
 ) error {
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{"rayClusterName": instance.Name}
@@ -616,8 +654,32 @@ func (r *RayClusterReconciler) updateStatus(
 		instance.Status.MaxWorkerReplicas = count
 	}
 
-	instance.Status.HeadStatus = headStatus
-	instance.Status.WorkerGroupStatuses = workerGroupStatuses
+	// Set head status
+	headStatus := rayiov1alpha1.GroupStatus{
+		DetectedRayResources: headRayResources,
+	}
+	if !reflect.DeepEqual(instance.Status.HeadStatus, headStatus) {
+		instance.Status.HeadStatus = headStatus
+	}
+
+	// Consistency check.
+	if len(workerRayResources) != len(instance.Spec.WorkerGroupSpecs) {
+		return fmt.Errorf("Worker Ray resource list should have the same length as the worker group spec list!")
+	}
+
+	// Set worker statuses
+	var workerGroupStatuses []rayiov1alpha1.GroupStatus
+	for i := 0; i < len(workerRayResources); i++ {
+		workerGroupStatuses = append(
+			workerGroupStatuses, rayiov1alpha1.GroupStatus{
+				GroupName:            instance.Spec.WorkerGroupSpecs[i].GroupName,
+				DetectedRayResources: workerRayResources[i],
+			},
+		)
+	}
+	if !reflect.DeepEqual(instance.Status.WorkerGroupStatuses, workerGroupStatuses) {
+		instance.Status.WorkerGroupStatuses = workerGroupStatuses
+	}
 
 	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.

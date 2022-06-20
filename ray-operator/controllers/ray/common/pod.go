@@ -563,3 +563,16 @@ func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
 	}
 	return nil
 }
+
+// Stores Pod config data derived from the RayCluster CR.
+// This type exists solely to tidy the return values of RayClusterReconciler.buildPodConfig
+type RayPodConfig struct {
+	// Configuration for the Ray head pod.
+	HeadPod v1.Pod
+	// Configuration for Ray worker pods. One entry per worker group.
+	WorkerPods []v1.Pod
+	// Resource capacity (CPU, GPU, memory, custom resorces) of the Ray head.
+	HeadRayResources rayiov1alpha1.RayResources
+	// Resource capacity (CPU, GPU, memory, custom resorces) of the Ray workers.
+	WorkerRayResources []rayiov1alpha1.RayResources
+}
