@@ -78,7 +78,6 @@ spec:
             limits:
               cpu: "2"
               memory: "1G"
-              nvidia.com/gpu: "5"
             requests:
               cpu: "500m"
               memory: "512Mi"
@@ -105,8 +104,8 @@ spec:
       block: 'true'
     rayResources:
       GOOP: 10
-      CPU: 0
-      MEMORY: 1000000000
+      CPU: 1
+      MEMORY: 2000000000
     #pod template
     template:
       metadata:

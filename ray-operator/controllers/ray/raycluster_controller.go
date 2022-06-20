@@ -353,8 +353,8 @@ func (r *RayClusterReconciler) reconcilePods(
 			var i int32
 			for i = 0; i < diff; i++ {
 				log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				workerPodConfig := workerPodConfig[workerIndex]
-				if err := r.createWorkerPod(*instance, workerPod); err != nil {
+				workerPodConfig := workerPodConfigs[workerIndex]
+				if err := r.createWorkerPod(*instance, workerPodConfig); err != nil {
 					return err
 				}
 			}
