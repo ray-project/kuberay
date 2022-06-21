@@ -588,45 +588,44 @@ func (r *RayClusterReconciler) detectRayResources(instance rayiov1alpha1.RayClus
 
 // Build head instance pod.
 // Return the pod and the map of resource capacities of the Ray head.
-func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) (corev1.Pod, rayiov1alpha1.RayResources) {
+func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster, detectedRayResources rayiov1alpha1.RayResources) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	rayResourceSpec := instance.Spec.HeadGroupSpec.RayResources
 	rayStartParams := instance.Spec.HeadGroupSpec.RayStartParams
-	pod, detectedRayResources := common.BuildPod(podConf, rayiov1alpha1.HeadNode, rayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, rayResourceSpec)
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, rayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, detectedRayResources)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
-	return pod, detectedRayResources
+	return pod
 }
 
-func (r *RayClusterReconciler) buildWorkerPods(instance rayiov1alpha1.RayCluster) (workerPods []corev1.Pod, workerResourceList []rayiov1alpha1.RayResources) {
-	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
-		workerPod, workerRayResources := r.buildWorkerPod(instance, workerGroupSpec)
+func (r *RayClusterReconciler) buildWorkerPods(instance rayiov1alpha1.RayCluster, workerRayResources []rayiov1alpha1.RayResources) (workerPods []corev1.Pod) {
+
+	for i, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
+		workerPod := r.buildWorkerPod(instance, workerGroupSpec, workerRayResources[i])
 		workerPods = append(workerPods, workerPod)
-		workerResourceList = append(workerResourceList, workerRayResources)
 	}
-	return workerPods, workerResourceList
+	return workerPods
 }
 
 // Build worker instance pods.
 // Return the pod and the map of resource capacities of the Ray worker.
-func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec) (corev1.Pod, rayiov1alpha1.RayResources) {
+func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec, detectedRayResources rayiov1alpha1.RayResources) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
-	pod, detectedRayResources := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, worker.RayResources)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling, detectedRayResources)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
-	return pod, detectedRayResources
+	return pod
 }
 
 // SetupWithManager builds the reconciler.
