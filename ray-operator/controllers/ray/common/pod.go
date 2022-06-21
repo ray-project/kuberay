@@ -103,22 +103,26 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-// BuildPod builds a pod config. Returns the pod config `Pod` and an updated rayResources map
-// `detectedRayResources`.
-// The returned `Pod` will be used to create Ray pods.
 // The map `detectedRayResources` is used internally in this method as part of the Ray start entrypoint.
 // This map is also returned so that it can be placed in RayCluster.status later in the reconcile iteration.
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, rayResourceSpec rayiov1alpha1.RayResources) (aPod v1.Pod, detectedRayResources rayiov1alpha1.RayResources) {
+func BuildRayResources(podTemplateSpec v1.PodTemplateSpec, rayStartParams map[string]string, rayResourceSpec rayiov1alpha1.RayResources) (detectedRayResources rayiov1alpha1.RayResources) {
 	rayContainerIndex := getRayContainerIndex(podTemplateSpec.Spec)
 	rayContainerResources := podTemplateSpec.Spec.Containers[rayContainerIndex].Resources
 
-	// Update user-provide rayResource spec with data from rayStartParams and the
+	// Update user-provided rayResource spec with data from rayStartParams and the
 	// pod spec.
 	detectedRayResources = utils.ComputeRayResources(
 		rayResourceSpec,
 		rayStartParams,
 		rayContainerResources,
 	)
+	return detectedRayResources
+}
+
+// BuildPod builds a pod config.
+// The returned `Pod` will be used to create Ray pods.
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, detectedRayResources rayiov1alpha1.RayResources) (aPod v1.Pod) {
+
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -127,6 +131,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
+	rayContainerIndex := getRayContainerIndex(pod.Spec)
+	setRayContainerResourceEnvVar(&pod.Spec.Containers[rayContainerIndex], detectedRayResources)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -152,7 +158,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, detectedRayResources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -176,9 +182,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
+	setRayContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
 
-	return pod, rayResourceSpec
+	return pod
 }
 
 // BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
@@ -326,54 +332,61 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	return labels
 }
 
-func setInitContainerEnvVars(container *v1.Container, svcName string) {
+func setContainerEnvVar(container *v1.Container, key string, value string) {
 	// RAY_IP can be used in the DNS lookup
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if !envVarExists("RAY_IP", container.Env) {
-		ip := v1.EnvVar{Name: "RAY_IP"}
-		ip.Value = svcName
-		container.Env = append(container.Env, ip)
+	if !envVarExists(key, container.Env) {
+		envVar := v1.EnvVar{Name: key}
+		envVar.Value = value
+		container.Env = append(container.Env, envVar)
 	}
 }
 
-func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) {
+func setInitContainerEnvVars(initContainer *v1.Container, svcName string) {
+	// RAY_IP can be used in the DNS lookup
+	setContainerEnvVar(initContainer, RAY_IP, svcName)
+}
+
+func setRayContainerResourceEnvVar(rayContainer *v1.Container, detectedRayResources rayiov1alpha1.RayResources) {
+	// RAY_IP can be used in the DNS lookup
+	resourceJSON, err := json.Marshal(detectedRayResources)
+	if err != nil {
+		// TODO (Dmitri) Pass error up the call stack.
+		log.Error(err, "Failed to parse Ray resources.")
+		return
+	}
+	quotedResourceJSON := shellescape.Quote(string(resourceJSON))
+	setContainerEnvVar(rayContainer, RAY_OVERRIDE_RESOURCES, quotedResourceJSON)
+}
+
+func setRayContainerEnvVars(rayContainer *v1.Container, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
-	if container.Env == nil || len(container.Env) == 0 {
-		container.Env = []v1.EnvVar{}
+	var rayIpValue string
+	if rayNodeType == rayiov1alpha1.HeadNode {
+		// if head, use localhost
+		rayIpValue = "127.0.0.1"
+	} else {
+		// if worker, use the service name of the head
+		rayIpValue = svcName
 	}
-	if !envVarExists(RAY_IP, container.Env) {
-		ip := v1.EnvVar{Name: RAY_IP}
-		if rayNodeType == rayiov1alpha1.HeadNode {
-			// if head, use localhost
-			ip.Value = "127.0.0.1"
-		} else {
-			// if worker, use the service name of the head
-			ip.Value = svcName
-		}
-		container.Env = append(container.Env, ip)
+	setContainerEnvVar(rayContainer, RAY_IP, rayIpValue)
+
+	var portValue string
+	if value, ok := rayStartParams["port"]; !ok {
+		// using default port
+		portValue = strconv.Itoa(DefaultRedisPort)
+	} else {
+		// setting the RAY_PORT env var from the params
+		portValue = value
 	}
-	if !envVarExists(RAY_PORT, container.Env) {
-		port := v1.EnvVar{Name: RAY_PORT}
-		if value, ok := rayStartParams["port"]; !ok {
-			// using default port
-			port.Value = strconv.Itoa(DefaultRedisPort)
-		} else {
-			// setting the RAY_PORT env var from the params
-			port.Value = value
-		}
-		container.Env = append(container.Env, port)
-	}
-	if !envVarExists(REDIS_PASSWORD, container.Env) {
-		// setting the REDIS_PASSWORD env var from the params
-		port := v1.EnvVar{Name: REDIS_PASSWORD}
-		if value, ok := rayStartParams["redis-password"]; ok {
-			port.Value = value
-		}
-		container.Env = append(container.Env, port)
+	setContainerEnvVar(rayContainer, RAY_PORT, portValue)
+
+	if value, ok := rayStartParams["redis-password"]; ok {
+		setContainerEnvVar(rayContainer, REDIS_PASSWORD, value)
 	}
 }
 
@@ -413,39 +426,21 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, detectedRayResources rayiov1alpha1.RayResources) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string) (fullCmd string) {
 
 	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
-	var rayStartCmd string
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		rayStartCmd = fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		rayStartCmd = fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		// TODO (Dmitri) Panic? Pass an error up the call stack?
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 		return ""
 	}
 
-	fullCmd = withResourceOverride(rayStartCmd, detectedRayResources)
-	return fullCmd
-}
-
-// Adds rayResourceOverride env variable to the Ray start command.
-// This is a Golang port of the corresponding Ray autoscaler logic:
-// https://github.com/ray-project/ray/blob/3de4657caedefc9b25f18e92565ddf1bd3bcb74d/python/ray/autoscaler/_private/command_runner.py#L100-L101
-func withResourceOverride(rayStartCmd string, detectedRayResources rayiov1alpha1.RayResources) (fullCmd string) {
-	resourceJSON, err := json.Marshal(detectedRayResources)
-	if err != nil {
-		// TODO (Dmitri) Pass error up the call stack.
-		log.Error(err, "Failed to parse Ray resources.")
-		return rayStartCmd
-	}
-	quotedResourceJSON := shellescape.Quote(string(resourceJSON))
-	fullCmd = fmt.Sprintf("export RAY_OVERRIDE_RESOURCES=%v;", quotedResourceJSON)
-	return fullCmd
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {

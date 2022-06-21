@@ -210,8 +210,10 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 }
 
 func (r *RayClusterReconciler) buildRayPodConfig(instance *rayiov1alpha1.RayCluster) common.RayPodConfig {
-	headPod, headRayResources := r.buildHeadPod(*instance)
-	workerPods, workerRayResources := r.buildWorkerPods(*instance)
+	// Determine Ray resource capacities of head and worker groups.
+	headRayResources, workerRayResources := r.detectRayResources(*instance)
+	headPod := r.buildHeadPod(*instance, headRayResources)
+	workerPods := r.buildWorkerPods(*instance, workerRayResources)
 	return common.RayPodConfig{
 		HeadPod:            headPod,
 		HeadRayResources:   headRayResources,
@@ -564,6 +566,24 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 	log.Info("Created pod", "Pod ", workerPod.GenerateName)
 	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created worker pod %s", workerPod.Name)
 	return nil
+}
+
+func (r *RayClusterReconciler) detectRayResources(instance rayiov1alpha1.RayCluster) (headRayResources rayiov1alpha1.RayResources, workerRayResources []rayiov1alpha1.RayResources) {
+	headGroupSpec := instance.Spec.HeadGroupSpec
+	headRayResources = common.BuildRayResources(
+		headGroupSpec.Template,
+		headGroupSpec.RayStartParams,
+		headGroupSpec.RayResources,
+	)
+	for _, workerGroupSpec := range instance.Spec.WorkerGroupSpecs {
+		workerResourceMap := common.BuildRayResources(
+			workerGroupSpec.Template,
+			workerGroupSpec.RayStartParams,
+			workerGroupSpec.RayResources,
+		)
+		workerRayResources = append(workerRayResources, workerResourceMap)
+	}
+	return headRayResources, workerRayResources
 }
 
 // Build head instance pod.
