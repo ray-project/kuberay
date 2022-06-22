@@ -495,7 +495,7 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 
 func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, headPod v1.Pod) error {
 	// TODO (@DmitriGekhtman) There's a lot of duplicated code between head and worker functions in this file
-	// and pod.go. Deduplicate and reuse?
+	// and in pod.go. Deduplicate and reuse?
 	podIdentifier := types.NamespacedName{
 		Name:      headPod.Name,
 		Namespace: headPod.Namespace,
