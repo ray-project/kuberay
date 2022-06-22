@@ -2,8 +2,6 @@ apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
   name: rayservice-sample
-  annotations:
-    kubernetes.io/ingress.class: nginx
 spec:
   serveConfigs:
     - name: shallow
@@ -42,7 +40,6 @@ spec:
     headGroupSpec:
       # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
       serviceType: ClusterIP
-      enableIngress: false
       # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
       replicas: 1
       # logical group name, for this called head-group, also can be functional
