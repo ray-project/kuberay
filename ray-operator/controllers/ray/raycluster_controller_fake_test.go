@@ -336,7 +336,7 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
@@ -373,7 +373,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
@@ -418,7 +418,7 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
@@ -461,7 +461,7 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
@@ -508,7 +508,7 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
@@ -552,7 +552,7 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcilePods(testRayCluster, rayiov1alpha1.GroupStatus{}, []rayiov1alpha1.GroupStatus{})
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{

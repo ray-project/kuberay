@@ -328,7 +328,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	if !(numContainers == expectedNumContainers) {
 		t.Fatalf("Expected `%v` container but got `%v`", expectedNumContainers, numContainers)
 	}
-	index := getAutoscalerContainerIndex(pod.Spec)
+	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
 	expectedContainer := autoscalerContainer
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
@@ -371,7 +371,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
 	expectedContainer.Resources = customResources
-	index := getAutoscalerContainerIndex(pod.Spec)
+	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
