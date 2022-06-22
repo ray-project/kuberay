@@ -166,11 +166,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			args = cont
 		}
 
-		// TODO (Dmitri) Always append `block`?
+		// TODO (@DmitriGekhtman) Always append `block`?
 		if !isRayStartWithBlock(rayStartParams) {
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
 
-			// TODO (Dmitri) TRAP interrupt and terminate signals for faster pod termination?
+			// TODO (@DmitriGekhtman) TRAP interrupt and terminate signals for faster pod termination?
 			args = args + " && sleep infinity"
 		}
 
@@ -351,7 +351,7 @@ func setInitContainerEnvVars(initContainer *v1.Container, svcName string) {
 func setRayContainerResourceEnvVar(rayContainer *v1.Container, detectedRayResources rayiov1alpha1.RayResources) {
 	resourceJSON, err := json.Marshal(detectedRayResources)
 	if err != nil {
-		// TODO (Dmitri) Pass error up the call stack.
+		// TODO (@DmitriGekhtman) Pass error up the call stack.
 		log.Error(err, "Failed to parse Ray resources.")
 		return
 	}
@@ -433,7 +433,7 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	case rayiov1alpha1.WorkerNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
-		// TODO (Dmitri) Panic? Pass an error up the call stack?
+		// TODO (@DmitriGekhtman) Panic? Pass an error up the call stack?
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 		return ""
 	}
