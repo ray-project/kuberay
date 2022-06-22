@@ -119,7 +119,7 @@ func BuildRayResources(podTemplateSpec v1.PodTemplateSpec, rayStartParams map[st
 }
 
 // BuildPod builds a pod config.
-// The returned `Pod` will be used to create Ray pods.
+// The returned v1.Pod will be used to create Ray pods.
 func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, detectedRayResources rayiov1alpha1.RayResources) (aPod v1.Pod) {
 
 	pod := v1.Pod{
