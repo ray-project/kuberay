@@ -14,8 +14,9 @@ import (
 // CPU, GPU, and memory data from rayStartParams overrides data from the podTemplate.
 // If CPU, GPU, or memory is not present in the resource map returned by this method, Ray will attempt to
 // infer these upon "ray start".
-// The map returned by this method will be written to the RayCluster CR's Status field, which allows it to be
-// read by the Ray Autoscaler.
+// The map returned by this method is used in two ways:
+// 1. It is passed as an environment variable to the Ray node. This advertises resource capacities to the Ray scheduler.
+// 2. It is written to the RayCluster CR's Status field. This allows the Ray autoscaler to access the resource capacities.
 func ComputeRayResources(
 	rayResourceSpec rayiov1alpha1.RayResources,
 	rayStartParams map[string]string,
@@ -76,7 +77,7 @@ func computeCPU(rayStartParams map[string]string, rayContainerResources v1.Resou
 	}
 
 	// The user might not have set CPU limits for the Ray container.
-	// That's not adviseable, but we don't consider it an error.
+	// That's usually not adviseable, but we don't consider it an error.
 	// Return a 0 value, which will be ignored by the caller of this function.
 	return 0
 }

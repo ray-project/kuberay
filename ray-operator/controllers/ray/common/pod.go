@@ -103,8 +103,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-// The map `detectedRayResources` is used internally in this method as part of the Ray start entrypoint.
-// This map is also returned so that it can be placed in RayCluster.status later in the reconcile iteration.
+// Detect Ray node CPU/GPU/memory capacities from Ray start params and the Ray container resource spec.
+// The user-provided rayResourceSpec overrides the autodetected resources.
 func BuildRayResources(podTemplateSpec v1.PodTemplateSpec, rayStartParams map[string]string, rayResourceSpec rayiov1alpha1.RayResources) (detectedRayResources rayiov1alpha1.RayResources) {
 	rayContainerIndex := getRayContainerIndex(podTemplateSpec.Spec)
 	rayContainerResources := podTemplateSpec.Spec.Containers[rayContainerIndex].Resources

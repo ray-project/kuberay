@@ -494,7 +494,7 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 }
 
 func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, headPod v1.Pod) error {
-	// TODO (Dmitri) There's a lot of duplicated code between head and worker functions in this file
+	// TODO (@DmitriGekhtman) There's a lot of duplicated code between head and worker functions in this file
 	// and pod.go. Deduplicate and reuse?
 	podIdentifier := types.NamespacedName{
 		Name:      headPod.Name,
@@ -506,11 +506,11 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, 
 		return fmt.Errorf("Ray pods should be created with metadata.generateName, not metadata.Name.")
 	}
 
-	// TODO (Dmitri) "name" and "generateName" are conflated in variable names, comments, log messages.
+	// TODO (@DmitriGekhtman) "name" and "generateName" are conflated in variable names, comments, log messages.
 	// Make the distinction clearer.
 	log.Info("createHeadPod", "head pod with name", headPod.GenerateName)
 	if err := r.Create(context.TODO(), &headPod); err != nil {
-		// TODO (Dmitri) The pod is created with generateName, so we can't get a conflict on creation.
+		// TODO (@DmitriGekhtman) The pod is created with generateName, so we can't get a conflict on creation.
 		// (The API server will generate a unique name.)
 		// Also, headPod.Name is the empty string, so the Get below would fail.
 		// (headPod.GenerateName is set but headPod.Name is not.)
@@ -529,7 +529,7 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster, 
 			return err
 		}
 	}
-	// TODO (Dmitri) Going down the callstack, `instance` was first passed by reference, then dereferenced and passed by value.
+	// TODO (@DmitriGekhtman) Going down the callstack, `instance` was first passed by reference, then dereferenced and passed by value.
 	// In the next line `instance` is again passed by reference.
 	// Always pass the RayCluster `instance` by reference for consistency?
 	r.Recorder.Eventf(&instance, v1.EventTypeNormal, "Created", "Created head pod %s", headPod.Name)
@@ -568,6 +568,10 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 	return nil
 }
 
+// Determines Ray head and worker resource capacities by combining user-provided RayResources
+// with CPU/GPU/memory data read from RayStartParams and the Ray container resource spec.
+// The returned resource maps are later passed to Ray as env variables and exposed in RayCluster.Status
+// for consumption by the autoscaler and for user observability.
 func (r *RayClusterReconciler) detectRayResources(instance rayiov1alpha1.RayCluster) (headRayResources rayiov1alpha1.RayResources, workerRayResources []rayiov1alpha1.RayResources) {
 	headGroupSpec := instance.Spec.HeadGroupSpec
 	headRayResources = common.BuildRayResources(
@@ -702,6 +706,8 @@ func (r *RayClusterReconciler) updateStatus(
 
 	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.
+	// TODO (@DmitriGekhtman): Is that desirable? We could check for changes in each of the if blocks
+	// above.
 	instance.Status.LastUpdateTime.Time = time.Now()
 	if err := r.Status().Update(context.Background(), instance); err != nil {
 		return err
