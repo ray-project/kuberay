@@ -225,13 +225,13 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	// Get active cluster and pending cluster instances.
-	activeRayCluster, err := r.getRayClusterByNameSpaceName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
+	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	pendingRayCluster, err := r.getRayClusterByNameSpaceName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PendingServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
+	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PendingServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
 
 	if err != nil {
 		return nil, nil, err
@@ -272,7 +272,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	return nil
 }
 
-func (r *RayServiceReconciler) getRayClusterByNameSpaceName(ctx context.Context, clusterKey client.ObjectKey) (*rayv1alpha1.RayCluster, error) {
+func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context, clusterKey client.ObjectKey) (*rayv1alpha1.RayCluster, error) {
 	rayCluster := &rayv1alpha1.RayCluster{}
 	if clusterKey.Name != "" {
 		// Ignore not found since in that case we should return RayCluster as nil.

@@ -81,7 +81,7 @@ type DashboardStatus struct {
 	IsHealthy      bool         `json:"isHealthy,omitempty"`
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the dashboard is healthy.
-	// Update when Dashboard is responsible or first time convert to non-responsible from responsible.
+	// Update when Dashboard is responsive or first time convert to non-responsive from responsive.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
