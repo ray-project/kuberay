@@ -591,7 +591,6 @@ func (r *RayClusterReconciler) detectRayResources(instance rayiov1alpha1.RayClus
 }
 
 // Build head instance pod.
-// Return the pod and the map of resource capacities of the Ray head.
 func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster, detectedRayResources rayiov1alpha1.RayResources) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
