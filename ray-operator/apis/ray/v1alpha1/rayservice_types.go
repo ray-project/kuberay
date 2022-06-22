@@ -58,9 +58,10 @@ type RayActorOptionSpec struct {
 }
 
 // RayServiceStatuses defines the observed state of RayService
+// +kubebuilder:printcolumn:name="ServiceStatus",type=string,JSONPath=".status.serviceStatus"
 type RayServiceStatuses struct {
 	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
-	// Pending Service Status indicates a RayCluster will be created or is under creating.
+	// Pending Service Status indicates a RayCluster will be created or is being created.
 	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
 	// ServiceStatus indicates the current RayService status.
 	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
@@ -79,8 +80,8 @@ type RayServiceStatus struct {
 type DashboardStatus struct {
 	IsHealthy      bool         `json:"isHealthy,omitempty"`
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// Keep track of how long the service is healthy.
-	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	// Keep track of how long the dashboard is healthy.
+	// Update when Dashboard is responsible or first time convert to non-responsible from responsible.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 

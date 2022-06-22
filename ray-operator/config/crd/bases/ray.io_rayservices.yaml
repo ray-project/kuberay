@@ -11577,7 +11577,7 @@ spec:
                       Dashboard
                     properties:
                       healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
+                        description: Keep track of how long the dashboard is healthy.
                         format: date-time
                         type: string
                       isHealthy:
@@ -11648,7 +11648,7 @@ spec:
                 type: object
               pendingServiceStatus:
                 description: Pending Service Status indicates a RayCluster will be
-                  created or is under creating.
+                  created or is being created.
                 properties:
                   appStatus:
                     description: 'Important: Run "make" to regenerate code after modifying
@@ -11671,7 +11671,7 @@ spec:
                       Dashboard
                     properties:
                       healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
+                        description: Keep track of how long the dashboard is healthy.
                         format: date-time
                         type: string
                       isHealthy:

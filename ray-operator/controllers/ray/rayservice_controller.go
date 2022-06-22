@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	networkingv1 "k8s.io/api/networking/v1"
 
@@ -195,14 +192,8 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1alpha1.RayService{}).
 		Owns(&rayv1alpha1.RayCluster{}).
-		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayv1alpha1.RayService{},
-		}).
-		Watches(&source.Kind{Type: &networkingv1.Ingress{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayv1alpha1.RayService{},
-		}).
+		Owns(&corev1.Service{}).
+		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
 
@@ -595,6 +586,7 @@ func (r *RayServiceReconciler) updateRayClusterInfo(rayServiceInstance *rayv1alp
 	}
 }
 
+// TODO: When start Ingress in RayService, we can disable the Ingress from RayCluster.
 func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	if rayClusterInstance.Spec.HeadGroupSpec.EnableIngress == nil || !*rayClusterInstance.Spec.HeadGroupSpec.EnableIngress {
 		return nil
