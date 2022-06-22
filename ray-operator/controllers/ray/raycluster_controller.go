@@ -569,7 +569,7 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 }
 
 // Determines Ray head and worker resource capacities by combining user-provided RayResources
-// with CPU/GPU/memory data read from RayStartParams and the Ray container resource spec.
+// with CPU/GPU/memory data from RayStartParams and the Ray container resource spec.
 // The returned resource maps are later passed to Ray as env variables and exposed in RayCluster.Status
 // for consumption by the autoscaler and for user observability.
 func (r *RayClusterReconciler) detectRayResources(instance rayiov1alpha1.RayCluster) (headRayResources rayiov1alpha1.RayResources, workerRayResources []rayiov1alpha1.RayResources) {
