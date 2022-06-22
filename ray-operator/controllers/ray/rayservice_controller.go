@@ -353,24 +353,23 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	var err error
 	// Loop until there is no pending RayCluster.
-	for {
-		err = r.Get(ctx, rayClusterKey, rayClusterInstance)
+	err = r.Get(ctx, rayClusterKey, rayClusterInstance)
 
-		// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
-		if err == nil {
-			r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String())
-			if delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); delErr != nil {
-				if errors.IsNotFound(delErr) {
-					break
-				}
-				return nil, delErr
-			}
-		} else if errors.IsNotFound(err) {
-			break
-		} else {
-			r.Log.Error(err, "Get request rayCluster instance error!")
-			return nil, err
+	// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
+	if err == nil {
+		r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String())
+		delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		if delErr == nil {
+			// Go to next loop and check if the ray cluster is deleted.
+			return nil, nil
+		} else if !errors.IsNotFound(delErr) {
+			return nil, delErr
 		}
+		// if error is `not found`, then continue.
+	} else if !errors.IsNotFound(err) {
+		r.Log.Error(err, "Get request rayCluster instance error!")
+		return nil, err
+		// if error is `not found`, then continue.
 	}
 
 	r.Log.V(1).Info("No pending RayCluster, creating RayCluster.")
