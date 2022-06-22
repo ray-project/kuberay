@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alessio/shellescape"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -350,15 +349,13 @@ func setInitContainerEnvVars(initContainer *v1.Container, svcName string) {
 }
 
 func setRayContainerResourceEnvVar(rayContainer *v1.Container, detectedRayResources rayiov1alpha1.RayResources) {
-	// RAY_IP can be used in the DNS lookup
 	resourceJSON, err := json.Marshal(detectedRayResources)
 	if err != nil {
 		// TODO (Dmitri) Pass error up the call stack.
 		log.Error(err, "Failed to parse Ray resources.")
 		return
 	}
-	quotedResourceJSON := shellescape.Quote(string(resourceJSON))
-	setContainerEnvVar(rayContainer, RAY_OVERRIDE_RESOURCES, quotedResourceJSON)
+	setContainerEnvVar(rayContainer, RAY_OVERRIDE_RESOURCES, string(resourceJSON))
 }
 
 func setRayContainerEnvVars(rayContainer *v1.Container, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string) {
