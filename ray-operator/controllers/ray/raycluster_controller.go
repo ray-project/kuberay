@@ -100,21 +100,39 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileAutoscalerRole(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileAutoscalerRoleBinding(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileIngress(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileServices(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcilePods(instance); err != nil {
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+			log.Error(updateErr, "RayCluser update state error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
@@ -581,6 +599,12 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		return err
 	}
 
+	runtimeServices := corev1.ServiceList{}
+	filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: "head"}
+	if err := r.List(context.TODO(), &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return err
+	}
+
 	count := utils.CalculateAvailableReplicas(runtimePods)
 	if instance.Status.AvailableWorkerReplicas != count {
 		instance.Status.AvailableWorkerReplicas = count
@@ -604,6 +628,37 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	// TODO (@Jeffwan): Update state field later.
 	// We always update instance no matter if there's one change or not.
 	instance.Status.LastUpdateTime.Time = time.Now()
+
+	// validation for the RayStartParam for the state.
+	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)
+	if err != nil {
+		r.Recorder.Event(instance, v1.EventTypeWarning, "Parameters conflict", err.Error())
+	}
+	// only in invalid status that we update the status to unhealthy.
+	if !isValid {
+		instance.Status.State = rayiov1alpha1.UnHealthy
+	} else {
+		totalDesireReplicas := *instance.Spec.HeadGroupSpec.Replicas + utils.CalculateDesiredReplicas(instance)
+		if utils.CalculateAvailableReplicas(runtimePods) >= totalDesireReplicas && utils.CheckAllPodsRunnning(runtimePods) {
+			instance.Status.State = rayiov1alpha1.Ready
+		}
+	}
+
+	if len(runtimeServices.Items) != 0 {
+		svc := runtimeServices.Items[0]
+		if instance.Status.Endpoints == nil {
+			instance.Status.Endpoints = map[string]int32{}
+		}
+		for _, port := range svc.Spec.Ports {
+			if len(port.Name) == 0 {
+				r.Log.Info("updateStatus", "service port name is empty", port)
+				continue
+			}
+			// TODO: Endpoints may be misleading for port
+			instance.Status.Endpoints[port.Name] = port.NodePort
+		}
+	}
+
 	if err := r.Status().Update(context.Background(), instance); err != nil {
 		return err
 	}
@@ -733,4 +788,9 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 	}
 
 	return nil
+}
+
+func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
+	instance.Status.State = clusterState
+	return r.Status().Update(context.Background(), instance)
 }

@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ const (
 	RayLogVolumeName            = "ray-logs"
 	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
+	RayHeadContainer            = "ray-head"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -544,4 +546,47 @@ func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+// ValidateHeadRayStartParams will do some validations for the head node RayStartParams,
+// return include the bool to judge if the RayStartParams is valid and err will include some information for the warning or error output.
+// if isValid is true, even if there maybe some error message, it is still acceptable for a ray and only affect the performance
+// if isValid is false, it means the RayStartParams will definitely casue a unhealthy or failed status in ray cluster.
+func ValidateHeadRayStartParams(rayHeadGroupSpec rayiov1alpha1.HeadGroupSpec) (isValid bool, err error) {
+	var objectStoreMemory int64
+	rayStartParams := rayHeadGroupSpec.RayStartParams
+	// validation for the object store memory
+	if objectStoreMemoryStr, ok := rayStartParams["object-store-memory"]; ok {
+		objectStoreMemory, err = strconv.ParseInt(objectStoreMemoryStr, 10, 64)
+		if err != nil {
+			isValid = false
+			err = errors.New("convert error of the \"object-store-memory\"")
+			return
+		}
+		for _, container := range rayHeadGroupSpec.Template.Spec.Containers {
+			// choose the ray container.
+			if container.Name == RayHeadContainer {
+				if shmSize, ok := container.Resources.Requests.Storage().AsInt64(); ok && objectStoreMemory > shmSize {
+					if envVarExists("RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE", container.Env) {
+						// in ray if RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE is set, it will only affect the performance.
+						isValid = true
+						log.Info(fmt.Sprintf("object store memory exceed the size of the share memory in head node, object-store-memory:%d, share memory size:%d\n", objectStoreMemory, shmSize) +
+							"This will harm performance. Consider deleting files in /dev/shm or increasing request memory of head node.")
+						err = errors.New("RayStartParams unhealthy")
+						return
+					} else {
+						// if not set, the head node may crash and result in an unhealthy status.
+						isValid = false
+						log.Info(fmt.Sprintf("object store memory exceed the size of the share memory in head node, object-store-memory:%d, share memory size:%d\n", objectStoreMemory, shmSize) +
+							"This will lead to a ValueError in ray! Consider deleting files in /dev/shm or increasing request memory of head node" +
+							"To ignore this warning, set an environment variable in headGroupSpec: RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE=1")
+						err = errors.New("RayStartParams unhealthy")
+						return
+					}
+				}
+			}
+		}
+	}
+	// default return
+	return true, nil
 }

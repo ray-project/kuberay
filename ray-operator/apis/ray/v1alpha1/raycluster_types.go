@@ -111,6 +111,8 @@ type RayClusterStatus struct {
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Service Node Ports
+	Endpoints map[string]int32 `json:"endpoints,omitempty"`
 }
 
 // RayNodeType  the type of a ray node: head/worker

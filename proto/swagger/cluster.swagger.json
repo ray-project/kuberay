@@ -255,6 +255,17 @@
           "type": "string",
           "format": "date-time",
           "description": "Output. The time that the cluster deleted."
+        },
+        "serviceEndpoint": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Output. The service endpoint of the cluster"
+        },
+        "clusterState": {
+          "type": "string",
+          "title": "Output. The status to show the cluster status.state"
         }
       }
     },

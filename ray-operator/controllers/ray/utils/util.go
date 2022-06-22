@@ -176,6 +176,16 @@ func GetHeadGroupServiceAccountName(cluster *rayiov1alpha1.RayCluster) string {
 	return cluster.Name
 }
 
+// CheckAllPodsRunnning check if all pod in a list is running
+func CheckAllPodsRunnning(runningPods corev1.PodList) bool {
+	for _, pod := range runningPods.Items {
+		if pod.Status.Phase != corev1.PodRunning {
+			return false
+		}
+	}
+	return true
+}
+
 func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) bool {
 	if pod.Status.Phase == corev1.PodRunning && pod.ObjectMeta.DeletionTimestamp == nil {
 		if len(template.Spec.Containers) != len(pod.Spec.Containers) {
