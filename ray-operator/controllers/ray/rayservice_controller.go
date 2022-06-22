@@ -3,6 +3,8 @@ package ray
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"reflect"
 	"strings"
 	"time"
@@ -467,6 +469,16 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
 	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+	runtimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeDeploymentGraphSpec.RuntimeEnv), &runtimeEnv)
+	servingClusterDeployments := utils.ServingClusterDeployments{
+		ImportPath:  rayServiceInstance.Spec.ServeDeploymentGraphSpec.ImportPath,
+		RuntimeEnv:  runtimeEnv,
+		Deployments: rayDashboardClient.ConvertServeConfig(rayServiceInstance.Spec.ServeDeploymentGraphSpec.ServeConfigSpecs),
+	}
+
+	deploymentJson, _ := json.Marshal(servingClusterDeployments)
+	r.Log.V(1).Info("updateServeDeployment", "json config", string(deploymentJson))
 	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeDeploymentGraphSpec); err != nil {
 		r.Log.Error(err, "fail to update deployment")
 		return err

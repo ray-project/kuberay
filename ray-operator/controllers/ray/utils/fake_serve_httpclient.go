@@ -33,7 +33,7 @@ func (r *FakeRayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuse
 	return &r.serveStatuses, nil
 }
 
-func (r *FakeRayDashboardClient) convertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
+func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
 	serveConfigToSend := make([]ServeConfigSpec, len(specs))
 
 	for i, config := range specs {

@@ -19,9 +19,6 @@ var (
 // ServeConfigSpec defines the desired state of RayService, used by Ray Dashboard.
 type ServeConfigSpec struct {
 	Name                      string                 `json:"name"`
-	ImportPath                string                 `json:"import_path"`
-	InitArgs                  []string               `json:"init_args,omitempty"`
-	InitKwargs                map[string]string      `json:"init_kwargs,omitempty"`
 	NumReplicas               *int32                 `json:"num_replicas,omitempty"`
 	RoutePrefix               string                 `json:"route_prefix,omitempty"`
 	MaxConcurrentQueries      *int32                 `json:"max_concurrent_queries,omitempty"`
@@ -62,7 +59,7 @@ type RayDashboardClientInterface interface {
 	GetDeployments() (string, error)
 	UpdateDeployments(specs rayv1alpha1.ServeDeploymentGraphSpec) error
 	GetDeploymentsStatus() (*ServeDeploymentStatuses, error)
-	convertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
+	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -107,7 +104,7 @@ func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeployment
 	servingClusterDeployments := ServingClusterDeployments{
 		ImportPath:  specs.ImportPath,
 		RuntimeEnv:  runtimeEnv,
-		Deployments: r.convertServeConfig(specs.ServeConfigSpecs),
+		Deployments: r.ConvertServeConfig(specs.ServeConfigSpecs),
 	}
 
 	deploymentJson, err := json.Marshal(servingClusterDeployments)
@@ -155,7 +152,7 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, e
 	return &serveStatuses, nil
 }
 
-func (r *RayDashboardClient) convertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
+func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
 	serveConfigToSend := make([]ServeConfigSpec, len(specs))
 
 	for i, config := range specs {
