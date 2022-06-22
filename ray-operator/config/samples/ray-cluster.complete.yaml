@@ -18,8 +18,6 @@ spec:
     # pod type head or worker
     # rayNodeType: head # Not needed since it is under the headgroup
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
-    rayResources:
-      FLEEBS: 10
     rayStartParams:
       port: '6379'
       object-store-memory: '100000000'
@@ -76,7 +74,7 @@ spec:
                 command: ["/bin/sh","-c","ray stop"]
           resources:
             limits:
-              cpu: "2"
+              cpu: "1"
               memory: "1G"
             requests:
               cpu: "500m"
@@ -102,10 +100,6 @@ spec:
       redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       node-ip-address: $MY_POD_IP
       block: 'true'
-    rayResources:
-      GOOP: 10
-      CPU: 1
-      memory: 2000000000
     #pod template
     template:
       metadata:
