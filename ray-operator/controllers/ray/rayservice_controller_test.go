@@ -39,6 +39,8 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+var runtimeEnvStr = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
+
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
@@ -54,48 +56,32 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayiov1alpha1.RayServiceSpec{
-			ServeConfigSpecs: []rayiov1alpha1.ServeConfigSpec{
-				{
-					Name:        "shallow",
-					ImportPath:  "test_env.shallow_import.ShallowClass",
-					NumReplicas: &numReplicas,
-					RoutePrefix: "/shallow",
-					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
+			ServeDeploymentGraphSpec: rayiov1alpha1.ServeDeploymentGraphSpec{
+				ImportPath: "fruit.deployment_graph",
+				RuntimeEnv: runtimeEnvStr,
+				ServeConfigSpecs: []rayiov1alpha1.ServeConfigSpec{
+					{
+						Name:        "MangoStand",
+						NumReplicas: &numReplicas,
+						UserConfig:  "price: 3",
+						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+							NumCpus: &numCpus,
 						},
 					},
-				},
-				{
-					Name:        "deep",
-					ImportPath:  "test_env.subdir1.subdir2.deep_import.DeepClass",
-					NumReplicas: &numReplicas,
-					RoutePrefix: "/deep",
-					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
+					{
+						Name:        "OrangeStand",
+						NumReplicas: &numReplicas,
+						UserConfig:  "price: 2",
+						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+							NumCpus: &numCpus,
 						},
 					},
-				},
-				{
-					Name:        "one",
-					ImportPath:  "test_module.test.one",
-					NumReplicas: &numReplicas,
-					RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
-						NumCpus: &numCpus,
-						RuntimeEnv: map[string][]string{
-							"py_modules": {
-								"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-								"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-							},
+					{
+						Name:        "PearStand",
+						NumReplicas: &numReplicas,
+						UserConfig:  "price: 1",
+						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+							NumCpus: &numCpus,
 						},
 					},
 				},
@@ -247,7 +233,7 @@ var _ = Context("Inside the default namespace", func() {
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.ActiveServiceStatus.RayClusterName, common.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
+				time.Second*15, time.Millisecond*500).Should(Equal(5), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(v1.PodRunning), Equal(v1.PodPending)))
 			}

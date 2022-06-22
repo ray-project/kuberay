@@ -11471,85 +11471,73 @@ spec:
                 required:
                 - headGroupSpec
                 type: object
-              serveConfigs:
+              serveDeploymentGraphConfig:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'
-                items:
-                  description: ServeConfigSpec defines the desired state of RayService
-                    Reference to https://docs.ray.
-                  properties:
-                    autoscalingConfig:
-                      additionalProperties:
-                        type: string
-                      type: object
-                    gracefulShutdownTimeoutS:
-                      format: int32
-                      type: integer
-                    gracefulShutdownWaitLoopS:
-                      format: int32
-                      type: integer
-                    healthCheckPeriodS:
-                      format: int32
-                      type: integer
-                    healthCheckTimeoutS:
-                      format: int32
-                      type: integer
-                    importPath:
-                      type: string
-                    initArgs:
-                      items:
-                        type: string
-                      type: array
-                    initKwargs:
-                      additionalProperties:
-                        type: string
-                      type: object
-                    maxConcurrentQueries:
-                      format: int32
-                      type: integer
-                    name:
-                      type: string
-                    numReplicas:
-                      format: int32
-                      type: integer
-                    rayActorOptions:
-                      description: RayActorOptionSpec defines the desired state of
-                        RayActor
+                properties:
+                  importPath:
+                    type: string
+                  runtimeEnv:
+                    type: string
+                  serveConfigs:
+                    items:
+                      description: ServeConfigSpec defines the desired state of RayService
+                        Reference to https://docs.ray.
                       properties:
-                        acceleratorType:
+                        autoscalingConfig:
                           type: string
-                        memory:
+                        gracefulShutdownTimeoutS:
                           format: int32
                           type: integer
-                        numCpus:
-                          type: number
-                        numGpus:
-                          type: number
-                        objectStoreMemory:
+                        gracefulShutdownWaitLoopS:
                           format: int32
                           type: integer
-                        resources:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        runtimeEnv:
-                          additionalProperties:
-                            items:
+                        healthCheckPeriodS:
+                          format: int32
+                          type: integer
+                        healthCheckTimeoutS:
+                          format: int32
+                          type: integer
+                        maxConcurrentQueries:
+                          format: int32
+                          type: integer
+                        name:
+                          type: string
+                        numReplicas:
+                          format: int32
+                          type: integer
+                        rayActorOptions:
+                          description: RayActorOptionSpec defines the desired state
+                            of RayActor
+                          properties:
+                            acceleratorType:
                               type: string
-                            type: array
+                            memory:
+                              format: int32
+                              type: integer
+                            numCpus:
+                              type: number
+                            numGpus:
+                              type: number
+                            objectStoreMemory:
+                              format: int32
+                              type: integer
+                            resources:
+                              type: string
+                            runtimeEnv:
+                              type: string
                           type: object
+                        routePrefix:
+                          type: string
+                        userConfig:
+                          type: string
+                      required:
+                      - name
                       type: object
-                    routePrefix:
-                      type: string
-                    userConfig:
-                      additionalProperties:
-                        type: string
-                      type: object
-                  required:
-                  - importPath
-                  - name
-                  type: object
-                type: array
+                    type: array
+                required:
+                - importPath
+                type: object
             type: object
           status:
             description: RayServiceStatuses defines the observed state of RayService

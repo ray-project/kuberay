@@ -456,7 +456,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	shouldUpdate := false
 
-	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) || len(serveStatus.ServeStatuses) != len(existConfig.ServeConfigSpecs) {
+	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) {
 		shouldUpdate = true
 	}
 
@@ -466,8 +466,8 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
-	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeConfigSpecs)
-	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeConfigSpecs); err != nil {
+	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeDeploymentGraphSpec); err != nil {
 		r.Log.Error(err, "fail to update deployment")
 		return err
 	}
@@ -534,7 +534,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1a
 func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *rayv1alpha1.RayService, rayServiceStatus *rayv1alpha1.RayServiceStatus) bool {
 	// Check if the serve deployment number is correct.
 	r.Log.V(1).Info("allServeDeploymentsHealthy", "rayServiceInstance.Status.ServeStatuses", rayServiceStatus.ServeStatuses)
-	if len(rayServiceStatus.ServeStatuses) != len(rayServiceInstance.Spec.ServeConfigSpecs) {
+	if len(rayServiceStatus.ServeStatuses) == 0 {
 		return false
 	}
 

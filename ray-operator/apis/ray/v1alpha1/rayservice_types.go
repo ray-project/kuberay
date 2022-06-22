@@ -23,22 +23,25 @@ const (
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
+	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveDeploymentGraphConfig,omitempty"`
+	RayClusterSpec           RayClusterSpec           `json:"rayClusterConfig,omitempty"`
+}
+
+type ServeDeploymentGraphSpec struct {
+	ImportPath       string            `json:"importPath"`
+	RuntimeEnv       string            `json:"runtimeEnv,omitempty"`
 	ServeConfigSpecs []ServeConfigSpec `json:"serveConfigs,omitempty"`
-	RayClusterSpec   RayClusterSpec    `json:"rayClusterConfig,omitempty"`
 }
 
 // ServeConfigSpec defines the desired state of RayService
 // Reference to https://docs.ray.io/en/latest/ray-core/package-ref.html#ray-remote.
 type ServeConfigSpec struct {
 	Name                      string             `json:"name"`
-	ImportPath                string             `json:"importPath"`
-	InitArgs                  []string           `json:"initArgs,omitempty"`
-	InitKwargs                map[string]string  `json:"initKwargs,omitempty"`
 	NumReplicas               *int32             `json:"numReplicas,omitempty"`
 	RoutePrefix               string             `json:"routePrefix,omitempty"`
 	MaxConcurrentQueries      *int32             `json:"maxConcurrentQueries,omitempty"`
-	UserConfig                map[string]string  `json:"userConfig,omitempty"`
-	AutoscalingConfig         map[string]string  `json:"autoscalingConfig,omitempty"`
+	UserConfig                string             `json:"userConfig,omitempty"`
+	AutoscalingConfig         string             `json:"autoscalingConfig,omitempty"`
 	GracefulShutdownWaitLoopS *int32             `json:"gracefulShutdownWaitLoopS,omitempty"`
 	GracefulShutdownTimeoutS  *int32             `json:"gracefulShutdownTimeoutS,omitempty"`
 	HealthCheckPeriodS        *int32             `json:"healthCheckPeriodS,omitempty"`
@@ -48,13 +51,13 @@ type ServeConfigSpec struct {
 
 // RayActorOptionSpec defines the desired state of RayActor
 type RayActorOptionSpec struct {
-	RuntimeEnv        map[string][]string `json:"runtimeEnv,omitempty"`
-	NumCpus           *float64            `json:"numCpus,omitempty"`
-	NumGpus           *float64            `json:"numGpus,omitempty"`
-	Memory            *int32              `json:"memory,omitempty"`
-	ObjectStoreMemory *int32              `json:"objectStoreMemory,omitempty"`
-	Resources         map[string]string   `json:"resources,omitempty"`
-	AcceleratorType   string              `json:"acceleratorType,omitempty"`
+	RuntimeEnv        string   `json:"runtimeEnv,omitempty"`
+	NumCpus           *float64 `json:"numCpus,omitempty"`
+	NumGpus           *float64 `json:"numGpus,omitempty"`
+	Memory            *int32   `json:"memory,omitempty"`
+	ObjectStoreMemory *int32   `json:"objectStoreMemory,omitempty"`
+	Resources         string   `json:"resources,omitempty"`
+	AcceleratorType   string   `json:"acceleratorType,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
