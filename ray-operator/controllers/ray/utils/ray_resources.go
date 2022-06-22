@@ -7,7 +7,10 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	v1 "k8s.io/api/core/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var rayClusterLog = logf.Log.WithName("RayCluster-Controller")
 
 // Updates the user-specified rayResource spec with CPU, GPU, and memory data from the rayStartParams and the pod template.
 // CPU, GPU, and memory data from user-specified rayResourceSpec overrides data from rayStartParams.
