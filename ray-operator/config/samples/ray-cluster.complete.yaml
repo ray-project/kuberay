@@ -105,7 +105,7 @@ spec:
     rayResources:
       GOOP: 10
       CPU: 1
-      MEMORY: 2000000000
+      memory: 2000000000
     #pod template
     template:
       metadata:
