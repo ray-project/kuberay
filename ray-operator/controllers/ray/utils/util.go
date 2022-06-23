@@ -94,6 +94,11 @@ func GenerateServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc")
 }
 
+// GenerateDashboardServiceName generates a ray head service name from cluster name
+func GenerateDashboardServiceName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, "dashboard", "svc")
+}
+
 // GenerateIdentifier generates identifier of same group pods
 func GenerateIdentifier(clusterName string, nodeType rayiov1alpha1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)

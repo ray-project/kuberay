@@ -2,11 +2,12 @@ package common
 
 const (
 	// Belows used as label key
-	RayClusterLabelKey   = "ray.io/cluster"
-	RayNodeTypeLabelKey  = "ray.io/node-type"
-	RayNodeGroupLabelKey = "ray.io/group"
-	RayNodeLabelKey      = "ray.io/is-ray-node"
-	RayIDLabelKey        = "ray.io/identifier"
+	RayClusterLabelKey                 = "ray.io/cluster"
+	RayNodeTypeLabelKey                = "ray.io/node-type"
+	RayNodeGroupLabelKey               = "ray.io/group"
+	RayNodeLabelKey                    = "ray.io/is-ray-node"
+	RayIDLabelKey                      = "ray.io/identifier"
+	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"

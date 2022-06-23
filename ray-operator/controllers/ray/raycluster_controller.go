@@ -114,6 +114,9 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.reconcileServices(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
+	if err := r.reconcileDashBoardServices(instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 	if err := r.reconcilePods(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -194,6 +197,47 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		}
 
 		err = r.createHeadService(rayHeadSvc, instance)
+		// if the service cannot be created we return the error and requeue
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha1.RayCluster) error {
+	r.Log.Info("reconcileDashBoardServices")
+	dashboardServices := corev1.ServiceList{}
+	filterLabels := client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: instance.Name + "-" + common.DefaultDashboardName}
+	if err := r.List(context.TODO(), &dashboardServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return err
+	}
+
+	if dashboardServices.Items != nil {
+		if len(dashboardServices.Items) == 1 {
+			r.Log.Info("reconcileServices ", "head service found", dashboardServices.Items[0].Name)
+			// TODO: compare diff and reconcile the object
+			// For example. ServiceType might be changed or port might be modified
+			return nil
+		}
+
+		// This should never happen.
+		// We add the protection here just in case controller has race issue or user manually create service with same label.
+		if len(dashboardServices.Items) > 1 {
+			r.Log.Info("reconcileServices ", "Duplicates head service found", len(dashboardServices.Items))
+			return nil
+		}
+	}
+
+	// Create head service if there's no existing one in the cluster.
+	if dashboardServices.Items == nil || len(dashboardServices.Items) == 0 {
+		rayDashboardSvc, err := common.BuildDashboardService(*instance)
+		if err != nil {
+			return err
+		}
+
+		err = r.createHeadService(rayDashboardSvc, instance)
 		// if the service cannot be created we return the error and requeue
 		if err != nil {
 			return err

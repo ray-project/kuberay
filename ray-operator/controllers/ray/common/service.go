@@ -38,6 +38,41 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 	return service, nil
 }
 
+// BuildDashboardService Builds the service for dashboard agent and head node.
+func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+	labels := map[string]string{
+		RayClusterDashboardServiceLabelKey: cluster.Name + "-" + DefaultDashboardName,
+	}
+	selectorLabels := map[string]string{
+		RayClusterLabelKey:  cluster.Name,
+		RayNodeTypeLabelKey: string(rayiov1alpha1.WorkerNode),
+	}
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateDashboardServiceName(cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: selectorLabels,
+			Ports:    []corev1.ServicePort{},
+			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+		},
+	}
+
+	ports := getServicePorts(cluster)
+	for name, port := range ports {
+		if name != DefaultDashboardName {
+			continue
+		}
+		svcPort := corev1.ServicePort{Name: name, Port: port}
+		service.Spec.Ports = append(service.Spec.Ports, svcPort)
+	}
+
+	return service, nil
+}
+
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 	ports, err := getPortsFromCluster(cluster)
