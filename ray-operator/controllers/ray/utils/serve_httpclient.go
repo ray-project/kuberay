@@ -49,6 +49,7 @@ type ServeDeploymentStatuses struct {
 	DeploymentStatuses []rayv1alpha1.ServeDeploymentStatus `json:"deployment_statuses,omitempty"`
 }
 
+// ServingClusterDeployments defines the request sent to the dashboard api server.
 type ServingClusterDeployments struct {
 	Deployments []ServeConfigSpec `json:"deployments,omitempty"`
 }
@@ -78,6 +79,7 @@ func (r *RayDashboardClient) InitClient(url string) {
 	r.dashboardURL = "http://" + url
 }
 
+// GetDeployments get the current deployments in the Ray cluster.
 func (r *RayDashboardClient) GetDeployments() (string, error) {
 	req, err := http.NewRequest("GET", r.dashboardURL+DeployPath, nil)
 	if err != nil {
@@ -96,6 +98,7 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 	return string(body), nil
 }
 
+// UpdateDeployments update the deployments in the Ray cluster.
 func (r *RayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConfigSpec) error {
 	servingClusterDeployments := ServingClusterDeployments{
 		Deployments: r.convertServeConfig(specs),
@@ -123,6 +126,7 @@ func (r *RayDashboardClient) UpdateDeployments(specs []rayv1alpha1.ServeConfigSp
 	return nil
 }
 
+// GetDeploymentsStatus get the current deployment statuses in the Ray cluster.
 func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, error) {
 	req, err := http.NewRequest("GET", r.dashboardURL+StatusPath, nil)
 	if err != nil {
