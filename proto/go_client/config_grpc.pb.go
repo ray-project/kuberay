@@ -27,7 +27,7 @@ type ComputeTemplateServiceClient interface {
 	ListComputeTemplates(ctx context.Context, in *ListComputeTemplatesRequest, opts ...grpc.CallOption) (*ListComputeTemplatesResponse, error)
 	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
 	ListAllComputeTemplates(ctx context.Context, in *ListAllComputeTemplatesRequest, opts ...grpc.CallOption) (*ListAllComputeTemplatesResponse, error)
-	// Deletes a compuate template by its name and namespace
+	// Deletes a compute template by its name and namespace
 	DeleteComputeTemplate(ctx context.Context, in *DeleteComputeTemplateRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -96,7 +96,7 @@ type ComputeTemplateServiceServer interface {
 	ListComputeTemplates(context.Context, *ListComputeTemplatesRequest) (*ListComputeTemplatesResponse, error)
 	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
 	ListAllComputeTemplates(context.Context, *ListAllComputeTemplatesRequest) (*ListAllComputeTemplatesResponse, error)
-	// Deletes a compuate template by its name and namespace
+	// Deletes a compute template by its name and namespace
 	DeleteComputeTemplate(context.Context, *DeleteComputeTemplateRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedComputeTemplateServiceServer()
 }

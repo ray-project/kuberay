@@ -196,7 +196,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes a compuate template by its name and namespace",
+        "summary": "Deletes a compute template by its name and namespace",
         "operationId": "ComputeTemplateService_DeleteComputeTemplate",
         "responses": {
           "200": {

@@ -55,7 +55,7 @@ kuberay cluster create [flags]
 
 Flags:
       --environment string               environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION) (default "DEV")
-      --head-compute-template string     compuate template name for ray head
+      --head-compute-template string     compute template name for ray head
       --head-image string                ray head image
       --head-service-type string         ray head service type (ClusterIP, NodePort, LoadBalancer) (default "ClusterIP")
       --name string                      name of the cluster

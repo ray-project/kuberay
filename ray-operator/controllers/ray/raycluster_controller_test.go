@@ -30,6 +30,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -183,6 +184,14 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: saName, Namespace: "default"}, sa),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head group ServiceAccount = %v", saName)
+		})
+
+		It("should create the autoscaler K8s RoleBinding if it doesn't exist", func() {
+			rbName := myRayCluster.Name
+			rb := &rbacv1.RoleBinding{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rbName, Namespace: myRayCluster.Namespace}, rb),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "autoscaler RoleBinding = %v", rbName)
 		})
 
 		It("should re-create a deleted worker", func() {
