@@ -3,11 +3,12 @@ package ray
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"reflect"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	networkingv1 "k8s.io/api/networking/v1"
