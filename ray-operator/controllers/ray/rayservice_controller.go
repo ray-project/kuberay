@@ -113,7 +113,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Reconcile Serve Configs.
-	r.cleanUpServeConfigMaps(rayServiceInstance)
+	r.cleanUpServeConfigCache(rayServiceInstance)
 
 	rayServiceLog.Info("Done reconcileRayCluster")
 
@@ -165,7 +165,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceRestartRequeueDuration}, nil
 	}
 
-	rayClusterInstance := activeRayClusterInstance // RayCluster instance which needs reconcile.
+	// Get the healthy ray cluster instance for service and ingress update.
+	rayClusterInstance := activeRayClusterInstance
 	if pendingRayClusterInstance != nil {
 		rayClusterInstance = pendingRayClusterInstance
 	}
@@ -220,6 +221,10 @@ func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstan
 	return err
 }
 
+// reconcileRayCluster checks the active and pending ray cluster instances. It includes 3 parts.
+// 1. It will decide whether to generate a pending cluster name.
+// 2. It will delete the old pending ray cluster instance.
+// 3. It will create a new pending ray cluster instance.
 func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) (*rayv1alpha1.RayCluster, *rayv1alpha1.RayCluster, error) {
 	var err error
 	if err = r.cleanUpRayClusterInstance(ctx, rayServiceInstance); err != nil {
@@ -251,6 +256,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	return activeRayCluster, pendingRayCluster, nil
 }
 
+// cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that are owned by the RayService instance.
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) error {
 	rayClusterList := rayv1alpha1.RayClusterList{}
 	filterLabels := client.MatchingLabels{common.RayServiceLabelKey: rayServiceInstance.Name}
@@ -289,7 +295,8 @@ func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context
 	return rayCluster, nil
 }
 
-func (r *RayServiceReconciler) cleanUpServeConfigMaps(rayServiceInstance *rayv1alpha1.RayService) {
+// cleanUpServeConfigCache cleans up the unused serve deployments config in the cached map.
+func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1alpha1.RayService) {
 	activeConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.ActiveServiceStatus.RayClusterName)
 	pendingConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 	configPrefix := r.generateConfigKeyPrefix(rayServiceInstance)
@@ -303,11 +310,12 @@ func (r *RayServiceReconciler) cleanUpServeConfigMaps(rayServiceInstance *rayv1a
 			// Skip configs owned by other RayService Instance.
 			continue
 		}
-		r.Log.V(1).Info("cleanUpServeConfigMaps", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
+		r.Log.V(1).Info("cleanUpServeConfigCache", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
 		r.ServeDeploymentConfigs.Remove(key)
 	}
 }
 
+// shouldPrepareNewRayCluster checks if we need to generate a new pending cluster.
 func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1alpha1.RayService, activeRayCluster *rayv1alpha1.RayCluster) bool {
 	shouldPrepareRayCluster := false
 
@@ -323,6 +331,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 	return shouldPrepareRayCluster
 }
 
+// createRayClusterInstanceIfNeeded checks if we need to create a new RayCluster instance. If so, create one.
 func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, pendingRayCluster *rayv1alpha1.RayCluster) (*rayv1alpha1.RayCluster, error) {
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
 		// No exist pending RayCluster and no need to create one.
@@ -343,6 +352,8 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	return pendingRayCluster, nil
 }
 
+// createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
+// One important part is that if this method deletes the old RayCluster, it will return instantly. It depends on the controller to call it again to generate the new RayCluster instance.
 func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstanceName string) (*rayv1alpha1.RayCluster, error) {
 	r.Log.V(1).Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterInstanceName)
 
@@ -488,7 +499,8 @@ func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1al
 	return nil
 }
 
-func (r *RayServiceReconciler) getAndCheckServeStatus(rayServiceInstance *rayv1alpha1.RayService, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus) (bool, error) {
+// getAndCheckServeStatus get app and serve deployments statuses, update the health timestamp and check if RayCluster is overall healthy.
+func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus) (bool, error) {
 	var serveStatuses *utils.ServeDeploymentStatuses
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(); err != nil {
