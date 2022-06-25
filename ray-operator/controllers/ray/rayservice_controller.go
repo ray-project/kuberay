@@ -254,7 +254,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	return activeRayCluster, pendingRayCluster, nil
 }
 
-// cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that owns by the RayService instance.
+// cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that are owned by the RayService instance.
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService) error {
 	rayClusterList := rayv1alpha1.RayClusterList{}
 	filterLabels := client.MatchingLabels{common.RayServiceLabelKey: rayServiceInstance.Name}
