@@ -417,6 +417,10 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 		}
 	}
 
+	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
+		rayStartParams["dashboard-agent-listen-port"] = "64988"
+	}
+
 	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
 	switch nodeType {

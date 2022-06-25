@@ -61,7 +61,7 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 		},
 	}
 
-	svcPort := corev1.ServicePort{Name: "api-server", Port: 13265}
+	svcPort := corev1.ServicePort{Name: "api-server", Port: 64988}
 	service.Spec.Ports = append(service.Spec.Ports, svcPort)
 
 	return service, nil
