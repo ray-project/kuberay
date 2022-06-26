@@ -71,8 +71,8 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: brucezhang90/bruce-docker-repo:ray-nightly-agent3-v1
-              #image: rayproject/ray:nightly
+              #image: rayproject/ray:1.12.1
+              image: rayproject/ray:nightly
               #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
               env:
                 - name: MY_POD_IP
@@ -93,10 +93,10 @@ spec:
                   name: dashboard
                 - containerPort: 10001
                   name: client
-                - containerPort: 64988 # Ray dashboard agent
-                  name: dashboard-agent
                 - containerPort: 8000
                   name: serve
+                - containerPort: 64988 # Ray dashboard agent
+                  name: dashboard-agent
     workerGroupSpecs:
       # the pod replicas in this group typed worker
       - replicas: 1

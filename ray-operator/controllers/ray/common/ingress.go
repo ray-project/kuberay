@@ -52,7 +52,7 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateServiceName(cluster.Name),
+			Name:        utils.GenerateIngressName(cluster.Name),
 			Namespace:   cluster.Namespace,
 			Labels:      labels,
 			Annotations: annotation,
@@ -75,7 +75,27 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 	if !ok {
 		logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
 	} else {
+		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
 		ingress.Spec.IngressClassName = &ingressClassName
+	}
+
+	return ingress, nil
+}
+
+// BuildIngressForRayService Builds the ingress for head service dashboard for RayService.
+// This is used to expose dashboard for external traffic.
+// RayService controller updates the ingress whenever a new RayCluster serves the traffic.
+func BuildIngressForRayService(service rayiov1alpha1.RayService, cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
+	ingress, err := BuildIngressForHeadService(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	ingress.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
+	ingress.ObjectMeta.Namespace = service.Namespace
+	ingress.ObjectMeta.Labels = map[string]string{
+		RayServiceLabelKey: service.Name,
+		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayiov1alpha1.HeadNode)),
 	}
 
 	return ingress, nil

@@ -110,7 +110,7 @@ type RayClusterStatus struct {
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
-	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 // RayNodeType  the type of a ray node: head/worker
