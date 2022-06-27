@@ -2,12 +2,13 @@ package utils
 
 import (
 	"fmt"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
