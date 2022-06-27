@@ -61,11 +61,10 @@ func BuildServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster r
 // BuildDashboardService Builds the service for dashboard agent and head node.
 func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	labels := map[string]string{
-		RayClusterDashboardServiceLabelKey: cluster.Name + "-" + DefaultDashboardName,
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
 	}
 	selectorLabels := map[string]string{
-		RayClusterLabelKey:  cluster.Name,
-		RayNodeTypeLabelKey: string(rayiov1alpha1.WorkerNode),
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
 	}
 
 	service := &corev1.Service{
