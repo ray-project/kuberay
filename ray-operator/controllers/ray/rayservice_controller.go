@@ -38,7 +38,7 @@ const (
 	ServiceDefaultRequeueDuration     = 2 * time.Second
 	ServiceRestartRequeueDuration     = 10 * time.Second
 	DashboardUnhealthySecondThreshold = 60.0
-	servicePortName                   = "dashboard"
+	servicePortName                   = "dashboard-agent"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -423,16 +423,16 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	return rayCluster, nil
 }
 
-func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	headService := &corev1.Service{}
-	headServiceName := utils.CheckName(utils.GenerateServiceName(rayCluster.Name))
-	if err := r.Get(ctx, client.ObjectKey{Name: headServiceName, Namespace: rayCluster.Namespace}, headService); err != nil {
+func (r *RayServiceReconciler) fetchDashboardAgentURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
+	dashboardAgentService := &corev1.Service{}
+	dashboardAgentServiceName := utils.CheckName(utils.GenerateDashboardServiceName(rayCluster.Name))
+	if err := r.Get(ctx, client.ObjectKey{Name: dashboardAgentServiceName, Namespace: rayCluster.Namespace}, dashboardAgentService); err != nil {
 		return "", err
 	}
 
-	r.Log.V(1).Info("fetchDashboardURL ", "head service found", headService.Name)
+	r.Log.V(1).Info("fetchDashboardAgentURL ", "head service found", dashboardAgentService.Name)
 	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
-	servicePorts := headService.Spec.Ports
+	servicePorts := dashboardAgentService.Spec.Ports
 
 	dashboardPort := int32(-1)
 
@@ -448,10 +448,10 @@ func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster
 	}
 
 	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
-		headService.Name,
-		headService.Namespace,
+		dashboardAgentService.Name,
+		dashboardAgentService.Namespace,
 		dashboardPort)
-	r.Log.V(1).Info("fetchDashboardURL ", "dashboardURL", dashboardURL)
+	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardURL)
 	return dashboardURL, nil
 }
 
@@ -691,7 +691,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false)
 		return err
 	}
@@ -726,7 +726,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false) {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
