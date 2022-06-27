@@ -418,10 +418,10 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	}
 
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		rayStartParams["dashboard-agent-listen-port"] = string(DefaultDashboardAgentListenPort)
+		rayStartParams["dashboard-agent-listen-port"] = fmt.Sprint(DefaultDashboardAgentListenPort)
 		for _, port := range ports {
 			if port.Name == "dashboard-agent" {
-				rayStartParams["dashboard-agent-listen-port"] = string(port.ContainerPort)
+				rayStartParams["dashboard-agent-listen-port"] = fmt.Sprint(port.ContainerPort)
 				break
 			}
 		}
