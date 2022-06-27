@@ -37,7 +37,7 @@ var (
 const (
 	ServiceDefaultRequeueDuration     = 2 * time.Second
 	ServiceRestartRequeueDuration     = 10 * time.Second
-	DashboardUnhealthySecondThreshold = 120.0
+	DashboardUnhealthySecondThreshold = 60.0
 	servicePortName                   = "dashboard-agent"
 )
 
