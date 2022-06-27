@@ -73,12 +73,13 @@ var myRayService = &RayService{
 				ServiceType: corev1.ServiceTypeClusterIP,
 				Replicas:    pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
-					"port":                "6379",
-					"object-store-memory": "100000000",
-					"dashboard-host":      "0.0.0.0",
-					"num-cpus":            "1",
-					"node-ip-address":     "127.0.0.1",
-					"block":               "true",
+					"port":                        "6379",
+					"object-store-memory":         "100000000",
+					"dashboard-host":              "0.0.0.0",
+					"num-cpus":                    "1",
+					"node-ip-address":             "127.0.0.1",
+					"block":                       "true",
+					"dashboard-agent-listen-port": "52365",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -129,6 +130,10 @@ var myRayService = &RayService{
 										Name:          "head",
 										ContainerPort: 10001,
 									},
+									{
+										Name:          "dashboard-agent",
+										ContainerPort: 52365,
+									},
 								},
 							},
 						},
@@ -142,8 +147,9 @@ var myRayService = &RayService{
 					MaxReplicas: pointer.Int32Ptr(10000),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
-						"port":     "6379",
-						"num-cpus": "1",
+						"port":                        "6379",
+						"num-cpus":                    "1",
+						"dashboard-agent-listen-port": "52365",
 					},
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
@@ -239,6 +245,7 @@ var expected = `{
             "replicas":1,
             "rayStartParams":{
                "block":"true",
+               "dashboard-agent-listen-port":"52365",
                "dashboard-host":"0.0.0.0",
                "node-ip-address":"127.0.0.1",
                "num-cpus":"1",
@@ -274,6 +281,10 @@ var expected = `{
                            {
                               "name":"head",
                               "containerPort":10001
+                           },
+                           {
+                              "name":"dashboard-agent",
+                              "containerPort":52365
                            }
                         ],
                         "env":[
@@ -308,6 +319,7 @@ var expected = `{
                "minReplicas":0,
                "maxReplicas":10000,
                "rayStartParams":{
+                  "dashboard-agent-listen-port":"52365",
                   "num-cpus":"1",
                   "port":"6379"
                },
