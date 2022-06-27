@@ -19,3 +19,7 @@ spec:
       port: 10001
       targetPort: 10001
       nodePort: 30001
+    - name: dashboard-agent
+      port: 52365
+      targetPort: 52365
+      nodePort: 52365
