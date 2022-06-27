@@ -37,7 +37,7 @@ var (
 const (
 	ServiceDefaultRequeueDuration     = 2 * time.Second
 	ServiceRestartRequeueDuration     = 10 * time.Second
-	DashboardUnhealthySecondThreshold = 60.0
+	DashboardUnhealthySecondThreshold = 120.0
 	servicePortName                   = "dashboard-agent"
 )
 
@@ -430,7 +430,7 @@ func (r *RayServiceReconciler) fetchDashboardAgentURL(ctx context.Context, rayCl
 		return "", err
 	}
 
-	r.Log.V(1).Info("fetchDashboardAgentURL ", "head service found", dashboardAgentService.Name)
+	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboard agent service found", dashboardAgentService.Name)
 	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
 	servicePorts := dashboardAgentService.Spec.Ports
 

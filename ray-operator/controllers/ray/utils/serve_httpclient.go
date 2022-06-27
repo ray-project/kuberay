@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -75,7 +76,9 @@ type RayDashboardClient struct {
 }
 
 func (r *RayDashboardClient) InitClient(url string) {
-	r.client = http.Client{}
+	r.client = http.Client{
+		Timeout: 2 * time.Second,
+	}
 	r.dashboardURL = "http://" + url
 }
 
