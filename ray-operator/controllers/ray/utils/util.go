@@ -106,6 +106,11 @@ func GenerateDashboardServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
+// GenerateDashboardAgentLabel generates label value for agent service selector.
+func GenerateDashboardAgentLabel(clusterName string) string {
+	return fmt.Sprintf("%s-%s", clusterName, DashboardName)
+}
+
 // GenerateIngressName generates an ingress name from cluster name
 func GenerateIngressName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "ingress")

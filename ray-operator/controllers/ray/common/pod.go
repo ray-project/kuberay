@@ -281,11 +281,12 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	}
 
 	ret = map[string]string{
-		RayNodeLabelKey:      "yes",
-		RayClusterLabelKey:   rayClusterName,
-		RayNodeTypeLabelKey:  string(rayNodeType),
-		RayNodeGroupLabelKey: groupName,
-		RayIDLabelKey:        utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		RayNodeLabelKey:                    "yes",
+		RayClusterLabelKey:                 rayClusterName,
+		RayNodeTypeLabelKey:                string(rayNodeType),
+		RayNodeGroupLabelKey:               groupName,
+		RayIDLabelKey:                      utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
 	}
 
 	for k, v := range ret {

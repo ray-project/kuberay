@@ -215,7 +215,7 @@ func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha
 	r.Log.Info("reconcileDashBoardServices")
 	defer r.Log.Info("reconcileDashBoardServices done")
 	dashboardServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: instance.Name + "-" + common.DefaultDashboardName}
+	filterLabels := client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(instance.Name)}
 	if err := r.List(context.TODO(), &dashboardServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
