@@ -8,8 +8,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -21,6 +19,7 @@ import (
 
 const (
 	RayClusterSuffix = "-raycluster-"
+	DashboardName    = "dashboard"
 )
 
 // IsCreated returns true if pod has been created and is maintained by the API server
@@ -104,7 +103,7 @@ func GenerateServiceName(clusterName string) string {
 
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, common.DefaultDashboardName, "svc")
+	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
 // GenerateIngressName generates an ingress name from cluster name
