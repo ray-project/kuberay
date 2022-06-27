@@ -201,7 +201,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			return err
 		}
 
-		err = r.createHeadService(rayHeadSvc, instance)
+		err = r.createService(rayHeadSvc, instance)
 		// if the service cannot be created we return the error and requeue
 		if err != nil {
 			return err
@@ -213,6 +213,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha1.RayCluster) error {
 	r.Log.Info("reconcileDashBoardServices")
+	defer r.Log.Info("reconcileDashBoardServices done")
 	dashboardServices := corev1.ServiceList{}
 	filterLabels := client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: instance.Name + "-" + common.DefaultDashboardName}
 	if err := r.List(context.TODO(), &dashboardServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -221,7 +222,7 @@ func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha
 
 	if dashboardServices.Items != nil {
 		if len(dashboardServices.Items) == 1 {
-			r.Log.Info("reconcileServices ", "head service found", dashboardServices.Items[0].Name)
+			r.Log.Info("reconcileDashBoardServices ", "dashboard agent service found", dashboardServices.Items[0].Name)
 			// TODO: compare diff and reconcile the object
 			// For example. ServiceType might be changed or port might be modified
 			return nil
@@ -230,19 +231,19 @@ func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha
 		// This should never happen.
 		// We add the protection here just in case controller has race issue or user manually create service with same label.
 		if len(dashboardServices.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates head service found", len(dashboardServices.Items))
+			r.Log.Info("reconcileDashBoardServices ", "Duplicates dashboard agent service found", len(dashboardServices.Items))
 			return nil
 		}
 	}
 
-	// Create head service if there's no existing one in the cluster.
+	// Create dashboard agent service if there's no existing one in the cluster.
 	if dashboardServices.Items == nil || len(dashboardServices.Items) == 0 {
 		rayDashboardSvc, err := common.BuildDashboardService(*instance)
 		if err != nil {
 			return err
 		}
 
-		err = r.createHeadService(rayDashboardSvc, instance)
+		err = r.createService(rayDashboardSvc, instance)
 		// if the service cannot be created we return the error and requeue
 		if err != nil {
 			return err
@@ -498,15 +499,15 @@ func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, 
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) createService(raySvc *v1.Service, instance *rayiov1alpha1.RayCluster) error {
 	// making sure the name is valid
-	rayHeadSvc.Name = utils.CheckName(rayHeadSvc.Name)
+	raySvc.Name = utils.CheckName(raySvc.Name)
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(instance, rayHeadSvc, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, raySvc, r.Scheme); err != nil {
 		return err
 	}
 
-	if errSvc := r.Create(context.TODO(), rayHeadSvc); errSvc != nil {
+	if errSvc := r.Create(context.TODO(), raySvc); errSvc != nil {
 		if errors.IsAlreadyExists(errSvc) {
 			log.Info("Pod service already exist,no need to create")
 			return nil
@@ -514,8 +515,8 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *v1.Service, instanc
 		log.Error(errSvc, "Pod Service create error!", "Pod.Service.Error", errSvc)
 		return errSvc
 	}
-	log.Info("Pod Service created successfully", "service name", rayHeadSvc.Name)
-	r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created service %s", rayHeadSvc.Name)
+	log.Info("Pod Service created successfully", "service name", raySvc.Name)
+	r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created service %s", raySvc.Name)
 	return nil
 }
 

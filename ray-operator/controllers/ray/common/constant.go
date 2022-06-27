@@ -14,15 +14,17 @@ const (
 	DashSymbol = "-"
 
 	// Use as default port
-	DefaultClientPort    = 10001
-	DefaultRedisPort     = 6379
-	DefaultDashboardPort = 8265
-	DefaultMetricsPort   = 8080
+	DefaultClientPort               = 10001
+	DefaultRedisPort                = 6379
+	DefaultDashboardPort            = 8265
+	DefaultMetricsPort              = 8080
+	DefaultDashboardAgentListenPort = 52365
 
-	DefaultClientPortName = "client"
-	DefaultRedisPortName  = "redis"
-	DefaultDashboardName  = "dashboard"
-	DefaultMetricsName    = "metrics"
+	DefaultClientPortName               = "client"
+	DefaultRedisPortName                = "redis"
+	DefaultDashboardName                = "dashboard"
+	DefaultMetricsName                  = "metrics"
+	DefaultDashboardAgentListenPortName = "dashboard-agent"
 
 	// Check node if ready by checking the path exists or not
 	PodReadyFilepath = "POD_READY_FILEPATH"

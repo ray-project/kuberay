@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"math"
 	"sort"
 	"strconv"
@@ -102,7 +103,7 @@ func GenerateServiceName(clusterName string) string {
 
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, "dashboard", "svc")
+	return fmt.Sprintf("%s-%s-%s", clusterName, common.DefaultDashboardName, "svc")
 }
 
 // GenerateIngressName generates an ingress name from cluster name

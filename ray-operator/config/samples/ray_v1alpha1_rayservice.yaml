@@ -55,7 +55,7 @@ spec:
         num-cpus: '1' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
-        dashboard-agent-listen-port: "64988"
+        dashboard-agent-listen-port: "52365"
       #pod template
       template:
         metadata:
@@ -95,7 +95,7 @@ spec:
                   name: client
                 - containerPort: 8000
                   name: serve
-                - containerPort: 64988 # Ray dashboard agent
+                - containerPort: 52365 # Ray dashboard agent
                   name: dashboard-agent
     workerGroupSpecs:
       # the pod replicas in this group typed worker
@@ -115,10 +115,8 @@ spec:
         #  - raycluster-complete-worker-small-group-k8tj7
         # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
         rayStartParams:
-          #redis-password: '5241590000000000'
-          redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
           node-ip-address: $MY_POD_IP
-          dashboard-agent-listen-port: "64988"
+          dashboard-agent-listen-port: "52365"
           block: 'true'
         #pod template
         template:
@@ -174,6 +172,9 @@ spec:
                         fieldPath: status.podIP
                 ports:
                   - containerPort: 80
+                    name: client
+                  - containerPort: 52365
+                    name: dashboard-agent
                 lifecycle:
                   preStop:
                     exec:

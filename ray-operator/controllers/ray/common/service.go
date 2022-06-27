@@ -81,9 +81,13 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 		},
 	}
 
-	svcPort := corev1.ServicePort{Name: "api-server", Port: 64988}
-	service.Spec.Ports = append(service.Spec.Ports, svcPort)
-
+	ports := getServicePorts(cluster)
+	for name, port := range ports {
+		if name == DefaultDashboardAgentListenPortName {
+			svcPort := corev1.ServicePort{Name: name, Port: port}
+			service.Spec.Ports = append(service.Spec.Ports, svcPort)
+		}
+	}
 	return service, nil
 }
 
@@ -115,9 +119,10 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
-		DefaultClientPortName: DefaultClientPort,
-		DefaultRedisPortName:  DefaultRedisPort,
-		DefaultDashboardName:  DefaultDashboardPort,
-		DefaultMetricsName:    DefaultMetricsPort,
+		DefaultClientPortName:               DefaultClientPort,
+		DefaultRedisPortName:                DefaultRedisPort,
+		DefaultDashboardName:                DefaultDashboardPort,
+		DefaultMetricsName:                  DefaultMetricsPort,
+		DefaultDashboardAgentListenPortName: DefaultDashboardAgentListenPort,
 	}
 }
