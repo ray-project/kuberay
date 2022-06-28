@@ -153,11 +153,8 @@ message Cluster {
   // Output. The time that the cluster deleted.
   google.protobuf.Timestamp deleted_at = 8;
 
-  // Output. The service endpoint of the cluster
-  map<string, string> service_endpoint = 9;
-  
   // Output. The status to show the cluster status.state
-  string cluster_state = 10;
+  string cluster_state = 9;
 }
 
 message ClusterSpec {

@@ -34,11 +34,6 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster) *api.Cluster {
 	pbCluster.ClusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(cluster.Spec.HeadGroupSpec)
 	pbCluster.ClusterSpec.WorkerGroupSepc = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
 
-	pbCluster.ServiceEndpoint = map[string]string{}
-	for name, port := range cluster.Status.Endpoints {
-		pbCluster.ServiceEndpoint[name] = strconv.Itoa(int(port))
-	}
-
 	return pbCluster
 }
 
