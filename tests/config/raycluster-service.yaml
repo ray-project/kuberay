@@ -22,4 +22,4 @@ spec:
     - name: dashboard-agent
       port: 52365
       targetPort: 52365
-      nodePort: 52365
+      nodePort: 32365

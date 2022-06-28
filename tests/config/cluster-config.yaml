@@ -21,7 +21,7 @@ nodes:
         hostPort: 10001
         listenAddress: "0.0.0.0"
         protocol: tcp
-      - containerPort: 52365
+      - containerPort: 32365
         hostPort: 52365
         listenAddress: "0.0.0.0"
         protocol: tcp
