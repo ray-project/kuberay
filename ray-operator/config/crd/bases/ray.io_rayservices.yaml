@@ -103,8 +103,8 @@ spec:
                         additionalProperties:
                           format: int64
                           type: integer
-                        description: RayResources is a string-int map specifying custom
-                          resources and resource overrides.
+                        description: RayResources is a string-int map specifying Ray
+                          custom resources and overrides for CPU,GPU,memory.
                         type: object
                       rayStartParams:
                         additionalProperties:
@@ -5743,8 +5743,8 @@ spec:
                           additionalProperties:
                             format: int64
                             type: integer
-                          description: RayResources specifies Ray custom resource
-                            capacities and resource capacity overrides.
+                          description: RayResources is a string-int map specifying
+                            Ray custom resources and overrides for CPU,GPU,memory.
                           type: object
                         rayStartParams:
                           additionalProperties:
@@ -11566,100 +11566,260 @@ spec:
                 type: array
             type: object
           status:
-            description: RayServiceStatus defines the observed state of RayService
+            description: RayServiceStatuses defines the observed state of RayService
             properties:
-              rayClusterName:
-                type: string
-              rayClusterStatus:
-                description: RayClusterStatus defines the observed state of RayCluster
+              activeServiceStatus:
                 properties:
-                  availableWorkerReplicas:
-                    description: AvailableWorkerReplicas indicates how many replicas
-                      are available in the cluster
-                    format: int32
-                    type: integer
-                  desiredWorkerReplicas:
-                    description: DesiredWorkerReplicas indicates overall desired replicas
-                      claimed by the user at the cluster level.
-                    format: int32
-                    type: integer
-                  headStatus:
+                  appStatus:
+                    description: 'Important: Run "make" to regenerate code after modifying
+                      this file'
                     properties:
-                      detectedRayResources:
-                        additionalProperties:
-                          format: int64
-                          type: integer
-                        description: DetectedRayResources is the map of resource name
-                          to Ray resource capacity for the members of the hea
-                        type: object
-                      groupName:
-                        description: Name of the group. Can be empty in the case of
-                          the head "group".
+                      healthLastUpdateTime:
+                        description: Keep track of how long the service is healthy.
+                        format: date-time
+                        type: string
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
                         type: string
                     type: object
-                  lastUpdateTime:
-                    description: LastUpdateTime indicates last update timestamp for
-                      this cluster status.
-                    format: date-time
-                    nullable: true
+                  dashboardStatus:
+                    description: DashboardStatus defines the current states of Ray
+                      Dashboard
+                    properties:
+                      healthLastUpdateTime:
+                        description: Keep track of how long the dashboard is healthy.
+                        format: date-time
+                        type: string
+                      isHealthy:
+                        type: boolean
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                    type: object
+                  rayClusterName:
                     type: string
-                  maxWorkerReplicas:
-                    description: MaxWorkerReplicas indicates sum of maximum replicas
-                      of each node group.
-                    format: int32
-                    type: integer
-                  minWorkerReplicas:
-                    description: MinWorkerReplicas indicates sum of minimum replicas
-                      of each node group.
-                    format: int32
-                    type: integer
-                  state:
-                    description: 'INSERT ADDITIONAL STATUS FIELD - define observed
-                      state of cluster Important: Run "make" to regenerat'
-                    type: string
-                  workerGroupStatuses:
-                    items:
-                      properties:
-                        detectedRayResources:
-                          additionalProperties:
-                            format: int64
-                            type: integer
-                          description: DetectedRayResources is the map of resource
-                            name to Ray resource capacity for the members of the hea
+                  rayClusterStatus:
+                    description: RayClusterStatus defines the observed state of RayCluster
+                    properties:
+                      availableWorkerReplicas:
+                        description: AvailableWorkerReplicas indicates how many replicas
+                          are available in the cluster
+                        format: int32
+                        type: integer
+                      desiredWorkerReplicas:
+                        description: DesiredWorkerReplicas indicates overall desired
+                          replicas claimed by the user at the cluster level.
+                        format: int32
+                        type: integer
+                      headStatus:
+                        properties:
+                          detectedRayResources:
+                            additionalProperties:
+                              format: int64
+                              type: integer
+                            description: DetectedRayResources is the map of resource
+                              name to Ray resource capacity for the members of the
+                              hea
+                            type: object
+                          groupName:
+                            description: Name of the group. Can be empty in the case
+                              of the head "group".
+                            type: string
+                        type: object
+                      lastUpdateTime:
+                        description: LastUpdateTime indicates last update timestamp
+                          for this cluster status.
+                        format: date-time
+                        nullable: true
+                        type: string
+                      maxWorkerReplicas:
+                        description: MaxWorkerReplicas indicates sum of maximum replicas
+                          of each node group.
+                        format: int32
+                        type: integer
+                      minWorkerReplicas:
+                        description: MinWorkerReplicas indicates sum of minimum replicas
+                          of each node group.
+                        format: int32
+                        type: integer
+                      state:
+                        description: 'INSERT ADDITIONAL STATUS FIELD - define observed
+                          state of cluster Important: Run "make" to regenerat'
+                        type: string
+                      workerGroupStatuses:
+                        items:
+                          properties:
+                            detectedRayResources:
+                              additionalProperties:
+                                format: int64
+                                type: integer
+                              description: DetectedRayResources is the map of resource
+                                name to Ray resource capacity for the members of the
+                                hea
+                              type: object
+                            groupName:
+                              description: Name of the group. Can be empty in the
+                                case of the head "group".
+                              type: string
                           type: object
-                        groupName:
-                          description: Name of the group. Can be empty in the case
-                            of the head "group".
+                        type: array
+                    type: object
+                  serveDeploymentStatuses:
+                    items:
+                      description: ServeDeploymentStatus defines the current state
+                        of Serve Deployment
+                      properties:
+                        healthLastUpdateTime:
+                          description: Keep track of how long the service is healthy.
+                          format: date-time
+                          type: string
+                        lastUpdateTime:
+                          format: date-time
+                          type: string
+                        message:
+                          type: string
+                        name:
+                          description: Name, Status, Message are from Ray Dashboard
+                            to represent the state of a serve deployment.
+                          type: string
+                        status:
+                          description: 'TODO: change status type to enum'
                           type: string
                       type: object
                     type: array
                 type: object
-              serveDeploymentStatuses:
-                items:
-                  description: ServeDeploymentStatus defines the current state of
-                    Serve Deployment
-                  properties:
-                    healthLastUpdateTime:
-                      description: Keep track of how long the service is healthy.
-                      format: date-time
-                      type: string
-                    lastUpdateTime:
-                      format: date-time
-                      type: string
-                    message:
-                      type: string
-                    name:
-                      description: Name, Status, Message are from Ray Dashboard to
-                        represent the state of a serve deployment.
-                      type: string
-                    status:
-                      description: 'TODO: change status type to enum'
-                      type: string
-                  type: object
-                type: array
+              pendingServiceStatus:
+                description: Pending Service Status indicates a RayCluster will be
+                  created or is being created.
+                properties:
+                  appStatus:
+                    description: 'Important: Run "make" to regenerate code after modifying
+                      this file'
+                    properties:
+                      healthLastUpdateTime:
+                        description: Keep track of how long the service is healthy.
+                        format: date-time
+                        type: string
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                    type: object
+                  dashboardStatus:
+                    description: DashboardStatus defines the current states of Ray
+                      Dashboard
+                    properties:
+                      healthLastUpdateTime:
+                        description: Keep track of how long the dashboard is healthy.
+                        format: date-time
+                        type: string
+                      isHealthy:
+                        type: boolean
+                      lastUpdateTime:
+                        format: date-time
+                        type: string
+                    type: object
+                  rayClusterName:
+                    type: string
+                  rayClusterStatus:
+                    description: RayClusterStatus defines the observed state of RayCluster
+                    properties:
+                      availableWorkerReplicas:
+                        description: AvailableWorkerReplicas indicates how many replicas
+                          are available in the cluster
+                        format: int32
+                        type: integer
+                      desiredWorkerReplicas:
+                        description: DesiredWorkerReplicas indicates overall desired
+                          replicas claimed by the user at the cluster level.
+                        format: int32
+                        type: integer
+                      headStatus:
+                        properties:
+                          detectedRayResources:
+                            additionalProperties:
+                              format: int64
+                              type: integer
+                            description: DetectedRayResources is the map of resource
+                              name to Ray resource capacity for the members of the
+                              hea
+                            type: object
+                          groupName:
+                            description: Name of the group. Can be empty in the case
+                              of the head "group".
+                            type: string
+                        type: object
+                      lastUpdateTime:
+                        description: LastUpdateTime indicates last update timestamp
+                          for this cluster status.
+                        format: date-time
+                        nullable: true
+                        type: string
+                      maxWorkerReplicas:
+                        description: MaxWorkerReplicas indicates sum of maximum replicas
+                          of each node group.
+                        format: int32
+                        type: integer
+                      minWorkerReplicas:
+                        description: MinWorkerReplicas indicates sum of minimum replicas
+                          of each node group.
+                        format: int32
+                        type: integer
+                      state:
+                        description: 'INSERT ADDITIONAL STATUS FIELD - define observed
+                          state of cluster Important: Run "make" to regenerat'
+                        type: string
+                      workerGroupStatuses:
+                        items:
+                          properties:
+                            detectedRayResources:
+                              additionalProperties:
+                                format: int64
+                                type: integer
+                              description: DetectedRayResources is the map of resource
+                                name to Ray resource capacity for the members of the
+                                hea
+                              type: object
+                            groupName:
+                              description: Name of the group. Can be empty in the
+                                case of the head "group".
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                  serveDeploymentStatuses:
+                    items:
+                      description: ServeDeploymentStatus defines the current state
+                        of Serve Deployment
+                      properties:
+                        healthLastUpdateTime:
+                          description: Keep track of how long the service is healthy.
+                          format: date-time
+                          type: string
+                        lastUpdateTime:
+                          format: date-time
+                          type: string
+                        message:
+                          type: string
+                        name:
+                          description: Name, Status, Message are from Ray Dashboard
+                            to represent the state of a serve deployment.
+                          type: string
+                        status:
+                          description: 'TODO: change status type to enum'
+                          type: string
+                      type: object
+                    type: array
+                type: object
               serviceStatus:
-                description: 'Important: Run "make" to regenerate code after modifying
-                  this file'
+                description: ServiceStatus indicates the current RayService status.
                 type: string
             type: object
         type: object

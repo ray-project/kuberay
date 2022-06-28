@@ -8,11 +8,17 @@ import (
 	"strings"
 	"unicode"
 
+	"k8s.io/apimachinery/pkg/util/rand"
+
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	RayClusterSuffix = "-raycluster-"
 )
 
 // IsCreated returns true if pod has been created and is maintained by the API server
@@ -92,6 +98,16 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 // GenerateServiceName generates a ray head service name from cluster name
 func GenerateServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc")
+}
+
+// GenerateIngressName generates an ingress name from cluster name
+func GenerateIngressName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "ingress")
+}
+
+// GenerateRayClusterName generates a ray cluster name from ray service name
+func GenerateRayClusterName(serviceName string) string {
+	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
 }
 
 // GenerateIdentifier generates identifier of same group pods

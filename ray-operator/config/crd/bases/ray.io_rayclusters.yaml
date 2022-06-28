@@ -99,8 +99,8 @@ spec:
                     additionalProperties:
                       format: int64
                       type: integer
-                    description: RayResources is a string-int map specifying custom
-                      resources and resource overrides.
+                    description: RayResources is a string-int map specifying Ray custom
+                      resources and overrides for CPU,GPU,memory.
                     type: object
                   rayStartParams:
                     additionalProperties:
@@ -5504,8 +5504,8 @@ spec:
                       additionalProperties:
                         format: int64
                         type: integer
-                      description: RayResources specifies Ray custom resource capacities
-                        and resource capacity overrides.
+                      description: RayResources is a string-int map specifying Ray
+                        custom resources and overrides for CPU,GPU,memory.
                       type: object
                     rayStartParams:
                       additionalProperties:

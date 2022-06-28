@@ -357,9 +357,27 @@ var expected = `{
       }
    },
    "status":{
-      "rayClusterStatus":{
-	     "headStatus": {},
-         "lastUpdateTime":null
+      "activeServiceStatus":{
+         "appStatus":{
+            
+         },
+         "dashboardStatus":{
+            
+         },
+         "rayClusterStatus":{
+            
+         }
+      },
+      "pendingServiceStatus":{
+         "appStatus":{
+            
+         },
+         "dashboardStatus":{
+            
+         },
+         "rayClusterStatus":{
+            
+         }
       }
    }
 }`
