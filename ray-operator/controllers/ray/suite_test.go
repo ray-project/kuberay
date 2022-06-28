@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -100,6 +102,7 @@ var _ = BeforeSuite(func(done Done) {
 }, 60)
 
 var _ = AfterSuite(func() {
+	utils.GetRayDashboardClientFunc = utils.GetRayDashboardClient
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())

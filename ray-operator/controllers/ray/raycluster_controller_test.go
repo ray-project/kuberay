@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	DefaultAttempts               = 8
+	DefaultAttempts               = 16
 	DefaultSleepDurationInSeconds = 3
 )
 

@@ -10,13 +10,14 @@ import (
 type ServiceStatus string
 
 const (
-	FailToGetOrCreateRayCluster  ServiceStatus = "FailToGetOrCreateRayCluster"
-	WaitForDashboard             ServiceStatus = "WaitForDashboard"
-	FailServeDeploy              ServiceStatus = "FailServeDeploy"
-	FailGetServeDeploymentStatus ServiceStatus = "FailGetServeDeploymentStatus"
-	Running                      ServiceStatus = "Running"
-	Restarting                   ServiceStatus = "Restarting"
-	FailDeleteRayCluster         ServiceStatus = "FailDeleteRayCluster"
+	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
+	WaitForDashboard                 ServiceStatus = "WaitForDashboard"
+	FailedServeDeploy                ServiceStatus = "FailedServeDeploy"
+	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
+	Running                          ServiceStatus = "Running"
+	Restarting                       ServiceStatus = "Restarting"
+	FailedToUpdateIngress            ServiceStatus = "FailedToUpdateIngress"
+	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
 // RayServiceSpec defines the desired state of RayService
@@ -56,18 +57,41 @@ type RayActorOptionSpec struct {
 	AcceleratorType   string              `json:"acceleratorType,omitempty"`
 }
 
-// RayServiceStatus defines the observed state of RayService
-type RayServiceStatus struct {
-	// Important: Run "make" to regenerate code after modifying this file
-	ServiceStatus    ServiceStatus           `json:"serviceStatus,omitempty"`
-	ServeStatuses    []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	RayClusterName   string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+// RayServiceStatuses defines the observed state of RayService
+// +kubebuilder:printcolumn:name="ServiceStatus",type=string,JSONPath=".status.serviceStatus"
+type RayServiceStatuses struct {
+	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
+	// Pending Service Status indicates a RayCluster will be created or is being created.
+	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
+	// ServiceStatus indicates the current RayService status.
+	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
 }
 
-// ServeDeploymentStatuses defines the current states of all Serve Deployments
-type ServeDeploymentStatuses struct {
-	Statuses []ServeDeploymentStatus `json:"statuses,omitempty"`
+type RayServiceStatus struct {
+	// Important: Run "make" to regenerate code after modifying this file
+	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
+	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
+	RayClusterName    string                  `json:"rayClusterName,omitempty"`
+	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+}
+
+// DashboardStatus defines the current states of Ray Dashboard
+type DashboardStatus struct {
+	IsHealthy      bool         `json:"isHealthy,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Keep track of how long the dashboard is healthy.
+	// Update when Dashboard is responsive or first time convert to non-responsive from responsive.
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
+}
+
+type AppStatus struct {
+	Status         string       `json:"status,omitempty"`
+	Message        string       `json:"message,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Keep track of how long the service is healthy.
+	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of Serve Deployment
@@ -75,12 +99,12 @@ type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard to represent the state of a serve deployment.
 	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
-	Status         string      `json:"status,omitempty"`
-	Message        string      `json:"message,omitempty"`
-	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	Status         string       `json:"status,omitempty"`
+	Message        string       `json:"message,omitempty"`
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -91,8 +115,8 @@ type RayService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   RayServiceSpec   `json:"spec,omitempty"`
-	Status RayServiceStatus `json:"status,omitempty"`
+	Spec   RayServiceSpec     `json:"spec,omitempty"`
+	Status RayServiceStatuses `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
