@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import logging
 import os
-import sys
 import tempfile
-import time
 import unittest
 from string import Template
 
 import docker
+import sys
+import time
 
 ray_version = '1.9.0'
 ray_image = "rayproject/ray:1.9.0"
@@ -20,6 +20,7 @@ raycluster_service_file = 'tests/config/raycluster-service.yaml'
 logger = logging.getLogger(__name__)
 
 kuberay_sha = 'nightly'
+
 
 def shell_run(cmd):
     logger.info(cmd)
@@ -61,6 +62,8 @@ def create_kuberay_cluster():
         f.write(raycluster_spec_buf)
         raycluster_spec_file = f.name
 
+    time.sleep(30)
+
     shell_assert_success('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=1600s')
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
@@ -85,13 +88,22 @@ def download_images():
 
 
 class BasicRayTestCase(unittest.TestCase):
-    def setUp(self):
+
+    @classmethod
+    def setUpClass(cls):
+        # Ray cluster is running inside a local Kind environment.
+        # We use port mapping to connect to the Kind environment
+        # from another local ray container. The local ray container
+        # outside Kind environment has the same ray version as the
+        # ray cluster running inside Kind environment.
         create_cluster()
         apply_kuberay_resources()
         download_images()
         create_kuberay_cluster()
 
     def test_simple_code(self):
+        # connect from a ray containter client to ray cluster
+        # inside a local Kind environment and run a simple test
         client = docker.from_env()
         container = client.containers.run(ray_image,
                                           remove=True,
@@ -99,7 +111,7 @@ class BasicRayTestCase(unittest.TestCase):
                                           tty=True,
                                           network_mode='host')
         rtn_code, output = container.exec_run(['python',
-                                              '-c', '''
+                                               '-c', '''
 import ray
 ray.init(address='ray://127.0.0.1:10001')
 
@@ -125,7 +137,40 @@ print(ray.get(futures))
 
         client.close()
 
-    def tearDown(self):
+    def test_cluster_info(self):
+        # connect from a ray containter client to ray cluster
+        # inside a local Kind environment and run a test that
+        # gets the amount of nodes in the ray cluster.
+        client = docker.from_env()
+        container = client.containers.run(ray_image,
+                                          remove=True,
+                                          detach=True,
+                                          tty=True,
+                                          network_mode='host')
+        rtn_code, output = container.exec_run(['python',
+                                               '-c', '''
+import ray
+ray.init(address='ray://127.0.0.1:10001')
+
+print(len(ray.nodes()))
+'''],
+                                              demux=True)
+        stdout_str, _ = output
+
+        container.stop()
+
+        if stdout_str != b'2\n':
+            print(output, file=sys.stderr)
+            raise Exception('invalid result.')
+        if rtn_code != 0:
+            msg = 'invalid return code {}'.format(rtn_code)
+            print(msg, file=sys.stderr)
+            raise Exception(msg)
+
+        client.close()
+
+    @classmethod
+    def tearDownClass(cls):
         delete_cluster()
 
 
