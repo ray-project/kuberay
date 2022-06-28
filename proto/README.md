@@ -33,6 +33,7 @@ We postpone the client generation until there's external service needs for commu
 
 Use the tools [bootprint-openapi](https://github.com/bootprint/bootprint-monorepo/tree/master/packages/bootprint-openapi) 
 and [html-inline](https://github.com/substack/html-inline) to generate the API reference from the swagger files.
+Refer to [design doc](../docs/design/protobuf-grpc-service.md) for more details of the API and architecture.
 
 ### Third Party Protos
 
