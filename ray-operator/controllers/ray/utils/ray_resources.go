@@ -85,6 +85,7 @@ func computeCPU(rayStartParams map[string]string, rayContainerResources v1.Resou
 	// The user might not have set CPU limits for the Ray container.
 	// That's usually not adviseable, but we don't consider it an error.
 	// Return a 0 value, which will be ignored by the caller of this function.
+	rayClusterLog.Info("CPU limits for Ray pod are unspecified. It's recommended to set CPU limits.")
 	return 0
 }
 
@@ -136,5 +137,6 @@ func computeMemory(rayStartParams map[string]string, rayContainerResources v1.Re
 	// The user might not have set memory limits for the Ray container.
 	// That's very inadvisable, but we don't consider it an error.
 	// Return a 0 value, which will be ignored by the caller of this function.
+	rayClusterLog.Info("Memory limits for Ray pod are unspecified. It's highly recommended to set memory limits.")
 	return 0
 }
