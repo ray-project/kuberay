@@ -33,7 +33,7 @@ spec:
         object-store-memory: '100000000'
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
-        num-cpus: '1' # can be auto-completed from the limits
+        num-cpus: '2' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
       #pod template
@@ -61,10 +61,10 @@ spec:
                       fieldPath: status.podIP
               resources:
                 limits:
-                  cpu: 1
+                  cpu: 2
                   memory: 2Gi
                 requests:
-                  cpu: 1
+                  cpu: 2
                   memory: 2Gi
               ports:
                 - containerPort: 6379
