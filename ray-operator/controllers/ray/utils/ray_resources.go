@@ -15,6 +15,7 @@ var rayClusterLog = logf.Log.WithName("RayCluster-Controller")
 // Updates the user-specified rayResource spec with CPU, GPU, and memory data from the rayStartParams and the pod template.
 // CPU, GPU, and memory data from user-specified rayResourceSpec overrides data from rayStartParams.
 // CPU, GPU, and memory data from rayStartParams overrides data from the podTemplate.
+// Fractional CPU is rounded up to the nearest integer.
 // If CPU, GPU, or memory is not present in the resource map returned by this method, Ray will attempt to
 // infer these upon "ray start".
 // The map returned by this method is used in two ways:
@@ -76,6 +77,8 @@ func computeCPU(rayStartParams map[string]string, rayContainerResources v1.Resou
 	// container resources.
 	cpuQuantity := rayContainerResources.Limits[v1.ResourceCPU]
 	if !cpuQuantity.IsZero() {
+		// This rounds fractional CPU up to the nearest integer.
+		// Ray does not support fractional CPU annotations for Ray nodes.
 		return cpuQuantity.Value()
 	}
 
