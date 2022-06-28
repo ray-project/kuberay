@@ -166,7 +166,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			args = cont
 		}
 
-		// TODO (@DmitriGekhtman) Always append `block`?
+		// TODO (@DmitriGekhtman) Always append `block` in setMissingRayStartParams?
+		// (Is there a reason not to always use --block?)
 		if !isRayStartWithBlock(rayStartParams) {
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
 
@@ -419,6 +420,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
 	}
 
+	// TODO(Dmitri) Append `block`?
 	return rayStartParams
 }
 
