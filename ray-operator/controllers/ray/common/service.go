@@ -85,6 +85,7 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 		if name == DefaultDashboardAgentListenPortName {
 			svcPort := corev1.ServicePort{Name: name, Port: port}
 			service.Spec.Ports = append(service.Spec.Ports, svcPort)
+			break
 		}
 	}
 	return service, nil

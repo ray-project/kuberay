@@ -210,6 +210,15 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			raySvc, err = common.BuildDashboardService(*instance)
 		}
 
+		if raySvc == nil {
+			r.Log.Info("reconcileServices ", "Cannot create un-support service type ", serviceType)
+			return nil
+		}
+		if len(raySvc.Spec.Ports) == 0 {
+			r.Log.Info("reconcileServices ", "Ray service has no ports set up.", raySvc.Spec)
+			return nil
+		}
+
 		if err != nil {
 			return err
 		}
