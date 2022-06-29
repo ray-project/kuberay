@@ -274,7 +274,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start  --port=6379  --redis-password=LetMeInRay  --num-cpus=1  --block  --address=raycluster-sample-head-svc:6379  --metrics-export-port=8080  --dashboard-agent-listen-port=52365")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start  --port=6379  --redis-password=LetMeInRay  --num-cpus=1  --block  --address=raycluster-sample-head-svc:6379  --metrics-export-port=8080")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
 	}
