@@ -32,6 +32,16 @@ const (
 
 var log = logf.Log.WithName("raycluster-common")
 
+// enabledHA check if RayCluster enabled HA in labels
+func enabledHA(instance rayiov1alpha1.RayCluster) bool {
+	if v, ok := instance.Labels[RayHAEnabledLabelKey]; ok {
+		if strings.ToLower(v) == "true" {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
 	podTemplate := headSpec.Template
@@ -44,7 +54,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels,
+		enabledHA(instance))
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
@@ -94,7 +105,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
+	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels,
+		enabledHA(instance))
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
@@ -119,33 +131,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-func ParseVersion(rayVersion string) (int, int, int, error) {
-	versions := strings.Split(rayVersion, ".")
-	if len(versions) <= 2 {
-		return 0, 0, 0, fmt.Errorf("invalid string")
-	}
-
-	var major int
-	var minor int
-	var patch int
-	var err error
-	if major, err = strconv.Atoi(versions[0]); err != nil {
-		return 0, 0, 0, err
-	}
-
-	if minor, err = strconv.Atoi(versions[1]); err != nil {
-		return 0, 0, 0, err
-	}
-
-	if patch, err = strconv.Atoi(versions[2]); err != nil {
-		return 0, 0, 0, err
-	}
-
-	return major, minor, patch, nil
-}
-
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool, rayVersion string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -179,8 +166,15 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
+	enableHA := false
+	if enabledString, ok := podTemplateSpec.Labels[RayHAEnabledLabelKey]; ok {
+		if strings.ToLower(enabledString) == "true" {
+			enableHA = true
+		}
+	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources,
+			enableHA)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -207,9 +201,10 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	// add health check for head node
 
-	// health check only works for 1.13
-	if major, minor, _, err := ParseVersion(rayVersion); err == nil && major*100+minor >= 113 {
+	// health check only if HA enabled
+	if enableHA {
 		if rayNodeType == rayiov1alpha1.HeadNode {
+			// TODO: add liveness probe
 			probe := &v1.Probe{}
 			if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
 				pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
@@ -354,7 +349,7 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
+func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string, enableHA bool) (ret map[string]string) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -369,6 +364,11 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 		KubernetesCreatedByLabelKey:        ComponentName,
 		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
 		RayNodeHealthStateLabelKey:         "",
+		RayHAEnabledLabelKey:               "false",
+	}
+
+	if enableHA {
+		ret[RayHAEnabledLabelKey] = "true"
 	}
 
 	for k, v := range ret {
@@ -379,7 +379,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 			}
 		}
 		if k == RayNodeGroupLabelKey {
-			// overriding invalide values for this label
+			// overriding invalid values for this label
 			if v != groupName {
 				labels[k] = v
 			}
@@ -489,7 +489,7 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements, enableHA bool) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -519,11 +519,19 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
-			"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		if enableHA {
+			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
+				"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		} else {
+			return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		}
 	case rayiov1alpha1.WorkerNode:
-		return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
-			"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		if enableHA {
+			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
+				"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		} else {
+			return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		}
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}

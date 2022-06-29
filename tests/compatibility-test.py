@@ -223,7 +223,8 @@ class RayHATestCase(unittest.TestCase):
             raise unittest.SkipTest("ray ha is not supported")
 
     def test_kill_head(self):
-        # delete head node
+        # This test will delete head node and wait for a new replacement to
+        # come up.
         shell_assert_success('kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
         time.sleep(20)
         # wait for new head node to start
@@ -234,7 +235,99 @@ class RayHATestCase(unittest.TestCase):
         # make sure both head and worker pods are ready
         shell_assert_success('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
 
+    def test_ray_serve(self):
+        client = docker.from_env()
+        container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
+                                          network_mode='host', command=["/bin/sh", "-c", "python"])
+        s = container.attach_socket(params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
+        s._sock.setblocking(0)
+        s._sock.sendall(b'''
+import ray
+import time
+import ray.serve as serve
+import os
+import requests
+from ray._private.test_utils import wait_for_condition
+
+def retry_with_timeout(func, count=90):
+    tmp = 0
+    err = None
+    while tmp < count:
+        try:
+            return func()
+        except Exception as e:
+            err = e
+            tmp += 1
+    assert err is not None
+    raise err
+
+ray.init(address='ray://127.0.0.1:10001')
+
+@serve.deployment
+    def d(*args):
+        return f"{os.getpid()}"
+
+d.deploy()
+pid1 = ray.get(d.get_handle().remote())
+
+print('ready')
+        ''')
+
+        count = 0
+        while count < 90:
+            try:
+                buf = s._sock.recv(4096)
+                logger.info(buf.decode())
+                if buf.decode().find('ready') != -1:
+                    break
+            except Exception as e:
+                pass
+            time.sleep(1)
+            count += 1
+        if count >= 90:
+            raise Exception('failed to run script')
+
+        # kill the gcs on head node. If fate sharing is enabled
+        # the whole head node pod will terminate.
+        shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
+        # wait for new head node getting created
+        time.sleep(10)
+        # make sure the new head is ready
+        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=1200s')
+
+        s._sock.sendall(b'''
+def get_new_value():
+    return ray.get(d.get_handle().remote())
+pid2 = retry_with_timeout(get_new_value)
+
+if pid1 == pid2:
+    print('successful: {} {}'.format(res1, res2))
+    sys.exit(0)
+else:
+    raise Exception('failed')
+        ''')
+
+        count = 0
+        while count < 90:
+            try:
+                buf = s._sock.recv(4096)
+                logger.info(buf.decode())
+                if buf.decode().find('success') != -1:
+                    break
+            except Exception as e:
+                pass
+            time.sleep(1)
+            count += 1
+        if count >= 90:
+            raise Exception('failed to run script')
+
+        container.stop()
+        client.close()
+
     def test_detached_actor(self):
+        # This test will run a ray client and start a detached actor at first.
+        # Then we will kill the head node and kuberay will start a new head node
+        # replacement. Finally, we will try to connect to the detached actor again.
         client = docker.from_env()
         container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                           network_mode='host', command=["/bin/sh", "-c", "python"])
@@ -284,6 +377,8 @@ print('ready')
         if count >= 90:
             raise Exception('failed to run script')
 
+        # kill the gcs on head node. If fate sharing is enabled
+        # the whole head node pod will terminate.
         shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
         time.sleep(10)
