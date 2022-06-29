@@ -118,10 +118,9 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
-		DefaultClientPortName:               DefaultClientPort,
-		DefaultRedisPortName:                DefaultRedisPort,
-		DefaultDashboardName:                DefaultDashboardPort,
-		DefaultMetricsName:                  DefaultMetricsPort,
-		DefaultDashboardAgentListenPortName: DefaultDashboardAgentListenPort,
+		DefaultClientPortName: DefaultClientPort,
+		DefaultRedisPortName:  DefaultRedisPort,
+		DefaultDashboardName:  DefaultDashboardPort,
+		DefaultMetricsName:    DefaultMetricsPort,
 	}
 }

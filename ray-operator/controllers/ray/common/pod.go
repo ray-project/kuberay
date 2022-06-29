@@ -137,7 +137,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources, pod.Spec.Containers[rayContainerIndex].Ports)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -396,7 +396,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements, ports []v1.ContainerPort) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -415,16 +415,6 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 		gpu := resource.Limits["gpu"]
 		if !gpu.IsZero() {
 			rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
-		}
-	}
-
-	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		rayStartParams["dashboard-agent-listen-port"] = fmt.Sprint(DefaultDashboardAgentListenPort)
-		for _, port := range ports {
-			if port.Name == "dashboard-agent" {
-				rayStartParams["dashboard-agent-listen-port"] = fmt.Sprint(port.ContainerPort)
-				break
-			}
 		}
 	}
 

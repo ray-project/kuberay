@@ -116,10 +116,10 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.reconcileIngress(instance); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileServices(instance); err != nil {
+	if err := r.reconcileServices(instance, common.HeadService); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileDashBoardServices(instance); err != nil {
+	if err := r.reconcileServices(instance, common.AgentService); err != nil {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcilePods(instance); err != nil {
@@ -171,16 +171,22 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster) error {
-	headServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &headServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster, serviceType common.ServiceType) error {
+	services := corev1.ServiceList{}
+	var filterLabels client.MatchingLabels
+	if serviceType == common.HeadService {
+		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	} else if serviceType == common.AgentService {
+		filterLabels = client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(instance.Name)}
+	}
+
+	if err := r.List(context.TODO(), &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	if headServices.Items != nil {
-		if len(headServices.Items) == 1 {
-			r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
+	if services.Items != nil {
+		if len(services.Items) == 1 {
+			r.Log.Info("reconcileServices ", serviceType+" service found", services.Items[0].Name)
 			// TODO: compare diff and reconcile the object
 			// For example. ServiceType might be changed or port might be modified
 			return nil
@@ -188,62 +194,27 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 		// This should never happen.
 		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(headServices.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates head service found", len(headServices.Items))
+		if len(services.Items) > 1 {
+			r.Log.Info("reconcileServices ", "Duplicates "+serviceType+" service found", len(services.Items))
 			return nil
 		}
 	}
 
 	// Create head service if there's no existing one in the cluster.
-	if headServices.Items == nil || len(headServices.Items) == 0 {
-		rayHeadSvc, err := common.BuildServiceForHeadPod(*instance)
+	if services.Items == nil || len(services.Items) == 0 {
+		var raySvc *v1.Service
+		var err error
+		if serviceType == common.HeadService {
+			raySvc, err = common.BuildServiceForHeadPod(*instance)
+		} else if serviceType == common.AgentService {
+			raySvc, err = common.BuildDashboardService(*instance)
+		}
+
 		if err != nil {
 			return err
 		}
 
-		err = r.createService(rayHeadSvc, instance)
-		// if the service cannot be created we return the error and requeue
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *RayClusterReconciler) reconcileDashBoardServices(instance *rayiov1alpha1.RayCluster) error {
-	r.Log.Info("reconcileDashBoardServices")
-	defer r.Log.Info("reconcileDashBoardServices done")
-	dashboardServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(instance.Name)}
-	if err := r.List(context.TODO(), &dashboardServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
-	}
-
-	if dashboardServices.Items != nil {
-		if len(dashboardServices.Items) == 1 {
-			r.Log.Info("reconcileDashBoardServices ", "dashboard agent service found", dashboardServices.Items[0].Name)
-			// TODO: compare diff and reconcile the object
-			// For example. ServiceType might be changed or port might be modified
-			return nil
-		}
-
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(dashboardServices.Items) > 1 {
-			r.Log.Info("reconcileDashBoardServices ", "Duplicates dashboard agent service found", len(dashboardServices.Items))
-			return nil
-		}
-	}
-
-	// Create dashboard agent service if there's no existing one in the cluster.
-	if dashboardServices.Items == nil || len(dashboardServices.Items) == 0 {
-		rayDashboardSvc, err := common.BuildDashboardService(*instance)
-		if err != nil {
-			return err
-		}
-
-		err = r.createService(rayDashboardSvc, instance)
+		err = r.createService(raySvc, instance)
 		// if the service cannot be created we return the error and requeue
 		if err != nil {
 			return err

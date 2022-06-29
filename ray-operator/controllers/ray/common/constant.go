@@ -39,3 +39,10 @@ const (
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
 )
+
+type ServiceType string
+
+const (
+	HeadService  ServiceType = "headService"
+	AgentService ServiceType = "agentService"
+)
