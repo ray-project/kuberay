@@ -186,7 +186,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 	if services.Items != nil {
 		if len(services.Items) == 1 {
-			r.Log.Info("reconcileServices ", serviceType+" service found", services.Items[0].Name)
+			r.Log.Info("reconcileServices ", string(serviceType)+" service found", services.Items[0].Name)
 			// TODO: compare diff and reconcile the object
 			// For example. ServiceType might be changed or port might be modified
 			return nil
@@ -195,7 +195,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		// This should never happen.
 		// We add the protection here just in case controller has race issue or user manually create service with same label.
 		if len(services.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates "+serviceType+" service found", len(services.Items))
+			r.Log.Info("reconcileServices ", "Duplicates "+string(serviceType)+" service found", len(services.Items))
 			return nil
 		}
 	}
