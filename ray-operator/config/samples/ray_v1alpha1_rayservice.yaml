@@ -4,14 +4,35 @@ metadata:
   name: rayservice-sample
 spec:
   serveDeploymentGraphConfig:
-    importPath: basic_dag.DagNode
+    importPath: fruit.deployment_graph
     runtimeEnv: |
-      working_dir: "https://github.com/shrekris-anyscale/test_dag/archive/HEAD.zip"
+      working_dir: "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip"
     serveConfigs:
-      - name: "f"
+      - name: MangoStand
+        numReplicas: 1
+        userConfig: |
+          price: 3
         rayActorOptions:
           numCpus: 0.1
-      - name: "BasicDriver"
+      - name: OrangeStand
+        numReplicas: 1
+        userConfig: |
+          price: 2
+        rayActorOptions:
+          numCpus: 0.1
+      - name: PearStand
+        numReplicas: 1
+        userConfig: |
+          price: 1
+        rayActorOptions:
+          numCpus: 0.1
+      - name: FruitMarket
+        numReplicas: 1
+        rayActorOptions:
+          numCpus: 0.1
+      - name: DAGDriver
+        numReplicas: 1
+        routePrefix: "/"
         rayActorOptions:
           numCpus: 0.1
   rayClusterConfig:
@@ -33,7 +54,7 @@ spec:
         object-store-memory: '100000000'
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
-        num-cpus: '2' # can be auto-completed from the limits
+        num-cpus: '4' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
       #pod template
@@ -61,10 +82,10 @@ spec:
                       fieldPath: status.podIP
               resources:
                 limits:
-                  cpu: 2
+                  cpu: 4
                   memory: 2Gi
                 requests:
-                  cpu: 2
+                  cpu: 4
                   memory: 2Gi
               ports:
                 - containerPort: 6379
