@@ -459,7 +459,7 @@ func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, 
 
 	if err := r.Create(context.TODO(), ingress); err != nil {
 		if errors.IsAlreadyExists(err) {
-			log.Info("Ingress already exists,no need to create")
+			log.Info("Ingress already exists, no need to create")
 			return nil
 		}
 		log.Error(err, "Ingress create error!", "Ingress.Error", err)
@@ -478,13 +478,13 @@ func (r *RayClusterReconciler) createService(raySvc *v1.Service, instance *rayio
 		return err
 	}
 
-	if errSvc := r.Create(context.TODO(), raySvc); errSvc != nil {
-		if errors.IsAlreadyExists(errSvc) {
-			log.Info("Pod service already exist,no need to create")
+	if err := r.Create(context.TODO(), raySvc); err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.Info("Pod service already exist, no need to create")
 			return nil
 		}
-		log.Error(errSvc, "Pod Service create error!", "Pod.Service.Error", errSvc)
-		return errSvc
+		log.Error(err, "Pod Service create error!", "Pod.Service.Error", err)
+		return err
 	}
 	log.Info("Pod Service created successfully", "service name", raySvc.Name)
 	r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created service %s", raySvc.Name)
@@ -658,13 +658,13 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 			return err
 		}
 
-		if errSvc := r.Create(context.TODO(), serviceAccount); errSvc != nil {
-			if errors.IsAlreadyExists(errSvc) {
-				log.Info("Pod service account already exist,no need to create")
+		if err := r.Create(context.TODO(), serviceAccount); err != nil {
+			if errors.IsAlreadyExists(err) {
+				log.Info("Pod service account already exist, no need to create")
 				return nil
 			}
-			log.Error(errSvc, "Pod Service Account create error!", "Pod.ServiceAccount.Error", errSvc)
-			return errSvc
+			log.Error(err, "Pod Service Account create error!", "Pod.ServiceAccount.Error", err)
+			return err
 		}
 		log.Info("Pod ServiceAccount created successfully", "service account name", serviceAccount.Name)
 		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created service account %s", serviceAccount.Name)
@@ -699,13 +699,13 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayiov1alpha1.R
 			return err
 		}
 
-		if errSvc := r.Create(context.TODO(), role); errSvc != nil {
-			if errors.IsAlreadyExists(errSvc) {
-				log.Info("role already exist,no need to create")
+		if err := r.Create(context.TODO(), role); err != nil {
+			if errors.IsAlreadyExists(err) {
+				log.Info("role already exist, no need to create")
 				return nil
 			}
-			log.Error(errSvc, "Role create error!", "Role.Error", errSvc)
-			return errSvc
+			log.Error(err, "Role create error!", "Role.Error", err)
+			return err
 		}
 		log.Info("Role created successfully", "role name", role.Name)
 		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created role %s", role.Name)
@@ -740,13 +740,13 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 			return err
 		}
 
-		if errSvc := r.Create(context.TODO(), roleBinding); errSvc != nil {
-			if errors.IsAlreadyExists(errSvc) {
-				log.Info("role binding already exist,no need to create")
+		if err := r.Create(context.TODO(), roleBinding); err != nil {
+			if errors.IsAlreadyExists(err) {
+				log.Info("role binding already exist, no need to create")
 				return nil
 			}
-			log.Error(errSvc, "Role binding create error!", "RoleBinding.Error", errSvc)
-			return errSvc
+			log.Error(err, "Role binding create error!", "RoleBinding.Error", err)
+			return err
 		}
 		log.Info("RoleBinding created successfully", "role binding name", roleBinding.Name)
 		r.Recorder.Eventf(instance, v1.EventTypeNormal, "Created", "Created role binding %s", roleBinding.Name)
