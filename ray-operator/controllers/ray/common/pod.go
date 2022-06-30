@@ -411,9 +411,13 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	}
 
 	if _, ok := rayStartParams["num-gpus"]; !ok {
-		gpu := resource.Limits["gpu"]
-		if !gpu.IsZero() {
-			rayStartParams["num-gpus"] = strconv.FormatInt(gpu.Value(), 10)
+		// Scan for resource keys ending with "/gpu" like "nvidia.com/gpu".
+		for resourceKey, resource := range resource.Limits {
+			if strings.HasSuffix(string(resourceKey), "/gpu") && !resource.IsZero() {
+				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
+			}
+			// For now, only support one GPU type. Break on first match.
+			break
 		}
 	}
 
