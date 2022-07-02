@@ -2,11 +2,13 @@ package common
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/alessio/shellescape"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -104,7 +106,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, rayCustomResources map[string]int64, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -139,7 +141,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, rayCustomResources, pod.Spec.Containers[rayContainerIndex].Resources)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -397,7 +399,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, rayCustomResources map[string]int64, resource v1.ResourceRequirements) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -420,6 +422,18 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 			}
 			// For now, only support one GPU type. Break on first match.
 			break
+		}
+	}
+
+	// Use optional rayCustomResources field to fill resources rayStartParam.
+	hasRayCustomResources := len(rayCustomResources) > 0
+	if _, ok := rayStartParams["resources"]; !ok && hasRayCustomResources {
+		customResourceBytes, err := json.Marshal(rayCustomResources)
+		if err == nil {
+			log.Error(err, "Could not marshal rayCustomResources map.")
+		} else {
+			customResourceJSONString := string(customResourceBytes)
+			rayStartParams["resources"] = shellescape.Quote(customResourceJSONString)
 		}
 	}
 

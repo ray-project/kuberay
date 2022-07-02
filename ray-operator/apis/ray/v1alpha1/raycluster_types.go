@@ -36,7 +36,7 @@ type HeadGroupSpec struct {
 	// RayCustomResources is a string-int map representing optional, user-specified custom resource
 	// capacities of Ray pods in this group.
 	// Equivalent to RayStartParams.resources, which must be specified as a json string.
-	// Disallowed keys: "GPU", "CPU", "memory", "object_store_memory".
+	// Disallowed keys: "GPU", "CPU", "memory", "object_store_memory". Instead, use rayStartParams["num-cpus"] etc.
 	RayCustomResources map[string]int64 `json:"rayCustomResources,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
@@ -58,7 +58,7 @@ type WorkerGroupSpec struct {
 	// RayCustomResources is a string-int map representing optional, user-specified custom resource
 	// capacities of Ray pods in this group.
 	// Equivalent to RayStartParams.resources, which must be specified as a json string.
-	// Disallowed keys: "GPU", "CPU", "memory", "object_store_memory".
+	// Disallowed keys: "CPU", "GPU", "memory", "object_store_memory". Instead, use rayStartParams["num-cpus"] etc.
 	RayCustomResources map[string]int64 `json:"rayCustomResources,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
