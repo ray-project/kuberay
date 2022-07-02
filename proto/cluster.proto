@@ -152,6 +152,9 @@ message Cluster {
 
   // Output. The time that the cluster deleted.
   google.protobuf.Timestamp deleted_at = 8;
+
+  // Output. The status to show the cluster status.state
+  string cluster_state = 9;
 }
 
 message ClusterSpec {
