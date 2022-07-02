@@ -33,6 +33,11 @@ type HeadGroupSpec struct {
 	// Number of desired pods in this pod group. This is a pointer to distinguish between explicit
 	// zero and not specified. Defaults to 1.
 	Replicas *int32 `json:"replicas"`
+	// RayCustomResources is a string-int map representing optional, user-specified custom resource
+	// capacities of Ray pods in this group.
+	// Equivalent to RayStartParams.resources, which must be specified as a json string.
+	// Disallowed keys: "GPU", "CPU", "memory".
+	RayCustomResources map[RayCustomResourceKey]int64 `json:"rayCustomResources,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is the eaxct pod template used in K8s depoyments, statefulsets, etc.
@@ -50,6 +55,11 @@ type WorkerGroupSpec struct {
 	MinReplicas *int32 `json:"minReplicas"`
 	// MaxReplicas defaults to maxInt32
 	MaxReplicas *int32 `json:"maxReplicas"`
+	// RayCustomResources is a string-int map representing optional, user-specified custom resource
+	// capacities of Ray pods in this group.
+	// Equivalent to RayStartParams.resources, which must be specified as a json string.
+	// Disallowed keys: "GPU", "CPU", "memory", "object_store_memory".
+	RayCustomResources map[RayCustomResourceKey]int64 `json:"rayCustomResources,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template a pod template for the worker
@@ -57,6 +67,10 @@ type WorkerGroupSpec struct {
 	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 }
+
+// Disallow keys meant to be passed via other Ray Start parameters (--num-cpus and so on.)
+// +kubebuilder:validation:Pattern=`(?!^(CPU|GPU|memory|object_store_memory)$)`
+type RayCustomResourceKey string
 
 // ScaleStrategy to remove workers
 type ScaleStrategy struct {

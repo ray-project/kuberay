@@ -95,6 +95,13 @@ spec:
                     description: EnableIngress indicates whether operator should create
                       ingress object for head service or not.
                     type: boolean
+                  rayCustomResources:
+                    additionalProperties:
+                      format: int64
+                      type: integer
+                    description: RayCustomResources is a string-int map representing
+                      optional, user-specified custom resource capacit
+                    type: object
                   rayStartParams:
                     additionalProperties:
                       type: string
@@ -5493,6 +5500,13 @@ spec:
                       description: MinReplicas defaults to 1
                       format: int32
                       type: integer
+                    rayCustomResources:
+                      additionalProperties:
+                        format: int64
+                        type: integer
+                      description: RayCustomResources is a string-int map representing
+                        optional, user-specified custom resource capacit
+                      type: object
                     rayStartParams:
                       additionalProperties:
                         type: string
