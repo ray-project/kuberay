@@ -18,6 +18,7 @@ import (
 )
 
 var testMemoryLimit = resource.MustParse("1Gi")
+var emptyRayCustom = map[string]int64{}
 
 var instance = rayiov1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
@@ -81,6 +82,9 @@ var instance = rayiov1alpha1.RayCluster{
 				MinReplicas: pointer.Int32Ptr(0),
 				MaxReplicas: pointer.Int32Ptr(10000),
 				GroupName:   "small-group",
+				RayCustomResources: map[string]int64{
+					"custom": 10,
+				},
 				RayStartParams: map[string]string{
 					"port":           "6379",
 					"redis-password": "LetMeInRay",
@@ -236,7 +240,7 @@ func TestBuildPod(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, nil)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, emptyRayCustom, svcName, nil)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -270,7 +274,7 @@ func TestBuildPod(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName)
-	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, nil)
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, worker.RayCustomResources, svcName, nil)
 
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
@@ -279,7 +283,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --num-gpus=3 --resources='{\"custom\":10}' --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
 	}
@@ -291,7 +295,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, emptyRayCustom, svcName, &trueFlag)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -371,7 +375,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		Resources:          &customResources,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, emptyRayCustom, svcName, &trueFlag)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
