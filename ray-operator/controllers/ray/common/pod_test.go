@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/stretchr/testify/assert"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -453,6 +455,33 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+}
+
+func TestValidateHeadRayStartParams_OK(t *testing.T) {
+	input := instance.Spec.HeadGroupSpec.DeepCopy()
+	isValid, err := ValidateHeadRayStartParams(*input)
+	assert.Equal(t, true, isValid)
+	assert.Nil(t, err)
+}
+
+func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T) {
+	input := instance.Spec.HeadGroupSpec.DeepCopy()
+	input.RayStartParams["object-store-memory"] = "2000000000"
+	input.Template.Spec.Containers[0].Env = append(input.Template.Spec.Containers[0].Env, v1.EnvVar{
+		Name:  allowSlowStorageEnvVar,
+		Value: "1",
+	})
+	isValid, err := ValidateHeadRayStartParams(*input)
+	assert.Equal(t, true, isValid)
+	assert.True(t, errors.IsBadRequest(err))
+}
+
+func TestValidateHeadRayStartParams_InvalidObjectStoreMemory(t *testing.T) {
+	input := instance.Spec.HeadGroupSpec.DeepCopy()
+	input.RayStartParams["object-store-memory"] = "2000000000"
+	isValid, err := ValidateHeadRayStartParams(*input)
+	assert.Equal(t, false, isValid)
+	assert.True(t, errors.IsBadRequest(err))
 }
 
 func splitAndSort(s string) []string {
