@@ -14,6 +14,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayevents "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1/events"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -623,7 +624,7 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)
 	if err != nil {
-		r.Recorder.Event(instance, corev1.EventTypeWarning, "Parameters conflict", err.Error())
+		r.Recorder.Event(instance, corev1.EventTypeWarning, rayevents.RayConfigError, err.Error())
 	}
 	// only in invalid status that we update the status to unhealthy.
 	if !isValid {
