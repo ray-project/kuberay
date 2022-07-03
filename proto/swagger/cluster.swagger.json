@@ -269,7 +269,7 @@
           "$ref": "#/definitions/protoHeadGroupSpec",
           "title": "The head group configuration"
         },
-        "workerGroupSepc": {
+        "workerGroupSpec": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoWorkerGroupSpec"

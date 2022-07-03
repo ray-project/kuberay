@@ -32,7 +32,7 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster) *api.Cluster {
 	// loop container and find the resource
 	pbCluster.ClusterSpec = &api.ClusterSpec{}
 	pbCluster.ClusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(cluster.Spec.HeadGroupSpec)
-	pbCluster.ClusterSpec.WorkerGroupSepc = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
+	pbCluster.ClusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
 
 	return pbCluster
 }

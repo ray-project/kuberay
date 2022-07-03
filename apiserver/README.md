@@ -85,7 +85,7 @@ payload
       "serviceType": "NodePort",
       "rayStartParams": {}
     },
-    "workerGroupSepc": [
+    "workerGroupSpec": [
       {
         "groupName": "small-wg",
         "computeTemplate": "worker-template",
@@ -126,7 +126,7 @@ GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
                         "port": "6379"
                     }
                 },
-                "worker_group_sepc": [
+                "worker_group_spec": [
                     {
                         "group_name": "small-wg",
                         "compute_template": "worker-template",

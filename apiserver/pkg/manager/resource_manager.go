@@ -90,7 +90,7 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 	dict[name] = computeTemplate
 
 	// populate worker compute template
-	for _, spec := range cluster.ClusterSpec.WorkerGroupSepc {
+	for _, spec := range cluster.ClusterSpec.WorkerGroupSpec {
 		name := spec.ComputeTemplate
 		if _, exist := dict[name]; !exist {
 			configMap, err := r.GetComputeTemplate(ctx, name, cluster.Namespace)
