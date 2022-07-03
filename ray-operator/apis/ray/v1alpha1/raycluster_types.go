@@ -90,7 +90,7 @@ type ClusterState string
 
 const (
 	Ready     ClusterState = "ready"
-	UnHealthy ClusterState = "unHealthy"
+	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
 )
 
