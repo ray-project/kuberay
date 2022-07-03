@@ -425,14 +425,15 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 		}
 	}
 
-	// Use optional rayCustomResources field to fill resources rayStartParam.
+	// Use optional rayCustomResources field to fill rayStartParams["resources"].
 	hasRayCustomResources := len(rayCustomResources) > 0
 	if _, ok := rayStartParams["resources"]; !ok && hasRayCustomResources {
 		customResourceBytes, err := json.Marshal(rayCustomResources)
-		if err == nil {
+		if err != nil {
 			log.Error(err, "Could not marshal rayCustomResources map.")
 		} else {
 			customResourceJSONString := string(customResourceBytes)
+			fmt.Println(shellescape.Quote(customResourceJSONString))
 			rayStartParams["resources"] = shellescape.Quote(customResourceJSONString)
 		}
 	}
