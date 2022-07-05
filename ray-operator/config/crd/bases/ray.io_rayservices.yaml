@@ -11482,7 +11482,7 @@ spec:
                   serveConfigs:
                     items:
                       description: ServeConfigSpec defines the desired state of RayService
-                        Reference to https://docs.ray.
+                        Reference to http://rayserve.org
                       properties:
                         autoscalingConfig:
                           type: string

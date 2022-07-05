@@ -34,7 +34,7 @@ type ServeDeploymentGraphSpec struct {
 }
 
 // ServeConfigSpec defines the desired state of RayService
-// Reference to https://docs.ray.io/en/latest/ray-core/package-ref.html#ray-remote.
+// Reference to http://rayserve.org
 type ServeConfigSpec struct {
 	Name                      string             `json:"name"`
 	NumReplicas               *int32             `json:"numReplicas,omitempty"`
