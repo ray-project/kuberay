@@ -3,36 +3,38 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serveConfigs:
-    - name: shallow
-      importPath: "test_env.shallow_import.ShallowClass"
-      numReplicas: 1
-      routePrefix: "/shallow"
-      rayActorOptions:
-        numCpus: 0.1
-        runtimeEnv:
-          py_modules:
-            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
-            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-    - name: deep
-      importPath: "test_env.subdir1.subdir2.deep_import.DeepClass"
-      numReplicas: 1
-      routePrefix: "/deep"
-      rayActorOptions:
-        numCpus: 0.1
-        runtimeEnv:
-          py_modules:
-            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
-            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-    - name: one
-      importPath: "test_module.test.one"
-      numReplicas: 1
-      rayActorOptions:
-        numCpus: 0.1
-        runtimeEnv:
-          py_modules:
-            - "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip"
-            - "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
+  serveDeploymentGraphConfig:
+    importPath: fruit.deployment_graph
+    runtimeEnv: |
+      working_dir: "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip"
+    serveConfigs:
+      - name: MangoStand
+        numReplicas: 1
+        userConfig: |
+          price: 3
+        rayActorOptions:
+          numCpus: 0.1
+      - name: OrangeStand
+        numReplicas: 1
+        userConfig: |
+          price: 2
+        rayActorOptions:
+          numCpus: 0.1
+      - name: PearStand
+        numReplicas: 1
+        userConfig: |
+          price: 1
+        rayActorOptions:
+          numCpus: 0.1
+      - name: FruitMarket
+        numReplicas: 1
+        rayActorOptions:
+          numCpus: 0.1
+      - name: DAGDriver
+        numReplicas: 1
+        routePrefix: "/"
+        rayActorOptions:
+          numCpus: 0.1
   rayClusterConfig:
     rayVersion: '1.12.1' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
@@ -52,7 +54,7 @@ spec:
         object-store-memory: '100000000'
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
-        num-cpus: '1' # can be auto-completed from the limits
+        num-cpus: '2' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
       #pod template
@@ -80,10 +82,10 @@ spec:
                       fieldPath: status.podIP
               resources:
                 limits:
-                  cpu: 1
+                  cpu: 2
                   memory: 2Gi
                 requests:
-                  cpu: 1
+                  cpu: 2
                   memory: 2Gi
               ports:
                 - containerPort: 6379

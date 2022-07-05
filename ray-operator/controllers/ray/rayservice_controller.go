@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	networkingv1 "k8s.io/api/networking/v1"
 
@@ -467,7 +470,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	shouldUpdate := false
 
-	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) || len(serveStatus.ServeStatuses) != len(existConfig.ServeConfigSpecs) {
+	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) {
 		shouldUpdate = true
 	}
 
@@ -477,8 +480,18 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
-	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeConfigSpecs)
-	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeConfigSpecs); err != nil {
+	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+	runtimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeDeploymentGraphSpec.RuntimeEnv), &runtimeEnv)
+	servingClusterDeployments := utils.ServingClusterDeployments{
+		ImportPath:  rayServiceInstance.Spec.ServeDeploymentGraphSpec.ImportPath,
+		RuntimeEnv:  runtimeEnv,
+		Deployments: rayDashboardClient.ConvertServeConfig(rayServiceInstance.Spec.ServeDeploymentGraphSpec.ServeConfigSpecs),
+	}
+
+	deploymentJson, _ := json.Marshal(servingClusterDeployments)
+	r.Log.V(1).Info("updateServeDeployment", "json config", string(deploymentJson))
+	if err := rayDashboardClient.UpdateDeployments(rayServiceInstance.Spec.ServeDeploymentGraphSpec); err != nil {
 		r.Log.Error(err, "fail to update deployment")
 		return err
 	}
@@ -546,7 +559,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *rayv1alpha1.RayService, rayServiceStatus *rayv1alpha1.RayServiceStatus) bool {
 	// Check if the serve deployment number is correct.
 	r.Log.V(1).Info("allServeDeploymentsHealthy", "rayServiceInstance.Status.ServeStatuses", rayServiceStatus.ServeStatuses)
-	if len(rayServiceStatus.ServeStatuses) != len(rayServiceInstance.Spec.ServeConfigSpecs) {
+	if len(rayServiceStatus.ServeStatuses) == 0 {
 		return false
 	}
 
@@ -712,7 +725,6 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	return err
 }
 
-// reconcileServe update serve deployments config if not deployed yet or the config is changed. Then check the dashboard health and serve deployment health. If unhealthy, mark restart by generating a pending cluster name in the RayService state.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, isActive bool) (ctrl.Result, bool, error) {
 	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
 	var err error
