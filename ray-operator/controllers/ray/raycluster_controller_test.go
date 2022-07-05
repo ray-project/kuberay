@@ -29,7 +29,6 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
@@ -157,7 +156,7 @@ var _ = Context("Inside the default namespace", func() {
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
-				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(v1.PodRunning), Equal(v1.PodPending)))
+				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
 			}
 		})
 
@@ -175,7 +174,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: pod.Name, Namespace: "default"}, pod),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My head pod = %v", pod)
-			Expect(pod.Status.Phase).Should(Or(Equal(v1.PodPending), Equal(v1.PodRunning)))
+			Expect(pod.Status.Phase).Should(Or(Equal(corev1.PodPending), Equal(corev1.PodRunning)))
 		})
 
 		It("should create the head group's specified K8s ServiceAccount if it doesn't exist", func() {
@@ -274,7 +273,7 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		count := 0
 		for _, aPod := range workerPods.Items {
-			if (reflect.DeepEqual(aPod.Status.Phase, v1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, v1.PodPending)) && aPod.DeletionTimestamp == nil {
+			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && aPod.DeletionTimestamp == nil {
 				count++
 			}
 		}

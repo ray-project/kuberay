@@ -161,7 +161,7 @@ message ClusterSpec {
   // The head group configuration
   HeadGroupSpec head_group_spec = 1;
   // The worker group configurations
-  repeated WorkerGroupSpec worker_group_sepc = 2;
+  repeated WorkerGroupSpec worker_group_spec = 2;
 }
 
 message HeadGroupSpec {

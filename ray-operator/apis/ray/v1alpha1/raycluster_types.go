@@ -100,7 +100,7 @@ type ClusterState string
 
 const (
 	Ready     ClusterState = "ready"
-	UnHealthy ClusterState = "unHealthy"
+	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
 )
 
@@ -159,3 +159,9 @@ type RayClusterList struct {
 func init() {
 	SchemeBuilder.Register(&RayCluster{}, &RayClusterList{})
 }
+
+type EventReason string
+
+const (
+	RayConfigError EventReason = "RayConfigError"
+)

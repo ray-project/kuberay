@@ -124,7 +124,7 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
 	}
 
-	for index, spec := range request.Cluster.ClusterSpec.WorkerGroupSepc {
+	for index, spec := range request.Cluster.ClusterSpec.WorkerGroupSpec {
 		if len(spec.GroupName) == 0 {
 			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
 		}
