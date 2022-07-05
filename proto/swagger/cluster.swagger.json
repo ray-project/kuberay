@@ -255,6 +255,10 @@
           "type": "string",
           "format": "date-time",
           "description": "Output. The time that the cluster deleted."
+        },
+        "clusterState": {
+          "type": "string",
+          "title": "Output. The status to show the cluster status.state"
         }
       }
     },

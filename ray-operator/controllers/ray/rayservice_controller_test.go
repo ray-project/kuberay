@@ -31,7 +31,6 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -265,7 +264,7 @@ var _ = Context("Inside the default namespace", func() {
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
-				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(v1.PodRunning), Equal(v1.PodPending)))
+				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
 			}
 		})
 

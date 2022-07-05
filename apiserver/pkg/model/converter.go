@@ -20,12 +20,13 @@ func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster) []*api.Cluster {
 
 func FromCrdToApiCluster(cluster *v1alpha1.RayCluster) *api.Cluster {
 	pbCluster := &api.Cluster{
-		Name:        cluster.Name,
-		Namespace:   cluster.Namespace,
-		Version:     cluster.Labels[util.RayClusterVersionLabelKey],
-		User:        cluster.Labels[util.RayClusterUserLabelKey],
-		Environment: api.Cluster_Environment(api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]]),
-		CreatedAt:   &timestamp.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
+		Name:         cluster.Name,
+		Namespace:    cluster.Namespace,
+		Version:      cluster.Labels[util.RayClusterVersionLabelKey],
+		User:         cluster.Labels[util.RayClusterUserLabelKey],
+		Environment:  api.Cluster_Environment(api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]]),
+		CreatedAt:    &timestamp.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
+		ClusterState: string(cluster.Status.State),
 	}
 
 	// loop container and find the resource
