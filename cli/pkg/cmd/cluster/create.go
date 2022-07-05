@@ -139,7 +139,7 @@ func createCluster(opts CreateOptions) error {
 		Environment: *go_client.Cluster_Environment(envInt).Enum(),
 		ClusterSpec: &go_client.ClusterSpec{
 			HeadGroupSpec:   headSpec,
-			WorkerGroupSepc: workerGroupSpecs,
+			WorkerGroupSpec: workerGroupSpecs,
 		},
 	}
 
