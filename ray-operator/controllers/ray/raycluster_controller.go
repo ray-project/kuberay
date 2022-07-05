@@ -623,7 +623,7 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)
 	if err != nil {
-		r.Recorder.Event(instance, corev1.EventTypeWarning, "Parameters conflict", err.Error())
+		r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayiov1alpha1.RayConfigError), err.Error())
 	}
 	// only in invalid status that we update the status to unhealthy.
 	if !isValid {
