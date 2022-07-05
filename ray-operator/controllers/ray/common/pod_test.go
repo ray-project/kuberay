@@ -466,9 +466,9 @@ func TestValidateHeadRayStartParams_OK(t *testing.T) {
 
 func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	input.RayStartParams["object-store-memory"] = "2000000000"
+	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
 	input.Template.Spec.Containers[0].Env = append(input.Template.Spec.Containers[0].Env, v1.EnvVar{
-		Name:  allowSlowStorageEnvVar,
+		Name:  AllowSlowStorageEnvVar,
 		Value: "1",
 	})
 	isValid, err := ValidateHeadRayStartParams(*input)
@@ -478,7 +478,7 @@ func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T
 
 func TestValidateHeadRayStartParams_InvalidObjectStoreMemory(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	input.RayStartParams["object-store-memory"] = "2000000000"
+	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
 	isValid, err := ValidateHeadRayStartParams(*input)
 	assert.Equal(t, false, isValid)
 	assert.True(t, errors.IsBadRequest(err))

@@ -25,9 +25,9 @@ const (
 	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
 	RayHeadContainer            = "ray-head"
-	objectStoreMemoryKey        = "object-store-memory"
-	// TODO (dxia): should be a const in upstream ray-project/ray
-	allowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
+	ObjectStoreMemoryKey        = "object-store-memory"
+	// TODO (davidxia): should be a const in upstream ray-project/ray
+	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -564,22 +564,22 @@ func ValidateHeadRayStartParams(rayHeadGroupSpec rayiov1alpha1.HeadGroupSpec) (i
 	var objectStoreMemory int64
 	rayStartParams := rayHeadGroupSpec.RayStartParams
 	// validation for the object store memory
-	if objectStoreMemoryStr, ok := rayStartParams[objectStoreMemoryKey]; ok {
+	if objectStoreMemoryStr, ok := rayStartParams[ObjectStoreMemoryKey]; ok {
 		objectStoreMemory, err = strconv.ParseInt(objectStoreMemoryStr, 10, 64)
 		if err != nil {
 			isValid = false
-			err = errors.NewBadRequest(fmt.Sprintf("Cannot parse %s %s as an integer: %s", objectStoreMemoryKey, objectStoreMemoryStr, err.Error()))
+			err = errors.NewBadRequest(fmt.Sprintf("Cannot parse %s %s as an integer: %s", ObjectStoreMemoryKey, objectStoreMemoryStr, err.Error()))
 			return
 		}
 		for _, container := range rayHeadGroupSpec.Template.Spec.Containers {
 			// find the ray container.
 			if container.Name == RayHeadContainer {
 				if shmSize, ok := container.Resources.Requests.Memory().AsInt64(); ok && objectStoreMemory > shmSize {
-					if envVarExists(allowSlowStorageEnvVar, container.Env) {
+					if envVarExists(AllowSlowStorageEnvVar, container.Env) {
 						// in ray if this env var is set, it will only affect the performance.
 						isValid = true
 						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+
-							"This will harm performance. Consider deleting files in %s or increasing head node's memory request.", objectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath)
+							"This will harm performance. Consider deleting files in %s or increasing head node's memory request.", ObjectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath)
 						log.Info(msg)
 						err = errors.NewBadRequest(msg)
 						return
@@ -589,7 +589,7 @@ func ValidateHeadRayStartParams(rayHeadGroupSpec rayiov1alpha1.HeadGroupSpec) (i
 						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+
 							"This will lead to a ValueError in Ray! Consider deleting files in %s or increasing head node's memory request.\n"+
 							"To ignore this warning, set the following environment variable in headGroupSpec: %s=1",
-							objectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath, allowSlowStorageEnvVar)
+							ObjectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath, AllowSlowStorageEnvVar)
 						err = errors.NewBadRequest(msg)
 						return
 					}
