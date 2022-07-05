@@ -557,7 +557,7 @@ type ClusterSpec struct {
 	// The head group configuration
 	HeadGroupSpec *HeadGroupSpec `protobuf:"bytes,1,opt,name=head_group_spec,json=headGroupSpec,proto3" json:"head_group_spec,omitempty"`
 	// The worker group configurations
-	WorkerGroupSepc []*WorkerGroupSpec `protobuf:"bytes,2,rep,name=worker_group_sepc,json=workerGroupSepc,proto3" json:"worker_group_sepc,omitempty"`
+	WorkerGroupSpec []*WorkerGroupSpec `protobuf:"bytes,2,rep,name=worker_group_spec,json=workerGroupSpec,proto3" json:"worker_group_spec,omitempty"`
 }
 
 func (x *ClusterSpec) Reset() {
@@ -599,9 +599,9 @@ func (x *ClusterSpec) GetHeadGroupSpec() *HeadGroupSpec {
 	return nil
 }
 
-func (x *ClusterSpec) GetWorkerGroupSepc() []*WorkerGroupSpec {
+func (x *ClusterSpec) GetWorkerGroupSpec() []*WorkerGroupSpec {
 	if x != nil {
-		return x.WorkerGroupSepc
+		return x.WorkerGroupSpec
 	}
 	return nil
 }
@@ -991,7 +991,7 @@ var file_cluster_proto_depIdxs = []int32{
 	14, // 5: proto.Cluster.created_at:type_name -> google.protobuf.Timestamp
 	14, // 6: proto.Cluster.deleted_at:type_name -> google.protobuf.Timestamp
 	10, // 7: proto.ClusterSpec.head_group_spec:type_name -> proto.HeadGroupSpec
-	11, // 8: proto.ClusterSpec.worker_group_sepc:type_name -> proto.WorkerGroupSpec
+	11, // 8: proto.ClusterSpec.worker_group_spec:type_name -> proto.WorkerGroupSpec
 	12, // 9: proto.HeadGroupSpec.ray_start_params:type_name -> proto.HeadGroupSpec.RayStartParamsEntry
 	13, // 10: proto.WorkerGroupSpec.ray_start_params:type_name -> proto.WorkerGroupSpec.RayStartParamsEntry
 	1,  // 11: proto.ClusterService.CreateCluster:input_type -> proto.CreateClusterRequest

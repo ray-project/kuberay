@@ -14,6 +14,7 @@ import (
 
 var numReplicas int32 = 1
 var numCpus = 0.1
+var runtimeEnvStr = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
 
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
@@ -21,48 +22,47 @@ var myRayService = &RayService{
 		Namespace: "default",
 	},
 	Spec: RayServiceSpec{
-		ServeConfigSpecs: []ServeConfigSpec{
-			{
-				Name:        "shallow",
-				ImportPath:  "test_env.shallow_import.ShallowClass",
-				NumReplicas: &numReplicas,
-				RoutePrefix: "/shallow",
-				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
+		ServeDeploymentGraphSpec: ServeDeploymentGraphSpec{
+			ImportPath: "fruit.deployment_graph",
+			RuntimeEnv: runtimeEnvStr,
+			ServeConfigSpecs: []ServeConfigSpec{
+				{
+					Name:        "MangoStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 3",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
 					},
 				},
-			},
-			{
-				Name:        "deep",
-				ImportPath:  "test_env.subdir1.subdir2.deep_import.DeepClass",
-				NumReplicas: &numReplicas,
-				RoutePrefix: "/deep",
-				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
+				{
+					Name:        "OrangeStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 2",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
 					},
 				},
-			},
-			{
-				Name:        "one",
-				ImportPath:  "test_module.test.one",
-				NumReplicas: &numReplicas,
-				RayActorOptions: RayActorOptionSpec{
-					NumCpus: &numCpus,
-					RuntimeEnv: map[string][]string{
-						"py_modules": {
-							"https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-							"https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip",
-						},
+				{
+					Name:        "PearStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 1",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "FruitMarket",
+					NumReplicas: &numReplicas,
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "DAGDriver",
+					NumReplicas: &numReplicas,
+					RoutePrefix: "/",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
 					},
 				},
 			},
@@ -193,52 +193,51 @@ var expected = `{
       "creationTimestamp":null
    },
    "spec":{
-      "serveConfigs":[
-         {
-            "name":"shallow",
-            "importPath":"test_env.shallow_import.ShallowClass",
-            "numReplicas":1,
-            "routePrefix":"/shallow",
-            "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
-               "numCpus":0.1
+      "serveDeploymentGraphConfig":{
+         "importPath":"fruit.deployment_graph",
+         "runtimeEnv":"working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"",
+         "serveConfigs":[
+            {
+               "name":"MangoStand",
+               "numReplicas":1,
+               "userConfig":"price: 3",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"OrangeStand",
+               "numReplicas":1,
+               "userConfig":"price: 2",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"PearStand",
+               "numReplicas":1,
+               "userConfig":"price: 1",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"FruitMarket",
+               "numReplicas":1,
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"DAGDriver",
+               "numReplicas":1,
+               "routePrefix":"/",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
             }
-         },
-         {
-            "name":"deep",
-            "importPath":"test_env.subdir1.subdir2.deep_import.DeepClass",
-            "numReplicas":1,
-            "routePrefix":"/deep",
-            "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
-               "numCpus":0.1
-            }
-         },
-         {
-            "name":"one",
-            "importPath":"test_module.test.one",
-            "numReplicas":1,
-            "rayActorOptions":{
-               "runtimeEnv":{
-                  "py_modules":[
-                     "https://github.com/ray-project/test_deploy_group/archive/67971777e225600720f91f618cdfe71fc47f60ee.zip",
-                     "https://github.com/ray-project/test_module/archive/aa6f366f7daa78c98408c27d917a983caa9f888b.zip"
-                  ]
-               },
-               "numCpus":0.1
-            }
-         }
-      ],
+         ]
+      },
       "rayClusterConfig":{
          "headGroupSpec":{
             "serviceType":"ClusterIP",

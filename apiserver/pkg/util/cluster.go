@@ -42,7 +42,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 		},
 	}
 
-	for _, spec := range apiCluster.ClusterSpec.WorkerGroupSepc {
+	for _, spec := range apiCluster.ClusterSpec.WorkerGroupSpec {
 		computeTemplate := computeTemplateMap[spec.ComputeTemplate]
 		workerPodTemplate := buildWorkerPodTemplate(apiCluster, spec, computeTemplate)
 

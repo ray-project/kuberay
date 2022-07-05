@@ -149,3 +149,9 @@ type RayClusterList struct {
 func init() {
 	SchemeBuilder.Register(&RayCluster{}, &RayClusterList{})
 }
+
+type EventReason string
+
+const (
+	RayConfigError EventReason = "RayConfigError"
+)
