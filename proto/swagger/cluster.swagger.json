@@ -202,6 +202,14 @@
       "default": "DEV",
       "description": "Optional field."
     },
+    "VolumeVolumeType": {
+      "type": "string",
+      "enum": [
+        "PERSISTENT_VOLUME_CLAIM",
+        "HOST_PATH"
+      ],
+      "default": "PERSISTENT_VOLUME_CLAIM"
+    },
     "googlerpcStatus": {
       "type": "object",
       "properties": {
@@ -357,7 +365,14 @@
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start parames of head node group"
+          "title": "Optional. The ray start params of head node group"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoVolume"
+          },
+          "title": "Optional. The volumes mount to head pod"
         }
       }
     },
@@ -382,6 +397,26 @@
             "$ref": "#/definitions/protoCluster"
           },
           "description": "A list of clusters returned."
+        }
+      }
+    },
+    "protoVolume": {
+      "type": "object",
+      "properties": {
+        "mountPath": {
+          "type": "string"
+        },
+        "volumeType": {
+          "$ref": "#/definitions/VolumeVolumeType"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "readOnly": {
+          "type": "boolean"
         }
       }
     },
@@ -421,6 +456,13 @@
             "type": "string"
           },
           "title": "Optional. The ray start parames of worker node group"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoVolume"
+          },
+          "title": "Optional. The volumes mount to worker pods"
         }
       }
     },
