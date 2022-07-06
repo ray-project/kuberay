@@ -4,16 +4,19 @@ metadata:
   name: kuberay-operator
   namespace: system
   labels:
-    control-plane: kuberay-operator
+    app.kubernetes.io/name: kuberay
+    app.kubernetes.io/component: kuberay-operator
 spec:
   selector:
     matchLabels:
-      control-plane: kuberay-operator
+      app.kubernetes.io/name: kuberay
+      app.kubernetes.io/component: kuberay-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: kuberay-operator
+        app.kubernetes.io/name: kuberay
+        app.kubernetes.io/component: kuberay-operator
     spec:
       securityContext:
         runAsNonRoot: true
@@ -28,7 +31,7 @@ spec:
         - name: http
           containerPort: 8080
           protocol: TCP
-        name: ray-manager
+        name: kuberay-operator
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
