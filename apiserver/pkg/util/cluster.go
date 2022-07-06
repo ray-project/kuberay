@@ -76,6 +76,8 @@ func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 	labels[RayClusterUserLabelKey] = cluster.User
 	labels[RayClusterVersionLabelKey] = cluster.Version
 	labels[RayClusterEnvironmentLabelKey] = cluster.Environment.String()
+	labels[KubernetesApplicationNameLabelKey] = ApplicationName
+	labels[KubernetesManagedByLabelKey] = ComponentName
 	return labels
 }
 
