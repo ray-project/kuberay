@@ -133,11 +133,13 @@ print(ray.get(futures))
         container.stop()
 
         if stdout_str != b'[0, 1, 4, 9]\n':
-            logger.info(output)
-            raise Exception('invalid result.')
+            logger.error('test_simple_code returns {}'.format(output))
+            raise Exception(('test_simple_code returns invalid result. ' +
+                             'Expected: {} Actual: {}').format(b'[0, 1, 4, 9]',
+                                                               stdout_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
-            logger.info(msg)
+            logger.error(msg)
             raise Exception(msg)
 
         client.close()
@@ -165,11 +167,13 @@ print(len(ray.nodes()))
         container.stop()
 
         if stdout_str != b'2\n':
-            logger.info(output)
-            raise Exception('invalid result.')
+            logger.error('test_cluster_info returns {}'.format(output))
+            raise Exception(('test_cluster_info returns invalid result. ' +
+                             'Expected: {} Actual: {}').format(b'2',
+                                                               stdout_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
-            logger.info(msg)
+            logger.error(msg)
             raise Exception(msg)
 
         client.close()
