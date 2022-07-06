@@ -9,10 +9,12 @@ type ClientOptions struct {
 // TODO: this needs to be revised.
 const (
 	// Label keys
-	RayClusterNameLabelKey        = "ray.io/cluster-name"
-	RayClusterUserLabelKey        = "ray.io/user"
-	RayClusterVersionLabelKey     = "ray.io/version"
-	RayClusterEnvironmentLabelKey = "ray.io/environment"
+	RayClusterNameLabelKey            = "ray.io/cluster-name"
+	RayClusterUserLabelKey            = "ray.io/user"
+	RayClusterVersionLabelKey         = "ray.io/version"
+	RayClusterEnvironmentLabelKey     = "ray.io/environment"
+	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
+	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
 
 	// Annotation keys
 	// Role level
@@ -20,4 +22,12 @@ const (
 	RayClusterImageAnnotationKey           = "ray.io/compute-image"
 
 	RayClusterDefaultImageRepository = "rayproject/ray"
+)
+
+const (
+	// The application name
+	ApplicationName = "kuberay"
+
+	// The component name for apiserver
+	ComponentName = "kuberay-apiserver"
 )

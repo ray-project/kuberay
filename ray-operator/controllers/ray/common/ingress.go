@@ -17,8 +17,10 @@ const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 // This is used to expose dashboard for external traffic.
 func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1.Ingress, error) {
 	labels := map[string]string{
-		RayClusterLabelKey: cluster.Name,
-		RayIDLabelKey:      utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode),
+		RayClusterLabelKey:                cluster.Name,
+		RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode),
+		KubernetesApplicationNameLabelKey: ApplicationName,
+		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
 	// Copy other ingress configuration from cluster annotation
