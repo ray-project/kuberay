@@ -16,6 +16,7 @@ type KubernetesClientInterface interface {
 	PodClient(namespace string) v1.PodInterface
 	ConfigMapClient(namespace string) v1.ConfigMapInterface
 	NamespaceClient() v1.NamespaceInterface
+	EventsClient(namespace string) v1.EventInterface
 }
 
 type KubernetesClient struct {
@@ -28,6 +29,10 @@ func (c *KubernetesClient) PodClient(namespace string) v1.PodInterface {
 
 func (c *KubernetesClient) ConfigMapClient(namespace string) v1.ConfigMapInterface {
 	return c.coreV1Client.ConfigMaps(namespace)
+}
+
+func (c *KubernetesClient) EventsClient(namespace string) v1.EventInterface {
+	return c.coreV1Client.Events(namespace)
 }
 
 func (c *KubernetesClient) NamespaceClient() v1.NamespaceInterface {
