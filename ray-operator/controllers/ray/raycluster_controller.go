@@ -634,6 +634,30 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		}
 	}
 
+	rayHeadSvc := corev1.ServiceList{}
+	filterLabels = client.MatchingLabels{
+		common.RayClusterLabelKey:  instance.Name,
+		common.RayNodeTypeLabelKey: "head",
+	}
+	// TODO: (@scarlet25151) for now there would be several kubernetes serivces related to
+	// one raycluster, we have used the label to select the headservice and pick the first one.
+	// we may need use Get method to select by name.
+	if err := r.List(context.TODO(), &rayHeadSvc, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return err
+	}
+	if len(rayHeadSvc.Items) != 0 {
+		svc := rayHeadSvc.Items[0]
+		if instance.Status.Endpoints == nil {
+			instance.Status.Endpoints = map[string]string{}
+		}
+		for _, port := range svc.Spec.Ports {
+			if len(port.Name) == 0 {
+				r.Log.Info("updateStatus", "service port name is empty", port)
+				continue
+			}
+			instance.Status.Endpoints[port.Name] = fmt.Sprintf("%d", port.NodePort)
+		}
+	}
 	timeNow := metav1.Now()
 	instance.Status.LastUpdateTime = &timeNow
 	if err := r.Status().Update(context.Background(), instance); err != nil {

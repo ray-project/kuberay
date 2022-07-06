@@ -158,6 +158,9 @@ message Cluster {
 
   // Output. The list related to the cluster.
   repeated ClusterEvent events = 10;
+  
+  // Output. The service endpoint of the cluster
+  map<string, string> service_endpoint = 11;
 }
 
 message ClusterSpec {

@@ -266,6 +266,13 @@
             "$ref": "#/definitions/protoClusterEvent"
           },
           "description": "Output. The list related to the cluster."
+        },
+        "serviceEndpoint": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Output. The service endpoint of the cluster"
         }
       }
     },
