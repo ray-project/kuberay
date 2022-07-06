@@ -9,6 +9,8 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"google.golang.org/protobuf/types/known/emptypb"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 )
 
 type ClusterServerOptions struct {
@@ -36,8 +38,12 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 	if err != nil {
 		return nil, util.Wrap(err, "Create Cluster failed.")
 	}
+	events, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
+	if err != nil {
+		klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
+	}
 
-	return model.FromCrdToApiCluster(cluster), nil
+	return model.FromCrdToApiCluster(cluster, events), nil
 }
 
 // Finds a specific Cluster by cluster name.
@@ -54,7 +60,12 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 	if err != nil {
 		return nil, util.Wrap(err, "Get cluster failed.")
 	}
-	return model.FromCrdToApiCluster(cluster), nil
+	events, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
+	if err != nil {
+		klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
+	}
+
+	return model.FromCrdToApiCluster(cluster, events), nil
 }
 
 // Finds all Clusters in a given namespace.
@@ -68,9 +79,18 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
+	clusterEventMap := make(map[string][]v1.Event)
+	for _, cluster := range clusters {
+		clusterEvents, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
+			continue
+		}
+		clusterEventMap[cluster.Name] = clusterEvents
+	}
 
 	return &api.ListClustersResponse{
-		Clusters: model.FromCrdToApiClusters(clusters),
+		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
 	}, nil
 }
 
@@ -81,9 +101,18 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
 	}
+	clusterEventMap := make(map[string][]v1.Event)
+	for _, cluster := range clusters {
+		clusterEvents, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
+			continue
+		}
+		clusterEventMap[cluster.Name] = clusterEvents
+	}
 
 	return &api.ListAllClustersResponse{
-		Clusters: model.FromCrdToApiClusters(clusters),
+		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
 	}, nil
 }
 

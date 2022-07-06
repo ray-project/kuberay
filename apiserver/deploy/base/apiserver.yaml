@@ -115,3 +115,10 @@ rules:
   - namespaces
   verbs:
   - list
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list

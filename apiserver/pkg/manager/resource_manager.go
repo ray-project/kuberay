@@ -51,6 +51,10 @@ func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv
 	return r.clientManager.KubernetesClient().ConfigMapClient(namespace)
 }
 
+func (r *ResourceManager) getEventsClient(namespace string) clientv1.EventInterface {
+	return r.clientManager.KubernetesClient().EventsClient(namespace)
+}
+
 func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInterface {
 	return r.clientManager.KubernetesClient().NamespaceClient()
 }
@@ -259,4 +263,29 @@ func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInte
 	}
 
 	return runtime, nil
+}
+
+func (r *ResourceManager) GetClusterEvents(ctx context.Context, clusterName string, namespace string) ([]v1.Event, error) {
+	client := r.getEventsClient(namespace)
+	clusterClient := r.getRayClusterClient(namespace)
+	return getRayClusterEventsByName(ctx, clusterName, client, clusterClient)
+}
+
+func getRayClusterEventsByName(ctx context.Context, name string, client clientv1.EventInterface, clusterClient rayiov1alpha1.RayClusterInterface) ([]v1.Event, error) {
+	rayCluster, err := getClusterByName(ctx, clusterClient, name)
+	if err != nil {
+		return nil, util.Wrap(err, "get raycluster event failed")
+	}
+	fieldSelectorById := fmt.Sprintf("involvedObject.name=%s", rayCluster.Name)
+	events, err := client.List(ctx, metav1.ListOptions{
+		FieldSelector: fieldSelectorById,
+		TypeMeta:      metav1.TypeMeta{Kind: "RayCluster"}})
+	if err != nil {
+		return nil, util.Wrap(err, "Get Ray Cluster Events failed")
+	}
+	if len(events.Items) == 0 {
+		return nil, fmt.Errorf("No Event with RayCluster name %s", name)
+	}
+
+	return events.Items, nil
 }
