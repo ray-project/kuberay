@@ -138,3 +138,12 @@ func getDefaultPorts() map[string]int32 {
 		DefaultDashboardAgentListenPortName: DefaultDashboardAgentListenPort,
 	}
 }
+
+// IsAgentServiceEnabled check if the agent service is enabled for RayCluster.
+func IsAgentServiceEnabled(instance *rayiov1alpha1.RayCluster) bool {
+	enableAgentServiceValue, exist := instance.Annotations[EnableAgentServiceKey]
+	if exist && enableAgentServiceValue == EnableAgentServiceTrue {
+		return true
+	}
+	return false
+}

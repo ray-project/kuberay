@@ -132,7 +132,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if utils.IsAgentServiceEnabled(instance) {
+	if common.IsAgentServiceEnabled(instance) {
 		// Reconcile agent service only when enabled in annotation.
 		if err := r.reconcileServices(instance, common.AgentService); err != nil {
 			if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {

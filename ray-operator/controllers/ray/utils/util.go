@@ -9,8 +9,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-
 	"k8s.io/apimachinery/pkg/util/json"
 
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -297,13 +295,4 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 		return false
 	}
 	return reflect.DeepEqual(v1, v2)
-}
-
-// IsAgentServiceEnabled check if the agent service is enabled for RayCluster.
-func IsAgentServiceEnabled(instance *rayiov1alpha1.RayCluster) bool {
-	enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]
-	if exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
-		return true
-	}
-	return false
 }
