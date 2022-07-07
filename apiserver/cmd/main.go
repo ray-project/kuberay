@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+
 	"math"
 	"net"
 	"net/http"
+	"path"
+	"strings"
 
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 
 	"google.golang.org/grpc"
@@ -19,6 +23,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
+	"github.com/ray-project/kuberay/apiserver/pkg/swagger"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -86,12 +91,46 @@ func startHttpProxy() {
 	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
 	topMux.Handle("/", runtimeMux)
 	topMux.Handle("/metrics", promhttp.Handler())
+	topMux.HandleFunc("/swagger/", serveSwaggerFile)
+	serveSwaggerUI(topMux)
 
 	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
 		klog.Fatal(err)
 	}
 
 	klog.Info("Http Proxy started")
+}
+
+func serveSwaggerFile(w http.ResponseWriter, r *http.Request) {
+	klog.Info("start serveSwaggerFile")
+
+	if !strings.HasSuffix(r.URL.Path, "swagger.json") {
+		klog.Errorf("Not Found: %s", r.URL.Path)
+		http.NotFound(w, r)
+		return
+	}
+
+	p := strings.TrimPrefix(r.URL.Path, "/swagger/")
+	// Currently, we copy swagger.json to system root /workspace/proto/swagger/.
+	// For the development, you can change path to `../proto/swagger`.
+	// TODO(Jeffwan@): fix this later, we should not have dependency on system folder structure.
+	p = path.Join("/workspace/proto/swagger/", p)
+
+	klog.Infof("Serving swagger-file: %s", p)
+	http.ServeFile(w, r, p)
+}
+
+// go-bindata --nocompress --pkg swagger -o pkg/swagger/datafile.go third_party/swagger-ui/...
+// We will need to copy third_party folder to `backend` folder when building images
+func serveSwaggerUI(mux *http.ServeMux) {
+	fileServer := http.FileServer(&assetfs.AssetFS{
+		Asset:    swagger.Asset,
+		AssetDir: swagger.AssetDir,
+		Prefix:   "third_party/swagger-ui",
+	})
+
+	prefix := "/swagger-ui/"
+	mux.Handle(prefix, http.StripPrefix(prefix, fileServer))
 }
 
 func registerHttpHandlerFromEndpoint(handler RegisterHttpHandlerFromEndpoint, serviceName string, ctx context.Context, mux *runtime.ServeMux) {
