@@ -100,8 +100,13 @@ func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, compute
 		image = cluster.ClusterSpec.HeadGroupSpec.Image
 	}
 
+	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
+
+	// build volume and volumeMounts
+	volMounts := buildVolumeMounts(spec.Volumes)
+	vols := buildVols(spec.Volumes)
 
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -147,8 +152,10 @@ func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, compute
 							v1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
+					VolumeMounts: volMounts,
 				},
 			},
+			Volumes: vols,
 		},
 	}
 
@@ -179,8 +186,13 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 		image = spec.Image
 	}
 
+	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
+
+	// build volume and volumeMounts
+	volMounts := buildVolumeMounts(spec.Volumes)
+	vols := buildVols(spec.Volumes)
 
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -288,8 +300,10 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 							v1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
+					VolumeMounts: volMounts,
 				},
 			},
+			Volumes: vols,
 		},
 	}
 
@@ -306,6 +320,46 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 	}
 
 	return podTemplateSpec
+}
+
+func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
+	var volMounts []v1.VolumeMount
+	for _, vol := range apiVolumes {
+		volMount := v1.VolumeMount{
+			Name:      vol.Name,
+			ReadOnly:  vol.ReadOnly,
+			MountPath: vol.MountPath,
+		}
+		volMounts = append(volMounts, volMount)
+	}
+	return volMounts
+}
+
+func newHostPathType(pathType string) *v1.HostPathType {
+	hostPathType := new(v1.HostPathType)
+	*hostPathType = v1.HostPathType(pathType)
+	return hostPathType
+}
+
+func buildVols(apiVolumes []*api.Volume) []v1.Volume {
+	var vols []v1.Volume
+	for _, rayVol := range apiVolumes {
+		if rayVol.VolumeType == api.Volume_HOST_PATH {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					HostPath: &v1.HostPathVolumeSource{
+						Path: rayVol.Source,
+						Type: newHostPathType(string(v1.HostPathDirectory)),
+					},
+				},
+			}
+			vols = append(vols, vol)
+		}
+		// TODO(Jeffwan@): handle PVC in the future
+	}
+
+	return vols
 }
 
 func intPointer(value int32) *int32 {
