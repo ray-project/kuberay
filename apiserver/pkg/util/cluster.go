@@ -141,6 +141,10 @@ func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, compute
 							Name:          "dashboard",
 							ContainerPort: 8265,
 						},
+						{
+							Name:          "metrics",
+							ContainerPort: 8080,
+						},
 					},
 					Resources: v1.ResourceRequirements{
 						Limits: v1.ResourceList{
