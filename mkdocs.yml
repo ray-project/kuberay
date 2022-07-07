@@ -1,5 +1,5 @@
 # Project Information
-site_name: KubeRay
+site_name: KubeRay Docs
 site_url: https://ray-project.github.io/kuberay
 
 # Repository
@@ -36,6 +36,8 @@ nav:
     - Guidance: troubleshooting.md
   - Designs:
     - Core API and Backend Service: design/protobuf-grpc-service.md
+  - Development:
+    - Release: release/README.md
 
 # Customization
 extra:

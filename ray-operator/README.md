@@ -35,7 +35,7 @@ You can update the number of replicas in a worker goup, and specify which exact 
 
 ### Ray cluster example code
 
-An example ray code is defined in this [configmap](msft-operator/ray-operator/config/samples/config-map-ray-code.yaml) that is mounted into the ray head-pod. By examining the logs of the head pod, we can see the list of the IP addresses of the nodes that joined the ray cluster:
+An example ray code is defined in this [configmap](config/samples/config-map-ray-code.yaml) that is mounted into the ray head-pod. By examining the logs of the head pod, we can see the list of the IP addresses of the nodes that joined the ray cluster:
 
 ![](media/logs-ray-cluster.gif)
 
