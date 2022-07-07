@@ -7,7 +7,3 @@ kind: Kustomization
 commonLabels:
   app.kubernetes.io/component: kuberay-operator
   app.kubernetes.io/name: kuberay
-images:
-- name: kuberay/operator
-  newName: brucezhang90/bruce-docker-repo
-  newTag: agent-nightly-v07
