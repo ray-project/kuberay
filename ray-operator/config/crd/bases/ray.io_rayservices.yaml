@@ -11589,6 +11589,11 @@ spec:
                           replicas claimed by the user at the cluster level.
                         format: int32
                         type: integer
+                      endpoints:
+                        additionalProperties:
+                          type: string
+                        description: Service Endpoints
+                        type: object
                       lastUpdateTime:
                         description: LastUpdateTime indicates last update timestamp
                           for this cluster status.
@@ -11683,6 +11688,11 @@ spec:
                           replicas claimed by the user at the cluster level.
                         format: int32
                         type: integer
+                      endpoints:
+                        additionalProperties:
+                          type: string
+                        description: Service Endpoints
+                        type: object
                       lastUpdateTime:
                         description: LastUpdateTime indicates last update timestamp
                           for this cluster status.
