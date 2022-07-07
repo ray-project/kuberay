@@ -18,12 +18,13 @@ raycluster_spec_template = 'tests/config/ray-cluster.mini.yaml.template'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 kuberay_sha = 'nightly'
 
 
 def shell_run(cmd):
-    logger.info(cmd)
+    logger.info('executing cmd: {}'.format(cmd))
     return os.system(cmd)
 
 
@@ -45,8 +46,12 @@ def apply_kuberay_resources():
     shell_assert_success('kind load docker-image kuberay/apiserver:{}'.format(kuberay_sha))
     shell_assert_success(
         'kubectl create -k manifests/cluster-scope-resources')
+    # use kustomize to build the yaml, then change the image to the one we want to testing.
     shell_assert_success(
-        'kubectl create -k manifests/base')
+        ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
+         'kustomize edit set image ' +
+         'kuberay/operator:nightly=kuberay/operator:{0} kuberay/apiserver:nightly=kuberay/apiserver:{0} && ' +
+         'kubectl apply -k .').format(kuberay_sha))
 
 
 def create_kuberay_cluster():
@@ -128,11 +133,13 @@ print(ray.get(futures))
         container.stop()
 
         if stdout_str != b'[0, 1, 4, 9]\n':
-            print(output, file=sys.stderr)
-            raise Exception('invalid result.')
+            logger.error('test_simple_code returns {}'.format(output))
+            raise Exception(('test_simple_code returns invalid result. ' +
+                             'Expected: {} Actual: {}').format(b'[0, 1, 4, 9]',
+                                                               stdout_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
-            print(msg, file=sys.stderr)
+            logger.error(msg)
             raise Exception(msg)
 
         client.close()
@@ -160,11 +167,13 @@ print(len(ray.nodes()))
         container.stop()
 
         if stdout_str != b'2\n':
-            print(output, file=sys.stderr)
-            raise Exception('invalid result.')
+            logger.error('test_cluster_info returns {}'.format(output))
+            raise Exception(('test_cluster_info returns invalid result. ' +
+                             'Expected: {} Actual: {}').format(b'2',
+                                                               stdout_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
-            print(msg, file=sys.stderr)
+            logger.error(msg)
             raise Exception(msg)
 
         client.close()
@@ -178,11 +187,11 @@ def parse_environment():
     global ray_version, ray_image, kuberay_sha
     for k, v in os.environ.items():
         if k == 'RAY_VERSION':
-            print('Setting Ray image to: {}'.format(v), file=sys.stderr)
+            logger.info('Setting Ray image to: {}'.format(v))
             ray_version = v
             ray_image = 'rayproject/ray:{}'.format(ray_version)
         if k == 'KUBERAY_IMG_SHA':
-            print('Using KubeRay docker build SHA: {}'.format(v))
+            logger.info('Using KubeRay docker build SHA: {}'.format(v))
             kuberay_sha = v
 
 

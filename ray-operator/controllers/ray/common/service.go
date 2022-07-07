@@ -11,9 +11,11 @@ import (
 // the worker nodes to connect to the head node.
 func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	labels := map[string]string{
-		RayClusterLabelKey:  cluster.Name,
-		RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode),
-		RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode)),
+		RayClusterLabelKey:                cluster.Name,
+		RayNodeTypeLabelKey:               string(rayiov1alpha1.HeadNode),
+		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode)),
+		KubernetesApplicationNameLabelKey: ApplicationName,
+		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
 	service := &corev1.Service{

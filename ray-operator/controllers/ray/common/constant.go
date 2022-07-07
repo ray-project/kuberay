@@ -10,6 +10,9 @@ const (
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 
+	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
+	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
+
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 
@@ -25,6 +28,12 @@ const (
 	DefaultDashboardName                = "dashboard"
 	DefaultMetricsName                  = "metrics"
 	DefaultDashboardAgentListenPortName = "dashboard-agent"
+
+	// The default application name
+	ApplicationName = "kuberay"
+
+	// The default name for kuberay operator
+	ComponentName = "kuberay-operator"
 
 	// Check node if ready by checking the path exists or not
 	PodReadyFilepath = "POD_READY_FILEPATH"

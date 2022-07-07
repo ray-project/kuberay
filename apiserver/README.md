@@ -165,3 +165,19 @@ GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 ```
 DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 ```
+
+
+## Swagger Support
+
+1. Download Swagger UI from [Swagger-UI](https://swagger.io/tools/swagger-ui/download/). In this case, we use `swagger-ui-3.51.2.tar.gz`
+2. Unzip package and copy `dist` folder to `third_party` folder
+3. Use `go-bindata` to generate go code from static files.
+
+```
+mkdir third_party
+tar -zvxf ~/Downloads/swagger-ui-3.51.2.tar.gz /tmp
+mv /tmp/swagger-ui-3.51.2/dist  third_party/swagger-ui
+
+cd apiserver/
+go-bindata --nocompress --pkg swagger -o pkg/swagger/datafile.go ./third_party/swagger-ui/...
+```

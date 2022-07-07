@@ -5,3 +5,7 @@ namespace: ray-system
 
 resources:
 - apiserver.yaml
+
+commonLabels:
+  app.kubernetes.io/name: kuberay
+  app.kubernetes.io/component: kuberay-apiserver

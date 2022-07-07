@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -10,15 +11,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster) []*api.Cluster {
+func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster, clusterEventsMap map[string][]v1.Event) []*api.Cluster {
 	apiClusters := make([]*api.Cluster, 0)
 	for _, cluster := range clusters {
-		apiClusters = append(apiClusters, FromCrdToApiCluster(cluster))
+		apiClusters = append(apiClusters, FromCrdToApiCluster(cluster, clusterEventsMap[cluster.Name]))
 	}
 	return apiClusters
 }
 
-func FromCrdToApiCluster(cluster *v1alpha1.RayCluster) *api.Cluster {
+func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.Cluster {
 	pbCluster := &api.Cluster{
 		Name:         cluster.Name,
 		Namespace:    cluster.Namespace,
@@ -34,6 +35,26 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster) *api.Cluster {
 	pbCluster.ClusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(cluster.Spec.HeadGroupSpec)
 	pbCluster.ClusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
 
+	// parse events
+	for _, event := range events {
+		clusterEvent := &api.ClusterEvent{
+			Id:             event.Name,
+			Name:           fmt.Sprintf("%s-%s", cluster.Labels[util.RayClusterNameLabelKey], event.Name),
+			CreatedAt:      &timestamp.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
+			FirstTimestamp: &timestamp.Timestamp{Seconds: event.FirstTimestamp.Unix()},
+			LastTimestamp:  &timestamp.Timestamp{Seconds: event.LastTimestamp.Unix()},
+			Reason:         event.Reason,
+			Message:        event.Message,
+			Type:           event.Type,
+			Count:          event.Count,
+		}
+		pbCluster.Events = append(pbCluster.Events, clusterEvent)
+	}
+
+	pbCluster.ServiceEndpoint = map[string]string{}
+	for name, port := range cluster.Status.Endpoints {
+		pbCluster.ServiceEndpoint[name] = port
+	}
 	return pbCluster
 }
 

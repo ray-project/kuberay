@@ -6,7 +6,8 @@ metadata:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
   labels:
-    control-plane: kuberay-operator
+    app.kubernetes.io/name: kuberay
+    app.kubernetes.io/component: kuberay-operator
   name: kuberay-operator
 spec:
   ports:
@@ -14,5 +15,6 @@ spec:
       port: 8080
       targetPort: 8080
   selector:
-    control-plane: kuberay-operator
+    app.kubernetes.io/name: kuberay
+    app.kubernetes.io/component: kuberay-operator
   type: ClusterIP

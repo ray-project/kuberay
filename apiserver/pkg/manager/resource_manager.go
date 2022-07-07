@@ -12,6 +12,7 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
@@ -49,6 +50,10 @@ func (r *ResourceManager) getRayClusterClient(namespace string) rayiov1alpha1.Ra
 
 func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv1.ConfigMapInterface {
 	return r.clientManager.KubernetesClient().ConfigMapClient(namespace)
+}
+
+func (r *ResourceManager) getEventsClient(namespace string) clientv1.EventInterface {
+	return r.clientManager.KubernetesClient().EventsClient(namespace)
 }
 
 func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInterface {
@@ -111,7 +116,14 @@ func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, na
 }
 
 func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error) {
-	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{})
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
+	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	})
 	if err != nil {
 		return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
 	}
@@ -132,8 +144,15 @@ func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*v1alpha1.RayC
 	}
 
 	var result []*v1alpha1.RayCluster
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
 	for _, namespace := range namespaces.Items {
-		rayClusterList, err := r.getRayClusterClient(namespace.Name).List(ctx, metav1.ListOptions{})
+		rayClusterList, err := r.getRayClusterClient(namespace.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		})
 		if err != nil {
 			return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace.Name))
 		}
@@ -247,6 +266,9 @@ func getClusterByName(ctx context.Context, client rayiov1alpha1.RayClusterInterf
 	if err != nil {
 		return nil, util.Wrap(err, "Get Cluster failed")
 	}
+	if managedBy, ok := cluster.Labels[util.KubernetesManagedByLabelKey]; !ok || managedBy != util.ComponentName {
+		return nil, fmt.Errorf("RayCluster with name %s not managed by %s", name, util.ComponentName)
+	}
 
 	return cluster, nil
 }
@@ -259,4 +281,29 @@ func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInte
 	}
 
 	return runtime, nil
+}
+
+func (r *ResourceManager) GetClusterEvents(ctx context.Context, clusterName string, namespace string) ([]v1.Event, error) {
+	client := r.getEventsClient(namespace)
+	clusterClient := r.getRayClusterClient(namespace)
+	return getRayClusterEventsByName(ctx, clusterName, client, clusterClient)
+}
+
+func getRayClusterEventsByName(ctx context.Context, name string, client clientv1.EventInterface, clusterClient rayiov1alpha1.RayClusterInterface) ([]v1.Event, error) {
+	rayCluster, err := getClusterByName(ctx, clusterClient, name)
+	if err != nil {
+		return nil, util.Wrap(err, "get raycluster event failed")
+	}
+	fieldSelectorById := fmt.Sprintf("involvedObject.name=%s", rayCluster.Name)
+	events, err := client.List(ctx, metav1.ListOptions{
+		FieldSelector: fieldSelectorById,
+		TypeMeta:      metav1.TypeMeta{Kind: "RayCluster"}})
+	if err != nil {
+		return nil, util.Wrap(err, "Get Ray Cluster Events failed")
+	}
+	if len(events.Items) == 0 {
+		return nil, fmt.Errorf("No Event with RayCluster name %s", name)
+	}
+
+	return events.Items, nil
 }
