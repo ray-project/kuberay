@@ -105,7 +105,7 @@ func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 	// Check if agent port is defined. If not, check if enable agent service.
 	if _, agentDefined := ports[DefaultDashboardAgentListenPortName]; !agentDefined {
 		enableAgentServiceValue, exist := cluster.Annotations[EnableAgentServiceKey]
-		if exist && enableAgentServiceValue == EnableAgentServiceValue {
+		if exist && enableAgentServiceValue == EnableAgentServiceTrue {
 			// If agent port is not in the config, add default value for it.
 			ports[DefaultDashboardAgentListenPortName] = DefaultDashboardAgentListenPort
 		}

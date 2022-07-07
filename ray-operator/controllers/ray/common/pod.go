@@ -407,7 +407,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
 	// add dashboard listen port for serve endpoints to RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceValue {
+		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
 			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}

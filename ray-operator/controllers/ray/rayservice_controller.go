@@ -411,7 +411,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceValue
+	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
 
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{

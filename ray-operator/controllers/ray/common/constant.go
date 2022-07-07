@@ -10,8 +10,8 @@ const (
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 
-	EnableAgentServiceKey   = "enableAgentService"
-	EnableAgentServiceValue = "true"
+	EnableAgentServiceKey  = "ray.io/enableAgentService"
+	EnableAgentServiceTrue = "true"
 
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"

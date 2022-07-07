@@ -132,11 +132,14 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileServices(instance, common.AgentService); err != nil {
-		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
-			log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+	if utils.IsAgentServiceEnabled(instance) {
+		// Reconcile agent service only when enabled in annotation.
+		if err := r.reconcileServices(instance, common.AgentService); err != nil {
+			if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+				log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcilePods(instance); err != nil {
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
