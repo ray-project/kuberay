@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -324,7 +323,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 		// Prepare new RayCluster if:
 		// 1. No active and pending cluster
 		// 2. No pending cluster, and the active RayCluster has changed.
-		if activeRayCluster == nil || !reflect.DeepEqual(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+		if activeRayCluster == nil || !utils.CompareJsonStruct(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 			shouldPrepareRayCluster = true
 		}
 	}
@@ -343,7 +342,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	// Create a new RayCluster if:
 	// 1. No RayCluster pending.
 	// 2. Config update for the pending cluster.
-	if pendingRayCluster == nil || !reflect.DeepEqual(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+	if pendingRayCluster == nil || !utils.CompareJsonStruct(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 		if err != nil {
 			return nil, err
@@ -371,7 +370,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
 	if err == nil {
-		r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String())
+		r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String(), "rayClusterInstance.Spec", rayClusterInstance.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
 		delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground))
 		if delErr == nil {
 			// Go to next loop and check if the ray cluster is deleted.
@@ -408,10 +407,16 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	}
 	rayClusterLabel[common.RayServiceLabelKey] = rayService.Name
 
+	rayClusterAnnotations := make(map[string]string)
+	for k, v := range rayService.Annotations {
+		rayClusterAnnotations[k] = v
+	}
+	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceValue
+
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayClusterLabel,
-			Annotations: rayService.Annotations,
+			Annotations: rayClusterAnnotations,
 			Name:        rayClusterName,
 			Namespace:   rayService.Namespace,
 		},
@@ -470,7 +475,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	shouldUpdate := false
 
-	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) {
+	if !ok || !utils.CompareJsonStruct(existConfig, rayServiceInstance.Spec) {
 		shouldUpdate = true
 	}
 

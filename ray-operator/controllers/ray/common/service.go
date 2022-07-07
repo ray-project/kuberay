@@ -91,12 +91,6 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 		}
 	}
 
-	// If agent port is not in the config, add default value for it.
-	if len(service.Spec.Ports) == 0 {
-		svcPort := corev1.ServicePort{Name: DefaultDashboardAgentListenPortName, Port: DefaultDashboardAgentListenPort}
-		service.Spec.Ports = append(service.Spec.Ports, svcPort)
-	}
-
 	return service, nil
 }
 
@@ -106,6 +100,15 @@ func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 	// Assign default ports
 	if err != nil || len(ports) == 0 {
 		ports = getDefaultPorts()
+	}
+
+	// Check if agent port is defined. If not, check if enable agent service.
+	if _, agentDefined := ports[DefaultDashboardAgentListenPortName]; !agentDefined {
+		enableAgentServiceValue, exist := cluster.Annotations[EnableAgentServiceKey]
+		if exist && enableAgentServiceValue == EnableAgentServiceValue {
+			// If agent port is not in the config, add default value for it.
+			ports[DefaultDashboardAgentListenPortName] = DefaultDashboardAgentListenPort
+		}
 	}
 
 	return ports

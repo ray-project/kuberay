@@ -2,7 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/json"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -270,4 +272,19 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 		}
 	}
 	return false
+}
+
+func CompareJsonStruct(objA interface{}, objB interface{}) bool {
+	a, err := json.Marshal(objA)
+	if err != nil {
+		return false
+	}
+	b, err := json.Marshal(objB)
+	if err != nil {
+		return false
+	}
+	var v1, v2 interface{}
+	json.Unmarshal(a, &v1)
+	json.Unmarshal(b, &v2)
+	return reflect.DeepEqual(v1, v2)
 }

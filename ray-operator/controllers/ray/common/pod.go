@@ -46,6 +46,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
+	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -286,13 +287,13 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	}
 
 	ret = map[string]string{
-		RayNodeLabelKey:                   "yes",
-		RayClusterLabelKey:                rayClusterName,
-		RayNodeTypeLabelKey:               string(rayNodeType),
-		RayNodeGroupLabelKey:              groupName,
-		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
-		KubernetesApplicationNameLabelKey: ApplicationName,
-		KubernetesCreatedByLabelKey:       ComponentName,
+		RayNodeLabelKey:                    "yes",
+		RayClusterLabelKey:                 rayClusterName,
+		RayNodeTypeLabelKey:                string(rayNodeType),
+		RayNodeGroupLabelKey:               groupName,
+		RayIDLabelKey:                      utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		KubernetesApplicationNameLabelKey:  ApplicationName,
+		KubernetesCreatedByLabelKey:        ComponentName,
 		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
 	}
 
@@ -397,6 +398,17 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	// add metrics port for expose the metrics to the prometheus.
 	if _, ok := rayStartParams["metrics-export-port"]; !ok {
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
+	}
+
+	return rayStartParams
+}
+
+func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
+	// add dashboard listen port for serve endpoints to RayService.
+	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
+		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceValue {
+			rayStartParams["dashboard-agent-listen-port"] = string(DefaultDashboardAgentListenPort)
+		}
 	}
 
 	return rayStartParams
