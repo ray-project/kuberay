@@ -285,7 +285,13 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 		return false
 	}
 	var v1, v2 interface{}
-	json.Unmarshal(a, &v1)
-	json.Unmarshal(b, &v2)
+	err = json.Unmarshal(a, &v1)
+	if err != nil {
+		return false
+	}
+	err = json.Unmarshal(b, &v2)
+	if err != nil {
+		return false
+	}
 	return reflect.DeepEqual(v1, v2)
 }
