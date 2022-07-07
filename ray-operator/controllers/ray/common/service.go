@@ -60,12 +60,55 @@ func BuildServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster r
 	return service, nil
 }
 
+// BuildDashboardService Builds the service for dashboard agent and head node.
+func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+	labels := map[string]string{
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
+	}
+	selectorLabels := map[string]string{
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
+	}
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateDashboardServiceName(cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: selectorLabels,
+			Ports:    []corev1.ServicePort{},
+			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+		},
+	}
+
+	ports := getServicePorts(cluster)
+	for name, port := range ports {
+		if name == DefaultDashboardAgentListenPortName {
+			svcPort := corev1.ServicePort{Name: name, Port: port}
+			service.Spec.Ports = append(service.Spec.Ports, svcPort)
+			break
+		}
+	}
+
+	return service, nil
+}
+
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 	ports, err := getPortsFromCluster(cluster)
 	// Assign default ports
 	if err != nil || len(ports) == 0 {
 		ports = getDefaultPorts()
+	}
+
+	// Check if agent port is defined. If not, check if enable agent service.
+	if _, agentDefined := ports[DefaultDashboardAgentListenPortName]; !agentDefined {
+		enableAgentServiceValue, exist := cluster.Annotations[EnableAgentServiceKey]
+		if exist && enableAgentServiceValue == EnableAgentServiceTrue {
+			// If agent port is not in the config, add default value for it.
+			ports[DefaultDashboardAgentListenPortName] = DefaultDashboardAgentListenPort
+		}
 	}
 
 	return ports
@@ -88,9 +131,19 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
-		DefaultClientPortName: DefaultClientPort,
-		DefaultRedisPortName:  DefaultRedisPort,
-		DefaultDashboardName:  DefaultDashboardPort,
-		DefaultMetricsName:    DefaultMetricsPort,
+		DefaultClientPortName:               DefaultClientPort,
+		DefaultRedisPortName:                DefaultRedisPort,
+		DefaultDashboardName:                DefaultDashboardPort,
+		DefaultMetricsName:                  DefaultMetricsPort,
+		DefaultDashboardAgentListenPortName: DefaultDashboardAgentListenPort,
 	}
+}
+
+// IsAgentServiceEnabled check if the agent service is enabled for RayCluster.
+func IsAgentServiceEnabled(instance *rayiov1alpha1.RayCluster) bool {
+	enableAgentServiceValue, exist := instance.Annotations[EnableAgentServiceKey]
+	if exist && enableAgentServiceValue == EnableAgentServiceTrue {
+		return true
+	}
+	return false
 }

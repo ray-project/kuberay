@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -76,7 +77,9 @@ type RayDashboardClient struct {
 }
 
 func (r *RayDashboardClient) InitClient(url string) {
-	r.client = http.Client{}
+	r.client = http.Client{
+		Timeout: 2 * time.Second,
+	}
 	r.dashboardURL = "http://" + url
 }
 

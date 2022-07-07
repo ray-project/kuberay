@@ -19,12 +19,13 @@ var myRayCluster = &RayCluster{
 		HeadGroupSpec: HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
-				"port":                "6379",
-				"object-manager-port": "12345",
-				"node-manager-port":   "12346",
-				"object-store-memory": "100000000",
-				"redis-password":      "LetMeInRay",
-				"num-cpus":            "1",
+				"port":                        "6379",
+				"object-manager-port":         "12345",
+				"node-manager-port":           "12346",
+				"object-store-memory":         "100000000",
+				"redis-password":              "LetMeInRay",
+				"num-cpus":                    "1",
+				"dashboard-agent-listen-port": "52365",
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -63,9 +64,10 @@ var myRayCluster = &RayCluster{
 				MaxReplicas: pointer.Int32Ptr(10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
-					"port":           "6379",
-					"redis-password": "LetMeInRay",
-					"num-cpus":       "1",
+					"port":                        "6379",
+					"redis-password":              "LetMeInRay",
+					"num-cpus":                    "1",
+					"dashboard-agent-listen-port": "52365",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{

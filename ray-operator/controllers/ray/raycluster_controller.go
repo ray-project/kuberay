@@ -20,6 +20,7 @@ import (
 	_ "k8s.io/api/apps/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -125,11 +126,20 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileServices(instance); err != nil {
+	if err := r.reconcileServices(instance, common.HeadService); err != nil {
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
 			log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+	if common.IsAgentServiceEnabled(instance) {
+		// Reconcile agent service only when enabled in annotation.
+		if err := r.reconcileServices(instance, common.AgentService); err != nil {
+			if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
+				log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		}
 	}
 	if err := r.reconcilePods(instance); err != nil {
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
@@ -183,16 +193,22 @@ func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayClust
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster) error {
-	headServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &headServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster, serviceType common.ServiceType) error {
+	services := corev1.ServiceList{}
+	var filterLabels client.MatchingLabels
+	if serviceType == common.HeadService {
+		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	} else if serviceType == common.AgentService {
+		filterLabels = client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(instance.Name)}
+	}
+
+	if err := r.List(context.TODO(), &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	if headServices.Items != nil {
-		if len(headServices.Items) == 1 {
-			r.Log.Info("reconcileServices ", "head service found", headServices.Items[0].Name)
+	if services.Items != nil {
+		if len(services.Items) == 1 {
+			r.Log.Info("reconcileServices ", string(serviceType)+" service found", services.Items[0].Name)
 			// TODO: compare diff and reconcile the object
 			// For example. ServiceType might be changed or port might be modified
 			return nil
@@ -200,20 +216,36 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 		// This should never happen.
 		// We add the protection here just in case controller has race issue or user manually create service with same label.
-		if len(headServices.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates head service found", len(headServices.Items))
+		if len(services.Items) > 1 {
+			r.Log.Info("reconcileServices ", "Duplicates "+string(serviceType)+" service found", len(services.Items))
 			return nil
 		}
 	}
 
 	// Create head service if there's no existing one in the cluster.
-	if headServices.Items == nil || len(headServices.Items) == 0 {
-		rayHeadSvc, err := common.BuildServiceForHeadPod(*instance)
+	if services.Items == nil || len(services.Items) == 0 {
+		var raySvc *v1.Service
+		var err error
+		if serviceType == common.HeadService {
+			raySvc, err = common.BuildServiceForHeadPod(*instance)
+		} else if serviceType == common.AgentService {
+			raySvc, err = common.BuildDashboardService(*instance)
+		}
+
+		if raySvc == nil {
+			r.Log.Info("reconcileServices ", "Cannot create un-support service type ", serviceType)
+			return nil
+		}
+		if len(raySvc.Spec.Ports) == 0 {
+			r.Log.Info("reconcileServices ", "Ray service has no ports set up.", raySvc.Spec)
+			return nil
+		}
+
 		if err != nil {
 			return err
 		}
 
-		err = r.createHeadService(rayHeadSvc, instance)
+		err = r.createService(raySvc, instance)
 		// if the service cannot be created we return the error and requeue
 		if err != nil {
 			return err
@@ -469,15 +501,15 @@ func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, 
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadService(rayHeadSvc *corev1.Service, instance *rayiov1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) createService(raySvc *corev1.Service, instance *rayiov1alpha1.RayCluster) error {
 	// making sure the name is valid
-	rayHeadSvc.Name = utils.CheckName(rayHeadSvc.Name)
+	raySvc.Name = utils.CheckName(raySvc.Name)
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(instance, rayHeadSvc, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, raySvc, r.Scheme); err != nil {
 		return err
 	}
 
-	if err := r.Create(context.TODO(), rayHeadSvc); err != nil {
+	if err := r.Create(context.TODO(), raySvc); err != nil {
 		if errors.IsAlreadyExists(err) {
 			log.Info("Pod service already exist, no need to create")
 			return nil
@@ -485,8 +517,8 @@ func (r *RayClusterReconciler) createHeadService(rayHeadSvc *corev1.Service, ins
 		log.Error(err, "Pod Service create error!", "Pod.Service.Error", err)
 		return err
 	}
-	log.Info("Pod Service created successfully", "service name", rayHeadSvc.Name)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Created", "Created service %s", rayHeadSvc.Name)
+	log.Info("Pod Service created successfully", "service name", raySvc.Name)
+	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Created", "Created service %s", raySvc.Name)
 	return nil
 }
 

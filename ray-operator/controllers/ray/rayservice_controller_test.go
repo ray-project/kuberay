@@ -91,12 +91,13 @@ var _ = Context("Inside the default namespace", func() {
 					ServiceType: corev1.ServiceTypeClusterIP,
 					Replicas:    pointer.Int32Ptr(1),
 					RayStartParams: map[string]string{
-						"port":                "6379",
-						"object-store-memory": "100000000",
-						"dashboard-host":      "0.0.0.0",
-						"num-cpus":            "1",
-						"node-ip-address":     "127.0.0.1",
-						"block":               "true",
+						"port":                        "6379",
+						"object-store-memory":         "100000000",
+						"dashboard-host":              "0.0.0.0",
+						"num-cpus":                    "1",
+						"node-ip-address":             "127.0.0.1",
+						"block":                       "true",
+						"dashboard-agent-listen-port": "52365",
 					},
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
@@ -147,6 +148,10 @@ var _ = Context("Inside the default namespace", func() {
 											Name:          "head",
 											ContainerPort: 10001,
 										},
+										{
+											Name:          "dashboard-agent",
+											ContainerPort: 52365,
+										},
 									},
 								},
 							},
@@ -160,8 +165,9 @@ var _ = Context("Inside the default namespace", func() {
 						MaxReplicas: pointer.Int32Ptr(10000),
 						GroupName:   "small-group",
 						RayStartParams: map[string]string{
-							"port":     "6379",
-							"num-cpus": "1",
+							"port":                        "6379",
+							"num-cpus":                    "1",
+							"dashboard-agent-listen-port": "52365",
 						},
 						Template: corev1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
@@ -186,6 +192,16 @@ var _ = Context("Inside the default namespace", func() {
 														FieldPath: "status.podIP",
 													},
 												},
+											},
+										},
+										Ports: []corev1.ContainerPort{
+											{
+												Name:          "client",
+												ContainerPort: 80,
+											},
+											{
+												Name:          "dashboard-agent",
+												ContainerPort: 52365,
 											},
 										},
 									},
@@ -302,6 +318,11 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 
 func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
 	serveStatuses := utils.ServeDeploymentStatuses{
+		ApplicationStatus: rayiov1alpha1.AppStatus{
+			Status:               "RUNNING",
+			LastUpdateTime:       &time,
+			HealthLastUpdateTime: &time,
+		},
 		DeploymentStatuses: []rayiov1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "shallow",

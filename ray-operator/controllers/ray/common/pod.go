@@ -46,6 +46,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
+	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -84,6 +85,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
+	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
 	// add metrics port for exposing to the promethues stack.
 	metricsPort := v1.ContainerPort{
@@ -286,13 +288,14 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	}
 
 	ret = map[string]string{
-		RayNodeLabelKey:                   "yes",
-		RayClusterLabelKey:                rayClusterName,
-		RayNodeTypeLabelKey:               string(rayNodeType),
-		RayNodeGroupLabelKey:              groupName,
-		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
-		KubernetesApplicationNameLabelKey: ApplicationName,
-		KubernetesCreatedByLabelKey:       ComponentName,
+		RayNodeLabelKey:                    "yes",
+		RayClusterLabelKey:                 rayClusterName,
+		RayNodeTypeLabelKey:                string(rayNodeType),
+		RayNodeGroupLabelKey:               groupName,
+		RayIDLabelKey:                      utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		KubernetesApplicationNameLabelKey:  ApplicationName,
+		KubernetesCreatedByLabelKey:        ComponentName,
+		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
 	}
 
 	for k, v := range ret {
@@ -396,6 +399,17 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	// add metrics port for expose the metrics to the prometheus.
 	if _, ok := rayStartParams["metrics-export-port"]; !ok {
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
+	}
+
+	return rayStartParams
+}
+
+func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
+	// add dashboard listen port for serve endpoints to RayService.
+	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
+		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
+			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
+		}
 	}
 
 	return rayStartParams

@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -41,7 +40,7 @@ const (
 	ServiceDefaultRequeueDuration     = 2 * time.Second
 	ServiceRestartRequeueDuration     = 10 * time.Second
 	DashboardUnhealthySecondThreshold = 60.0
-	servicePortName                   = "dashboard"
+	servicePortName                   = "dashboard-agent"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -324,7 +323,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 		// Prepare new RayCluster if:
 		// 1. No active and pending cluster
 		// 2. No pending cluster, and the active RayCluster has changed.
-		if activeRayCluster == nil || !reflect.DeepEqual(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+		if activeRayCluster == nil || !utils.CompareJsonStruct(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 			shouldPrepareRayCluster = true
 		}
 	}
@@ -343,7 +342,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	// Create a new RayCluster if:
 	// 1. No RayCluster pending.
 	// 2. Config update for the pending cluster.
-	if pendingRayCluster == nil || !reflect.DeepEqual(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+	if pendingRayCluster == nil || !utils.CompareJsonStruct(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
 		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 		if err != nil {
 			return nil, err
@@ -371,7 +370,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
 	if err == nil {
-		r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String())
+		r.Log.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String(), "rayClusterInstance.Spec", rayClusterInstance.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
 		delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground))
 		if delErr == nil {
 			// Go to next loop and check if the ray cluster is deleted.
@@ -408,10 +407,16 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	}
 	rayClusterLabel[common.RayServiceLabelKey] = rayService.Name
 
+	rayClusterAnnotations := make(map[string]string)
+	for k, v := range rayService.Annotations {
+		rayClusterAnnotations[k] = v
+	}
+	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
+
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayClusterLabel,
-			Annotations: rayService.Annotations,
+			Annotations: rayClusterAnnotations,
 			Name:        rayClusterName,
 			Namespace:   rayService.Namespace,
 		},
@@ -426,16 +431,16 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	return rayCluster, nil
 }
 
-func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	headService := &corev1.Service{}
-	headServiceName := utils.CheckName(utils.GenerateServiceName(rayCluster.Name))
-	if err := r.Get(ctx, client.ObjectKey{Name: headServiceName, Namespace: rayCluster.Namespace}, headService); err != nil {
+func (r *RayServiceReconciler) fetchDashboardAgentURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
+	dashboardAgentService := &corev1.Service{}
+	dashboardAgentServiceName := utils.CheckName(utils.GenerateDashboardServiceName(rayCluster.Name))
+	if err := r.Get(ctx, client.ObjectKey{Name: dashboardAgentServiceName, Namespace: rayCluster.Namespace}, dashboardAgentService); err != nil {
 		return "", err
 	}
 
-	r.Log.V(1).Info("fetchDashboardURL ", "head service found", headService.Name)
+	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboard agent service found", dashboardAgentService.Name)
 	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
-	servicePorts := headService.Spec.Ports
+	servicePorts := dashboardAgentService.Spec.Ports
 
 	dashboardPort := int32(-1)
 
@@ -451,10 +456,10 @@ func (r *RayServiceReconciler) fetchDashboardURL(ctx context.Context, rayCluster
 	}
 
 	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
-		headService.Name,
-		headService.Namespace,
+		dashboardAgentService.Name,
+		dashboardAgentService.Namespace,
 		dashboardPort)
-	r.Log.V(1).Info("fetchDashboardURL ", "dashboardURL", dashboardURL)
+	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardURL)
 	return dashboardURL, nil
 }
 
@@ -470,7 +475,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	shouldUpdate := false
 
-	if !ok || !reflect.DeepEqual(existConfig, rayServiceInstance.Spec) {
+	if !ok || !utils.CompareJsonStruct(existConfig, rayServiceInstance.Spec) {
 		shouldUpdate = true
 	}
 
@@ -704,7 +709,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false)
 		return err
 	}
@@ -738,7 +743,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = r.fetchDashboardURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false) {
 			rayServiceLog.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)

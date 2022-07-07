@@ -3,10 +3,13 @@ package utils
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"k8s.io/apimachinery/pkg/util/json"
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
@@ -19,6 +22,7 @@ import (
 
 const (
 	RayClusterSuffix = "-raycluster-"
+	DashboardName    = "dashboard"
 )
 
 // IsCreated returns true if pod has been created and is maintained by the API server
@@ -98,6 +102,16 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 // GenerateServiceName generates a ray head service name from cluster name
 func GenerateServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc")
+}
+
+// GenerateDashboardServiceName generates a ray head service name from cluster name
+func GenerateDashboardServiceName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
+}
+
+// GenerateDashboardAgentLabel generates label value for agent service selector.
+func GenerateDashboardAgentLabel(clusterName string) string {
+	return fmt.Sprintf("%s-%s", clusterName, DashboardName)
 }
 
 // GenerateIngressName generates an ingress name from cluster name
@@ -259,4 +273,26 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 		}
 	}
 	return false
+}
+
+// CompareJsonStruct This is a way to better compare if two objects are the same when they are json/yaml structs. reflect.DeepEqual will fail in some cases.
+func CompareJsonStruct(objA interface{}, objB interface{}) bool {
+	a, err := json.Marshal(objA)
+	if err != nil {
+		return false
+	}
+	b, err := json.Marshal(objB)
+	if err != nil {
+		return false
+	}
+	var v1, v2 interface{}
+	err = json.Unmarshal(a, &v1)
+	if err != nil {
+		return false
+	}
+	err = json.Unmarshal(b, &v2)
+	if err != nil {
+		return false
+	}
+	return reflect.DeepEqual(v1, v2)
 }
