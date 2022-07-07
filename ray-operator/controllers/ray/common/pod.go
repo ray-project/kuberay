@@ -85,6 +85,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
+	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
 	// add metrics port for exposing to the promethues stack.
 	metricsPort := v1.ContainerPort{
@@ -407,7 +408,7 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 	// add dashboard listen port for serve endpoints to RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
 		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceValue {
-			rayStartParams["dashboard-agent-listen-port"] = string(DefaultDashboardAgentListenPort)
+			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}
 

@@ -57,7 +57,6 @@ spec:
         num-cpus: '2' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
-        dashboard-agent-listen-port: "52365"
       #pod template
       template:
         metadata:
@@ -117,7 +116,6 @@ spec:
         # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
         rayStartParams:
           node-ip-address: $MY_POD_IP
-          dashboard-agent-listen-port: "52365"
           block: 'true'
         #pod template
         template:
