@@ -43,45 +43,6 @@
         "tags": [
           "ComputeTemplateService"
         ]
-      },
-      "post": {
-        "summary": "Creates a new compute template.",
-        "operationId": "ComputeTemplateService_CreateComputeTemplate",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoComputeTemplate"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "description": "The compute template to be created.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoComputeTemplate"
-            }
-          },
-          {
-            "name": "namespace",
-            "description": "The namespace of the compute template to be created.",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ComputeTemplateService"
-        ]
       }
     },
     "/apis/v1alpha2/image_templates": {
@@ -150,6 +111,45 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "ComputeTemplateService"
+        ]
+      },
+      "post": {
+        "summary": "Creates a new compute template.",
+        "operationId": "ComputeTemplateService_CreateComputeTemplate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoComputeTemplate"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the compute template to be created",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The compute template to be created.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoComputeTemplate"
+            }
           }
         ],
         "tags": [
