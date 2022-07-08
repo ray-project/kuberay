@@ -30,8 +30,7 @@ type HeadGroupSpec struct {
 	ServiceType v1.ServiceType `json:"serviceType"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// Number of desired pods in this pod group. This is a pointer to distinguish between explicit
-	// zero and not specified. Defaults to 1.
+	// HeadGroupSpec. Replicas is deprecated and ignored; there can only be one head pod.
 	Replicas *int32 `json:"replicas,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
