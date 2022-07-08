@@ -32,7 +32,7 @@ type HeadGroupSpec struct {
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// Number of desired pods in this pod group. This is a pointer to distinguish between explicit
 	// zero and not specified. Defaults to 1.
-	Replicas *int32 `json:"replicas"`
+	Replicas *int32 `json:"replicas,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is the eaxct pod template used in K8s depoyments, statefulsets, etc.
