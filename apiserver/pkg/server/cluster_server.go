@@ -141,6 +141,10 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
 
+	if request.Namespace != request.Cluster.Namespace {
+		return util.NewInvalidInputError("The namespace in the request is different from the namespace in the cluster definition.")
+	}
+
 	if request.Cluster.Name == "" {
 		return util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
 	}
