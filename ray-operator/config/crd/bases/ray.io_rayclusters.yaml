@@ -102,7 +102,7 @@ spec:
                       node-manager-port, object-store-memory, ...'
                     type: object
                   replicas:
-                    description: HeadGroupSpec. Replicas is deprecated and ignored;
+                    description: HeadGroupSpec.Replicas is deprecated and ignored;
                       there can only be one head pod.
                     format: int32
                     type: integer
