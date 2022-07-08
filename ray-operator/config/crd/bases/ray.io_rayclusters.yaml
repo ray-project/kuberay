@@ -103,7 +103,7 @@ spec:
                     type: object
                   replicas:
                     description: HeadGroupSpec.Replicas is deprecated and ignored;
-                      there can only be one head pod.
+                      there can only be one head pod per Ray cluster.
                     format: int32
                     type: integer
                   serviceType:
