@@ -10,7 +10,6 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2"
 )
 
 type ListOptions struct {
@@ -31,9 +30,6 @@ func newCmdList() *cobra.Command {
 
 	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "",
 		"kubernetes namespace where the cluster is provisioned")
-	if err := cmd.MarkFlagRequired("namespace"); err != nil {
-		klog.Warning(err)
-	}
 
 	return cmd
 }
@@ -51,15 +47,24 @@ func listCluster(opts ListOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r, err := client.ListCluster(ctx, &go_client.ListClustersRequest{
-		Namespace: opts.namespace,
-	})
-	if err != nil {
-		log.Fatalf("could not list cluster clusters %v", err)
+	var clusters []*go_client.Cluster
+	if len(opts.namespace) == 0 {
+		r, err := client.ListAllClusters(ctx, &go_client.ListAllClustersRequest{})
+		if err != nil {
+			log.Fatalf("could not list all clusters %v", err)
+		}
+		clusters = r.GetClusters()
+	} else {
+		r, err := client.ListCluster(ctx, &go_client.ListClustersRequest{
+			Namespace: opts.namespace,
+		})
+		if err != nil {
+			log.Fatalf("could not list clusters %v", err)
+		}
+		clusters = r.GetClusters()
 	}
-	clusters := r.GetClusters()
 	rows, maxNumberWorkerGroups := convertClustersToStrings(clusters)
-	header := []string{"Name", "User", "Namespace", "Created At", "Version", "Environment", "Head Image", "Head Compute Template", "Head Service Type"}
+	header := []string{"Name", "Namespace", "User", "Version", "Environment", "Created At", "Head Image", "Head Compute Template", "Head Service Type"}
 	for i := 0; i < maxNumberWorkerGroups; i++ {
 		header = append(header, "Worker Group Name", "Worker Image", "Worker ComputeTemplate")
 	}
@@ -92,7 +97,7 @@ func convertClustersToStrings(clusters []*go_client.Cluster) ([][]string, int) {
 func convertClusterToString(r *go_client.Cluster) ([]string, int) {
 	headResource := r.GetClusterSpec().GetHeadGroupSpec()
 	workerGroups := r.GetClusterSpec().GetWorkerGroupSpec()
-	line := []string{r.GetName(), r.GetUser(), r.GetNamespace(), r.GetCreatedAt().AsTime().String(), r.GetVersion(), r.GetEnvironment().String(),
+	line := []string{r.GetName(), r.GetNamespace(), r.GetUser(), r.GetVersion(), r.GetEnvironment().String(), r.GetCreatedAt().AsTime().String(),
 		headResource.GetImage(), headResource.GetComputeTemplate(), headResource.GetServiceType()}
 	nWorkGroups := len(workerGroups)
 
