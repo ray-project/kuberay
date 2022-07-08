@@ -11,7 +11,6 @@ import (
 	"github.com/ray-project/kuberay/cli/pkg/cmdutil"
 	"github.com/ray-project/kuberay/proto/go_client"
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2"
 )
 
 type ListOptions struct {
@@ -32,9 +31,6 @@ func newCmdList() *cobra.Command {
 
 	cmd.Flags().StringVarP(&opts.namespace, "namespace", "n", "",
 		"kubernetes namespace where the compute template is stored")
-	if err := cmd.MarkFlagRequired("namespace"); err != nil {
-		klog.Warning(err)
-	}
 
 	return cmd
 }
@@ -52,17 +48,26 @@ func listComputeTemplates(opts ListOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r, err := client.ListComputeTemplates(ctx, &go_client.ListComputeTemplatesRequest{
-		Namespace: opts.namespace,
-	})
-	if err != nil {
-		log.Fatalf("could not list compute template %v", err)
+	var computeTemplates []*go_client.ComputeTemplate
+	if len(opts.namespace) == 0 {
+		r, err := client.ListAllComputeTemplates(ctx, &go_client.ListAllComputeTemplatesRequest{})
+		if err != nil {
+			log.Fatalf("could not list all compute templates %v", err)
+		}
+		computeTemplates = r.GetComputeTemplates()
+	} else {
+		r, err := client.ListComputeTemplates(ctx, &go_client.ListComputeTemplatesRequest{
+			Namespace: opts.namespace,
+		})
+		if err != nil {
+			log.Fatalf("could not list compute templates %v", err)
+		}
+		computeTemplates = r.GetComputeTemplates()
 	}
-	computeTemplates := r.GetComputeTemplates()
 	rows := convertComputeTemplatesToStrings(computeTemplates)
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "CPU", "Memory", "GPU", "GPU-Accelerator"})
+	table.SetHeader([]string{"Name", "Namespace", "CPU", "Memory", "GPU", "GPU-Accelerator"})
 	table.AppendBulk(rows)
 	table.Render()
 
@@ -77,11 +82,10 @@ func convertComputeTemplatesToStrings(computeTemplates []*go_client.ComputeTempl
 	}
 
 	return data
-
 }
 
 func convertComputeTemplatToString(r *go_client.ComputeTemplate) []string {
-	line := []string{r.GetName(), strconv.Itoa(int(r.GetCpu())), strconv.Itoa(int(r.Memory)),
+	line := []string{r.GetName(), r.Namespace, strconv.Itoa(int(r.GetCpu())), strconv.Itoa(int(r.Memory)),
 		strconv.Itoa(int(r.GetGpu())), r.GetGpuAccelerator()}
 	return line
 }
