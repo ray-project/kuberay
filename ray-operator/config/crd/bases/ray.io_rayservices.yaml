@@ -106,7 +106,8 @@ spec:
                           node-manager-port, object-store-memory, ...'
                         type: object
                       replicas:
-                        description: Number of desired pods in this pod group.
+                        description: HeadGroupSpec. Replicas is deprecated and ignored;
+                          there can only be one head pod.
                         format: int32
                         type: integer
                       serviceType:
@@ -5707,7 +5708,6 @@ spec:
                         type: object
                     required:
                     - rayStartParams
-                    - replicas
                     - serviceType
                     - template
                     type: object
