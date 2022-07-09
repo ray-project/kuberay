@@ -23,6 +23,7 @@ import (
 const (
 	RayClusterSuffix = "-raycluster-"
 	DashboardName    = "dashboard"
+	ServingName      = "serving"
 )
 
 // IsCreated returns true if pod has been created and is maintained by the API server
@@ -112,6 +113,16 @@ func GenerateDashboardServiceName(clusterName string) string {
 // GenerateDashboardAgentLabel generates label value for agent service selector.
 func GenerateDashboardAgentLabel(clusterName string) string {
 	return fmt.Sprintf("%s-%s", clusterName, DashboardName)
+}
+
+// GenerateServingServiceName generates name for serving service.
+func GenerateServingServiceName(serviceName string) string {
+	return fmt.Sprintf("%s-%s-%s", serviceName, ServingName, "svc")
+}
+
+// GenerateServingServiceLabel generates label value for serving service selector.
+func GenerateServingServiceLabel(serviceName string) string {
+	return fmt.Sprintf("%s-%s", serviceName, ServingName)
 }
 
 // GenerateIngressName generates an ingress name from cluster name

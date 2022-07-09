@@ -40,10 +40,10 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 	return service, nil
 }
 
-// BuildServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
+// BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
-func BuildServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+func BuildHeadServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	service, err := BuildServiceForHeadPod(rayCluster)
 	if err != nil {
 		return nil, err
@@ -55,6 +55,42 @@ func BuildServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster r
 		RayServiceLabelKey:  rayService.Name,
 		RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode),
 		RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayiov1alpha1.HeadNode)),
+	}
+
+	return service, nil
+}
+
+// BuildServingServiceForRayService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
+func BuildServingServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+	labels := map[string]string{
+		RayServiceLabelKey:               rayService.Name,
+		RayClusterServingServiceLabelKey: utils.GenerateServingServiceLabel(rayService.Name),
+	}
+	selectorLabels := map[string]string{
+		RayClusterLabelKey:               rayCluster.Name,
+		RayClusterServingServiceLabelKey: utils.GenerateServingServiceLabel(rayService.Name),
+	}
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServingServiceName(rayService.Name),
+			Namespace: rayService.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: selectorLabels,
+			Ports:    []corev1.ServicePort{},
+			Type:     rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType,
+		},
+	}
+
+	ports := getServicePorts(rayCluster)
+	for name, port := range ports {
+		if name == DefaultServingPortName {
+			svcPort := corev1.ServicePort{Name: name, Port: port}
+			service.Spec.Ports = append(service.Spec.Ports, svcPort)
+			break
+		}
 	}
 
 	return service, nil
@@ -131,11 +167,11 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
-		DefaultClientPortName:               DefaultClientPort,
-		DefaultRedisPortName:                DefaultRedisPort,
-		DefaultDashboardName:                DefaultDashboardPort,
-		DefaultMetricsName:                  DefaultMetricsPort,
-		DefaultDashboardAgentListenPortName: DefaultDashboardAgentListenPort,
+		DefaultClientPortName:  DefaultClientPort,
+		DefaultRedisPortName:   DefaultRedisPort,
+		DefaultDashboardName:   DefaultDashboardPort,
+		DefaultMetricsName:     DefaultMetricsPort,
+		DefaultServingPortName: DefaultServingPort,
 	}
 }
 
