@@ -67,7 +67,7 @@ kind: RayCluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-    ray.io/ha-enabled: "true"
+    ray.io/ha-enabled: "true" # enable Ray HA
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-external-redis
 spec:

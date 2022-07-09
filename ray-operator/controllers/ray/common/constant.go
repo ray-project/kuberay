@@ -55,6 +55,19 @@ const (
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
+
+	// Ray HA default readiness probe values
+	DefaultReadinessProbeInitialDelaySeconds = 10
+	DefaultReadinessProbeTimeoutSeconds      = 0
+	DefaultReadinessProbePeriodSeconds       = 0
+	DefaultReadinessProbeSuccessThreshold    = 0
+	DefaultReadinessProbeFailureThreshold    = 10
+	// Ray HA default liveness probe values
+	DefaultLivenessProbeInitialDelaySeconds = 10
+	DefaultLivenessProbeTimeoutSeconds      = 0
+	DefaultLivenessProbePeriodSeconds       = 0
+	DefaultLivenessProbeSuccessThreshold    = 0
+	DefaultLivenessProbeFailureThreshold    = 20
 )
 
 type ServiceType string

@@ -30,7 +30,7 @@ const (
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
 )
 
-var log = logf.Log.WithName("raycluster-common")
+var log = logf.Log.WithName("RayCluster-Controller")
 
 // enabledHA check if RayCluster enabled HA in labels
 func enabledHA(instance rayiov1alpha1.RayCluster) bool {
@@ -131,6 +131,72 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
+func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// TODO : implement me
+	if rayNodeType == rayiov1alpha1.HeadNode {
+		// head node liveness probe
+		cmd := []string{
+			"python", "-c",
+			"from ray._private.gcs_utils import check_health;import sys;" +
+				fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
+					DefaultRedisPort),
+		}
+		probe.Exec = &v1.ExecAction{Command: cmd}
+	} else {
+		// worker node liveness probe
+		cmd := []string{"true"}
+		probe.Exec = &v1.ExecAction{Command: cmd}
+	}
+	if probe.InitialDelaySeconds != 0 {
+		probe.InitialDelaySeconds = DefaultLivenessProbeInitialDelaySeconds
+	}
+	if probe.TimeoutSeconds != 0 {
+		probe.TimeoutSeconds = DefaultLivenessProbeTimeoutSeconds
+	}
+	if probe.PeriodSeconds != 0 {
+		probe.PeriodSeconds = DefaultLivenessProbePeriodSeconds
+	}
+	if probe.SuccessThreshold != 0 {
+		probe.SuccessThreshold = DefaultLivenessProbeSuccessThreshold
+	}
+	if probe.FailureThreshold != 0 {
+		probe.FailureThreshold = DefaultLivenessProbeFailureThreshold
+	}
+}
+
+func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// TODO : implement me
+	if rayNodeType == rayiov1alpha1.HeadNode {
+		// head node readiness probe
+		cmd := []string{
+			"python", "-c",
+			"from ray._private.gcs_utils import check_health;import sys;" +
+				fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
+					DefaultRedisPort),
+		}
+		probe.Exec = &v1.ExecAction{Command: cmd}
+	} else {
+		// worker node readiness probe
+		cmd := []string{"true"}
+		probe.Exec = &v1.ExecAction{Command: cmd}
+	}
+	if probe.InitialDelaySeconds != 0 {
+		probe.InitialDelaySeconds = DefaultReadinessProbeInitialDelaySeconds
+	}
+	if probe.TimeoutSeconds != 0 {
+		probe.TimeoutSeconds = DefaultReadinessProbeTimeoutSeconds
+	}
+	if probe.PeriodSeconds != 0 {
+		probe.PeriodSeconds = DefaultReadinessProbePeriodSeconds
+	}
+	if probe.SuccessThreshold != 0 {
+		probe.SuccessThreshold = DefaultReadinessProbeSuccessThreshold
+	}
+	if probe.FailureThreshold != 0 {
+		probe.FailureThreshold = DefaultReadinessProbeFailureThreshold
+	}
+}
+
 // BuildPod a pod config
 func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, enableRayAutoscaler *bool) (aPod v1.Pod) {
 	pod := v1.Pod{
@@ -166,15 +232,15 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
-	enableHA := false
+	enabledHA := false
 	if enabledString, ok := podTemplateSpec.Labels[RayHAEnabledLabelKey]; ok {
 		if strings.ToLower(enabledString) == "true" {
-			enableHA = true
+			enabledHA = true
 		}
 	}
 	if !strings.Contains(cmd, "ray start") {
 		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources,
-			enableHA)
+			enabledHA)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -202,35 +268,19 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	// add health check for head node
 
 	// health check only if HA enabled
-	if enableHA {
-		if rayNodeType == rayiov1alpha1.HeadNode {
-			// TODO: add liveness probe
+	if enabledHA {
+		// check readiness probe
+		if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
 			probe := &v1.Probe{}
-			if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-				pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
-			}
-			probe = pod.Spec.Containers[rayContainerIndex].ReadinessProbe
-			if probe.Exec == nil && probe.HTTPGet == nil && probe.TCPSocket == nil {
-				probe.Exec = &v1.ExecAction{Command: []string{
-					"python", "-c",
-					"from ray._private.gcs_utils import check_health;import sys;" +
-						fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
-							DefaultRedisPort),
-				}}
-			}
-			if probe.InitialDelaySeconds == 0 {
-				probe.InitialDelaySeconds = 10
-			}
-			if probe.FailureThreshold == 0 {
-				// This number is set to 20 to make default tests happy
-				probe.FailureThreshold = 20
-			}
+			pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+			setReadinessProbe(probe, rayNodeType)
 		}
 
-		// add health check for worker node
-		if rayNodeType == rayiov1alpha1.WorkerNode && pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-			// TODO: add probe for worker node
-			pod.Spec.Containers[rayContainerIndex].ReadinessProbe = nil
+		// check liveness probe
+		if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+			probe := &v1.Probe{}
+			pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+			setLivenessProbe(probe, rayNodeType)
 		}
 	}
 
@@ -349,7 +399,7 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string, enableHA bool) (ret map[string]string) {
+func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string, enabledHA bool) (ret map[string]string) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -364,10 +414,11 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 		KubernetesCreatedByLabelKey:        ComponentName,
 		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
 		RayNodeHealthStateLabelKey:         "",
-		RayHAEnabledLabelKey:               "false",
+		RayHAEnabledLabelKey:               "false", // by default, Ray HA is disabled.
 	}
 
-	if enableHA {
+	if enabledHA {
+		// add label RayHAEnabledLabelKey to the created pods if Ray HA is enabled
 		ret[RayHAEnabledLabelKey] = "true"
 	}
 
@@ -388,6 +439,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 			labels[k] = v
 		}
 	}
+
 	return labels
 }
 
@@ -489,7 +541,7 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements, enableHA bool) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements, enabledHA bool) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -519,14 +571,14 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		if enableHA {
+		if enabledHA {
 			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
 				"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 		} else {
 			return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 		}
 	case rayiov1alpha1.WorkerNode:
-		if enableHA {
+		if enabledHA {
 			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
 				"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 		} else {

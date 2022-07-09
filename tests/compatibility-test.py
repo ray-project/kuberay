@@ -85,7 +85,9 @@ def create_kuberay_cluster(template_name):
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
 
-    time.sleep(180)
+    time.sleep(120)
+
+    shell_run('kubectl get pods -A')
 
     rtn = shell_run(
         'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
@@ -201,6 +203,8 @@ print(len(ray.nodes()))
 
 
 def ray_ha_supported():
+    if ray_version == "nightly":
+        return True
     major, minor, patch = parse_ray_version(ray_version)
     if major * 100 + minor < 113:
         return False
@@ -212,6 +216,8 @@ class RayHATestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not ray_ha_supported():
+            return
         delete_cluster()
         create_cluster()
         apply_kuberay_resources()

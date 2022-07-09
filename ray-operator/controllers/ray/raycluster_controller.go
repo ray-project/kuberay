@@ -140,8 +140,8 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 			return ctrl.Result{}, nil
 		}
 	} else {
-		err := fmt.Errorf("HAEnabled label not found")
-		log.Error(err, "HAEnabled label not found")
+		log.Info("HAEnabled label not found", "pod name", unhealthyPod.Name)
+		return ctrl.Result{}, nil
 	}
 
 	needUpdate := true
