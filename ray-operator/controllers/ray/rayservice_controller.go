@@ -180,7 +180,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateService, err)
 			return ctrl.Result{}, err
 		}
-		r.labelServingPods(ctx, rayServiceInstance, rayClusterInstance)
+		if err := r.labelServingPods(ctx, rayClusterInstance); err != nil {
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateServingPodLabel, err)
+			return ctrl.Result{}, err
+		}
 		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, common.ServingService); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateService, err)
 			return ctrl.Result{}, err
@@ -815,7 +818,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	return ctrl.Result{}, true, nil
 }
 
-func (r *RayServiceReconciler) labelServingPods(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
+func (r *RayServiceReconciler) labelServingPods(ctx context.Context, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	allPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: rayClusterInstance.Name}
 
@@ -823,8 +826,19 @@ func (r *RayServiceReconciler) labelServingPods(ctx context.Context, rayServiceI
 		return err
 	}
 
+	httpProxyClient := utils.GetRayHttpProxyClient()
+	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
-		
+		httpProxyClient.SetHostIp(pod.Status.PodIP)
+		if httpProxyClient.CheckHealth() == nil {
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.RayClusterServingServiceTrue
+		} else {
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.RayClusterServingServiceFalse
+		}
+		if updateErr := r.Update(ctx, &pod); updateErr != nil {
+			r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
+			return updateErr
+		}
 	}
 
 	return nil

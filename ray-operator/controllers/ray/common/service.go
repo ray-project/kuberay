@@ -68,7 +68,7 @@ func BuildServingServiceForRayService(rayService rayiov1alpha1.RayService, rayCl
 	}
 	selectorLabels := map[string]string{
 		RayClusterLabelKey:               rayCluster.Name,
-		RayClusterServingServiceLabelKey: utils.GenerateServingServiceLabel(rayService.Name),
+		RayClusterServingServiceLabelKey: RayClusterServingServiceTrue,
 	}
 
 	service := &corev1.Service{

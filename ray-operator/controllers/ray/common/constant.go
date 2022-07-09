@@ -14,6 +14,9 @@ const (
 	EnableAgentServiceKey  = "ray.io/enableAgentService"
 	EnableAgentServiceTrue = "true"
 
+	RayClusterServingServiceTrue  = "true"
+	RayClusterServingServiceFalse = "false"
+
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
 
