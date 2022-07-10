@@ -58,7 +58,6 @@ var _ = Context("Inside the default namespace", func() {
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				ServiceType: "ClusterIP",
-				Replicas:    pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
