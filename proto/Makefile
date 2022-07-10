@@ -2,7 +2,7 @@
 
 IMAGE_NAME=kuberay/proto-generator
 IMAGE_TAG=$(shell git rev-parse HEAD)
-PREBUILT_REMOTE_IMAGE=kuberay/proto-generator:550d4af484e4e1d2f92117357cc49ffcdc2e41ce
+PREBUILT_REMOTE_IMAGE=kuberay/proto-generator:8210e17c28b3b373449f99561f10534e13d35969
 
 OUTPUT_MODE=import
 TMP_OUTPUT=/tmp
