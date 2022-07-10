@@ -136,15 +136,18 @@ func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 	if rayNodeType == rayiov1alpha1.HeadNode {
 		// head node liveness probe
 		cmd := []string{
-			"python", "-c",
-			"from ray._private.gcs_utils import check_health;import sys;" +
-				fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
-					DefaultRedisPort),
+			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRagAgentPort, RayAgentRayletHealthPath),
+			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
 		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	} else {
 		// worker node liveness probe
-		cmd := []string{"true"}
+		cmd := []string{
+			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRagAgentPort, RayAgentRayletHealthPath),
+		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	}
 	if probe.InitialDelaySeconds != 0 {
@@ -169,15 +172,18 @@ func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 	if rayNodeType == rayiov1alpha1.HeadNode {
 		// head node readiness probe
 		cmd := []string{
-			"python", "-c",
-			"from ray._private.gcs_utils import check_health;import sys;" +
-				fmt.Sprintf("sys.exit(not check_health('localhost:%d'))",
-					DefaultRedisPort),
+			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRagAgentPort, RayAgentRayletHealthPath),
+			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
 		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	} else {
 		// worker node readiness probe
-		cmd := []string{"true"}
+		cmd := []string{
+			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				DefaultRagAgentPort, RayAgentRayletHealthPath),
+		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	}
 	if probe.InitialDelaySeconds != 0 {
@@ -232,15 +238,15 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
-	enabledHA := false
-	if enabledString, ok := podTemplateSpec.Labels[RayHAEnabledLabelKey]; ok {
-		if strings.ToLower(enabledString) == "true" {
-			enabledHA = true
+	externalRedis := false
+	for _, envVar := range pod.Spec.Containers[rayContainerIndex].Env {
+		if envVar.Name == "RAY_REDIS_ADDRESS" && envVar.Value != "" {
+			externalRedis = true
 		}
 	}
 	if !strings.Contains(cmd, "ray start") {
 		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources,
-			enabledHA)
+			externalRedis)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -265,22 +271,22 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
 
-	// add health check for head node
-
 	// health check only if HA enabled
-	if enabledHA {
-		// check readiness probe
-		if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-			probe := &v1.Probe{}
-			pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
-			setReadinessProbe(probe, rayNodeType)
-		}
-
-		// check liveness probe
-		if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-			probe := &v1.Probe{}
-			pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
-			setLivenessProbe(probe, rayNodeType)
+	if enabledString, ok := podTemplateSpec.Labels[RayHAEnabledLabelKey]; ok {
+		if strings.ToLower(enabledString) == "true" {
+			// Ray HA is enabled and we need to add health checks
+			if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+				// add readiness probe
+				probe := &v1.Probe{}
+				pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+				setReadinessProbe(probe, rayNodeType)
+			}
+			if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+				// add liveness probe
+				probe := &v1.Probe{}
+				pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+				setLivenessProbe(probe, rayNodeType)
+			}
 		}
 	}
 
@@ -541,7 +547,8 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements, enabledHA bool) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements,
+	needRedisInstalled bool) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -571,14 +578,14 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		if enabledHA {
+		if needRedisInstalled {
 			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
 				"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 		} else {
 			return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 		}
 	case rayiov1alpha1.WorkerNode:
-		if enabledHA {
+		if needRedisInstalled {
 			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
 				"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 		} else {

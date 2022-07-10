@@ -69,6 +69,12 @@ const (
 	DefaultLivenessProbePeriodSeconds       = 0
 	DefaultLivenessProbeSuccessThreshold    = 0
 	DefaultLivenessProbeFailureThreshold    = 30
+
+	// Ray health check related configurations
+	DefaultRagAgentPort       = 52365
+	DefaultRayDashboardPort   = 8265
+	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
+	RayDashboardGCSHealthPath = "api/gcs_healthz"
 )
 
 type ServiceType string
