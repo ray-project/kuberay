@@ -134,6 +134,11 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		}
 	}
 
+	if unhealthyPod == nil {
+		log.Info("pod not found", "pod name", event.InvolvedObject.Name)
+		return ctrl.Result{}, nil
+	}
+
 	if enabledString, ok := unhealthyPod.Labels[common.RayHAEnabledLabelKey]; ok {
 		if strings.ToLower(enabledString) != "true" {
 			log.Info("HA not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)

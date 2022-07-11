@@ -239,7 +239,13 @@ class RayHATestCase(unittest.TestCase):
         # make sure the new head is ready
         shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=1200s')
         # make sure both head and worker pods are ready
-        shell_assert_success('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
+        rtn = shell_run('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
+        if rtn != 0:
+            shell_run('kubectl get pods -A')
+            shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+        assert  rtn == 0
 
     def test_ray_serve(self):
         client = docker.from_env()
