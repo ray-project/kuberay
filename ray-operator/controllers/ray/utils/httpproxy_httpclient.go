@@ -31,7 +31,7 @@ type RayHttpProxyClient struct {
 
 func (r *RayHttpProxyClient) InitClient() {
 	r.client = http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 20 * time.Millisecond,
 	}
 }
 

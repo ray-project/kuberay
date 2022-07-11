@@ -9,13 +9,13 @@ const (
 	RayNodeLabelKey                    = "ray.io/is-ray-node"
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
-	RayClusterServingServiceLabelKey   = "ray.io/serving"
+	RayClusterServingServiceLabelKey   = "ray.io/serve"
 
 	EnableAgentServiceKey  = "ray.io/enableAgentService"
 	EnableAgentServiceTrue = "true"
 
-	RayClusterServingServiceTrue  = "true"
-	RayClusterServingServiceFalse = "false"
+	EnableRayClusterServingServiceTrue  = "true"
+	EnableRayClusterServingServiceFalse = "false"
 
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
@@ -36,7 +36,7 @@ const (
 	DefaultDashboardName                = "dashboard"
 	DefaultMetricsName                  = "metrics"
 	DefaultDashboardAgentListenPortName = "dashboard-agent"
-	DefaultServingPortName              = "serving"
+	DefaultServingPortName              = "serve"
 
 	// The default application name
 	ApplicationName = "kuberay"
@@ -63,5 +63,5 @@ type ServiceType string
 const (
 	HeadService    ServiceType = "headService"
 	AgentService   ServiceType = "agentService"
-	ServingService ServiceType = "servingService"
+	ServingService ServiceType = "serveService"
 )

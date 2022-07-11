@@ -831,9 +831,9 @@ func (r *RayServiceReconciler) labelServingPods(ctx context.Context, rayClusterI
 	for _, pod := range allPods.Items {
 		httpProxyClient.SetHostIp(pod.Status.PodIP)
 		if httpProxyClient.CheckHealth() == nil {
-			pod.Labels[common.RayClusterServingServiceLabelKey] = common.RayClusterServingServiceTrue
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceTrue
 		} else {
-			pod.Labels[common.RayClusterServingServiceLabelKey] = common.RayClusterServingServiceFalse
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceFalse
 		}
 		if updateErr := r.Update(ctx, &pod); updateErr != nil {
 			r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
