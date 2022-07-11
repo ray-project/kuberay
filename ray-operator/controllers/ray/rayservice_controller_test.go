@@ -335,7 +335,7 @@ func checkAgentServiceExistence(ctx context.Context, service *rayiov1alpha1.RayS
 func checkServeServiceExistence(ctx context.Context, service *rayiov1alpha1.RayService) func() (bool, error) {
 	return func() (bool, error) {
 		agentService := corev1.Service{}
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(service.Status.ActiveServiceStatus.RayClusterName), Namespace: "default"}, &agentService); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(service.Name), Namespace: "default"}, &agentService); err != nil {
 			return false, err
 		}
 		return true, nil
