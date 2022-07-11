@@ -220,6 +220,8 @@ var _ = Context("Inside the default namespace", func() {
 		return &fakeRayDashboardClient
 	}
 
+	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
+
 	myRayCluster := &rayiov1alpha1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {
@@ -258,6 +260,18 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService status = %v", myRayService.Status)
+		})
+
+		It("Agent service should be created", func() {
+			Eventually(
+				checkAgentServiceExistence(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+		})
+
+		It("Serve service should be created", func() {
+			Eventually(
+				checkServeServiceExistence(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
@@ -307,6 +321,26 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
+
+func checkAgentServiceExistence(ctx context.Context, service *rayiov1alpha1.RayService) func() (bool, error) {
+	return func() (bool, error) {
+		agentService := corev1.Service{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(service.Status.ActiveServiceStatus.RayClusterName), Namespace: "default"}, &agentService); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+}
+
+func checkServeServiceExistence(ctx context.Context, service *rayiov1alpha1.RayService) func() (bool, error) {
+	return func() (bool, error) {
+		agentService := corev1.Service{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(service.Status.ActiveServiceStatus.RayClusterName), Namespace: "default"}, &agentService); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+}
 
 func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	client := utils.FakeRayDashboardClient{}

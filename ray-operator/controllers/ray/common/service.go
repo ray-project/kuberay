@@ -64,7 +64,7 @@ func BuildHeadServiceForRayService(rayService rayiov1alpha1.RayService, rayClust
 func BuildServingServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	labels := map[string]string{
 		RayServiceLabelKey:               rayService.Name,
-		RayClusterServingServiceLabelKey: utils.GenerateServingServiceLabel(rayService.Name),
+		RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(rayService.Name),
 	}
 	selectorLabels := map[string]string{
 		RayClusterLabelKey:               rayCluster.Name,
@@ -73,7 +73,7 @@ func BuildServingServiceForRayService(rayService rayiov1alpha1.RayService, rayCl
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateServingServiceName(rayService.Name),
+			Name:      utils.GenerateServeServiceName(rayService.Name),
 			Namespace: rayService.Namespace,
 			Labels:    labels,
 		},

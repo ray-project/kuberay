@@ -115,13 +115,13 @@ func GenerateDashboardAgentLabel(clusterName string) string {
 	return fmt.Sprintf("%s-%s", clusterName, DashboardName)
 }
 
-// GenerateServingServiceName generates name for serve service.
-func GenerateServingServiceName(serviceName string) string {
+// GenerateServeServiceName generates name for serve service.
+func GenerateServeServiceName(serviceName string) string {
 	return fmt.Sprintf("%s-%s-%s", serviceName, ServeName, "svc")
 }
 
-// GenerateServingServiceLabel generates label value for serve service selector.
-func GenerateServingServiceLabel(serviceName string) string {
+// GenerateServeServiceLabel generates label value for serve service selector.
+func GenerateServeServiceLabel(serviceName string) string {
 	return fmt.Sprintf("%s-%s", serviceName, ServeName)
 }
 
