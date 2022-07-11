@@ -26,6 +26,7 @@ func (r *FakeRayHttpProxyClient) SetHostIp(hostIp string) {
 }
 
 func (r *FakeRayHttpProxyClient) CheckHealth() error {
+	// TODO: test check return error cases.
 	// Always return successful.
 	return nil
 }

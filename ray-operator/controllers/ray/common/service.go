@@ -60,8 +60,8 @@ func BuildHeadServiceForRayService(rayService rayiov1alpha1.RayService, rayClust
 	return service, nil
 }
 
-// BuildServingServiceForRayService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
-func BuildServingServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
+// BuildServeServiceForRayService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
+func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
 	labels := map[string]string{
 		RayServiceLabelKey:               rayService.Name,
 		RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(rayService.Name),

@@ -675,7 +675,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	if serviceType == common.HeadService {
 		raySvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
 	} else if serviceType == common.ServingService {
-		raySvc, err = common.BuildServingServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+		raySvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
 	}
 
 	if err != nil {
