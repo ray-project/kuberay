@@ -67,6 +67,7 @@ kind: RayCluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
+  annotations:
     ray.io/ha-enabled: "true" # enable Ray HA
   name: raycluster-external-redis
 spec:

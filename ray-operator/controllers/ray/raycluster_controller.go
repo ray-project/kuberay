@@ -134,32 +134,32 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		}
 	}
 
-	if unhealthyPod == nil {
-		log.Info("pod not found", "pod name", event.InvolvedObject.Name)
+	if unhealthyPod == nil || unhealthyPod.Annotations == nil {
+		log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
 
-	if enabledString, ok := unhealthyPod.Labels[common.RayHAEnabledLabelKey]; ok {
+	if enabledString, ok := unhealthyPod.Annotations[common.RayHAEnabledAnnotationKey]; ok {
 		if strings.ToLower(enabledString) != "true" {
 			log.Info("HA not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
 			return ctrl.Result{}, nil
 		}
 	} else {
-		log.Info("HAEnabled label not found", "pod name", unhealthyPod.Name)
+		log.Info("HAEnabled annotation not found", "pod name", unhealthyPod.Name)
 		return ctrl.Result{}, nil
 	}
 
 	needUpdate := true
-	if !utils.IsRunningAndReady(unhealthyPod) {
+	if !utils.IsRunningAndReady(unhealthyPod) && unhealthyPod.Annotations != nil {
 		log.Info("mark pod unhealthy and need for a rebuild", "pod name", unhealthyPod.Name)
-		for k, v := range unhealthyPod.GetLabels() {
-			if k == common.RayNodeHealthStateLabelKey && v == common.PodUnhealthy {
+		for k, v := range unhealthyPod.GetAnnotations() {
+			if k == common.RayNodeHealthStateAnnotationKey && v == common.PodUnhealthy {
 				needUpdate = false
 			}
 		}
 		if needUpdate {
 			updatedPod := unhealthyPod.DeepCopy()
-			updatedPod.Labels[common.RayNodeHealthStateLabelKey] = common.PodUnhealthy
+			updatedPod.Annotations[common.RayNodeHealthStateAnnotationKey] = common.PodUnhealthy
 			if err := r.Update(context.TODO(), updatedPod); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -375,13 +375,15 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		}
 	} else {
 		// we have exactly one head pod running
-		if v, ok := headPods.Items[0].Labels[common.RayNodeHealthStateLabelKey]; ok && v == common.PodUnhealthy {
-			if err := r.Delete(context.TODO(), &headPods.Items[0]); err != nil {
-				return err
+		if headPods.Items[0].Annotations != nil {
+			if v, ok := headPods.Items[0].Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
+				if err := r.Delete(context.TODO(), &headPods.Items[0]); err != nil {
+					return err
+				}
+				log.Info(fmt.Sprintf("need to delete unhealthy head pod %s", headPods.Items[0].Name))
+				// we are deleting the head pod now, let's reconcile again later
+				return nil
 			}
-			log.Info(fmt.Sprintf("need to delete unhealthy head pod %s", headPods.Items[0].Name))
-			// we are deleting the head pod now, let's reconcile again later
-			return nil
 		}
 	}
 
@@ -432,7 +434,10 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 
 		// delete the worker pod if it is marked unhealthy
 		for _, workerPod := range workerPods.Items {
-			if v, ok := workerPod.Labels[common.RayNodeHealthStateLabelKey]; ok && v == common.PodUnhealthy {
+			if workerPod.Annotations == nil {
+				continue
+			}
+			if v, ok := workerPod.Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
 				if err := r.Delete(context.TODO(), &workerPod); err != nil {
 					return err
 				}

@@ -32,9 +32,12 @@ const (
 
 var log = logf.Log.WithName("RayCluster-Controller")
 
-// enabledHA check if RayCluster enabled HA in labels
-func enabledHA(instance rayiov1alpha1.RayCluster) bool {
-	if v, ok := instance.Labels[RayHAEnabledLabelKey]; ok {
+// rayClusterHAEnabled check if RayCluster enabled HA in annotations
+func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
+	if instance.Annotations == nil {
+		return false
+	}
+	if v, ok := instance.Annotations[RayHAEnabledAnnotationKey]; ok {
 		if strings.ToLower(v) == "true" {
 			return true
 		}
@@ -54,10 +57,19 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels,
-		enabledHA(instance))
+	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
+
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
+	}
+	if rayClusterHAEnabled(instance) {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
+	} else {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+	}
+	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -105,10 +117,19 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels,
-		enabledHA(instance))
+	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
+
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
+	}
+	if rayClusterHAEnabled(instance) {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
+	} else {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+	}
+	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
 
 	// add metrics port for exposing to the promethues stack.
 	metricsPort := v1.ContainerPort{
@@ -270,20 +291,22 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName)
 
 	// health check only if HA enabled
-	if enabledString, ok := podTemplateSpec.Labels[RayHAEnabledLabelKey]; ok {
-		if strings.ToLower(enabledString) == "true" {
-			// Ray HA is enabled and we need to add health checks
-			if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-				// add readiness probe
-				probe := &v1.Probe{}
-				pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
-				setReadinessProbe(probe, rayNodeType)
-			}
-			if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-				// add liveness probe
-				probe := &v1.Probe{}
-				pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
-				setLivenessProbe(probe, rayNodeType)
+	if podTemplateSpec.Annotations != nil {
+		if enabledString, ok := podTemplateSpec.Annotations[RayHAEnabledAnnotationKey]; ok {
+			if strings.ToLower(enabledString) == "true" {
+				// Ray HA is enabled and we need to add health checks
+				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+					// add readiness probe
+					probe := &v1.Probe{}
+					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+					setReadinessProbe(probe, rayNodeType)
+				}
+				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+					// add liveness probe
+					probe := &v1.Probe{}
+					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+					setLivenessProbe(probe, rayNodeType)
+				}
 			}
 		}
 	}
@@ -403,7 +426,7 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string, enabledHA bool) (ret map[string]string) {
+func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -417,13 +440,6 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 		KubernetesApplicationNameLabelKey:  ApplicationName,
 		KubernetesCreatedByLabelKey:        ComponentName,
 		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
-		RayNodeHealthStateLabelKey:         "",
-		RayHAEnabledLabelKey:               "false", // by default, Ray HA is disabled.
-	}
-
-	if enabledHA {
-		// add label RayHAEnabledLabelKey to the created pods if Ray HA is enabled
-		ret[RayHAEnabledLabelKey] = "true"
 	}
 
 	for k, v := range ret {
