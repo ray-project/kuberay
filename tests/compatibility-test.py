@@ -432,12 +432,6 @@ else:
         container.stop()
         client.close()
 
-    def test_kill_worker(self):
-        # if not ray_ha_supported():
-        #   raise unittest.SkipTest("ray ha is not supported")
-        # TODO: implement me
-        pass
-
 
 def parse_environment():
     global ray_version, ray_image, kuberay_sha

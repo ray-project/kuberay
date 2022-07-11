@@ -132,7 +132,6 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 }
 
 func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	// TODO : implement me
 	if rayNodeType == rayiov1alpha1.HeadNode {
 		// head node liveness probe
 		cmd := []string{
@@ -168,7 +167,6 @@ func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 }
 
 func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	// TODO : implement me
 	if rayNodeType == rayiov1alpha1.HeadNode {
 		// head node readiness probe
 		cmd := []string{
