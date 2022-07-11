@@ -152,6 +152,10 @@ var _ = Context("Inside the default namespace", func() {
 											Name:          "dashboard-agent",
 											ContainerPort: 52365,
 										},
+										{
+											Name:          "serve",
+											ContainerPort: 8000,
+										},
 									},
 								},
 							},
@@ -262,16 +266,28 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService status = %v", myRayService.Status)
 		})
 
-		It("Agent service should be created", func() {
+		It("should create a new head service resource", func() {
+			svc := &corev1.Service{}
 			Eventually(
-				checkAgentServiceExistence(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue())
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
 		})
 
-		It("Serve service should be created", func() {
+		It("should create a new agent service resource", func() {
+			svc := &corev1.Service{}
 			Eventually(
-				checkServeServiceExistence(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue())
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(myRayCluster.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My agent service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayClusterDashboardServiceLabelKey]).Should(Equal(utils.GenerateDashboardAgentLabel(myRayCluster.Name)))
+		})
+
+		It("should create a new serve service resource", func() {
+			svc := &corev1.Service{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(myRayService.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My serve service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
@@ -321,26 +337,6 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
-
-func checkAgentServiceExistence(ctx context.Context, service *rayiov1alpha1.RayService) func() (bool, error) {
-	return func() (bool, error) {
-		agentService := corev1.Service{}
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(service.Status.ActiveServiceStatus.RayClusterName), Namespace: "default"}, &agentService); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-}
-
-func checkServeServiceExistence(ctx context.Context, service *rayiov1alpha1.RayService) func() (bool, error) {
-	return func() (bool, error) {
-		agentService := corev1.Service{}
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(service.Status.ActiveServiceStatus.RayClusterName), Namespace: "default"}, &agentService); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-}
 
 func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	client := utils.FakeRayDashboardClient{}
