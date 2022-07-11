@@ -180,7 +180,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateService, err)
 			return ctrl.Result{}, err
 		}
-		if err := r.labelServingPods(ctx, rayClusterInstance); err != nil {
+		if err := r.labelHealthyServePods(ctx, rayClusterInstance); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{}, err
 		}
@@ -818,7 +818,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	return ctrl.Result{}, true, nil
 }
 
-func (r *RayServiceReconciler) labelServingPods(ctx context.Context, rayClusterInstance *rayv1alpha1.RayCluster) error {
+func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	allPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: rayClusterInstance.Name}
 
