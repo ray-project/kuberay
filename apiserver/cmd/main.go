@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-
 	"math"
 	"net"
 	"net/http"
@@ -11,10 +10,10 @@ import (
 	"strings"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
 	"k8s.io/klog/v2"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -82,7 +81,15 @@ func startHttpProxy() {
 	defer cancel()
 
 	// Create gRPC HTTP MUX and register services.
-	runtimeMux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{OrigName: true, EmitDefaults: true}))
+	runtimeMux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+			MarshalOptions: protojson.MarshalOptions{
+				UseProtoNames:  true,
+				UseEnumNumbers: true,
+			},
+		}),
+		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
+	)
 	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
 

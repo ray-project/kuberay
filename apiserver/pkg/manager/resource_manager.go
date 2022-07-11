@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
-
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -264,6 +264,10 @@ func (r *ResourceManager) DeleteComputeTemplate(ctx context.Context, name string
 func getClusterByName(ctx context.Context, client rayiov1alpha1.RayClusterInterface, name string) (*v1alpha1.RayCluster, error) {
 	cluster, err := client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, util.NewNotFoundError(err, "Cluster %s not found", name)
+		}
+
 		return nil, util.Wrap(err, "Get Cluster failed")
 	}
 	if managedBy, ok := cluster.Labels[util.KubernetesManagedByLabelKey]; !ok || managedBy != util.ComponentName {
@@ -277,6 +281,10 @@ func getClusterByName(ctx context.Context, client rayiov1alpha1.RayClusterInterf
 func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInterface, name string) (*v1.ConfigMap, error) {
 	runtime, err := client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, util.NewNotFoundError(err, "Cluster %s not found", name)
+		}
+
 		return nil, util.Wrap(err, "Get compute template failed")
 	}
 
