@@ -176,7 +176,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateIngress, err)
 			return ctrl.Result{}, err
 		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance); err != nil {
+		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, common.HeadService); err != nil {
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateService, err)
+			return ctrl.Result{}, err
+		}
+		if err := r.labelHealthyServePods(ctx, rayClusterInstance); err != nil {
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateServingPodLabel, err)
+			return ctrl.Result{}, err
+		}
+		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, common.ServingService); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedToUpdateService, err)
 			return ctrl.Result{}, err
 		}
@@ -660,42 +668,49 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 	return nil
 }
 
-func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
+func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serviceType common.ServiceType) error {
 	// Creat Service Struct.
-	rayHeadSvc, err := common.BuildServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+	var raySvc *corev1.Service
+	var err error
+	if serviceType == common.HeadService {
+		raySvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+	} else if serviceType == common.ServingService {
+		raySvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+	}
+
 	if err != nil {
 		return err
 	}
-	rayHeadSvc.Name = utils.CheckName(rayHeadSvc.Name)
+	raySvc.Name = utils.CheckName(raySvc.Name)
 
 	// Get Service instance.
-	headService := &corev1.Service{}
-	err = r.Get(ctx, client.ObjectKey{Name: rayHeadSvc.Name, Namespace: rayServiceInstance.Namespace}, headService)
+	rayService := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: raySvc.Name, Namespace: rayServiceInstance.Namespace}, rayService)
 
 	if err == nil {
 		// Update Service
-		headService.Spec = rayHeadSvc.Spec
+		rayService.Spec = raySvc.Spec
 		r.Log.V(1).Info("reconcileServices update service")
-		if updateErr := r.Update(ctx, headService); updateErr != nil {
-			r.Log.Error(updateErr, "rayHeadSvc Update error!", "rayHeadSvc.Error", updateErr)
+		if updateErr := r.Update(ctx, rayService); updateErr != nil {
+			r.Log.Error(updateErr, "raySvc Update error!", "raySvc.Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
 		// Create Service
 		r.Log.V(1).Info("reconcileServices create service")
-		if err := ctrl.SetControllerReference(rayServiceInstance, rayHeadSvc, r.Scheme); err != nil {
+		if err := ctrl.SetControllerReference(rayServiceInstance, raySvc, r.Scheme); err != nil {
 			return err
 		}
-		if createErr := r.Create(ctx, rayHeadSvc); createErr != nil {
+		if createErr := r.Create(ctx, raySvc); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
-				log.Info("rayHeadSvc already exists,no need to create")
+				log.Info("raySvc already exists,no need to create")
 				return nil
 			}
-			r.Log.Error(createErr, "rayHeadSvc create error!", "rayHeadSvc.Error", createErr)
+			r.Log.Error(createErr, "raySvc create error!", "raySvc.Error", createErr)
 			return createErr
 		}
 	} else {
-		r.Log.Error(err, "rayHeadSvc get error!")
+		r.Log.Error(err, "raySvc get error!")
 		return err
 	}
 
@@ -801,4 +816,30 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	return ctrl.Result{}, true, nil
+}
+
+func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClusterInstance *rayv1alpha1.RayCluster) error {
+	allPods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: rayClusterInstance.Name}
+
+	if err := r.List(ctx, &allPods, client.InNamespace(rayClusterInstance.Namespace), filterLabels); err != nil {
+		return err
+	}
+
+	httpProxyClient := utils.GetRayHttpProxyClientFunc()
+	httpProxyClient.InitClient()
+	for _, pod := range allPods.Items {
+		httpProxyClient.SetHostIp(pod.Status.PodIP)
+		if httpProxyClient.CheckHealth() == nil {
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceTrue
+		} else {
+			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceFalse
+		}
+		if updateErr := r.Update(ctx, &pod); updateErr != nil {
+			r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
+			return updateErr
+		}
+	}
+
+	return nil
 }

@@ -152,6 +152,10 @@ var _ = Context("Inside the default namespace", func() {
 											Name:          "dashboard-agent",
 											ContainerPort: 52365,
 										},
+										{
+											Name:          "serve",
+											ContainerPort: 8000,
+										},
 									},
 								},
 							},
@@ -220,6 +224,8 @@ var _ = Context("Inside the default namespace", func() {
 		return &fakeRayDashboardClient
 	}
 
+	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
+
 	myRayCluster := &rayiov1alpha1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {
@@ -258,6 +264,30 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService status = %v", myRayService.Status)
+		})
+
+		It("should create a new head service resource", func() {
+			svc := &corev1.Service{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
+		})
+
+		It("should create a new agent service resource", func() {
+			svc := &corev1.Service{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(myRayCluster.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My agent service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayClusterDashboardServiceLabelKey]).Should(Equal(utils.GenerateDashboardAgentLabel(myRayCluster.Name)))
+		})
+
+		It("should create a new serve service resource", func() {
+			svc := &corev1.Service{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(myRayService.Name), Namespace: "default"}, svc),
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "My serve service = %v", svc)
+			Expect(svc.Spec.Selector[common.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
