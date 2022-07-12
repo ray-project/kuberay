@@ -627,10 +627,14 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	}
 	// only in invalid status that we update the status to unhealthy.
 	if !isValid {
-		instance.Status.State = rayiov1alpha1.Unhealthy
+		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Unhealthy); updateErr != nil {
+			log.Error(updateErr, "RayCluster update state error", "cluster name", instance.Name)
+		}
 	} else {
 		if utils.CheckAllPodsRunnning(runtimePods) {
-			instance.Status.State = rayiov1alpha1.Ready
+			if updateErr := r.updateClusterState(instance, rayiov1alpha1.Ready); updateErr != nil {
+				log.Error(updateErr, "RayCluster update state error", "cluster name", instance.Name)
+			}
 		}
 	}
 
