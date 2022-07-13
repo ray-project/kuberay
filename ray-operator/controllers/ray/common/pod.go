@@ -257,15 +257,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
 	}
-	externalRedis := false
-	for _, envVar := range pod.Spec.Containers[rayContainerIndex].Env {
-		if envVar.Name == "RAY_REDIS_ADDRESS" && envVar.Value != "" {
-			externalRedis = true
-		}
-	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources,
-			externalRedis)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
@@ -561,8 +554,7 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements,
-	needRedisInstalled bool) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -592,19 +584,9 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 	switch nodeType {
 	case rayiov1alpha1.HeadNode:
-		if needRedisInstalled {
-			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
-				"ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
-		} else {
-			return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
-		}
+		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
 	case rayiov1alpha1.WorkerNode:
-		if needRedisInstalled {
-			return fmt.Sprintf("/home/ray/anaconda3/bin/pip install redis; "+
-				"ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
-		} else {
-			return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
-		}
+		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}
