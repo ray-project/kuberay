@@ -45,6 +45,18 @@ func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
 	return false
 }
 
+func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate v1.PodTemplateSpec) {
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
+	}
+	if rayClusterHAEnabled(instance) {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
+	} else {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+	}
+	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
+}
+
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string) v1.PodTemplateSpec {
 	podTemplate := headSpec.Template
@@ -61,15 +73,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName)
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
-	if podTemplate.Annotations == nil {
-		podTemplate.Annotations = make(map[string]string)
-	}
-	if rayClusterHAEnabled(instance) {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
-	} else {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
-	}
-	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
+	initTemplateAnnotations(instance, podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -121,15 +125,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
-	if podTemplate.Annotations == nil {
-		podTemplate.Annotations = make(map[string]string)
-	}
-	if rayClusterHAEnabled(instance) {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
-	} else {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
-	}
-	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
+	initTemplateAnnotations(instance, podTemplate)
 
 	// add metrics port for exposing to the promethues stack.
 	metricsPort := v1.ContainerPort{
@@ -157,7 +153,7 @@ func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 		// head node liveness probe
 		cmd := []string{
 			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRagAgentPort, RayAgentRayletHealthPath),
+				DefaultRayAgentPort, RayAgentRayletHealthPath),
 			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
 				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
 		}
@@ -166,7 +162,7 @@ func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 		// worker node liveness probe
 		cmd := []string{
 			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRagAgentPort, RayAgentRayletHealthPath),
+				DefaultRayAgentPort, RayAgentRayletHealthPath),
 		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	}
@@ -192,7 +188,7 @@ func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 		// head node readiness probe
 		cmd := []string{
 			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRagAgentPort, RayAgentRayletHealthPath),
+				DefaultRayAgentPort, RayAgentRayletHealthPath),
 			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
 				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
 		}
@@ -201,7 +197,7 @@ func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
 		// worker node readiness probe
 		cmd := []string{
 			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRagAgentPort, RayAgentRayletHealthPath),
+				DefaultRayAgentPort, RayAgentRayletHealthPath),
 		}
 		probe.Exec = &v1.ExecAction{Command: cmd}
 	}
