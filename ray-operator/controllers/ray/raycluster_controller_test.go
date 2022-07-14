@@ -58,7 +58,6 @@ var _ = Context("Inside the default namespace", func() {
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				ServiceType: "ClusterIP",
-				Replicas:    pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
@@ -212,16 +211,16 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should update a raycluster object deleting a random pod", func() {
 			// adding a scale down
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-			rep := new(int32)
-			*rep = 2
-			myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
-
-			// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
-			// We need to handle conflict error and retry the update.
 			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				rep := new(int32)
+				*rep = 2
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
+
+				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
+				// We need to handle conflict error and retry the update.
 				return k8sClient.Update(ctx, myRayCluster)
 			})
 

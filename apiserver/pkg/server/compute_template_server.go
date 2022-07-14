@@ -103,6 +103,10 @@ func ValidateCreateComputeTemplateRequest(request *api.CreateComputeTemplateRequ
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
 
+	if request.Namespace != request.ComputeTemplate.Namespace {
+		return util.NewInvalidInputError("The namespace in the request is different from the namespace defined in the compute template.")
+	}
+
 	if request.ComputeTemplate.Name == "" {
 		return util.NewInvalidInputError("Compute template name is empty. Please specify a valid value.")
 	}

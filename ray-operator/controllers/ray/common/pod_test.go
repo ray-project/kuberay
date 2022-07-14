@@ -181,7 +181,7 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
-	Image:           "rayproject/ray:836b08",
+	Image:           "rayproject/ray:7d3ceb",
 	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{

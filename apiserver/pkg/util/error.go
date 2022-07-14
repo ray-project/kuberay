@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	k8metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -213,6 +214,13 @@ func (e *UserError) Cause() error {
 func (e *UserError) String() string {
 	return fmt.Sprintf("%v (code: %v): %+v", e.externalMessage, e.externalStatusCode,
 		e.internalError)
+}
+
+// GRPCStatus implements `GRPCStatus` to make sure `FromError` in grpc-go can honor the code.
+// Otherwise, it will always return codes.Unknown(2).
+// https://github.com/grpc/grpc-go/blob/2c0949c22d46095edc579d9e66edcd025192b98c/status/status.go#L91-L92
+func (e *UserError) GRPCStatus() *status.Status {
+	return status.New(e.externalStatusCode, e.externalMessage)
 }
 
 func (e *UserError) wrapf(format string, args ...interface{}) *UserError {
