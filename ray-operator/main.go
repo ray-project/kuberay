@@ -52,7 +52,7 @@ func main() {
 		"watch-namespace",
 		"",
 		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
-	flag.BoolVar(&ray.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", false,
+	flag.BoolVar(&ray.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", true,
 		"Temporary feature flag - to be deleted after testing")
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
