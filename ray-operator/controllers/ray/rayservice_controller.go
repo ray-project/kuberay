@@ -191,7 +191,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		rayServiceLog.Error(err, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
+		rayServiceLog.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
 		return ctrl.Result{}, err
 	}
 
@@ -483,7 +483,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	shouldUpdate := false
 
-	if !ok || !utils.CompareJsonStruct(existConfig, rayServiceInstance.Spec) {
+	if !ok || !utils.CompareJsonStruct(existConfig, rayServiceInstance.Spec) || len(serveStatus.ServeStatuses) == 0 {
 		shouldUpdate = true
 	}
 
