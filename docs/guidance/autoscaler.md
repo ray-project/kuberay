@@ -5,18 +5,12 @@
 ### Prerequisite
 
 You have to use nightly operator images because [autoscaler support](https://github.com/ray-project/kuberay/pull/163) is merged recently.
-You can follow below steps for a quick deployment.
+To deploy the nightly RayCluster CRD and operator:
 
 ```
-git clone https://github.com/ray-project/kuberay.git
-cd kuberay
-kubectl create -k manifests/cluster-scope-resources
-kubectl apply -k manifests/overlays/autoscaling
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
 ```
-
-> Note: For compatibility with the Ray autoscaler, the KubeRay Operator's entrypoint
-> must include the flag `--prioritize-workers-to-delete`. The kustomization overlay
-> `manifests/overlays/autoscaling` provided in the last command above adds the necessary flag.
 
 ### Deploy a cluster with autoscaling enabled
 
@@ -32,7 +26,7 @@ NAME                                             READY   STATUS    RESTARTS   AG
 raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
 ```
 
-The recommended way is to check containers logs. Here's an example of well-behaved autoscaler.
+The recommended way is to check containers logs. Here's an example of a well-behaved autoscaler.
 ```
 kubectl logs -f raycluster-autoscaler-head-mgwwk autoscaler
 
