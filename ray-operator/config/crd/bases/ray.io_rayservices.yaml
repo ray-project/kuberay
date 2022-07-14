@@ -81,7 +81,7 @@ spec:
                             type: object
                         type: object
                       upscalingMode:
-                        description: UpscalineMode is "Default" or "Aggressive.
+                        description: UpscalingMode is "Default" or "Aggressive.
                         enum:
                         - Default
                         - Aggressive
