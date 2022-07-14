@@ -627,7 +627,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 
 func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) error {
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{"rayClusterName": instance.Name}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}

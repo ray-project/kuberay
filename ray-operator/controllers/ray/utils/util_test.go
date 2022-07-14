@@ -33,6 +33,25 @@ func TestStatus(t *testing.T) {
 	}
 }
 
+func TestCheckAllPodsRunnning(t *testing.T) {
+	pods := []corev1.Pod{
+		*createSomePod(),
+		*createSomePod(),
+	}
+	pods[0].Status.Phase = corev1.PodPending
+	pods[1].Status.Phase = corev1.PodRunning
+	podList1 := corev1.PodList{
+		Items: pods,
+	}
+	if CheckAllPodsRunnning(podList1) {
+		t.Fail()
+	}
+	podList2 := corev1.PodList{}
+	if CheckAllPodsRunnning(podList2) {
+		t.Fail()
+	}
+}
+
 func TestCheckName(t *testing.T) {
 	// test 1 -> change
 	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
