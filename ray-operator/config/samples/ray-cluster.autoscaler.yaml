@@ -21,7 +21,7 @@ spec:
     # IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     idleTimeoutSeconds: 300
     # Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
-    image: "rayproject/ray:7d3ceb"
+    image: "rayproject/ray:a304d1"
     # ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
     imagePullPolicy: Always
   ######################headGroupSpecs#################################
