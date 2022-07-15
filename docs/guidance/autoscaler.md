@@ -5,7 +5,7 @@
 ### Prerequisite
 
 You have to use nightly operator images because [autoscaler support](https://github.com/ray-project/kuberay/pull/163) is merged recently.
-You can follow below steps for a quick deployment.
+To deploy the nightly RayCluster CRD and KubeRay, run
 
 ```
 git clone https://github.com/ray-project/kuberay.git
@@ -14,15 +14,14 @@ kubectl create -k manifests/cluster-scope-resources
 kubectl apply -k manifests/overlays/autoscaling
 ```
 
-> Note: For compatibility with the Ray autoscaler, the KubeRay Operator's entrypoint
-> must include the flag `--prioritize-workers-to-delete`. The kustomization overlay
-> `manifests/overlays/autoscaling` provided in the last command above adds the necessary flag.
-
 ### Deploy a cluster with autoscaling enabled
 
+Next, to deploy a sample autoscaling Ray cluster, run
 ```
 kubectl apply -f ray-operator/config/samples/ray-cluster.autoscaler.yaml
 ```
+
+See the above config file for details on autoscaling configuration.
 
 To verify autoscaler is working, **Do not** trust READY container status because autoscaler container has in-built retry and even there's error, it won't crash now.
 
@@ -32,7 +31,7 @@ NAME                                             READY   STATUS    RESTARTS   AG
 raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
 ```
 
-The recommended way is to check containers logs. Here's an example of well-behaved autoscaler.
+The recommended way is to check containers logs. Here's an example of logs from a healthy autoscaler.
 ```
 kubectl logs -f raycluster-autoscaler-head-mgwwk autoscaler
 
@@ -62,7 +61,7 @@ Demands:
  (no resource demands)
 ```
 
-#### Known issues and limitations
+#### Notes
 
 1. The operator will recognize the following setting and automatically inject a preconfigured autoscaler container to the head pod.
    The service account, role, and role binding needed by the autoscaler will be created by the operator out-of-box.
@@ -75,7 +74,7 @@ Demands:
       enableInTreeAutoscaling: true
     ```
 
-2. The autoscaler image is `rayproject/ray:7d3ceb` which reflects the latest changes from the Ray master branch.
+2. The autoscaler image is `rayproject/ray:a304d1` which reflects the latest changes from the Ray master branch.
 
 3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. The autoscaler image used
 is compatible with all Ray versions >= 1.11.0.
@@ -96,4 +95,4 @@ ray.init("auto")
 ray.autoscaler.sdk.request_resources(num_cpus=4)
 ```
 
-You can see new ray nodes (pods) are joinning the cluster if the default node group doesn't have enough resources.
+You should then see two extra Ray nodes (pods) scale up to satisfy the 4 CPU demand.

@@ -75,7 +75,7 @@ type AutoscalerOptions struct {
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 300 (five minutes).
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
-	// UpscalineMode is "Default" or "Aggressive."
+	// UpscalingMode is "Default" or "Aggressive."
 	// Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Aggressive: Upscaling is not rate-limited.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
