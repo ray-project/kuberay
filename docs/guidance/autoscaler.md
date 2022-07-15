@@ -8,15 +8,20 @@ You have to use nightly operator images because [autoscaler support](https://git
 To deploy the nightly RayCluster CRD and operator:
 
 ```
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
+git clone https://github.com/ray-project/kuberay.git
+cd kuberay
+kubectl create -k manifests/cluster-scope-resources
+kubectl apply -k manifests/overlays/autoscaling
 ```
 
 ### Deploy a cluster with autoscaling enabled
 
+To deploy a sample autoscaling Ray cluster, run
 ```
 kubectl apply -f ray-operator/config/samples/ray-cluster.autoscaler.yaml
 ```
+
+See the above config file for details on autoscaling configuration.
 
 To verify autoscaler is working, **Do not** trust READY container status because autoscaler container has in-built retry and even there's error, it won't crash now.
 
@@ -26,7 +31,7 @@ NAME                                             READY   STATUS    RESTARTS   AG
 raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
 ```
 
-The recommended way is to check containers logs. Here's an example of a well-behaved autoscaler.
+The recommended way is to check containers logs. Here's an example of logs from a healthy autoscaler.
 ```
 kubectl logs -f raycluster-autoscaler-head-mgwwk autoscaler
 
@@ -56,7 +61,7 @@ Demands:
  (no resource demands)
 ```
 
-#### Known issues and limitations
+#### Notes
 
 1. The operator will recognize the following setting and automatically inject a preconfigured autoscaler container to the head pod.
    The service account, role, and role binding needed by the autoscaler will be created by the operator out-of-box.
@@ -90,4 +95,4 @@ ray.init("auto")
 ray.autoscaler.sdk.request_resources(num_cpus=4)
 ```
 
-You can see new ray nodes (pods) are joinning the cluster if the default node group doesn't have enough resources.
+You should then see two extra Ray nodes (pods) scale up to satisfy the 4 CPU demand.
