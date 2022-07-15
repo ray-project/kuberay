@@ -14,15 +14,15 @@ spec:
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
   # The configuration below represents the DEFAULTS.
   autoscalerOptions:
-    # UpscalineMode is "Default" or "Aggressive."
+    # upscalingMode is "Default" or "Aggressive."
     # Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
     # Aggressive: Upscaling is not rate-limited.
     upscalingMode: Default
-    # IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+    # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     idleTimeoutSeconds: 300
-    # Image optionally overrides the autoscaler's container image.
+    # image optionally overrides the autoscaler's container image.
     image: "rayproject/ray:a304d1"
-    # ImagePullPolicy optionally overrides the autoscaler container's image pull policy.
+    # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
     imagePullPolicy: Always
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
