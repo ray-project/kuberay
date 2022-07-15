@@ -12,7 +12,7 @@ spec:
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
-  # The configuration below represents the DEFAULTS.
+  # The example configuration shownbelow below represents the DEFAULT values.
   autoscalerOptions:
     # upscalingMode is "Default" or "Aggressive."
     # Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
