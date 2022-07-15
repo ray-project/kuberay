@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-service
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ .Values.name }}
+  ports:
+    {{- toYaml .Values.service.ports | nindent 12 }}
