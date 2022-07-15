@@ -268,6 +268,12 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		log.Info("reconcilePods ", "head pod found", headPod.Name)
 		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
 			log.Info("reconcilePods", "head pod is up and running... checking workers", headPod.Name)
+		} else if headPod.Status.Phase == corev1.PodFailed && strings.Contains(headPod.Status.Reason, "Evicted") {
+			// Handle evicted pod
+			log.Info("reconcilePods", "head pod has been evicted and controller needs to replace the pod", headPod.Name)
+			if err := r.Delete(context.TODO(), &headPod); err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
 		}

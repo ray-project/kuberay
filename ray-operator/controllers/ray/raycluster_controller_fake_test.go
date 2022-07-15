@@ -55,6 +55,7 @@ var (
 	expectReplicaNum        int32
 	testPods                []runtime.Object
 	testRayCluster          *rayiov1alpha1.RayCluster
+	headSelector            labels.Selector
 	workerSelector          labels.Selector
 	workersToDelete         []string
 )
@@ -309,7 +310,13 @@ func setupTest(t *testing.T) {
 		selection.Equals,
 		groupNameReqValue)
 	assert.Nil(t, err, "Fail to create requirement")
-
+	headNameReqValue := []string{headGroupNameStr}
+	headNameReq, err := labels.NewRequirement(
+		common.RayNodeGroupLabelKey,
+		selection.Equals,
+		headNameReqValue)
+	assert.Nil(t, err, "Fail to create requirement")
+	headSelector = labels.NewSelector().Add(*headNameReq)
 	workerSelector = labels.NewSelector().Add(*instanceReq).Add(*groupNameReq)
 }
 
@@ -570,6 +577,45 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
 		}
 	}
+}
+
+func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+
+	podList := corev1.PodList{}
+	err := fakeClient.List(context.Background(), &podList, client.InNamespace(namespaceStr))
+
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+
+	// Simulate head pod get evicted.
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	podList.Items[0].Status.Reason = "Evicted"
+	err = fakeClient.Update(context.Background(), &podList.Items[0])
+	assert.Nil(t, err, "Fail to get update pod status")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	err = testRayClusterReconciler.reconcilePods(testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
+
+	// Filter head pod
+	err = fakeClient.List(context.Background(), &podList, &client.ListOptions{
+		LabelSelector: headSelector,
+		Namespace:     namespaceStr,
+	})
+
+	assert.Nil(t, err, "Fail to get pod list after reconcile")
+	assert.Equal(t, 0, len(podList.Items),
+		"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
 }
 
 func TestReconcile_UpdateLocalWorkersToDelete_OK(t *testing.T) {
