@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -56,6 +57,7 @@ var (
 	testPods                []runtime.Object
 	testRayCluster          *rayiov1alpha1.RayCluster
 	headSelector            labels.Selector
+	testServices            []runtime.Object
 	workerSelector          labels.Selector
 	workersToDelete         []string
 )
@@ -296,6 +298,26 @@ func setupTest(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster)
+	if err != nil {
+		t.Errorf("failed to build head service: %v", err)
+	}
+	// K8s automatically sets TargetPort to the same value as Port. So we mimic that behavior here.
+	for i, port := range headService.Spec.Ports {
+		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
+	}
+	dashboardService, err := common.BuildDashboardService(*testRayCluster)
+	if err != nil {
+		t.Errorf("failed to build dashboard service: %v", err)
+	}
+	for i, port := range dashboardService.Spec.Ports {
+		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
+	}
+	testServices = []runtime.Object{
+		headService,
+		dashboardService,
 	}
 
 	instanceReqValue := []string{instanceName}
@@ -729,4 +751,31 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 	err = fakeClient.Get(context.Background(), rbNamespacedName, &rb)
 
 	assert.Nil(t, err, "Fail to get autoscaler RoleBinding after reconciliation")
+}
+
+func TestUpdateEndpoints(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testServices...).Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	if err := testRayClusterReconciler.updateEndpoints(testRayCluster); err != nil {
+		t.Errorf("updateEndpoints failed: %v", err)
+	}
+
+	expected := map[string]string{
+		"client":    "10001",
+		"dashboard": "8265",
+		"metrics":   "8080",
+		"redis":     "6379",
+		"serve":     "8000",
+	}
+	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }
