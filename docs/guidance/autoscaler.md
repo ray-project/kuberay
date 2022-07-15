@@ -5,7 +5,7 @@
 ### Prerequisite
 
 You have to use nightly operator images because [autoscaler support](https://github.com/ray-project/kuberay/pull/163) is merged recently.
-To deploy the nightly RayCluster CRD and operator:
+To deploy the nightly RayCluster CRD and KubeRay, run
 
 ```
 git clone https://github.com/ray-project/kuberay.git
@@ -16,7 +16,7 @@ kubectl apply -k manifests/overlays/autoscaling
 
 ### Deploy a cluster with autoscaling enabled
 
-To deploy a sample autoscaling Ray cluster, run
+Next, to deploy a sample autoscaling Ray cluster, run
 ```
 kubectl apply -f ray-operator/config/samples/ray-cluster.autoscaler.yaml
 ```
