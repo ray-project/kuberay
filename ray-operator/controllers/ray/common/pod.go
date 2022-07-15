@@ -148,73 +148,49 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-func setLivenessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	if rayNodeType == rayiov1alpha1.HeadNode {
-		// head node liveness probe
-		cmd := []string{
-			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayAgentPort, RayAgentRayletHealthPath),
-			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	if probe.Exec == nil {
+		// we only create the probe if user did not specify any.
+		if rayNodeType == rayiov1alpha1.HeadNode {
+			// head node liveness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayAgentPort, RayAgentRayletHealthPath),
+				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		} else {
+			// worker node liveness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayAgentPort, RayAgentRayletHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
 		}
-		probe.Exec = &v1.ExecAction{Command: cmd}
-	} else {
-		// worker node liveness probe
-		cmd := []string{
-			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayAgentPort, RayAgentRayletHealthPath),
-		}
-		probe.Exec = &v1.ExecAction{Command: cmd}
-	}
-	if probe.InitialDelaySeconds != 0 {
-		probe.InitialDelaySeconds = DefaultLivenessProbeInitialDelaySeconds
-	}
-	if probe.TimeoutSeconds != 0 {
-		probe.TimeoutSeconds = DefaultLivenessProbeTimeoutSeconds
-	}
-	if probe.PeriodSeconds != 0 {
-		probe.PeriodSeconds = DefaultLivenessProbePeriodSeconds
-	}
-	if probe.SuccessThreshold != 0 {
-		probe.SuccessThreshold = DefaultLivenessProbeSuccessThreshold
-	}
-	if probe.FailureThreshold != 0 {
-		probe.FailureThreshold = DefaultLivenessProbeFailureThreshold
 	}
 }
 
-func setReadinessProbe(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	if rayNodeType == rayiov1alpha1.HeadNode {
-		// head node readiness probe
-		cmd := []string{
-			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayAgentPort, RayAgentRayletHealthPath),
-			"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	if probe.Exec == nil {
+		// we only create the probe if user did not specify any.
+		if rayNodeType == rayiov1alpha1.HeadNode {
+			// head node readiness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayAgentPort, RayAgentRayletHealthPath),
+				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		} else {
+			// worker node readiness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultRayAgentPort, RayAgentRayletHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
 		}
-		probe.Exec = &v1.ExecAction{Command: cmd}
-	} else {
-		// worker node readiness probe
-		cmd := []string{
-			"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-				DefaultRayAgentPort, RayAgentRayletHealthPath),
-		}
-		probe.Exec = &v1.ExecAction{Command: cmd}
-	}
-	if probe.InitialDelaySeconds != 0 {
-		probe.InitialDelaySeconds = DefaultReadinessProbeInitialDelaySeconds
-	}
-	if probe.TimeoutSeconds != 0 {
-		probe.TimeoutSeconds = DefaultReadinessProbeTimeoutSeconds
-	}
-	if probe.PeriodSeconds != 0 {
-		probe.PeriodSeconds = DefaultReadinessProbePeriodSeconds
-	}
-	if probe.SuccessThreshold != 0 {
-		probe.SuccessThreshold = DefaultReadinessProbeSuccessThreshold
-	}
-	if probe.FailureThreshold != 0 {
-		probe.FailureThreshold = DefaultReadinessProbeFailureThreshold
 	}
 }
 
@@ -285,17 +261,34 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			if strings.ToLower(enabledString) == "true" {
 				// Ray HA is enabled and we need to add health checks
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-					// add readiness probe
-					probe := &v1.Probe{}
+					// it is possible that some user have the probe parameters to override the default,
+					// in this case, this if condition is skipped
+					probe := &v1.Probe{
+						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+						PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+					}
 					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
-					setReadinessProbe(probe, rayNodeType)
 				}
+				// add readiness probe exec command in case missing.
+				initReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
+
 				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-					// add liveness probe
-					probe := &v1.Probe{}
+					// it is possible that some user have the probe parameters to override the default,
+					// in this case, this if condition is skipped
+					probe := &v1.Probe{
+						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+						PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+					}
 					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
-					setLivenessProbe(probe, rayNodeType)
 				}
+				// add liveness probe exec command in case missing
+				initLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
 			}
 		}
 	}
