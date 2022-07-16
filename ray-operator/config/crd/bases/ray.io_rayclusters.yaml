@@ -10992,6 +10992,11 @@ spec:
                   type: string
                 description: Service Endpoints
                 type: object
+              metadata:
+                additionalProperties:
+                  type: string
+                description: Metadata
+                type: object
               lastUpdateTime:
                 description: LastUpdateTime indicates last update timestamp for this
                   cluster status.

@@ -55,6 +55,8 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 	for name, port := range cluster.Status.Endpoints {
 		pbCluster.ServiceEndpoint[name] = port
 	}
+
+	pbCluster.Metadata = cluster.Status.Metadata
 	return pbCluster
 }
 

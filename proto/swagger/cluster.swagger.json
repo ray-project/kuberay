@@ -299,6 +299,13 @@
             "type": "string"
           },
           "title": "Output. The service endpoint of the cluster"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Output. Various metadata about the cluster."
         }
       }
     },

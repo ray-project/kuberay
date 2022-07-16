@@ -161,6 +161,9 @@ message Cluster {
   
   // Output. The service endpoint of the cluster
   map<string, string> service_endpoint = 11;
+
+  // Output. Various metadata about the cluster.
+  map<string, string> metadata = 12;
 }
 
 message ClusterSpec {

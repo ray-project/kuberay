@@ -112,6 +112,8 @@ type RayClusterStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Service Endpoints
 	Endpoints map[string]string `json:"endpoints,omitempty"`
+	// Metadata
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // RayNodeType  the type of a ray node: head/worker

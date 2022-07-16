@@ -778,6 +778,10 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		return err
 	}
 
+	if err := r.updateMetadata(instance); err != nil {
+		return err
+	}
+
 	timeNow := metav1.Now()
 	instance.Status.LastUpdateTime = &timeNow
 	if err := r.Status().Update(context.Background(), instance); err != nil {
@@ -954,4 +958,22 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
 	return r.Status().Update(context.Background(), instance)
+}
+
+func (r *RayClusterReconciler) updateMetadata(instance *rayiov1alpha1.RayCluster) error {
+	runtimePods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
+	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return err
+	}
+	if len(runtimePods.Items) < 1 {
+		r.Log.Info("Unable to find head node pod. Not updating status with head IP", "cluster name", instance.Name, "filter labels", filterLabels)
+	} else if len(runtimePods.Items) > 1 {
+		r.Log.Info("Found multiple head node pods. Not updating status with head IP", "cluster name", instance.Name, "filter labels", filterLabels)
+	}
+
+	instance.Status.Metadata = map[string]string{
+		common.HeadNodeIpKey: runtimePods.Items[0].Status.PodIP,
+	}
+	return nil
 }

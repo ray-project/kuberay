@@ -98,6 +98,7 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				PodIP: "123.123.123.123",
 			},
 		},
 		&corev1.Pod{
@@ -778,4 +779,27 @@ func TestUpdateEndpoints(t *testing.T) {
 		"serve":     "8000",
 	}
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
+}
+
+func TestUpdateMetadata(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	if err := testRayClusterReconciler.updateMetadata(testRayCluster); err != nil {
+		t.Errorf("updateMetadata failed: %v", err)
+	}
+
+	expected := map[string]string{
+		"head_node_ip": "123.123.123.123",
+	}
+	assert.Equal(t, expected, testRayCluster.Status.Metadata, "RayCluster status.metadata not updated")
 }

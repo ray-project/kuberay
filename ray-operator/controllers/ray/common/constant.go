@@ -88,6 +88,8 @@ const (
 	// Ray health check related configurations
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
+	// Cluster metadata keys
+	HeadNodeIpKey = "head_node_ip"
 )
 
 type ServiceType string
