@@ -36,10 +36,10 @@ var (
 )
 
 const (
-	ServiceDefaultRequeueDuration     = 2 * time.Second
-	ServiceRestartRequeueDuration     = 10 * time.Second
-	DashboardUnhealthySecondThreshold = 60.0
-	servicePortName                   = "dashboard-agent"
+	ServiceDefaultRequeueDuration          = 2 * time.Second
+	ServiceRestartRequeueDuration          = 10 * time.Second
+	DashboardAgentUnhealthySecondThreshold = 60.0
+	servicePortName                        = "dashboard-agent"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -600,7 +600,7 @@ func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceClusterSt
 		rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime = &timeNow
 	}
 
-	return time.Since(rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= DashboardUnhealthySecondThreshold
+	return time.Since(rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= DashboardAgentUnhealthySecondThreshold
 }
 
 func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1alpha1.RayService) {

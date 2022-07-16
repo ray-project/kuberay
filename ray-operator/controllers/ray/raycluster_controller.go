@@ -95,7 +95,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			log.Error(err, "Read request instance error!")
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
