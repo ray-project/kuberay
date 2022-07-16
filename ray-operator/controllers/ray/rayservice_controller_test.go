@@ -27,6 +27,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
