@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/go-logr/logr v1.2.0
-	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/orcaman/concurrent-map v1.0.0

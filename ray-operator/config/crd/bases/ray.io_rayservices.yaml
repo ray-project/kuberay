@@ -34,6 +34,9 @@ spec:
           spec:
             description: RayServiceSpec defines the desired state of RayService
             properties:
+              deploymentUnhealthySecondThreshold:
+                format: int32
+                type: integer
               rayClusterConfig:
                 description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
                   NOTE: json tags are required.'
@@ -11538,6 +11541,9 @@ spec:
                 required:
                 - importPath
                 type: object
+              serviceUnhealthySecondThreshold:
+                format: int32
+                type: integer
             type: object
           status:
             description: RayServiceStatuses defines the observed state of RayService

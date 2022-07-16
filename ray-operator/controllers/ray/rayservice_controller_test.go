@@ -316,15 +316,15 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("Should detect unhealthy status and try to switch to new RayCluster.", func() {
 			// Set a wrong serve status with unhealthy.
-			orignialServeDeploymentUnhealthySecondThreshold := ServeDeploymentUnhealthySecondThreshold
-			ServeDeploymentUnhealthySecondThreshold = 5
+			orignialServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
+			ServiceUnhealthySecondThreshold = 5
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UNHEALTHY"))
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 
-			ServeDeploymentUnhealthySecondThreshold = orignialServeDeploymentUnhealthySecondThreshold
+			ServiceUnhealthySecondThreshold = orignialServeDeploymentUnhealthySecondThreshold
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
 
