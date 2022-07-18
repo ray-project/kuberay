@@ -2,19 +2,36 @@ package utils
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
+	fmtErrors "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/json"
+
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+)
+
+// TODO: currently the following constants are also declared in ray-operator/controllers/ray/common
+// We cannot import them to avoid cycles
+const (
+	DefaultDashboardName                = "dashboard"
+	DefaultDashboardAgentListenPortName = "dashboard-agent"
 )
 
 var (
 	DeployPath = "/api/serve/deployments/"
 	StatusPath = "/api/serve/deployments/status"
+	JobPath    = "/api/jobs/"
 )
 
 // ServeConfigSpec defines the desired state of RayService, used by Ray Dashboard.
@@ -62,6 +79,8 @@ type RayDashboardClientInterface interface {
 	UpdateDeployments(specs rayv1alpha1.ServeDeploymentGraphSpec) error
 	GetDeploymentsStatus() (*ServeDeploymentStatuses, error)
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
+	GetJobInfo(jobId string) (*RayJobInfo, error)
+	SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -74,6 +93,68 @@ func GetRayDashboardClient() RayDashboardClientInterface {
 type RayDashboardClient struct {
 	client       http.Client
 	dashboardURL string
+}
+
+func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
+	dashboardAgentService := &corev1.Service{}
+	dashboardAgentServiceName := CheckName(GenerateDashboardServiceName(rayCluster.Name))
+	if err := cli.Get(ctx, client.ObjectKey{Name: dashboardAgentServiceName, Namespace: rayCluster.Namespace}, dashboardAgentService); err != nil {
+		return "", err
+	}
+
+	log.V(1).Info("fetchDashboardAgentURL ", "dashboard agent service found", dashboardAgentService.Name)
+	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
+	servicePorts := dashboardAgentService.Spec.Ports
+
+	dashboardPort := int32(-1)
+
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == DefaultDashboardAgentListenPortName {
+			dashboardPort = servicePort.Port
+			break
+		}
+	}
+
+	if dashboardPort == int32(-1) {
+		return "", fmtErrors.Errorf("dashboard port not found")
+	}
+
+	dashboardAgentURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
+		dashboardAgentService.Name,
+		dashboardAgentService.Namespace,
+		dashboardPort)
+	log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardAgentURL)
+	return dashboardAgentURL, nil
+}
+
+func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
+	headSvc := &corev1.Service{}
+	headSvcName := CheckName(GenerateServiceName(rayCluster.Name))
+	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+		return "", err
+	}
+
+	log.V(1).Info("fetchDashboardURL ", "dashboard service found", headSvc.Name)
+	servicePorts := headSvc.Spec.Ports
+	dashboardPort := int32(-1)
+
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == DefaultDashboardName {
+			dashboardPort = servicePort.Port
+			break
+		}
+	}
+
+	if dashboardPort == int32(-1) {
+		return "", fmtErrors.Errorf("dashboard port not found")
+	}
+
+	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
+		headSvc.Name,
+		headSvc.Namespace,
+		dashboardPort)
+	log.V(1).Info("fetchDashboardURL ", "dashboardURL", dashboardURL)
+	return dashboardURL, nil
 }
 
 func (r *RayDashboardClient) InitClient(url string) {
@@ -119,14 +200,13 @@ func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeployment
 		return err
 	}
 
-	req, err := http.NewRequest("PUT", r.dashboardURL+DeployPath, bytes.NewBuffer(deploymentJson))
+	req, err := http.NewRequest(http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(deploymentJson))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return err
 	}
@@ -199,4 +279,112 @@ func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigS
 	}
 
 	return serveConfigToSend
+}
+
+// RayJobInfo is the response of "ray job status" api.
+// Reference to https://docs.ray.io/en/master/cluster/jobs-package-ref.html#jobinfo.
+type RayJobInfo struct {
+	JobStatus  rayv1alpha1.JobStatus `json:"status,omitempty"`
+	Entrypoint string                `json:"entrypoint,omitempty"`
+	Message    string                `json:"message,omitempty"`
+	ErrorType  *string               `json:"error_type,omitempty"`
+	StartTime  int64                 `json:"start_time,omitempty"`
+	EndTime    int64                 `json:"end_time,omitempty"`
+	Metadata   map[string]string     `json:"metadata,omitempty"`
+}
+
+// RayJobRequest is the request body to submit.
+// Reference to https://docs.ray.io/en/master/cluster/jobs-package-ref.html#jobsubmissionclient.
+type RayJobRequest struct {
+	Entrypoint string                 `json:"entrypoint"`
+	JobId      string                 `json:"job_id,omitempty"`
+	RuntimeEnv map[string]interface{} `json:"runtime_env,omitempty"`
+	Metadata   map[string]string      `json:"metadata,omitempty"`
+}
+
+type RayJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
+	req, err := http.NewRequest("GET", r.dashboardURL+JobPath+jobId, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := r.client.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var jobInfo RayJobInfo
+	if err = json.Unmarshal(body, &jobInfo); err != nil {
+		return nil, err
+	}
+
+	return &jobInfo, nil
+}
+
+func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
+	request, err := ConvertRayJobToReq(rayJob)
+	if err != nil {
+		return "", err
+	}
+	rayJobJson, err := json.Marshal(request)
+	if err != nil {
+		return
+	}
+	log.Info(fmt.Sprintf("Submit a ray job: %s", string(rayJobJson)))
+
+	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := r.client.Do(req)
+
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var jobResp RayJobResponse
+	if err = json.Unmarshal(body, &jobResp); err != nil {
+		return
+	}
+
+	return jobResp.JobId, nil
+}
+
+func ConvertRayJobToReq(rayJob *rayv1alpha1.RayJob) (*RayJobRequest, error) {
+	req := &RayJobRequest{
+		Entrypoint: rayJob.Spec.Entrypoint,
+		Metadata:   rayJob.Spec.Metadata,
+		JobId:      rayJob.Status.JobId,
+	}
+	if len(rayJob.Spec.RuntimeEnv) == 0 {
+		return req, nil
+	}
+	decodeBytes, err := base64.StdEncoding.DecodeString(rayJob.Spec.RuntimeEnv)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to decode runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnv, err)
+	}
+	var runtimeEnv map[string]interface{}
+	err = json.Unmarshal(decodeBytes, &runtimeEnv)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal runtimeEnv: %v: %v", decodeBytes, err)
+	}
+	req.RuntimeEnv = runtimeEnv
+	return req, nil
 }
