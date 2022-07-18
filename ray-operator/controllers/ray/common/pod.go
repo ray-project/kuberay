@@ -371,12 +371,12 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 	}
 
 	if !envVarExists(RAY_IP, container.Env) {
-		ip := v1.EnvVar{Name: RAY_IP, Value: rayIP}
-		container.Env = append(container.Env, ip)
+		ipEnv := v1.EnvVar{Name: RAY_IP, Value: rayIP}
+		container.Env = append(container.Env, ipEnv)
 	}
 	if !envVarExists(RAY_PORT, container.Env) {
-		port_env := v1.EnvVar{Name: RAY_PORT, Value: headPort}
-		container.Env = append(container.Env, port_env)
+		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
+		container.Env = append(container.Env, portEnv)
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
