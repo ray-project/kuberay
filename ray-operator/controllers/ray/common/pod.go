@@ -382,7 +382,7 @@ func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayN
 	// from within the cluster.
 	if !envVarExists(RAY_ADDRESS, container.Env) {
 		rayAddress := fmt.Sprintf("%s:%s", rayIP, headPort)
-		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: fmt.Sprintf("%s:%s", rayIP, rayAddress)}
+		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
 	}
 	if !envVarExists(REDIS_PASSWORD, container.Env) {

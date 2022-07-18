@@ -231,6 +231,22 @@ var autoscalerContainer = v1.Container{
 
 var trueFlag = true
 
+func TestGetHeadPort(t *testing.T) {
+	headStartParams := make(map[string]string)
+	actualResult := GetHeadPort(headStartParams)
+	expectedResult := "6379"
+	if !(actualResult == expectedResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	headStartParams["port"] = "9999"
+	actualResult = GetHeadPort(headStartParams)
+	expectedResult = "9999"
+	if !(actualResult == expectedResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 
@@ -240,8 +256,27 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil)
 
-	actualResult := pod.Labels[RayClusterLabelKey]
-	expectedResult := cluster.Name
+	// Check RAY_ADDRESS env.
+	foundEnv := false
+	expectedResult := "127.0.0.1:6379"
+	var actualResult string
+	for _, env := range pod.Spec.Containers[0].Env {
+		if env.Name == RAY_ADDRESS {
+			actualResult = env.Value
+			if !(actualResult == expectedResult) {
+				t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+			}
+			foundEnv = true
+			break
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("Couldn't find RAY_ADDRESS env on head pod.")
+	}
+
+	// Check labels.
+	actualResult = pod.Labels[RayClusterLabelKey]
+	expectedResult = cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -256,12 +291,14 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	// Check volumes.
 	actualVolumes := pod.Spec.Volumes
 	expectedVolumes := volumesNoAutoscaler
 	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedVolumes, actualVolumes)
 	}
 
+	// Check volume mounts.
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsNoAutoscaler
 	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
@@ -274,6 +311,24 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName, "6379")
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil)
 
+	// Check RAY_ADDRESS env
+	foundEnv = false
+	expectedResult = "raycluster-sample-head-svc:6379"
+	for _, env := range pod.Spec.Containers[0].Env {
+		if env.Name == RAY_ADDRESS {
+			actualResult = env.Value
+			if !(actualResult == expectedResult) {
+				t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+			}
+			foundEnv = true
+			break
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("Couldn't find RAY_ADDRESS env on head pod.")
+	}
+
+	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
 
