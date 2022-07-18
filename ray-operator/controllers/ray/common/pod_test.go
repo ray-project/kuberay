@@ -237,7 +237,7 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
