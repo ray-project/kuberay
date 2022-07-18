@@ -18,6 +18,7 @@ kind: RayCluster
 metadata:
   annotations:
     ray.io/ha-enabled: "true" # <- add this annotation enable GCS HA
+    ray.io/external-storage-namespace: "my-raycluster-storage-namespace" # <- optional, to specify the external storage namespace
 ...
 ```
 An example can be found at [ray-cluster.external-redis.yaml](../../ray-operator/config/samples/ray-cluster.external-redis.yaml)
@@ -59,6 +60,8 @@ will also add such annotation to the pod whenever the head/worker node is create
 To use external Redis cluster as the backend storage(required by Ray GCS HA),
 you need to add `RAY_REDIS_ADDRESS` environment variable to the head node template.
 
+Also, you can specify a storage namespace for your Ray cluster by using an annotation `ray.io/external-storage-namespace`
+
 An example can be found at [ray-cluster.external-redis.yaml](../../ray-operator/config/samples/ray-cluster.external-redis.yaml)
 
 #### KubeRay Operator Controller
@@ -75,8 +78,7 @@ In every KubeRay Operator controller reconcile loop, it monitors any pod in Ray 
 
 #### Known issues and limitations
 
-1. Currently, Python redis package is removed from Ray official image. We need to install Python redis package in the very beginning of the container start. (This is done by KubeRay by adding commands to Ray container spec.)
-2. For now, Ray head/worker node that fails the readiness probe recovers itself by restarting itself. More fine-grained control and recovery mechanisms are expected in the future.
+1. For now, Ray head/worker node that fails the readiness probe recovers itself by restarting itself. More fine-grained control and recovery mechanisms are expected in the future.
 
 ### Test Ray GCS HA
 

@@ -10,9 +10,10 @@ const (
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 
-	// Ray GCS HA Annotations
-	RayHAEnabledAnnotationKey       = "ray.io/ha-enabled"
-	RayNodeHealthStateAnnotationKey = "ray.io/health-state"
+	// Ray GCS HA related annotations
+	RayHAEnabledAnnotationKey         = "ray.io/ha-enabled"
+	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
+	RayNodeHealthStateAnnotationKey   = "ray.io/health-state"
 
 	// Pod health state values
 	PodUnhealthy = "Unhealthy"
@@ -49,11 +50,12 @@ const (
 	PodReadyFilepath = "POD_READY_FILEPATH"
 
 	// Use as container env variable
-	NAMESPACE      = "NAMESPACE"
-	CLUSTER_NAME   = "CLUSTER_NAME"
-	RAY_IP         = "RAY_IP"
-	RAY_PORT       = "RAY_PORT"
-	REDIS_PASSWORD = "REDIS_PASSWORD"
+	NAMESPACE               = "NAMESPACE"
+	CLUSTER_NAME            = "CLUSTER_NAME"
+	RAY_IP                  = "RAY_IP"
+	RAY_PORT                = "RAY_PORT"
+	REDIS_PASSWORD          = "REDIS_PASSWORD"
+	RAY_EXTERNAL_STORAGE_NS = "RAY_external_storage_namespace"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
