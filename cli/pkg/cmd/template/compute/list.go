@@ -85,7 +85,9 @@ func convertComputeTemplatesToStrings(computeTemplates []*go_client.ComputeTempl
 }
 
 func convertComputeTemplatToString(r *go_client.ComputeTemplate) []string {
-	line := []string{r.GetName(), r.Namespace, strconv.Itoa(int(r.GetCpu())), strconv.Itoa(int(r.Memory)),
-		strconv.Itoa(int(r.GetGpu())), r.GetGpuAccelerator()}
+	line := []string{
+		r.GetName(), r.Namespace, strconv.Itoa(int(r.GetCpu())), strconv.Itoa(int(r.Memory)),
+		strconv.Itoa(int(r.GetGpu())), r.GetGpuAccelerator(),
+	}
 	return line
 }

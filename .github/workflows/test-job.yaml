@@ -88,6 +88,18 @@ jobs:
         $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
       if: failure()
 
+    - name: Run gofumpt
+      run: |
+        go install mvdan.cc/gofumpt@latest
+        test -z "$(set -o pipefail && $(go env GOPATH)/bin/gofumpt -l apiserver/ ray-operator/ cli/ | tee gofumpt.out)" || { cat gofumpt.out && exit 1; }
+
+    - name: Open this to see how to fix gofumpt if it fails
+      run: |
+        echo "Run command 'gofumpt -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
+        $(go env GOPATH)/bin/gofumpt -d apiserver/ ray-operator/ cli/
+      if: failure()
+
   build_apiserver:
     env:
       working-directory: ./apiserver

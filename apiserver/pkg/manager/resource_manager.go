@@ -305,7 +305,8 @@ func getRayClusterEventsByName(ctx context.Context, name string, client clientv1
 	fieldSelectorById := fmt.Sprintf("involvedObject.name=%s", rayCluster.Name)
 	events, err := client.List(ctx, metav1.ListOptions{
 		FieldSelector: fieldSelectorById,
-		TypeMeta:      metav1.TypeMeta{Kind: "RayCluster"}})
+		TypeMeta:      metav1.TypeMeta{Kind: "RayCluster"},
+	})
 	if err != nil {
 		return nil, util.Wrap(err, "Get Ray Cluster Events failed")
 	}
