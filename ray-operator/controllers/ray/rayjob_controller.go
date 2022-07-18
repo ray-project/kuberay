@@ -127,11 +127,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	if jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
 		// TODO: if the job fails, we should retry
+		r.Log.Info(fmt.Sprintf("Update ray job %s status from %s to %s", rayJobInstance.Status.JobId, rayJobInstance.Status.JobStatus, jobInfo.JobStatus))
 		rayJobInstance.Status.JobStatus = jobInfo.JobStatus
 		err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusRunning, nil)
 		return ctrl.Result{}, err
 	}
 
+	if rayJobInstance.Status.JobDeploymentStatus != rayv1alpha1.JobDeploymentStatusRunning {
+		err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusRunning, nil)
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
