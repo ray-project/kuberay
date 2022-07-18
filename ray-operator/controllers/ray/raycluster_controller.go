@@ -591,7 +591,9 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
+	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
+	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -605,8 +607,10 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
+	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
+	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, instance.Spec.EnableInTreeAutoscaling)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		log.Error(err, "Failed to set controller reference for raycluster pod")

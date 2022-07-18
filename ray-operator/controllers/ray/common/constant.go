@@ -51,11 +51,14 @@ const (
 	NAMESPACE      = "NAMESPACE"
 	CLUSTER_NAME   = "CLUSTER_NAME"
 	RAY_IP         = "RAY_IP"
+	RAY_ADDRESS    = "RAY_ADDRESS"
 	RAY_PORT       = "RAY_PORT"
 	REDIS_PASSWORD = "REDIS_PASSWORD"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
+
+	LOCAL_HOST = "127.0.0.1"
 )
 
 type ServiceType string
