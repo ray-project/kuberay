@@ -35,6 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -72,6 +74,9 @@ var _ = BeforeSuite(func(done Done) {
 	err = rayiov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = rayv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -90,6 +95,9 @@ var _ = BeforeSuite(func(done Done) {
 
 	err = NewRayServiceReconciler(mgr).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
+
+	err = NewRayJobReconciler(mgr).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())

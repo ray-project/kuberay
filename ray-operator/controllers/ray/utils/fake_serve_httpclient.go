@@ -78,3 +78,10 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 func (r *FakeRayDashboardClient) SetServeStatus(status ServeDeploymentStatuses) {
 	r.serveStatuses = status
 }
+
+func (r *FakeRayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
+	return nil, nil
+}
+func (r *FakeRayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob) (jobId string, err error) {
+	return "", nil
+}
