@@ -90,10 +90,10 @@ For the fruit example deployment, you can try the following request
 ```
 You can get the response as `6`.
 
-> Note: serve-svc will do traffic routing among all the workers which have serve deployments. It is HA in general.
-> Note: serve-svc will always try it best to point to the healthy cluster, even during upgrading or failing cases.
-> Note: You can set `serviceUnhealthySecondThreshold` to define the threshold of seconds that the serve deployments fail.
-> Note: You can set `deploymentUnhealthySecondThreshold` to define the threshold of seconds that the Ray fails to deploy any serve deployments.
+* Note: serve-svc will do traffic routing among all the workers which have serve deployments. It is HA in general.
+* Note: serve-svc will always try it best to point to the healthy cluster, even during upgrading or failing cases.
+* Note: You can set `serviceUnhealthySecondThreshold` to define the threshold of seconds that the serve deployments fail.
+* Note: You can set `deploymentUnhealthySecondThreshold` to define the threshold of seconds that the Ray fails to deploy any serve deployments.
 
 ### Update Ray Serve Deployment Graph
 
