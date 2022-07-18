@@ -32,13 +32,16 @@ const (
 type RayJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Entrypoint string            `json:"entrypoint"`
-	Metadata   map[string]string `json:"metadata,omitempty"`
+	Entrypoint string `json:"entrypoint"`
+	// Metadata is data to store along with this job.
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// RuntimeEnv is base64 encoded.
-	RuntimeEnv               string         `json:"runtimeEnv,omitempty"`
-	ShutdownAfterJobFinishes bool           `json:"shutdownAfterJobFinishes,omitempty"`
-	JobId                    string         `json:"jobId,omitempty"`
-	RayClusterSpec           RayClusterSpec `json:"rayClusterSpec,omitempty"`
+	RuntimeEnv string `json:"runtimeEnv,omitempty"`
+	// TODO: If set to true, the rayCluster will be deleted after the rayJob finishes
+	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// If jobId is not set, a new jobId will be auto-generated.
+	JobId          string         `json:"jobId,omitempty"`
+	RayClusterSpec RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
 }

@@ -108,8 +108,7 @@ func GenerateServiceName(clusterName string) string {
 
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf(
-		"%s-%s-%s", clusterName, DashboardName, "svc")
+	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
 // GenerateDashboardAgentLabel generates label value for agent service selector.

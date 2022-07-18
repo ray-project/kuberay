@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -81,7 +80,7 @@ type RayDashboardClientInterface interface {
 	GetDeploymentsStatus() (*ServeDeploymentStatuses, error)
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 	GetJobInfo(jobId string) (*RayJobInfo, error)
-	SubmitJob(rayJob *rayv1alpha1.RayJob) (jobId string, err error)
+	SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -160,7 +159,7 @@ func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client,
 
 func (r *RayDashboardClient) InitClient(url string) {
 	r.client = http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
 }
@@ -334,7 +333,7 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
 	request, err := ConvertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
@@ -343,7 +342,7 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob) (jobId string
 	if err != nil {
 		return
 	}
-	logrus.Infof("Submit a ray job: %s", string(rayJobJson))
+	log.Info(fmt.Sprintf("Submit a ray job: %s", string(rayJobJson)))
 
 	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
 	if err != nil {

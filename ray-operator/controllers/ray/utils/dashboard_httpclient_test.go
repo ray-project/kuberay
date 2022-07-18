@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 )
@@ -72,7 +73,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 
-		jobId, err := rayDashboardClient.SubmitJob(rayJob)
+		jobId, err := rayDashboardClient.SubmitJob(rayJob, &ctrl.Log)
 		Expect(err).To(BeNil())
 		Expect(jobId).To(Equal(expectJobId))
 

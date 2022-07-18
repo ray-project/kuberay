@@ -110,7 +110,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	if jobInfo == nil {
 		// Submit the job if no id set
-		jobId, err := rayDashboardClient.SubmitJob(rayJobInstance)
+		jobId, err := rayDashboardClient.SubmitJob(rayJobInstance, &r.Log)
 		if err != nil {
 			r.Log.Error(err, "failed to submit job")
 			err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusFailedJobDeploy, err)
@@ -153,9 +153,9 @@ func (r *RayJobReconciler) getRayJobInstance(ctx context.Context, request ctrl.R
 	rayJobInstance := &rayv1alpha1.RayJob{}
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
-			rayServiceLog.Info("Read request instance not found error!")
+			r.Log.Info("Read request instance not found error!")
 		} else {
-			rayServiceLog.Error(err, "Read request instance error!")
+			r.Log.Error(err, "Read request instance error!")
 		}
 		// Error reading the object - requeue the request.
 		return nil, err

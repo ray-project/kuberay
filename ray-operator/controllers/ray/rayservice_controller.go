@@ -41,7 +41,6 @@ const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
 	ServiceRestartRequeueDuration      = 10 * time.Second
 	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
-	servicePortName                    = "dashboard-agent"
 )
 
 // RayServiceReconciler reconciles a RayService object
