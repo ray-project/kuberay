@@ -75,6 +75,7 @@ rayservice-sample-serve-svc                        ClusterIP   10.100.39.92     
 ```
 
 > Note: Default ports and their definition. 
+
 | Port  | Definition          |
 |-------|---------------------|
 | 6379  | Ray GCS             |
