@@ -310,7 +310,6 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	}
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +347,6 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return
 	}
