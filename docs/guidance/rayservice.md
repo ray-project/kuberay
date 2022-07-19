@@ -83,11 +83,16 @@ rayservice-sample-serve-svc                        ClusterIP   10.100.39.92     
 | 8000  | Ray Serve           |
 | 52365 | Ray Dashboard Agent |
 
+Get the RayService information with your RayService name.
+```shell
+$ kubectl describe  rayservices rayservice-sample
+```
+
 ### Access User Services
 
 The users' traffic can go through the `serve` service (for example, `rayservice-sample-serve-svc`).
 
-Run a curl pod:
+#### Run a curl pod
 `kubectl run curl --image=radial/busyboxplus:curl -i --tty`
 
 For the fruit example deployment, you can try the following request
@@ -97,11 +102,29 @@ For the fruit example deployment, you can try the following request
 ```
 You can get the response as `6`.
 
+#### Use Port Forwarding
+Set up kubernetes port forwarding.
+```shell
+$ kubectl port-forward service/rayservice-sample-serve-svc 8000
+```
+For the fruit example deployment, you can try the following request
+```shell
+curl  -X POST -H 'Content-Type: application/json' localhost:8000 -d '["MANGO", 2]'
+6
+```
+
 `serve-svc` is HA in general.
 * Note: serve-svc will do traffic routing among all the workers which have serve deployments.
 * Note: serve-svc will always try it best to point to the healthy cluster, even during upgrading or failing cases.
 * Note: You can set `serviceUnhealthySecondThreshold` to define the threshold of seconds that the serve deployments fail.
 * Note: You can set `deploymentUnhealthySecondThreshold` to define the threshold of seconds that the Ray fails to deploy any serve deployments.
+
+### Access Ray Dashboard
+Set up kubernetes port forwarding for the dashboard.
+```shell
+$ kubectl port-forward service/rayservice-sample-head-svc 8265
+```
+Then you can open your web browser with the url localhost:8265 to see your Ray dashboard page.
 
 ### Update Ray Serve Deployment Graph
 
@@ -127,7 +150,14 @@ You can check the kubernetes stats of your RayService. It should show similar:
 
 After it finishes deployment, let's send a request again.
 ```shell
+# In the curl pod.
 [ root@curl:/ ]$ curl  -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000 -d '["MANGO", 2]'
+8
+```
+Or
+```shell
+# Using port forwarding.
+curl  -X POST -H 'Content-Type: application/json' localhost:8000 -d '["MANGO", 2]'
 8
 ```
 Now you will get `8` as a result.
