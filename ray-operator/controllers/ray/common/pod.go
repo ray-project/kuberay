@@ -32,6 +32,9 @@ const (
 
 var log = logf.Log.WithName("RayCluster-Controller")
 
+// Get the port required to connect to the Ray cluster by worker nodes and drivers
+// started within the cluster.
+// For Ray >= 1.11.0 this is the GCS server port. For Ray < 1.11.0 it is the Redis port.
 func GetHeadPort(headStartParams map[string]string) string {
 	var headPort string
 	if value, ok := headStartParams["port"]; !ok {
@@ -46,6 +49,9 @@ func GetHeadPort(headStartParams map[string]string) string {
 
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string, headPort string) v1.PodTemplateSpec {
+	// TODO (Dmitri) The argument headPort is essentially unused;
+	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
+	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -410,6 +416,7 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 
 // TODO auto complete params
 func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, svcName string, headPort string) (completeStartParams map[string]string) {
+	// Note: The argument headPort is unused for nodeType == rayiov1alpha1.HeadNode.
 	if nodeType == rayiov1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
 			address := fmt.Sprintf("%s:%s", svcName, headPort)
