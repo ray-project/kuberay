@@ -1,31 +1,29 @@
-## Ray Service (alpha)
+## Ray Services (alpha)
 
-> Note: This is the alpha version of Ray Service. There will be ongoing improvements for Ray Service in the future releases.
+> Note: This is the alpha version of Ray Services. There will be ongoing improvements for Ray Services in the future releases.
 
 ### Prerequisite
 
 * Ray 2.0 is required.
 
-### What is RayService?
+### What is a RayService?
 
-RayService is new CR supported by KubeRay in v0.3.0.
+The RayService is a new CR supported by KubeRay in v0.3.0.
 
-RayService manages 2 things:
+A RayService manages 2 things:
 * RayCluster: Manages resources in kubernetes cluster.
 * Rey Serve Deployment Graph: Manages users' serve deployment graph.
 
-### What does RayService provide?
+### What does the RayService provide?
 
-* Kubernetes natively support for ray cluster and ray serve deployment graph. Users can use kubernetes config to define ray cluster and ray serve deployment graph. Users can use `kubectl` create ray cluster and ray serve deployment graph.  
+* Kubernetes-native support for Ray cluster and Ray Serve deployment graphs. Users can use kubernetes config to define ray cluster and ray serve deployment graph. Users can use `kubectl` create ray cluster and ray serve deployment graph.  
 * In-place update for ray serve deployment graph. Users can update the ray serve deployment graph config in the RayService CR config and use `kubectl apply` to update the serve deployment graph.
 * Zero downtime upgrade for ray cluster. Users can update the ray cluster config in the RayService CR config and use `kubectl apply` to update the ray cluster. RayService will temporarily create a pending ray cluster, wait for the pending ray cluster ready, and then switch traffics to the new ray cluster, terminate the old cluster. 
-* Service HA. RayService will monitor the ray cluster and serve deployments health status. If RayService detects any unhealthy status lasting for a certain time, RayService will try to create a new ray cluster, and switch traffic to the new cluster when it is ready.
+* Services HA. RayService will monitor the ray cluster and serve deployments health status. If RayService detects any unhealthy status lasting for a certain time, RayService will try to create a new ray cluster, and switch traffic to the new cluster when it is ready.
 
-### Operator operations
+### Deploy the Operator
 
-Deploy the operator
-
-`kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"`
+`$ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"`
 
 Check that the controller is running.
 
@@ -38,10 +36,6 @@ $ kubectl get pods -n ray-system
 NAME                            READY   STATUS    RESTARTS   AGE
 ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 ```
-
-Delete the operator
-
-`kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"`
 
 ### Run an example cluster
 
@@ -70,13 +64,26 @@ rayservice-sample-raycluster-qd2vl-head-45hj4             1/1     Running   0   
 $ kubectl get services
 NAME                                               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                                          AGE
 kubernetes                                         ClusterIP   10.100.0.1       <none>        443/TCP                                          62d
+# A head node service maintained by the RayService.
 rayservice-sample-head-svc                         ClusterIP   10.100.34.24     <none>        6379/TCP,8265/TCP,10001/TCP,8000/TCP,52365/TCP   24m
+# A dashboard agent service maintained by the RayCluster.
 rayservice-sample-raycluster-qd2vl-dashboard-svc   ClusterIP   10.100.109.177   <none>        52365/TCP                                        24m
+# A head node service maintained by the RayCluster.
 rayservice-sample-raycluster-qd2vl-head-svc        ClusterIP   10.100.180.221   <none>        6379/TCP,8265/TCP,10001/TCP,8000/TCP,52365/TCP   24m
+# A serve service maintained by the RayService.
 rayservice-sample-serve-svc                        ClusterIP   10.100.39.92     <none>        8000/TCP                                         24m
 ```
 
-### Access User Service
+> Note: Default ports and their definition. 
+| Port  | Definition          |
+|-------|---------------------|
+| 6379  | Ray GCS             |
+| 8265  | Ray Dashboard       |
+| 10001 | Ray Client          |
+| 8000  | Ray Serve           |
+| 52365 | Ray Dashboard Agent |
+
+### Access User Services
 
 The users' traffic can go through the `serve` service (for example, `rayservice-sample-serve-svc`).
 
@@ -90,7 +97,8 @@ For the fruit example deployment, you can try the following request
 ```
 You can get the response as `6`.
 
-* Note: serve-svc will do traffic routing among all the workers which have serve deployments. It is HA in general.
+`serve-svc` is HA in general.
+* Note: serve-svc will do traffic routing among all the workers which have serve deployments.
 * Note: serve-svc will always try it best to point to the healthy cluster, even during upgrading or failing cases.
 * Note: You can set `serviceUnhealthySecondThreshold` to define the threshold of seconds that the serve deployments fail.
 * Note: You can set `deploymentUnhealthySecondThreshold` to define the threshold of seconds that the Ray fails to deploy any serve deployments.
@@ -148,7 +156,7 @@ You can check the kubernetes stats of your RayService. It should show similar:
 You can see RayService is preparing a pending cluster. After the pending cluster is healthy, RayService will switch it as active cluster and terminate the previous cluster.
 
 ### RayService Observability
-RayService is native kubernetes CRD. You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
+You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
 You can also use `kubectl describe rayservices rayservice-sample` to check the states and event logs of your RayService instance.
 
 You can also login the head pod and use Ray cli to check the logs.
@@ -156,3 +164,7 @@ You can also login the head pod and use Ray cli to check the logs.
 
 ### Delete the RayService instance
 `$ kubectl delete -f config/samples/ray_v1alpha1_rayservice.yaml`
+
+### Delete the operator
+
+`$ kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"`
