@@ -167,16 +167,16 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNode
 			// head node liveness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayAgentPort, RayAgentRayletHealthPath),
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node liveness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayAgentPort, RayAgentRayletHealthPath),
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		}
@@ -190,16 +190,16 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 			// head node readiness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayAgentPort, RayAgentRayletHealthPath),
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayDashboardPort, RayDashboardGCSHealthPath),
+					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node readiness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
-					DefaultRayAgentPort, RayAgentRayletHealthPath),
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		}

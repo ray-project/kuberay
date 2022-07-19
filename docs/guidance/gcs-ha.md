@@ -2,6 +2,9 @@
 
 > Note: This feature is still experimental, there are a few limitations and stabilization will be done in future release from both Ray and KubeRay side.
 
+Ray GCS HA enables GCS server to use external storage backend. As a result, Ray clusters can tolerant GCS failures and recover from failures
+without affecting important services such as detached Actors & RayServe deployments.
+
 ### Prerequisite
 
 * Ray 2.0 is required.
@@ -9,7 +12,7 @@
 
 ### Enable Ray GCS HA
 
-To enable Ray GCS HA in your newly KubeRay-managed Ray cluster, you need to enable it by add an annotation to the
+To enable Ray GCS HA in your newly KubeRay-managed Ray cluster, you need to enable it by adding an annotation to the
 RayCluster YAML file.
 
 ```yaml
@@ -50,7 +53,7 @@ On Ray head node, we access a local Ray dashboard http endpoint and a Raylet htt
 healthy state. Since Ray dashboard does not reside Ray worker node, we only check the local Raylet http endpoint to make sure
 the worker node is healthy.
 
-#### Ray GCS HA Label
+#### Ray GCS HA Annotation
 
 Our Ray GCS HA feature checks if an annotation called `ray.io/ha-enabled` is set to `true` in `RayCluster` YAML file. If so, KubeRay
 will also add such annotation to the pod whenever the head/worker node is created.
@@ -75,6 +78,15 @@ After this, the controller will try to recover the failed pod. If controller can
 
 In every KubeRay Operator controller reconcile loop, it monitors any pod in Ray cluster that has `Unhealthy` value in annotation
 `ray.io/health-state`. If any pod is found, this pod is deleted and gets recreated.
+
+#### External Storage Namespace
+
+External storage namespaces can be used to share a single storage backend among multiple Ray clusters. By default, `ray.io/external-storage-namespace`
+uses the RayCluster UID as its value when GCS HA is enabled. Or if the user wants to use customized external storage namespace,
+the user can add `ray.io/external-storage-namespace` annotation to RayCluster yaml file.
+
+Whenever `ray.io/external-storage-namespace` annotation is set, the head/worker node will have `RAY_external_storage_namespace` environment
+variable set which Ray can pick up later.
 
 #### Known issues and limitations
 
