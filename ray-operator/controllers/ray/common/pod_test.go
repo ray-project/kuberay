@@ -247,6 +247,22 @@ func TestGetHeadPort(t *testing.T) {
 	}
 }
 
+func checkRayAddress(t *testing.T, pod v1.Pod, expectedRayAddress string) {
+	foundEnv := false
+	for _, env := range pod.Spec.Containers[0].Env {
+		if env.Name == RAY_ADDRESS {
+			if !(env.Value == expectedRayAddress) {
+				t.Fatalf("Expected `%v` but got `%v`", expectedRayAddress, env.Value)
+			}
+			foundEnv = true
+			break
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("Couldn't find RAY_ADDRESS env on pod.")
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 
@@ -257,26 +273,11 @@ func TestBuildPod(t *testing.T) {
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil)
 
 	// Check RAY_ADDRESS env.
-	foundEnv := false
-	expectedResult := "127.0.0.1:6379"
-	var actualResult string
-	for _, env := range pod.Spec.Containers[0].Env {
-		if env.Name == RAY_ADDRESS {
-			actualResult = env.Value
-			if !(actualResult == expectedResult) {
-				t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-			}
-			foundEnv = true
-			break
-		}
-	}
-	if !foundEnv {
-		t.Fatalf("Couldn't find RAY_ADDRESS env on head pod.")
-	}
+	checkRayAddress(t, pod, "127.0.0.1:6379")
 
 	// Check labels.
-	actualResult = pod.Labels[RayClusterLabelKey]
-	expectedResult = cluster.Name
+	actualResult := pod.Labels[RayClusterLabelKey]
+	expectedResult := cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -312,21 +313,7 @@ func TestBuildPod(t *testing.T) {
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil)
 
 	// Check RAY_ADDRESS env
-	foundEnv = false
-	expectedResult = "raycluster-sample-head-svc:6379"
-	for _, env := range pod.Spec.Containers[0].Env {
-		if env.Name == RAY_ADDRESS {
-			actualResult = env.Value
-			if !(actualResult == expectedResult) {
-				t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-			}
-			foundEnv = true
-			break
-		}
-	}
-	if !foundEnv {
-		t.Fatalf("Couldn't find RAY_ADDRESS env on head pod.")
-	}
+	checkRayAddress(t, pod, "raycluster-sample-head-svc:6379")
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
