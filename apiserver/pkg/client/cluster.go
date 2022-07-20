@@ -6,7 +6,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclusterclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 

@@ -3,3 +3,7 @@
 package v1alpha1
 
 type RayClusterExpansion interface{}
+
+type RayJobExpansion interface{}
+
+type RayServiceExpansion interface{}

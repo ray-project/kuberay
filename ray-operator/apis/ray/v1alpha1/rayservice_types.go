@@ -115,7 +115,7 @@ type ServeDeploymentStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-
+//+genclient
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`

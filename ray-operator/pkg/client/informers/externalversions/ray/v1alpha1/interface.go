@@ -10,6 +10,10 @@ import (
 type Interface interface {
 	// RayClusters returns a RayClusterInformer.
 	RayClusters() RayClusterInformer
+	// RayJobs returns a RayJobInformer.
+	RayJobs() RayJobInformer
+	// RayServices returns a RayServiceInformer.
+	RayServices() RayServiceInformer
 }
 
 type version struct {
@@ -26,4 +30,14 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // RayClusters returns a RayClusterInformer.
 func (v *version) RayClusters() RayClusterInformer {
 	return &rayClusterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// RayJobs returns a RayJobInformer.
+func (v *version) RayJobs() RayJobInformer {
+	return &rayJobInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// RayServices returns a RayServiceInformer.
+func (v *version) RayServices() RayServiceInformer {
+	return &rayServiceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

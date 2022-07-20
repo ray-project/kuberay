@@ -44,8 +44,8 @@ chmod +x ${CODEGEN_PKG}/generate-groups.sh
 #
 cd ${SCRIPT_ROOT}
 ${CODEGEN_PKG}/generate-groups.sh "client,informer,lister" \
- github.com/ray-project/kuberay/ray-operator/pkg/client github.com/ray-project/kuberay/ray-operator/api \
- raycluster:v1alpha1 \
+ github.com/ray-project/kuberay/ray-operator/pkg/client github.com/ray-project/kuberay/ray-operator/apis \
+ ray:v1alpha1 \
  --output-base "${TEMP_DIR}" \
  --go-header-file hack/boilerplate.go.txt
 
