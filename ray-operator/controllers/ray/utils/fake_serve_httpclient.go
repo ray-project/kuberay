@@ -83,6 +83,7 @@ func (r *FakeRayDashboardClient) SetServeStatus(status ServeDeploymentStatuses) 
 func (r *FakeRayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	return nil, nil
 }
+
 func (r *FakeRayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
 	return "", nil
 }

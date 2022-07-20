@@ -172,7 +172,6 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 	}
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return "", err
 	}
@@ -195,7 +194,6 @@ func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeployment
 	}
 
 	deploymentJson, err := json.Marshal(servingClusterDeployments)
-
 	if err != nil {
 		return err
 	}
@@ -223,7 +221,6 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, e
 	}
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +310,6 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	}
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +347,6 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return
 	}
