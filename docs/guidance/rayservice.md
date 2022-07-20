@@ -8,15 +8,15 @@
 
 ### What is a RayService?
 
-The RayService is a new CR supported by KubeRay in v0.3.0.
+The RayService is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayService manages 2 things:
 * RayCluster: Manages resources in kubernetes cluster.
-* Rey Serve Deployment Graph: Manages users' serve deployment graph.
+* Ray Serve Deployment Graph: Manages users' serve deployment graph.
 
 ### What does the RayService provide?
 
-* Kubernetes-native support for Ray cluster and Ray Serve deployment graphs. Users can use kubernetes config to define ray cluster and ray serve deployment graph. Users can use `kubectl` create ray cluster and ray serve deployment graph.  
+* Kubernetes-native support for Ray cluster and Ray Serve deployment graphs. You can use a kubernetes config to define a ray cluster and its ray serve deployment graphs. Then you can use `kubectl` to create the cluster and its graphs.
 * In-place update for ray serve deployment graph. Users can update the ray serve deployment graph config in the RayService CR config and use `kubectl apply` to update the serve deployment graph.
 * Zero downtime upgrade for ray cluster. Users can update the ray cluster config in the RayService CR config and use `kubectl apply` to update the ray cluster. RayService will temporarily create a pending ray cluster, wait for the pending ray cluster ready, and then switch traffics to the new ray cluster, terminate the old cluster. 
 * Services HA. RayService will monitor the ray cluster and serve deployments health status. If RayService detects any unhealthy status lasting for a certain time, RayService will try to create a new ray cluster, and switch traffic to the new cluster when it is ready.
@@ -94,7 +94,8 @@ $ kubectl describe  rayservices rayservice-sample
 The users' traffic can go through the `serve` service (for example, `rayservice-sample-serve-svc`).
 
 #### Run a curl pod
-`kubectl run curl --image=radial/busyboxplus:curl -i --tty`
+`kubectl run curl --image=radial/busyboxplus:curl -i --tty` 
+Or if you already have a curl pod running, you can login with `kubectl exec -it curl sh`.
 
 For the fruit example deployment, you can try the following request
 ```shell
