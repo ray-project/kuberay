@@ -91,6 +91,9 @@ var _ = BeforeSuite(func(done Done) {
 	err = NewRayServiceReconciler(mgr).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
+	err = NewRayJobReconciler(mgr).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
+
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())

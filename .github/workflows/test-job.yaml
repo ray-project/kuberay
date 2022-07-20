@@ -88,12 +88,104 @@ jobs:
         $(go env GOPATH)/bin/goimports -d apiserver/ ray-operator/ cli/
       if: failure()
 
-  build:
+    - name: Run gofumpt
+      run: |
+        go install mvdan.cc/gofumpt@latest
+        test -z "$(set -o pipefail && $(go env GOPATH)/bin/gofumpt -l apiserver/ ray-operator/ cli/ | tee gofumpt.out)" || { cat gofumpt.out && exit 1; }
+
+    - name: Open this to see how to fix gofumpt if it fails
+      run: |
+        echo "Run command 'gofumpt -w apiserver/ ray-operator/ cli/' to correct your code format."
+        echo "Proposed format changes:"
+        $(go env GOPATH)/bin/gofumpt -d apiserver/ ray-operator/ cli/
+      if: failure()
+
+  build_apiserver:
+    env:
+      working-directory: ./apiserver
+      cli-working-directory: ./cli
+    name: Build Apiserver, CLI Binaries and Docker Images
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Go 1.17.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - name: list directories
+        working-directory: ${{env.working-directory}}
+        run: |
+          pwd
+          ls -R
+
+      - name: install kubebuilder
+        run: |
+          wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
+          sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
+
+      - name: Get revision SHA
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+      - name: Get dependencies
+        run: go mod download
+        working-directory: ${{env.working-directory}}
+
+      - name: Build
+        run: go build ./...
+        working-directory: ${{env.working-directory}}
+
+      - name: Test
+        run: go test ./...
+        working-directory: ${{env.working-directory}}
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Build Docker Image - Apiserver
+        run: |
+          docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
+          docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
+
+      - name: Upload Artifact Apiserver
+        uses: actions/upload-artifact@v2
+        with:
+          name: apiserver_img
+          path: /tmp/apiserver.tar
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Push Apiserver to DockerHub
+        run: |
+          docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
+          docker push kuberay/apiserver:nightly
+
+        working-directory: ${{env.working-directory}}
+        if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Build CLI
+        run: go build -o kuberay -a main.go
+        working-directory: ${{env.cli-working-directory}}
+
+  build_operator:
     env:
       working-directory: ./ray-operator
-      cli-working-directory: ./cli
-      apiserver-working-directory: ./apiserver
-    name: Build Binaries and Docker Images
+    name: Build Operator Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
 
@@ -152,17 +244,6 @@ jobs:
         name: operator_img
         path: /tmp/operator.tar
 
-    - name: Build Docker Image - Apiserver
-      run: |
-        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
-        docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-
-    - name: Upload Artifact Apiserver
-      uses: actions/upload-artifact@v2
-      with:
-        name: apiserver_img
-        path: /tmp/apiserver.tar
-
     - name: Log in to Docker Hub
       uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
       with:
@@ -170,26 +251,22 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
       if: ${{ github.ref == 'refs/heads/master' }}
 
-    - name: Push to DockerHub
+    - name: Push Operator to DockerHub
       run: |
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
-        docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
-        docker push kuberay/apiserver:nightly
 
       working-directory: ${{env.working-directory}}
       if: ${{ github.ref == 'refs/heads/master' }}
 
-    - name: Build CLI
-      run: go build -o kuberay -a main.go
-      working-directory: ${{env.cli-working-directory}}
-
   test-compatibility-1_9_0:
-    needs: build
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test 1.9.0
+    name: Compatibility Test - 1.9.0
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -204,9 +281,12 @@ jobs:
           ray_version: 1.9.0
 
   test-compatibility-1_10_0:
-    needs: build
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test 1.10.0
+    name: Compatibility Test - 1.10.0
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -221,9 +301,12 @@ jobs:
           ray_version: 1.10.0
 
   test-compatibility-1_11_0:
-    needs: build
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test 1.11.0
+    name: Compatibility Test - 1.11.0
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -238,9 +321,12 @@ jobs:
           ray_version: 1.11.0
 
   test-compatibility-1_12_0:
-    needs: build
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test 1.12.0
+    name: Compatibility Test - 1.12.0
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -253,3 +339,23 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 1.12.0
+
+  test-compatibility-nightly:
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
+    runs-on: ubuntu-latest
+    name: Compatibility Test - Nightly
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: nightly

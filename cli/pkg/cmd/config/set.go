@@ -14,8 +14,8 @@ func NewCmdSet() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			key := args[0]
 			value := args[1]
-			//key, _ := cmd.Flags().GetString("key")
-			//value, _ := cmd.Flags().GetString("value")
+			// key, _ := cmd.Flags().GetString("key")
+			// value, _ := cmd.Flags().GetString("value")
 			cmdutil.SetKeyValPair(key, value)
 		},
 	}

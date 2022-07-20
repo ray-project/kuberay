@@ -22,7 +22,7 @@ const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
 	RayLogVolumeName            = "ray-logs"
-	RayLogVolumeMountPath       = "/tmp/ray"
+	RayLogVolumeMountPath       = "/tmp/ray/session_latest/logs"
 	AutoscalerContainerName     = "autoscaler"
 	RayHeadContainer            = "ray-head"
 	ObjectStoreMemoryKey        = "object-store-memory"
@@ -47,6 +47,43 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return headPort
 }
 
+// rayClusterHAEnabled check if RayCluster enabled HA in annotations
+func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
+	if instance.Annotations == nil {
+		return false
+	}
+	if v, ok := instance.Annotations[RayHAEnabledAnnotationKey]; ok {
+		if strings.ToLower(v) == "true" {
+			return true
+		}
+	}
+	return false
+}
+
+func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.PodTemplateSpec) {
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
+	}
+
+	// For now, we just set ray external storage enabled/disabled by checking if HA is enalled/disabled.
+	// This may need to be updated in the future.
+	if rayClusterHAEnabled(instance) {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
+		// if we have HA enabled, we need to set up a default external storage namespace.
+		podTemplate.Annotations[RayExternalStorageNSAnnotationKey] = string(instance.UID)
+	} else {
+		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+	}
+	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
+
+	// set ray external storage namespace if user specified one.
+	if instance.Annotations != nil {
+		if v, ok := instance.Annotations[RayExternalStorageNSAnnotationKey]; ok {
+			podTemplate.Annotations[RayExternalStorageNSAnnotationKey] = v
+		}
+	}
+}
+
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string, headPort string) v1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
@@ -65,6 +102,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName, headPort)
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
+
+	initTemplateAnnotations(instance, &podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -116,6 +155,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName, headPort)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
+	initTemplateAnnotations(instance, &podTemplate)
+
 	// add metrics port for exposing to the promethues stack.
 	metricsPort := v1.ContainerPort{
 		Name:          "metrics",
@@ -135,6 +176,52 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	}
 
 	return podTemplate
+}
+
+func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	if probe.Exec == nil {
+		// we only create the probe if user did not specify any.
+		if rayNodeType == rayiov1alpha1.HeadNode {
+			// head node liveness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardPort, RayDashboardGCSHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		} else {
+			// worker node liveness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		}
+	}
+}
+
+func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	if probe.Exec == nil {
+		// we only create the probe if user did not specify any.
+		if rayNodeType == rayiov1alpha1.HeadNode {
+			// head node readiness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardPort, RayDashboardGCSHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		} else {
+			// worker node readiness probe
+			cmd := []string{
+				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+			}
+			probe.Exec = &v1.ExecAction{Command: cmd}
+		}
+	}
 }
 
 // BuildPod a pod config
@@ -177,7 +264,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		// replacing the old command
 		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
 		if cmd != "" {
-			args = fmt.Sprintf("%s && %s", cont, cmd)
+			// If 'ray start' has --block specified, commands after it will not get executed.
+			// so we need to put cmd before cont.
+			args = fmt.Sprintf("%s && %s", cmd, cont)
 		} else {
 			args = cont
 		}
@@ -194,7 +283,45 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod.Spec.Containers[rayContainerIndex], rayNodeType, rayStartParams, svcName, headPort)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort)
+
+	// health check only if HA enabled
+	if podTemplateSpec.Annotations != nil {
+		if enabledString, ok := podTemplateSpec.Annotations[RayHAEnabledAnnotationKey]; ok {
+			if strings.ToLower(enabledString) == "true" {
+				// Ray HA is enabled and we need to add health checks
+				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+					// it is possible that some user have the probe parameters to override the default,
+					// in this case, this if condition is skipped
+					probe := &v1.Probe{
+						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+						PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+					}
+					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+				}
+				// add readiness probe exec command in case missing.
+				initReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
+
+				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+					// it is possible that some user have the probe parameters to override the default,
+					// in this case, this if condition is skipped
+					probe := &v1.Probe{
+						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+						PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+					}
+					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+				}
+				// add liveness probe exec command in case missing
+				initLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
+			}
+		}
+	}
 
 	return pod
 }
@@ -335,7 +462,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 			}
 		}
 		if k == RayNodeGroupLabelKey {
-			// overriding invalide values for this label
+			// overriding invalid values for this label
 			if v != groupName {
 				labels[k] = v
 			}
@@ -344,6 +471,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 			labels[k] = v
 		}
 	}
+
 	return labels
 }
 
@@ -359,10 +487,11 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 }
 
-func setContainerEnvVars(container *v1.Container, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
+	container := &pod.Spec.Containers[rayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}

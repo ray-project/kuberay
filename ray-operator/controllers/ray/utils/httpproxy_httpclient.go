@@ -46,7 +46,6 @@ func (r *RayHttpProxyClient) CheckHealth() error {
 	}
 
 	resp, err := r.client.Do(req)
-
 	if err != nil {
 		return err
 	}

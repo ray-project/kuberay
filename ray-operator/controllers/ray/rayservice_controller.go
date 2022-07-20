@@ -9,19 +9,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	networkingv1 "k8s.io/api/networking/v1"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	cmap "github.com/orcaman/concurrent-map"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,16 +32,13 @@ import (
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 )
 
-var (
-	// This variable is mutable for unit testing purpose.
-	ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
-)
+// This variable is mutable for unit testing purpose.
+var ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
 
 const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
 	ServiceRestartRequeueDuration      = 10 * time.Second
 	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
-	servicePortName                    = "dashboard-agent"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -90,7 +89,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	var logger = r.Log.WithValues("ServiceName", request.NamespacedName)
+	logger := r.Log.WithValues("ServiceName", request.NamespacedName)
 	var isHealthy bool = false
 
 	var rayServiceInstance *rayv1alpha1.RayService
@@ -238,13 +237,11 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 
 	// Get active cluster and pending cluster instances.
 	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PendingServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -400,7 +397,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 		r.Log.Error(err, "unable to create rayCluster for rayService", "rayCluster", rayClusterInstance)
 		return nil, err
 	}
-	r.Log.V(1).Info("created rayCluster for rayService run", "rayCluster", rayClusterInstance)
+	r.Log.V(1).Info("created rayCluster for rayService", "rayCluster", rayClusterInstance)
 
 	return rayClusterInstance, nil
 }
@@ -434,38 +431,6 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	}
 
 	return rayCluster, nil
-}
-
-func (r *RayServiceReconciler) fetchDashboardAgentURL(ctx context.Context, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	dashboardAgentService := &corev1.Service{}
-	dashboardAgentServiceName := utils.CheckName(utils.GenerateDashboardServiceName(rayCluster.Name))
-	if err := r.Get(ctx, client.ObjectKey{Name: dashboardAgentServiceName, Namespace: rayCluster.Namespace}, dashboardAgentService); err != nil {
-		return "", err
-	}
-
-	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboard agent service found", dashboardAgentService.Name)
-	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
-	servicePorts := dashboardAgentService.Spec.Ports
-
-	dashboardPort := int32(-1)
-
-	for _, servicePort := range servicePorts {
-		if servicePort.Name == servicePortName {
-			dashboardPort = servicePort.Port
-			break
-		}
-	}
-
-	if dashboardPort == int32(-1) {
-		return "", fmtErrors.Errorf("dashboard port not found")
-	}
-
-	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
-		dashboardAgentService.Name,
-		dashboardAgentService.Namespace,
-		dashboardPort)
-	r.Log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardURL)
-	return dashboardURL, nil
 }
 
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serveStatus *rayv1alpha1.RayServiceStatus) bool {
@@ -549,7 +514,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 		}
 	}
 
-	//Check app status.
+	// Check app status.
 	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
 	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
 	if serveStatuses.ApplicationStatus.Status != "HEALTHY" {
@@ -730,7 +695,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -764,7 +729,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = r.fetchDashboardAgentURL(ctx, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
