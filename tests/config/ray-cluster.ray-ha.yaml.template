@@ -106,6 +106,12 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
+            livenessProbe:
+              initialDelaySeconds: 30
+              failureThreshold: 200
+            readinessProbe:
+              initialDelaySeconds: 30
+              failureThreshold: 120
   workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 2
@@ -162,6 +168,12 @@ spec:
                   cpu: "1"
                 requests:
                   cpu: "200m"
+              livenessProbe:
+                initialDelaySeconds: 30
+                failureThreshold: 200
+              readinessProbe:
+                initialDelaySeconds: 30
+                failureThreshold: 120
           volumes:
             - name: log-volume
               emptyDir: {}
