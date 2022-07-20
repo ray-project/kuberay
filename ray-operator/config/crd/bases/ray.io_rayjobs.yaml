@@ -45,10 +45,12 @@ spec:
                   Important: Run "make" to regenerate code af'
                 type: string
               jobId:
+                description: If jobId is not set, a new jobId will be auto-generated.
                 type: string
               metadata:
                 additionalProperties:
                   type: string
+                description: Metadata is data to store along with this job.
                 type: object
               rayClusterSpec:
                 description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -97,7 +99,7 @@ spec:
                             type: object
                         type: object
                       upscalingMode:
-                        description: UpscalineMode is "Default" or "Aggressive.
+                        description: UpscalingMode is "Default" or "Aggressive.
                         enum:
                         - Default
                         - Aggressive
@@ -122,7 +124,8 @@ spec:
                           node-manager-port, object-store-memory, ...'
                         type: object
                       replicas:
-                        description: Number of desired pods in this pod group.
+                        description: HeadGroupSpec.Replicas is deprecated and ignored;
+                          there can only be one head pod per Ray cluster.
                         format: int32
                         type: integer
                       serviceType:
@@ -5723,7 +5726,6 @@ spec:
                         type: object
                     required:
                     - rayStartParams
-                    - replicas
                     - serviceType
                     - template
                     type: object
@@ -11491,6 +11493,8 @@ spec:
                 description: RuntimeEnv is base64 encoded.
                 type: string
               shutdownAfterJobFinishes:
+                description: 'TODO: If set to true, the rayCluster will be deleted
+                  after the rayJob finishes'
                 type: boolean
             required:
             - entrypoint
