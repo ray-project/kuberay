@@ -28,6 +28,7 @@ nav:
     - KubeRay ApiServer: components/apiserver.md
     - KubeRay CLI: components/cli.md
   - Features:
+    - RayService: guidance/rayservice.md
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
   - Best Practice:
