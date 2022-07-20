@@ -97,8 +97,10 @@ func convertClustersToStrings(clusters []*go_client.Cluster) ([][]string, int) {
 func convertClusterToString(r *go_client.Cluster) ([]string, int) {
 	headResource := r.GetClusterSpec().GetHeadGroupSpec()
 	workerGroups := r.GetClusterSpec().GetWorkerGroupSpec()
-	line := []string{r.GetName(), r.GetNamespace(), r.GetUser(), r.GetVersion(), r.GetEnvironment().String(), r.GetCreatedAt().AsTime().String(),
-		headResource.GetImage(), headResource.GetComputeTemplate(), headResource.GetServiceType()}
+	line := []string{
+		r.GetName(), r.GetNamespace(), r.GetUser(), r.GetVersion(), r.GetEnvironment().String(), r.GetCreatedAt().AsTime().String(),
+		headResource.GetImage(), headResource.GetComputeTemplate(), headResource.GetServiceType(),
+	}
 	nWorkGroups := len(workerGroups)
 
 	for _, workerGroup := range workerGroups {

@@ -13,8 +13,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/sirupsen/logrus"
+
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,19 @@ const (
 // IsCreated returns true if pod has been created and is maintained by the API server
 func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
+}
+
+// IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
+func IsRunningAndReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
@@ -133,6 +147,11 @@ func GenerateIngressName(clusterName string) string {
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
 	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
+}
+
+// GenerateRayJobId generates a ray job id for submission
+func GenerateRayJobId(rayjob string) string {
+	return fmt.Sprintf("%s-%s", rayjob, rand.String(5))
 }
 
 // GenerateIdentifier generates identifier of same group pods

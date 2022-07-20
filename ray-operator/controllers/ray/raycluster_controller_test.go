@@ -46,7 +46,7 @@ const (
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
-	var enableInTreeAutoscaling = true
+	enableInTreeAutoscaling := true
 
 	myRayCluster := &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -238,7 +238,7 @@ var _ = Context("Inside the default namespace", func() {
 			// adding a scale strategy
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
 
 			podToDelete1 := workerPods.Items[0]
 			rep := new(int32)
