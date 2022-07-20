@@ -22,7 +22,7 @@ const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
 	RayLogVolumeName            = "ray-logs"
-	RayLogVolumeMountPath       = "/tmp/ray"
+	RayLogVolumeMountPath       = "/tmp/ray/session_latest/logs"
 	AutoscalerContainerName     = "autoscaler"
 	RayHeadContainer            = "ray-head"
 	ObjectStoreMemoryKey        = "object-store-memory"
