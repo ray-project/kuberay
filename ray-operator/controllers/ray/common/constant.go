@@ -76,14 +76,14 @@ const (
 	DefaultReadinessProbeTimeoutSeconds      = 0
 	DefaultReadinessProbePeriodSeconds       = 0
 	DefaultReadinessProbeSuccessThreshold    = 0
-	DefaultReadinessProbeFailureThreshold    = 15
+	DefaultReadinessProbeFailureThreshold    = 20
 
 	// Ray HA default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 10
 	DefaultLivenessProbeTimeoutSeconds      = 0
 	DefaultLivenessProbePeriodSeconds       = 0
 	DefaultLivenessProbeSuccessThreshold    = 0
-	DefaultLivenessProbeFailureThreshold    = 30
+	DefaultLivenessProbeFailureThreshold    = 40
 
 	// Ray health check related configurations
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"

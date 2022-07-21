@@ -46,7 +46,7 @@ def create_cluster():
     shell_assert_success(
         'kind create cluster --config {}'.format(kindcluster_config_file))
     time.sleep(30)
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=1200s')
+    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
     assert rtn == 0
@@ -78,7 +78,7 @@ def create_kuberay_cluster(template_name):
         f.write(raycluster_spec_buf)
         raycluster_spec_file = f.name
 
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=1200s')
+    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
     assert rtn == 0
@@ -90,7 +90,7 @@ def create_kuberay_cluster(template_name):
     shell_run('kubectl get pods -A')
 
     rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
+        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
         shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
@@ -232,14 +232,15 @@ class RayHATestCase(unittest.TestCase):
         # This test will delete head node and wait for a new replacement to
         # come up.
         shell_assert_success('kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
-        time.sleep(20)
+
         # wait for new head node to start
-        shell_assert_success('kubectl get pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
+        time.sleep(80)
+        shell_assert_success('kubectl get pods -A')
 
         # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=1200s')
+        # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
-        rtn = shell_run('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=1200s')
+        rtn = shell_run('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
             shell_run('kubectl get pods -A')
             shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
@@ -276,8 +277,8 @@ def retry_with_timeout(func, count=90):
 ray.init(address='ray://127.0.0.1:10001')
 
 @serve.deployment
-    def d(*args):
-        return f"{os.getpid()}"
+def d(*args):
+    return f"{os.getpid()}"
 
 d.deploy()
 pid1 = ray.get(d.get_handle().remote())
@@ -305,7 +306,7 @@ print('ready')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=1200s')
+        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
 def get_new_value():
@@ -313,9 +314,10 @@ def get_new_value():
 pid2 = retry_with_timeout(get_new_value)
 
 if pid1 == pid2:
-    print('successful: {} {}'.format(res1, res2))
+    print('successful: {} {}'.format(pid1, pid2))
     sys.exit(0)
 else:
+    print('failed: {} {}'.format(pid1, pid2))
     raise Exception('failed')
         ''')
 
@@ -324,8 +326,10 @@ else:
             try:
                 buf = s._sock.recv(4096)
                 logger.info(buf.decode())
-                if buf.decode().find('success') != -1:
+                if buf.decode().find('successful') != -1:
                     break
+                if buf.decode().find('failed') != -1:
+                    raise Exception('test failed {}'.format(buf.decode()))
             except Exception as e:
                 pass
             time.sleep(1)
@@ -395,7 +399,7 @@ print('ready')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=1200s')
+        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
 def get_detached_actor():
@@ -410,6 +414,7 @@ if res1 != res2:
     print('successful: {} {}'.format(res1, res2))
     sys.exit(0)
 else:
+    print('failed: {} {}'.format(res1, res2))
     raise Exception('failed')
         ''')
 
@@ -421,7 +426,7 @@ else:
                 if buf.decode().find('successful') != -1:
                     break
                 if buf.decode().find('failed') != -1:
-                    raise Exception('test failed')
+                    raise Exception('test failed {}'.format(buf.decode()))
             except Exception as e:
                 pass
             time.sleep(1)
