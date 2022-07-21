@@ -68,6 +68,11 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
           lifecycle:
             preStop:
               exec:
