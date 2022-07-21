@@ -15,7 +15,7 @@ func NewCmdGet() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			key := args[0]
-			//key, _ := cmd.Flags().GetString("key")
+			// key, _ := cmd.Flags().GetString("key")
 			val := cmdutil.GetVal(key)
 			fmt.Printf("%s\n", val)
 		},

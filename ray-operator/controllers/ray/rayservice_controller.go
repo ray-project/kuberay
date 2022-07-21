@@ -30,10 +30,8 @@ import (
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 )
 
-var (
-	// This variable is mutable for unit testing purpose.
-	ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
-)
+// This variable is mutable for unit testing purpose.
+var ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
 
 const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
@@ -90,7 +88,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	var logger = r.Log.WithValues("ServiceName", request.NamespacedName)
+	logger := r.Log.WithValues("ServiceName", request.NamespacedName)
 	var isHealthy bool = false
 
 	var rayServiceInstance *rayv1alpha1.RayService
@@ -238,13 +236,11 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 
 	// Get active cluster and pending cluster instances.
 	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PendingServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -549,7 +545,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 		}
 	}
 
-	//Check app status.
+	// Check app status.
 	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
 	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
 	if serveStatuses.ApplicationStatus.Status != "HEALTHY" {

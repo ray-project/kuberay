@@ -46,7 +46,7 @@ const (
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
-	var enableInTreeAutoscaling = true
+	enableInTreeAutoscaling := true
 
 	myRayCluster := &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
