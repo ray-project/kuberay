@@ -231,15 +231,51 @@ var autoscalerContainer = v1.Container{
 
 var trueFlag = true
 
+func TestGetHeadPort(t *testing.T) {
+	headStartParams := make(map[string]string)
+	actualResult := GetHeadPort(headStartParams)
+	expectedResult := "6379"
+	if !(actualResult == expectedResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	headStartParams["port"] = "9999"
+	actualResult = GetHeadPort(headStartParams)
+	expectedResult = "9999"
+	if !(actualResult == expectedResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+func checkRayAddress(t *testing.T, pod v1.Pod, expectedRayAddress string) {
+	foundEnv := false
+	for _, env := range pod.Spec.Containers[0].Env {
+		if env.Name == RAY_ADDRESS {
+			if !(env.Value == expectedRayAddress) {
+				t.Fatalf("Expected `%v` but got `%v`", expectedRayAddress, env.Value)
+			}
+			foundEnv = true
+			break
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("Couldn't find RAY_ADDRESS env on pod.")
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, nil)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil)
 
+	// Check RAY_ADDRESS env.
+	checkRayAddress(t, pod, "127.0.0.1:6379")
+
+	// Check labels.
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
@@ -256,12 +292,14 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	// Check volumes.
 	actualVolumes := pod.Spec.Volumes
 	expectedVolumes := volumesNoAutoscaler
 	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedVolumes, actualVolumes)
 	}
 
+	// Check volume mounts.
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsNoAutoscaler
 	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
@@ -271,9 +309,13 @@ func TestBuildPod(t *testing.T) {
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName)
-	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, nil)
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName, "6379")
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil)
 
+	// Check RAY_ADDRESS env
+	checkRayAddress(t, pod, "raycluster-sample-head-svc:6379")
+
+	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
 
@@ -292,8 +334,8 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -372,8 +414,8 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		ImagePullPolicy:    &customPullPolicy,
 		Resources:          &customResources,
 	}
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, &trueFlag)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
@@ -390,7 +432,7 @@ func TestDefaultHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 
 	// autoscaler container is injected into head pod
 	actualContainerCount := len(podTemplateSpec.Spec.Containers)
@@ -413,7 +455,7 @@ func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 	cluster := instance.DeepCopy()
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := ""
@@ -430,7 +472,7 @@ func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := serviceAccount
@@ -448,7 +490,7 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName)
+	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := serviceAccount

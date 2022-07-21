@@ -32,7 +32,10 @@ const (
 	DashSymbol = "-"
 
 	// Use as default port
-	DefaultClientPort               = 10001
+	DefaultClientPort = 10001
+	// For Ray >= 1.11.0, "DefaultRedisPort" actually refers to the GCS server port.
+	// However, the role of this port is unchanged in Ray APIs like ray.init and ray start.
+	// This is the port used by Ray workers and drivers inside the Ray cluster to connect to the Ray head.
 	DefaultRedisPort                = 6379
 	DefaultDashboardPort            = 8265
 	DefaultMetricsPort              = 8080
@@ -60,12 +63,14 @@ const (
 	CLUSTER_NAME            = "CLUSTER_NAME"
 	RAY_IP                  = "RAY_IP"
 	RAY_PORT                = "RAY_PORT"
+	RAY_ADDRESS             = "RAY_ADDRESS"
 	REDIS_PASSWORD          = "REDIS_PASSWORD"
 	RAY_EXTERNAL_STORAGE_NS = "RAY_external_storage_namespace"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
 
+	LOCAL_HOST = "127.0.0.1"
 	// Ray HA default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
 	DefaultReadinessProbeTimeoutSeconds      = 0
