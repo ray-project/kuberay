@@ -77,7 +77,7 @@ func (s rayClusterNamespaceLister) Get(name string) (*v1alpha1.RayCluster, error
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("ray"), name)
+		return nil, errors.NewNotFound(v1alpha1.Resource("raycluster"), name)
 	}
 	return obj.(*v1alpha1.RayCluster), nil
 }

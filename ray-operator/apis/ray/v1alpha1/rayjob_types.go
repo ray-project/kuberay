@@ -60,7 +60,7 @@ type RayJobStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-
+//+genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
 	metav1.TypeMeta   `json:",inline"`

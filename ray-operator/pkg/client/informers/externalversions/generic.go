@@ -39,6 +39,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=ray.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("rayclusters"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Ray().V1alpha1().RayClusters().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("rayjobs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Ray().V1alpha1().RayJobs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("rayservices"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Ray().V1alpha1().RayServices().Informer()}, nil
 
 	}
 

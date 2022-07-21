@@ -3,7 +3,7 @@
 package fake
 
 import (
-	v1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/raycluster/v1alpha1"
+	v1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
@@ -14,6 +14,14 @@ type FakeRayV1alpha1 struct {
 
 func (c *FakeRayV1alpha1) RayClusters(namespace string) v1alpha1.RayClusterInterface {
 	return &FakeRayClusters{c, namespace}
+}
+
+func (c *FakeRayV1alpha1) RayJobs(namespace string) v1alpha1.RayJobInterface {
+	return &FakeRayJobs{c, namespace}
+}
+
+func (c *FakeRayV1alpha1) RayServices(namespace string) v1alpha1.RayServiceInterface {
+	return &FakeRayServices{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

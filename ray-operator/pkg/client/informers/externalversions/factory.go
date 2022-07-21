@@ -9,7 +9,7 @@ import (
 
 	versioned "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/internalinterfaces"
-	raycluster "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/raycluster"
+	ray "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/ray"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -156,9 +156,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Ray() raycluster.Interface
+	Ray() ray.Interface
 }
 
-func (f *sharedInformerFactory) Ray() raycluster.Interface {
-	return raycluster.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Ray() ray.Interface {
+	return ray.New(f, f.namespace, f.tweakListOptions)
 }
