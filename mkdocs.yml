@@ -29,6 +29,7 @@ nav:
     - KubeRay CLI: components/cli.md
   - Features:
     - RayService: guidance/rayservice.md
+    - Ray GCS HA: guidance/gcs-ha.md
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
   - Best Practice:
