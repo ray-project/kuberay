@@ -53,8 +53,7 @@ spec:
                 description: Metadata is data to store along with this job.
                 type: object
               rayClusterSpec:
-                description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                  NOTE: json tags are required.'
+                description: RayClusterSpec is the cluster template to run the job
                 properties:
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
@@ -11493,9 +11492,13 @@ spec:
                 description: RuntimeEnv is base64 encoded.
                 type: string
               shutdownAfterJobFinishes:
-                description: 'TODO: If set to true, the rayCluster will be deleted
-                  after the rayJob finishes'
+                description: ShutdownAfterJobFinishes will determine whether to delete
+                  the ray cluster once rayJob succeed or fai
                 type: boolean
+              ttlSecondsAfterFinished:
+                description: TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+                format: int32
+                type: integer
             required:
             - entrypoint
             type: object
@@ -11504,13 +11507,22 @@ spec:
             properties:
               dashboardURL:
                 type: string
+              endTime:
+                description: Represents time when the job was ended.
+                format: date-time
+                type: string
               jobDeploymentStatus:
+                description: JobDeploymentStatus indicates RayJob status including
+                  RayCluster lifecycle management and Job submis
                 type: string
               jobId:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerat'
                 type: string
               jobStatus:
+                description: JobStatus is the Ray Job Status. https://docs.ray.io/en/latest/cluster/jobs-package-ref.
+                type: string
+              message:
                 type: string
               rayClusterName:
                 type: string
@@ -11553,6 +11565,11 @@ spec:
                       state of cluster Important: Run "make" to regenerat'
                     type: string
                 type: object
+              startTime:
+                description: Represents time when the job was acknowledged by the
+                  Ray cluster.
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

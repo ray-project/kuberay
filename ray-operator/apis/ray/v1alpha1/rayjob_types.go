@@ -7,6 +7,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// JobStatus is the Ray Job Status. https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobstatus
 type JobStatus string
 
 const (
@@ -17,6 +18,7 @@ const (
 	JobStatusFailed    JobStatus = "FAILED"
 )
 
+// JobDeploymentStatus indicates RayJob status including RayCluster lifecycle management and Job submission
 type JobDeploymentStatus string
 
 const (
@@ -26,6 +28,7 @@ const (
 	JobDeploymentStatusFailedJobDeploy               JobDeploymentStatus = "FailedJobDeploy"
 	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
 	JobDeploymentStatusFailedToGetJobStatus          JobDeploymentStatus = "FailedToGetJobStatus"
+	JobDeploymentStatusComplete                      JobDeploymentStatus = "Complete"
 )
 
 // RayJobSpec defines the desired state of RayJob
@@ -37,10 +40,14 @@ type RayJobSpec struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// RuntimeEnv is base64 encoded.
 	RuntimeEnv string `json:"runtimeEnv,omitempty"`
-	// TODO: If set to true, the rayCluster will be deleted after the rayJob finishes
-	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
-	JobId          string         `json:"jobId,omitempty"`
+	JobId string `json:"jobId,omitempty"`
+	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
+	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+	// It's only working when ShutdownAfterJobFinishes set to true.
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
@@ -55,7 +62,14 @@ type RayJobStatus struct {
 	DashboardURL        string              `json:"dashboardURL,omitempty"`
 	JobStatus           JobStatus           `json:"jobStatus,omitempty"`
 	JobDeploymentStatus JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
-	RayClusterStatus    RayClusterStatus    `json:"rayClusterStatus,omitempty"`
+	Message             string              `json:"message,omitempty"`
+	// Represents time when the job was acknowledged by the Ray cluster.
+	// It is not guaranteed to be set in happens-before order across separate operations.
+	// It is represented in RFC3339 form
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// Represents time when the job was ended.
+	EndTime          *metav1.Time     `json:"endTime,omitempty"`
+	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
