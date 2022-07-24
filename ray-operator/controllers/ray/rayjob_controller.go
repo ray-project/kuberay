@@ -83,6 +83,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	// Check the current status of ray cluster before submitting.
+	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
+		r.Log.Info("waiting for the cluster to be ready", "rayCluster", rayClusterInstance.Name)
+		err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusWaitForDashboard, nil)
+		return ctrl.Result{}, err
+	}
+
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
 	clientURL := rayJobInstance.Status.DashboardURL
@@ -96,12 +103,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 		rayJobInstance.Status.DashboardURL = clientURL
-	}
-
-	// Check the current status of ray cluster before submitting.
-	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
-		r.Log.Info("waiting for the cluster to be ready", "rayCluster", rayClusterInstance.Name)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
