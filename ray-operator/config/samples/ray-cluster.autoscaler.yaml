@@ -8,7 +8,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-autoscaler
 spec:
-  rayVersion: '1.12.1'
+  rayVersion: '1.13.0'
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
@@ -52,7 +52,7 @@ spec:
         containers:
         # The Ray head pod
         - name: ray-head
-          image: rayproject/ray:1.12.1
+          image: rayproject/ray:1.13.0
           imagePullPolicy: Always
           env:
           - name: CPU_REQUEST
@@ -135,7 +135,7 @@ spec:
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:1.12.1
+          image: rayproject/ray:1.13.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           env:
