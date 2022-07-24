@@ -29,9 +29,11 @@ nav:
     - KubeRay CLI: components/cli.md
   - Features:
     - RayService: guidance/rayservice.md
+    - RayJob: guidance/rayjob.md
     - Ray GCS HA: guidance/gcs-ha.md
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
+    - Observability: guidance/observability.md
   - Best Practice:
     - Worker reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting:
@@ -39,7 +41,8 @@ nav:
   - Designs:
     - Core API and Backend Service: design/protobuf-grpc-service.md
   - Development:
-    - Release: release/README.md
+    - Development: development/development.md
+    - Release: development/release.md
 
 # Customization
 extra:
