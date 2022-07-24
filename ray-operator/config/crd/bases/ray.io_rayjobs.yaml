@@ -99,10 +99,12 @@ spec:
                             type: object
                         type: object
                       upscalingMode:
-                        description: UpscalingMode is "Default" or "Aggressive.
+                        description: UpscalingMode is "Conservative", "Default", or
+                          "Aggressive.
                         enum:
                         - Default
                         - Aggressive
+                        - Conservative
                         type: string
                     type: object
                   enableInTreeAutoscaling:
