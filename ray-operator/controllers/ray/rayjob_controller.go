@@ -83,6 +83,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
+		r.Log.Info("waiting for the cluster to be ready", "rayCluster", rayClusterInstance.Name)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	}
+
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
 	clientURL := rayJobInstance.Status.DashboardURL
@@ -90,7 +95,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
 		if clientURL, err = utils.FetchDashboardURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
 			if clientURL == "" {
-				err = fmt.Errorf("Empty dashboardURL")
+				err = fmt.Errorf("empty dashboardURL")
 			}
 			err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusWaitForDashboard, err)
 			return ctrl.Result{}, err
@@ -116,7 +121,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusFailedJobDeploy, err)
 			return ctrl.Result{}, err
 		}
-		log.Info("Job succesfully submmited", "jobId", jobId)
+		log.Info("Job successfully submitted", "jobId", jobId)
 		rayJobInstance.Status.JobStatus = rayv1alpha1.JobStatusPending
 		err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusRunning, nil)
 		if err != nil {
