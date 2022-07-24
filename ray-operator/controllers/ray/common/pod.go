@@ -528,6 +528,15 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		}
 		container.Env = append(container.Env, port)
 	}
+	if !envVarExists(RAY_EXTERNAL_STORAGE_NS, container.Env) {
+		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
+		if pod.Annotations != nil {
+			if v, ok := pod.Annotations[RayExternalStorageNSAnnotationKey]; ok {
+				storageNS := v1.EnvVar{Name: RAY_EXTERNAL_STORAGE_NS, Value: v}
+				container.Env = append(container.Env, storageNS)
+			}
+		}
+	}
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
