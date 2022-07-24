@@ -73,15 +73,16 @@ type AutoscalerOptions struct {
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
 	ImagePullPolicy *v1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-	// Defaults to 300 (five minutes).
+	// Defaults to 60 (one minute).
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
-	// UpscalingMode is "Default" or "Aggressive."
-	// Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
-	// Aggressive: Upscaling is not rate-limited.
+	// UpscalingMode is "Conservative", "Default", or "Aggressive."
+	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+	// Default: Upscaling is not rate-limited.
+	// Aggressive: An alias for Default; upscaling is not rate-limited.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Default;Aggressive
+// +kubebuilder:validation:Enum=Default;Aggressive;Conservative
 type UpscalingMode string
 
 // The overall state of the Ray cluster.

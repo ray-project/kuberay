@@ -15,11 +15,12 @@ spec:
   # The example configuration shown below below represents the DEFAULT values.
   autoscalerOptions:
     # upscalingMode is "Default" or "Aggressive."
-    # Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
-    # Aggressive: Upscaling is not rate-limited.
+    # Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+    # Default: Upscaling is not rate-limited.
+    # Aggressive: An alias for Default; upscaling is not rate-limited.
     upscalingMode: Default
     # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-    idleTimeoutSeconds: 300
+    idleTimeoutSeconds: 60
     # image optionally overrides the autoscaler's container image.
     image: "rayproject/ray:d2ef34"
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
