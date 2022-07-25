@@ -24,7 +24,7 @@ metadata:
     ray.io/external-storage-namespace: "my-raycluster-storage-namespace" # <- optional, to specify the external storage namespace
 ...
 ```
-An example can be found at [ray-cluster.external-redis.yaml](../../ray-operator/config/samples/ray-cluster.external-redis.yaml)
+An example can be found at [ray-cluster.external-redis.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.external-redis.yaml)
 
 When annotation `ray.io/ha-enabled` is added with a `true` value, KubeRay will enable Ray GCS HA feature. This feature
 contains several components:
@@ -65,7 +65,7 @@ you need to add `RAY_REDIS_ADDRESS` environment variable to the head node templa
 
 Also, you can specify a storage namespace for your Ray cluster by using an annotation `ray.io/external-storage-namespace`
 
-An example can be found at [ray-cluster.external-redis.yaml](../../ray-operator/config/samples/ray-cluster.external-redis.yaml)
+An example can be found at [ray-cluster.external-redis.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.external-redis.yaml)
 
 #### KubeRay Operator Controller
 
