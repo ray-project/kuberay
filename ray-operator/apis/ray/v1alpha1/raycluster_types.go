@@ -72,6 +72,10 @@ type AutoscalerOptions struct {
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
 	ImagePullPolicy *v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// Optional list of environment variables to set in the autoscaler container.
+	Env []v1.EnvVar `json:"env,omitempty"`
+	// Optional list of sources to populate environment variables in the autoscaler container.
+	EnvFrom []v1.EnvFromSource `json:"envFrom,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute).
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
