@@ -84,11 +84,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Check the current status of ray cluster before submitting.
-	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
-		r.Log.Info("waiting for the cluster to be ready", "rayCluster", rayClusterInstance.Name)
-		err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusWaitForDashboard, nil)
-		return ctrl.Result{}, err
-	}
+	//if rayClusterInstance.Status.State != rayv1alpha1.Ready {
+	//	r.Log.Info("waiting for the cluster to be ready", "rayCluster", rayClusterInstance.Name)
+	//	err = r.updateState(ctx, rayJobInstance, rayv1alpha1.JobDeploymentStatusWaitForDashboard, nil)
+	//	return ctrl.Result{}, err
+	//}
 
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
