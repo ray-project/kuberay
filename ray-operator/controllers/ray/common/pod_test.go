@@ -406,6 +406,8 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 			v1.ResourceMemory: testMemoryLimit,
 		},
 	}
+	customEnv := []v1.EnvVar{{Name: "fooEnv", Value: "fooValue"}}
+	customEnvFrom := []v1.EnvFromSource{{Prefix: "Pre"}}
 
 	cluster.Spec.AutoscalerOptions = &rayiov1alpha1.AutoscalerOptions{
 		UpscalingMode:      &customUpscaling,
@@ -413,6 +415,8 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		Image:              &customAutoscalerImage,
 		ImagePullPolicy:    &customPullPolicy,
 		Resources:          &customResources,
+		Env:                customEnv,
+		EnvFrom:            customEnvFrom,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag)
@@ -420,6 +424,8 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
 	expectedContainer.Resources = customResources
+	expectedContainer.EnvFrom = customEnvFrom
+	expectedContainer.Env = append(expectedContainer.Env, customEnv...)
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {

@@ -388,6 +388,12 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		if autoscalerOptions.ImagePullPolicy != nil {
 			autoscalerContainer.ImagePullPolicy = *autoscalerOptions.ImagePullPolicy
 		}
+		if len(autoscalerOptions.Env) > 0 {
+			autoscalerContainer.Env = append(autoscalerContainer.Env, autoscalerOptions.Env...)
+		}
+		if len(autoscalerOptions.EnvFrom) > 0 {
+			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
+		}
 	}
 }
 
