@@ -223,7 +223,7 @@ var autoscalerContainer = v1.Container{
 	},
 	VolumeMounts: []v1.VolumeMount{
 		{
-			MountPath: "/tmp/ray/session_latest/logs",
+			MountPath: "/tmp/ray",
 			Name:      "ray-logs",
 		},
 	},
