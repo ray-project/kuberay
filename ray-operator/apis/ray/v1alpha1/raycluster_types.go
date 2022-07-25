@@ -66,7 +66,7 @@ type ScaleStrategy struct {
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
 	// Resources specifies resource requests and limits for the autoscaler container.
-	// Default values: 256m CPU request, 512m CPU limit, 256Mi memory request, 512Mi memory limit.
+	// Default values: 500m CPU request and limit. 512m CPU limit, 512Mi memory request and limit.
 	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
 	Image *string `json:"image,omitempty"`

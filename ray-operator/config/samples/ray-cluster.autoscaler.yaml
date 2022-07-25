@@ -8,11 +8,15 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-autoscaler
 spec:
+  # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
   rayVersion: '1.13.0'
+  # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
+  # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
   # The example configuration shown below below represents the DEFAULT values.
+  # (You may delete autoscalerOptions if the defaults are suitable.)
   autoscalerOptions:
     # upscalingMode is "Default" or "Aggressive."
     # Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
@@ -25,6 +29,13 @@ spec:
     image: "rayproject/ray:d2ef34"
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
     imagePullPolicy: Always
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
