@@ -211,7 +211,7 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace st
 	client := r.getKubernetesConfigMapClient(namespace)
 	configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
 	if err != nil {
-		return nil, util.Wrap(err, "List compute runtimes failed")
+		return nil, util.Wrap(err, "List compute templates failed")
 	}
 
 	var result []*v1.ConfigMap
@@ -282,7 +282,7 @@ func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInte
 	runtime, err := client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return nil, util.NewNotFoundError(err, "Cluster %s not found", name)
+			return nil, util.NewNotFoundError(err, "Compute template %s not found", name)
 		}
 
 		return nil, util.Wrap(err, "Get compute template failed")
