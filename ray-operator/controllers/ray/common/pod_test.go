@@ -174,7 +174,7 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 	},
 	{
 		Name:      "ray-logs",
-		MountPath: "/tmp/ray/session_latest",
+		MountPath: "/tmp/ray",
 		ReadOnly:  false,
 	},
 }
