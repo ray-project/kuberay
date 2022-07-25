@@ -27,10 +27,12 @@ type ClusterServiceClient interface {
 	ListCluster(ctx context.Context, in *ListClustersRequest, opts ...grpc.CallOption) (*ListClustersResponse, error)
 	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllClusters(ctx context.Context, in *ListAllClustersRequest, opts ...grpc.CallOption) (*ListAllClustersResponse, error)
-	// Deletes an cluster without deleting the cluster's runs and jobs. To
+	// Deletes a cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before
 	// deleting the cluster.
 	DeleteCluster(ctx context.Context, in *DeleteClusterRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// Get a cluster's status with the list of all pod IPs.
+	GetClusterStatus(ctx context.Context, in *GetClusterRequest, opts ...grpc.CallOption) (*ClusterStatus, error)
 }
 
 type clusterServiceClient struct {
@@ -86,6 +88,15 @@ func (c *clusterServiceClient) DeleteCluster(ctx context.Context, in *DeleteClus
 	return out, nil
 }
 
+func (c *clusterServiceClient) GetClusterStatus(ctx context.Context, in *GetClusterRequest, opts ...grpc.CallOption) (*ClusterStatus, error) {
+	out := new(ClusterStatus)
+	err := c.cc.Invoke(ctx, "/proto.ClusterService/GetClusterStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClusterServiceServer is the server API for ClusterService service.
 // All implementations must embed UnimplementedClusterServiceServer
 // for forward compatibility
@@ -98,10 +109,12 @@ type ClusterServiceServer interface {
 	ListCluster(context.Context, *ListClustersRequest) (*ListClustersResponse, error)
 	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllClusters(context.Context, *ListAllClustersRequest) (*ListAllClustersResponse, error)
-	// Deletes an cluster without deleting the cluster's runs and jobs. To
+	// Deletes a cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before
 	// deleting the cluster.
 	DeleteCluster(context.Context, *DeleteClusterRequest) (*emptypb.Empty, error)
+	// Get a cluster's status with the list of all pod IPs.
+	GetClusterStatus(context.Context, *GetClusterRequest) (*ClusterStatus, error)
 	mustEmbedUnimplementedClusterServiceServer()
 }
 
@@ -123,6 +136,9 @@ func (UnimplementedClusterServiceServer) ListAllClusters(context.Context, *ListA
 }
 func (UnimplementedClusterServiceServer) DeleteCluster(context.Context, *DeleteClusterRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCluster not implemented")
+}
+func (UnimplementedClusterServiceServer) GetClusterStatus(context.Context, *GetClusterRequest) (*ClusterStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClusterStatus not implemented")
 }
 func (UnimplementedClusterServiceServer) mustEmbedUnimplementedClusterServiceServer() {}
 
@@ -227,6 +243,24 @@ func _ClusterService_DeleteCluster_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClusterService_GetClusterStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterServiceServer).GetClusterStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.ClusterService/GetClusterStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterServiceServer).GetClusterStatus(ctx, req.(*GetClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClusterService_ServiceDesc is the grpc.ServiceDesc for ClusterService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -253,6 +287,10 @@ var ClusterService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteCluster",
 			Handler:    _ClusterService_DeleteCluster_Handler,
+		},
+		{
+			MethodName: "GetClusterStatus",
+			Handler:    _ClusterService_GetClusterStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

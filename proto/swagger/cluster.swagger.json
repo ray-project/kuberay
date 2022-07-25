@@ -152,7 +152,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes an cluster without deleting the cluster's runs and jobs. To\navoid unexpected behaviors, delete an cluster's runs and jobs before\ndeleting the cluster.",
+        "summary": "Deletes a cluster without deleting the cluster's runs and jobs. To\navoid unexpected behaviors, delete an cluster's runs and jobs before\ndeleting the cluster.",
         "operationId": "ClusterService_DeleteCluster",
         "responses": {
           "200": {
@@ -179,6 +179,45 @@
           {
             "name": "name",
             "description": "The name of the cluster to be deleted.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ClusterService"
+        ]
+      }
+    },
+    "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}/status": {
+      "get": {
+        "summary": "Get a cluster's status with the list of all pod IPs.",
+        "operationId": "ClusterService_GetClusterStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoClusterStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the cluster to be retrieved.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "The name of the cluster to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -363,6 +402,24 @@
         }
       }
     },
+    "protoClusterStatus": {
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "$ref": "#/definitions/protoCluster"
+        },
+        "headGroupStatus": {
+          "$ref": "#/definitions/protoHeadGroupStatus",
+          "title": "The worker group configurations"
+        },
+        "workerGroupStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoWorkerGroupStatus"
+          }
+        }
+      }
+    },
     "protoHeadGroupSpec": {
       "type": "object",
       "properties": {
@@ -394,6 +451,17 @@
         }
       }
     },
+    "protoHeadGroupStatus": {
+      "type": "object",
+      "properties": {
+        "podList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoPodStatus"
+          }
+        }
+      }
+    },
     "protoListAllClustersResponse": {
       "type": "object",
       "properties": {
@@ -415,6 +483,17 @@
             "$ref": "#/definitions/protoCluster"
           },
           "description": "A list of clusters returned."
+        }
+      }
+    },
+    "protoPodStatus": {
+      "type": "object",
+      "properties": {
+        "podName": {
+          "type": "string"
+        },
+        "podIp": {
+          "type": "string"
         }
       }
     },
@@ -487,6 +566,21 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        }
+      }
+    },
+    "protoWorkerGroupStatus": {
+      "type": "object",
+      "properties": {
+        "groupName": {
+          "type": "string",
+          "title": "Required. Group name of the current worker group"
+        },
+        "podList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoPodStatus"
+          }
         }
       }
     },

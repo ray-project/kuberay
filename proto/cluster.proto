@@ -52,12 +52,19 @@ service ClusterService {
     };
   }
 
-  // Deletes an cluster without deleting the cluster's runs and jobs. To
+  // Deletes a cluster without deleting the cluster's runs and jobs. To
   // avoid unexpected behaviors, delete an cluster's runs and jobs before
   // deleting the cluster.
   rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"
+    };
+  }
+
+ // Get a cluster's status with the list of all pod IPs.
+ rpc GetClusterStatus(GetClusterRequest) returns (ClusterStatus) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}/status"
     };
   }
 }
@@ -256,4 +263,26 @@ message ClusterEvent {
   
   // Output. The number of times this event has occurred.
   int32 count = 9;
+}
+
+message PodStatus {
+  string pod_name = 1;
+  string pod_ip = 2;
+}
+
+message HeadGroupStatus {
+  repeated PodStatus pod_list = 1;
+}
+
+message WorkerGroupStatus {
+  // Required. Group name of the current worker group
+  string group_name = 1;
+  repeated PodStatus pod_list = 2;
+}
+
+message ClusterStatus {
+  Cluster cluster = 1;
+  // The worker group configurations
+  HeadGroupStatus head_group_status = 2;
+  repeated WorkerGroupStatus worker_group_status = 3;
 }
