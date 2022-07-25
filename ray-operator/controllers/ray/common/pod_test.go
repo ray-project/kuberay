@@ -217,8 +217,8 @@ var autoscalerContainer = v1.Container{
 			v1.ResourceMemory: resource.MustParse("512Mi"),
 		},
 		Requests: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("256m"),
-			v1.ResourceMemory: resource.MustParse("256Mi"),
+			v1.ResourceCPU:    resource.MustParse("500m"),
+			v1.ResourceMemory: resource.MustParse("512Mi"),
 		},
 	},
 	VolumeMounts: []v1.VolumeMount{

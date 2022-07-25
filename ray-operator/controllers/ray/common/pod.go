@@ -362,15 +362,14 @@ func BuildAutoscalerContainer() v1.Container {
 			"--cluster-namespace",
 			"$(RAY_CLUSTER_NAMESPACE)",
 		},
-		// TODO: make resource requirement configurable.
 		Resources: v1.ResourceRequirements{
 			Limits: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("500m"),
 				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse("256m"),
-				v1.ResourceMemory: resource.MustParse("256Mi"),
+				v1.ResourceCPU:    resource.MustParse("500m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
 	}
