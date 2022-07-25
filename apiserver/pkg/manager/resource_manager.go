@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/model"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
@@ -14,6 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"github.com/ray-project/kuberay/apiserver/pkg/model"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
 const DefaultNamespace = "ray-system"
@@ -58,6 +59,10 @@ func (r *ResourceManager) getEventsClient(namespace string) clientv1.EventInterf
 
 func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInterface {
 	return r.clientManager.KubernetesClient().NamespaceClient()
+}
+
+func (r *ResourceManager) getKubernetesPodClient(namespace string) clientv1.PodInterface {
+	return r.clientManager.KubernetesClient().PodClient(namespace)
 }
 
 // clusters
@@ -113,6 +118,55 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 func (r *ResourceManager) GetCluster(ctx context.Context, clusterName string, namespace string) (*v1alpha1.RayCluster, error) {
 	client := r.getRayClusterClient(namespace)
 	return getClusterByName(ctx, client, clusterName)
+}
+
+func (r *ResourceManager) GetClusterStatus(ctx context.Context, cluster *api.Cluster) (*api.ClusterStatus, error) {
+	podClient := r.getKubernetesPodClient(cluster.Namespace)
+
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.RayClusterLabelKey: cluster.Name,
+		},
+	}
+	podList, err := podClient.List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	headGroupStatus := &api.HeadGroupStatus{}
+	workerGroupStatus := map[string]*api.WorkerGroupStatus{}
+	for _, pod := range podList.Items {
+		if pod.Labels[util.RayNodeTypeLabelKey] == "head" {
+			headGroupStatus.PodList = append(headGroupStatus.PodList, &api.PodStatus{
+				PodName: pod.Name,
+				PodIp:   pod.Status.PodIP,
+			})
+		} else {
+			groupName := pod.Labels[util.RayNodeGroupLabelKey]
+			wgs, ok := workerGroupStatus[groupName]
+			if !ok {
+				wgs = &api.WorkerGroupStatus{
+					GroupName: groupName,
+				}
+				workerGroupStatus[groupName] = wgs
+			}
+			wgs.PodList = append(wgs.PodList, &api.PodStatus{
+				PodName: pod.Name,
+				PodIp:   pod.Status.PodIP,
+			})
+		}
+	}
+	workerGroupStatusList := make([]*api.WorkerGroupStatus, 0, len(workerGroupStatus))
+	for _, wgs := range workerGroupStatus {
+		workerGroupStatusList = append(workerGroupStatusList, wgs)
+	}
+	return &api.ClusterStatus{
+		Cluster:           cluster,
+		HeadGroupStatus:   headGroupStatus,
+		WorkerGroupStatus: workerGroupStatusList,
+	}, nil
 }
 
 func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([]*v1alpha1.RayCluster, error) {

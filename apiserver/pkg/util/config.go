@@ -9,10 +9,14 @@ type ClientOptions struct {
 // TODO: this needs to be revised.
 const (
 	// Label keys
-	RayClusterNameLabelKey            = "ray.io/cluster-name"
-	RayClusterUserLabelKey            = "ray.io/user"
-	RayClusterVersionLabelKey         = "ray.io/version"
-	RayClusterEnvironmentLabelKey     = "ray.io/environment"
+	RayClusterLabelKey            = "ray.io/cluster"
+	RayClusterNameLabelKey        = "ray.io/cluster-name"
+	RayClusterUserLabelKey        = "ray.io/user"
+	RayClusterVersionLabelKey     = "ray.io/version"
+	RayClusterEnvironmentLabelKey = "ray.io/environment"
+	RayNodeTypeLabelKey           = "ray.io/node-type"
+	RayNodeGroupLabelKey          = "ray.io/group"
+
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
 

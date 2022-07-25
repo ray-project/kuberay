@@ -4,13 +4,14 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/ray-project/kuberay/apiserver/pkg/manager"
-	"github.com/ray-project/kuberay/apiserver/pkg/model"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"google.golang.org/protobuf/types/known/emptypb"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
+	"github.com/ray-project/kuberay/apiserver/pkg/model"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
 type ClusterServerOptions struct {
@@ -66,6 +67,28 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 	}
 
 	return model.FromCrdToApiCluster(cluster, events), nil
+}
+
+// Finds a specific Cluster by cluster name.
+func (s *ClusterServer) GetClusterStatus(ctx context.Context, request *api.GetClusterRequest) (*api.ClusterStatus, error) {
+	if request.Name == "" {
+		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace == "" {
+		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
+	cluster, err := s.resourceManager.GetCluster(ctx, request.Name, request.Namespace)
+	if err != nil {
+		return nil, util.Wrap(err, "Get cluster failed.")
+	}
+	events, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
+	if err != nil {
+		klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
+	}
+
+	return s.resourceManager.GetClusterStatus(ctx, model.FromCrdToApiCluster(cluster, events))
 }
 
 // Finds all Clusters in a given namespace.
