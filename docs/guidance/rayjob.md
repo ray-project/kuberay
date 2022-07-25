@@ -9,18 +9,16 @@
 
 ### What is a RayJob?
 
-The RayService is a new custom resource (CR) supported by KubeRay in v0.3.0.
+The RayJob is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
-A RayService manages 2 things:
+A RayJob manages 2 things:
 * RayCluster: Manages resources in kubernetes cluster.
-* Ray Serve Deployment Graph: Manages users' serve deployment graph.
+* Job: Manages users' job in ray cluster.
 
-### What does the RayService provide?
+### What does the RayJob provide?
 
-* Kubernetes-native support for Ray cluster and Ray Serve deployment graphs. You can use a kubernetes config to define a ray cluster and its ray serve deployment graphs. Then you can use `kubectl` to create the cluster and its graphs.
-* In-place update for ray serve deployment graph. Users can update the ray serve deployment graph config in the RayService CR config and use `kubectl apply` to update the serve deployment graph.
-* Zero downtime upgrade for ray cluster. Users can update the ray cluster config in the RayService CR config and use `kubectl apply` to update the ray cluster. RayService will temporarily create a pending ray cluster, wait for the pending ray cluster ready, and then switch traffics to the new ray cluster, terminate the old cluster. 
-* Services HA. RayService will monitor the ray cluster and serve deployments health status. If RayService detects any unhealthy status lasting for a certain time, RayService will try to create a new ray cluster, and switch traffic to the new cluster when it is ready.
+* Kubernetes-native support for Ray cluster and Ray Job. You can use a kubernetes config to define a ray cluster and jobs in ray cluster. Then you can use `kubectl` to create the cluster and its job. The cluster can be deleted automatically after the job is finished.
+
 
 ### Deploy the KubeRay
 
@@ -38,7 +36,7 @@ $ kubectl apply -f config/samples/ray_v1alpha1_rayjob.yaml
 ```
 
 ```shell
-# List running RayServices.
+# List running RayJobs.
 $ kubectl get rayjob
 NAME                AGE
 rayjob-sample   7s
@@ -122,7 +120,7 @@ Events:
 ```
 
 
-### Delete the RayService instance
+### Delete the RayJob instance
 
 ```shell
 $ kubectl delete -f config/samples/ray_v1alpha1_rayjob.yaml
