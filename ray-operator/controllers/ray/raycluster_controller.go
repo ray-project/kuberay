@@ -782,17 +782,32 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		}
 	}
 
+	if err := r.updateEndpoints(instance); err != nil {
+		return err
+	}
+
+	timeNow := metav1.Now()
+	instance.Status.LastUpdateTime = &timeNow
+	if err := r.Status().Update(context.Background(), instance); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) updateEndpoints(instance *rayiov1alpha1.RayCluster) error {
+	// TODO: (@scarlet25151) There may be several K8s Services for a RayCluster.
+	// We assume we can find the right one by filtering Services with appropriate label selectors
+	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	filterLabels = client.MatchingLabels{
+	filterLabels := client.MatchingLabels{
 		common.RayClusterLabelKey:  instance.Name,
 		common.RayNodeTypeLabelKey: "head",
 	}
-	// TODO: (@scarlet25151) for now there would be several kubernetes serivces related to
-	// one raycluster, we have used the label to select the headservice and pick the first one.
-	// we may need use Get method to select by name.
 	if err := r.List(context.TODO(), &rayHeadSvc, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
+
 	if len(rayHeadSvc.Items) != 0 {
 		svc := rayHeadSvc.Items[0]
 		if instance.Status.Endpoints == nil {
@@ -800,16 +815,21 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		}
 		for _, port := range svc.Spec.Ports {
 			if len(port.Name) == 0 {
-				r.Log.Info("updateStatus", "service port name is empty", port)
+				r.Log.Info("updateStatus", "service port's name is empty. Not adding it to RayCluster status.endpoints", port)
 				continue
 			}
-			instance.Status.Endpoints[port.Name] = fmt.Sprintf("%d", port.NodePort)
+			if port.NodePort != 0 {
+				instance.Status.Endpoints[port.Name] = fmt.Sprintf("%d", port.NodePort)
+			} else if port.TargetPort.IntVal != 0 {
+				instance.Status.Endpoints[port.Name] = fmt.Sprintf("%d", port.TargetPort.IntVal)
+			} else if port.TargetPort.StrVal != "" {
+				instance.Status.Endpoints[port.Name] = port.TargetPort.StrVal
+			} else {
+				r.Log.Info("updateStatus", "service port's targetPort is empty. Not adding it to RayCluster status.endpoints", port)
+			}
 		}
-	}
-	timeNow := metav1.Now()
-	instance.Status.LastUpdateTime = &timeNow
-	if err := r.Status().Update(context.Background(), instance); err != nil {
-		return err
+	} else {
+		r.Log.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", filterLabels)
 	}
 
 	return nil

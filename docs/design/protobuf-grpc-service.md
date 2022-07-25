@@ -215,7 +215,7 @@ service ComputeTemplateService {
     };
   }
 
-  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
   rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/compute_templates"

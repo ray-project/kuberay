@@ -25,7 +25,7 @@ type ComputeTemplateServiceClient interface {
 	GetComputeTemplate(ctx context.Context, in *GetComputeTemplateRequest, opts ...grpc.CallOption) (*ComputeTemplate, error)
 	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
 	ListComputeTemplates(ctx context.Context, in *ListComputeTemplatesRequest, opts ...grpc.CallOption) (*ListComputeTemplatesResponse, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllComputeTemplates(ctx context.Context, in *ListAllComputeTemplatesRequest, opts ...grpc.CallOption) (*ListAllComputeTemplatesResponse, error)
 	// Deletes a compute template by its name and namespace
 	DeleteComputeTemplate(ctx context.Context, in *DeleteComputeTemplateRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -94,7 +94,7 @@ type ComputeTemplateServiceServer interface {
 	GetComputeTemplate(context.Context, *GetComputeTemplateRequest) (*ComputeTemplate, error)
 	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
 	ListComputeTemplates(context.Context, *ListComputeTemplatesRequest) (*ListComputeTemplatesResponse, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllComputeTemplates(context.Context, *ListAllComputeTemplatesRequest) (*ListAllComputeTemplatesResponse, error)
 	// Deletes a compute template by its name and namespace
 	DeleteComputeTemplate(context.Context, *DeleteComputeTemplateRequest) (*emptypb.Empty, error)

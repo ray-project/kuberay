@@ -31,8 +31,8 @@ KubeRay provides several tools to improve running and managing Ray's experience 
 - Ray Operator
 - Backend services to create/delete cluster resources
 - Kubectl plugin/CLI to operate CRD objects
+- Native Job and Serving integration with Clusters
 - Data Scientist centric workspace for fast prototyping (incubating)
-- Native Job and Serving integration with Clusters (incubating)
 - Kubernetes event dumper for ray clusters/pod/services (future work)
 - Operator Integration with Kubernetes node problem detector (future work)
 
