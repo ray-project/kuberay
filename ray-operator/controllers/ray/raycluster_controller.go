@@ -147,17 +147,11 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		return ctrl.Result{}, nil
 	}
 
-	needUpdate := true
-	if !utils.IsRunningAndReady(unhealthyPod) && unhealthyPod.Annotations != nil {
-		r.Log.Info("mark pod unhealthy and need for a rebuild", "pod name", unhealthyPod.Name)
-		for k, v := range unhealthyPod.GetAnnotations() {
-			if k == common.RayNodeHealthStateAnnotationKey && v == common.PodUnhealthy {
-				needUpdate = false
-			}
-		}
-		if needUpdate {
+	if !utils.IsRunningAndReady(unhealthyPod) {
+		if v, ok := unhealthyPod.Annotations[common.RayNodeHealthStateAnnotationKey]; !ok || v != common.PodUnhealthy {
 			updatedPod := unhealthyPod.DeepCopy()
 			updatedPod.Annotations[common.RayNodeHealthStateAnnotationKey] = common.PodUnhealthy
+			r.Log.Info("mark pod unhealthy and need for a rebuild", "pod", unhealthyPod)
 			if err := r.Update(context.TODO(), updatedPod); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -442,10 +436,10 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				continue
 			}
 			if v, ok := workerPod.Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
+				r.Log.Info(fmt.Sprintf("deleting unhealthy worker pod %s", workerPod.Name))
 				if err := r.Delete(context.TODO(), &workerPod); err != nil {
 					return err
 				}
-				r.Log.Info(fmt.Sprintf("need to delete unhealthy worker pod %s", workerPod.Name))
 				// we are deleting one worker pod now, let's reconcile again later
 				return nil
 			}
