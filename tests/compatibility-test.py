@@ -113,7 +113,7 @@ def download_images():
     client.close()
 
 
-class BasicRayTestCase(unittest.TestCase):
+class BasicRayTestCase():
     cluster_template_file = 'tests/config/ray-cluster.mini.yaml.template'
 
     @classmethod
@@ -211,7 +211,7 @@ def ray_ha_supported():
     return True
 
 
-class RayHATestCase(unittest.TestCase):
+class RayHATestCase():
     cluster_template_file = 'tests/config/ray-cluster.ray-ha.yaml.template'
 
     @classmethod
@@ -438,6 +438,31 @@ else:
         client.close()
 
 
+class RayServiceTestCase(unittest.TestCase):
+    service_template_file = 'tests/config/ray-service.yaml.template'
+
+    @classmethod
+    def setUpClass(cls):
+        # Ray cluster is running inside a local Kind environment.
+        # We use port mapping to connect to the Kind environment
+        # from another local ray container. The local ray container
+        # outside Kind environment has the same ray version as the
+        # ray cluster running inside Kind environment.
+        delete_cluster()
+        create_cluster()
+        apply_kuberay_resources()
+        download_images()
+        create_kuberay_cluster(RayServiceTestCase.service_template_file)
+        time.sleep(180)
+        shell_run('kubectl wait --for=condition=ready service -l ray.io/serve=rayservice-sample-serve --all --timeout=900s')
+        shell_run('kubectl port-forward service/rayservice-sample-serve-svc 8000')
+
+    def test_service_info(self):
+        print("fake test")
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        shell_run(curl_cmd)
+
+
 def parse_environment():
     global ray_version, ray_image, kuberay_sha
     for k, v in os.environ.items():
@@ -448,6 +473,34 @@ def parse_environment():
         if k == 'KUBERAY_IMG_SHA':
             logger.info('Using KubeRay docker build SHA: {}'.format(v))
             kuberay_sha = v
+
+
+def wait_for_condition(
+    condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
+):
+    """Wait until a condition is met or time out with an exception.
+
+    Args:
+        condition_predictor: A function that predicts the condition.
+        timeout: Maximum timeout in seconds.
+        retry_interval_ms: Retry interval in milliseconds.
+
+    Raises:
+        RuntimeError: If the condition is not met before the timeout expires.
+    """
+    start = time.time()
+    last_ex = None
+    while time.time() - start <= timeout:
+        try:
+            if condition_predictor(**kwargs):
+                return
+        except Exception as ex:
+            last_ex = ex
+        time.sleep(retry_interval_ms / 1000.0)
+    message = "The condition wasn't met before the timeout expired."
+    if last_ex is not None:
+        message += f" Last exception: {last_ex}"
+    raise RuntimeError(message)
 
 
 if __name__ == '__main__':
