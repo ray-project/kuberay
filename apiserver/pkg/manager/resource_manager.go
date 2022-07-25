@@ -282,7 +282,7 @@ func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInte
 	runtime, err := client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return nil, util.NewNotFoundError(err, "Cluster %s not found", name)
+			return nil, util.NewNotFoundError(err, "Compute template %s not found", name)
 		}
 
 		return nil, util.Wrap(err, "Get compute template failed")
