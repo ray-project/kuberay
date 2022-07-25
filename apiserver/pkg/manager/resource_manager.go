@@ -211,7 +211,7 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace st
 	client := r.getKubernetesConfigMapClient(namespace)
 	configMapList, err := client.List(ctx, metav1.ListOptions{LabelSelector: "ray.io/config-type=compute-template"})
 	if err != nil {
-		return nil, util.Wrap(err, "List compute runtimes failed")
+		return nil, util.Wrap(err, "List compute templates failed")
 	}
 
 	var result []*v1.ConfigMap
