@@ -102,13 +102,25 @@ def create_kuberay_cluster(template_name):
     shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
 
 
-def create_kuberay_service(service_config_file_name):
+def create_kuberay_service(template_name):
+    template = None
+    with open(template_name, mode='r') as f:
+        template = Template(f.read())
+
+    rayservice_spec_buf = template.substitute(
+        {'ray_image': ray_image, 'ray_version': ray_version})
+
+    service_config_file = None
+    with tempfile.NamedTemporaryFile('w', delete=False) as f:
+        f.write(rayservice_spec_buf)
+        service_config_file = f.name
+
     rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
     assert rtn == 0
-    assert service_config_file_name is not None
-    shell_assert_success('kubectl apply -f {}'.format(service_config_file_name))
+    assert service_config_file is not None
+    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
 
     shell_run('kubectl get pods -A')
 
@@ -221,6 +233,14 @@ print(len(ray.nodes()))
 
 
 def ray_ha_supported():
+    if ray_version == "nightly":
+        return True
+    major, minor, patch = parse_ray_version(ray_version)
+    if major * 100 + minor < 113:
+        return False
+    return True
+
+def ray_service_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
@@ -457,12 +477,14 @@ else:
 
 
 class RayServiceTestCase(unittest.TestCase):
-    service_config_file = 'tests/config/ray-service.yaml'
-    service_serve_update_config_file = 'tests/config/ray-service-serve-update.yaml'
-    service_cluster_update_config_file = 'tests/config/ray-service-cluster-update.yaml'
+    service_template_file = 'tests/config/ray-service.yaml.template'
+    service_serve_update_template_file = 'tests/config/ray-service-serve-update.yaml.template'
+    service_cluster_update_template_file = 'tests/config/ray-service-cluster-update.yaml.template'
 
     @classmethod
     def setUpClass(cls):
+        if not ray_service_supported():
+            return
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
         # We wait for the serve service ready.
@@ -471,8 +493,12 @@ class RayServiceTestCase(unittest.TestCase):
         create_cluster()
         apply_kuberay_resources()
         download_images()
-        create_kuberay_service(RayServiceTestCase.service_config_file)
+        create_kuberay_service(RayServiceTestCase.service_template_file)
         cls.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+
+    def setUp(self):
+        if not ray_service_supported():
+            raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
@@ -480,14 +506,14 @@ class RayServiceTestCase(unittest.TestCase):
             lambda: shell_run(curl_cmd) == 0,
             timeout=5,
         )
-        create_kuberay_service(RayServiceTestCase.service_serve_update_config_file)
+        create_kuberay_service(RayServiceTestCase.service_serve_update_template_file)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
         wait_for_condition(
             lambda: shell_run(curl_cmd) == 0,
             timeout=60,
         )
-        create_kuberay_service(RayServiceTestCase.service_cluster_update_config_file)
+        create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
         wait_for_condition(
@@ -497,6 +523,8 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if not ray_service_supported():
+            return
         cls.port_forwarding_proc.kill()
 
 def parse_environment():
