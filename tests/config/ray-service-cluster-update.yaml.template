@@ -3,8 +3,8 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
+  serviceUnhealthySecondThreshold: 300
+  deploymentUnhealthySecondThreshold: 300
   serveDeploymentGraphConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |
@@ -13,7 +13,7 @@ spec:
       - name: MangoStand
         numReplicas: 1
         userConfig: |
-          price: 3
+          price: 4
         rayActorOptions:
           numCpus: 0.1
       - name: OrangeStand
@@ -38,7 +38,7 @@ spec:
         rayActorOptions:
           numCpus: 0.1
   rayClusterConfig:
-    rayVersion: 'nightly' # should match the Ray version in the image of the containers
+    rayVersion: '$ray_version'
     ######################headGroupSpecs#################################
     # head group template and specs, (perhaps 'group' is not needed in the name)
     headGroupSpec:
@@ -57,8 +57,9 @@ spec:
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+        node-ip-address: $$MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
+        num-cpus: "1000"
       #pod template
       template:
         metadata:
@@ -74,22 +75,13 @@ spec:
         spec:
           containers:
             - name: ray-head
-              #image: rayproject/ray:1.12.1
-              image: rayproject/ray:nightly
+              image: $ray_image
               imagePullPolicy: Always
-              #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
               env:
                 - name: MY_POD_IP
                   valueFrom:
                     fieldRef:
                       fieldPath: status.podIP
-              resources:
-                limits:
-                  cpu: 2
-                  memory: 2Gi
-                requests:
-                  cpu: 2
-                  memory: 2Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -103,7 +95,7 @@ spec:
       # the pod replicas in this group typed worker
       - replicas: 1
         minReplicas: 1
-        maxReplicas: 5
+        maxReplicas: 3
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
         # if worker pods need to be added, we can simply increment the replicas
@@ -117,8 +109,9 @@ spec:
         #  - raycluster-complete-worker-small-group-k8tj7
         # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
         rayStartParams:
-          node-ip-address: $MY_POD_IP
+          node-ip-address: $$MY_POD_IP
           block: 'true'
+          num-cpus: "1000"
         #pod template
         template:
           metadata:
@@ -129,13 +122,12 @@ spec:
               key: value
           spec:
             initContainers:
-              # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
               - name: init-myservice
                 image: busybox:1.28
-                command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+                command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
             containers:
               - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:nightly
+                image: $ray_image
                 imagePullPolicy: Always
                 # environment variables to set in the container.Optional.
                 # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
@@ -179,11 +171,5 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-                resources:
-                  limits:
-                    cpu: "1"
-                    memory: "2Gi"
-                  requests:
-                    cpu: "500m"
-                    memory: "2Gi"
+
 
