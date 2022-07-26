@@ -502,7 +502,7 @@ class RayServiceTestCase(unittest.TestCase):
             raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
-        cls.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         wait_for_condition(
@@ -518,9 +518,9 @@ class RayServiceTestCase(unittest.TestCase):
         )
         create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
         time.sleep(5)
-        self.port_forwarding_proc.kill()
+        port_forwarding_proc.kill()
         time.sleep(5)
-        self.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
 
@@ -528,7 +528,7 @@ class RayServiceTestCase(unittest.TestCase):
             lambda: shell_run(curl_cmd) == 0,
             timeout=180,
         )
-        cls.port_forwarding_proc.kill()
+        port_forwarding_proc.kill()
 
 def parse_environment():
     global ray_version, ray_image, kuberay_sha
