@@ -463,11 +463,10 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Ray cluster is running inside a local Kind environment.
-        # We use port mapping to connect to the Kind environment
-        # from another local ray container. The local ray container
-        # outside Kind environment has the same ray version as the
-        # ray cluster running inside Kind environment.
+        # Ray Service is running inside a local Kind environment.
+        # We use the Ray nightly version now.
+        # We wait for the serve service ready.
+        # The test will check the successful response from serve service.
         delete_cluster()
         create_cluster()
         apply_kuberay_resources()
