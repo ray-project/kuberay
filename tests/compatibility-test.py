@@ -85,7 +85,7 @@ def create_kuberay_cluster(template_name):
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
 
-    time.sleep(120)
+    time.sleep(180)
 
     shell_run('kubectl get pods -A')
 
