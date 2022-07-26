@@ -254,7 +254,7 @@ def ray_ha_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor < 113:
+    if major * 100 + minor <= 113:
         return False
     return True
 
@@ -262,7 +262,7 @@ def ray_service_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor < 113:
+    if major * 100 + minor <= 113:
         return False
     return True
 
