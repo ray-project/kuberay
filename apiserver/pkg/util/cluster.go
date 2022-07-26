@@ -19,10 +19,6 @@ type RayCluster struct {
 // NewRayCluster creates a RayCluster.
 // func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
 func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) *RayCluster {
-	// figure out how to build this
-	computeTemplate := computeTemplateMap[apiCluster.ClusterSpec.HeadGroupSpec.ComputeTemplate]
-	headPodTemplate := buildHeadPodTemplate(apiCluster, apiCluster.ClusterSpec.HeadGroupSpec, computeTemplate)
-	headReplicas := int32(1)
 	rayCluster := &rayclusterapi.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
@@ -30,41 +26,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 			Labels:      buildRayClusterLabels(apiCluster),
 			Annotations: buildRayClusterAnnotations(apiCluster),
 		},
-		Spec: rayclusterapi.RayClusterSpec{
-			RayVersion: apiCluster.Version,
-			HeadGroupSpec: rayclusterapi.HeadGroupSpec{
-				ServiceType:    v1.ServiceType(apiCluster.ClusterSpec.HeadGroupSpec.ServiceType),
-				Template:       headPodTemplate,
-				Replicas:       &headReplicas,
-				RayStartParams: apiCluster.ClusterSpec.HeadGroupSpec.RayStartParams,
-			},
-			WorkerGroupSpecs: []rayclusterapi.WorkerGroupSpec{},
-		},
-	}
-
-	for _, spec := range apiCluster.ClusterSpec.WorkerGroupSpec {
-		computeTemplate := computeTemplateMap[spec.ComputeTemplate]
-		workerPodTemplate := buildWorkerPodTemplate(apiCluster, spec, computeTemplate)
-
-		minReplicas := spec.Replicas
-		maxReplicas := spec.Replicas
-		if spec.MinReplicas != 0 {
-			minReplicas = spec.MinReplicas
-		}
-		if spec.MaxReplicas != 0 {
-			maxReplicas = spec.MaxReplicas
-		}
-
-		workerNodeSpec := rayclusterapi.WorkerGroupSpec{
-			GroupName:      spec.GroupName,
-			MinReplicas:    intPointer(minReplicas),
-			MaxReplicas:    intPointer(maxReplicas),
-			Replicas:       intPointer(spec.Replicas),
-			RayStartParams: spec.RayStartParams,
-			Template:       workerPodTemplate,
-		}
-
-		rayCluster.Spec.WorkerGroupSpecs = append(rayCluster.Spec.WorkerGroupSpecs, workerNodeSpec)
+		Spec: *buildRayClusterSpec(apiCluster.Version, apiCluster.ClusterSpec, computeTemplateMap),
 	}
 
 	return &RayCluster{rayCluster}
@@ -87,6 +49,49 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 	return annotations
 }
 
+func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayclusterapi.RayClusterSpec {
+	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
+	headPodTemplate := buildHeadPodTemplate(imageVersion, clusterSpec.HeadGroupSpec, computeTemplate)
+	headReplicas := int32(1)
+	rayClusterSpec := &rayclusterapi.RayClusterSpec{
+		RayVersion: imageVersion,
+		HeadGroupSpec: rayclusterapi.HeadGroupSpec{
+			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
+			Template:       headPodTemplate,
+			Replicas:       &headReplicas,
+			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
+		},
+		WorkerGroupSpecs: []rayclusterapi.WorkerGroupSpec{},
+	}
+
+	for _, spec := range clusterSpec.WorkerGroupSpec {
+		computeTemplate = computeTemplateMap[spec.ComputeTemplate]
+		workerPodTemplate := buildWorkerPodTemplate(imageVersion, spec, computeTemplate)
+
+		minReplicas := spec.Replicas
+		maxReplicas := spec.Replicas
+		if spec.MinReplicas != 0 {
+			minReplicas = spec.MinReplicas
+		}
+		if spec.MaxReplicas != 0 {
+			maxReplicas = spec.MaxReplicas
+		}
+
+		workerNodeSpec := rayclusterapi.WorkerGroupSpec{
+			GroupName:      spec.GroupName,
+			MinReplicas:    intPointer(minReplicas),
+			MaxReplicas:    intPointer(maxReplicas),
+			Replicas:       intPointer(spec.Replicas),
+			RayStartParams: spec.RayStartParams,
+			Template:       workerPodTemplate,
+		}
+
+		rayClusterSpec.WorkerGroupSpecs = append(rayClusterSpec.WorkerGroupSpecs, workerNodeSpec)
+	}
+
+	return rayClusterSpec
+}
+
 func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image string) map[string]string {
 	annotations := map[string]string{}
 	annotations[RayClusterComputeTemplateAnnotationKey] = computeTemplate.Name
@@ -94,10 +99,10 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
-func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
-	image := constructRayImage(RayClusterDefaultImageRepository, cluster.Version)
-	if len(cluster.ClusterSpec.HeadGroupSpec.Image) != 0 {
-		image = cluster.ClusterSpec.HeadGroupSpec.Image
+func buildHeadPodTemplate(imageVersion string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
+	if len(spec.Image) != 0 {
+		image = spec.Image
 	}
 
 	// calculate resources
@@ -182,10 +187,10 @@ func constructRayImage(containerImage string, version string) string {
 	return fmt.Sprintf("%s:%s", containerImage, version)
 }
 
-func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+func buildWorkerPodTemplate(imageVersion string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
-	image := constructRayImage(RayClusterDefaultImageRepository, cluster.Version)
+	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
 	}

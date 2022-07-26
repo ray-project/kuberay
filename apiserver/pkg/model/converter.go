@@ -31,9 +31,7 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 	}
 
 	// loop container and find the resource
-	pbCluster.ClusterSpec = &api.ClusterSpec{}
-	pbCluster.ClusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(cluster.Spec.HeadGroupSpec)
-	pbCluster.ClusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
+	pbCluster.ClusterSpec = PopulateRayClusterSpec(cluster.Spec)
 
 	// parse events
 	for _, event := range events {
@@ -56,6 +54,13 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 		pbCluster.ServiceEndpoint[name] = port
 	}
 	return pbCluster
+}
+
+func PopulateRayClusterSpec(spec v1alpha1.RayClusterSpec) *api.ClusterSpec {
+	clusterSpec := &api.ClusterSpec{}
+	clusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(spec.HeadGroupSpec)
+	clusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(spec.WorkerGroupSpecs)
+	return clusterSpec
 }
 
 func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
@@ -110,4 +115,25 @@ func FromKubeToAPIComputeTemplates(configMaps []*v1.ConfigMap) []*api.ComputeTem
 		apiComputeTemplates = append(apiComputeTemplates, FromKubeToAPIComputeTemplate(configMap))
 	}
 	return apiComputeTemplates
+}
+
+func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
+	apiJobs := make([]*api.RayJob, 0)
+	for _, job := range jobs {
+		apiJobs = append(apiJobs, FromCrdToApiJob(job))
+	}
+	return apiJobs
+}
+
+func FromCrdToApiJob(job *v1alpha1.RayJob) *api.RayJob {
+	pbJob := &api.RayJob{
+		Entrypoint: job.Spec.Entrypoint,
+		Metadata: job.Spec.Metadata,
+		RuntimeEnv: job.Spec.RuntimeEnv,
+		JobId: job.Spec.JobId,
+		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
+		ClusterSelector: job.Spec.ClusterSelector,
+		ClusterSpec: PopulateRayClusterSpec(job.Spec.RayClusterSpec),
+	}
+	return pbJob
 }
