@@ -625,7 +625,7 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 		}
 		if createErr := r.Create(ctx, ingress); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
-				log.Info("Ingress already exists,no need to create")
+				r.Log.Info("Ingress already exists,no need to create")
 				return nil
 			}
 			r.Log.Error(createErr, "Ingress create error!", "Ingress.Error", createErr)
@@ -674,7 +674,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		}
 		if createErr := r.Create(ctx, raySvc); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
-				log.Info("raySvc already exists,no need to create")
+				r.Log.Info("raySvc already exists,no need to create")
 				return nil
 			}
 			r.Log.Error(createErr, "raySvc create error!", "raySvc.Error", createErr)

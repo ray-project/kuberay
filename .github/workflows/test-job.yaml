@@ -26,8 +26,10 @@ jobs:
         # Default value should work for both pull_request and merge(push) event.
         ref: ${{github.event.pull_request.head.sha}}
 
-    - name: Install goimports
-      run: go get golang.org/x/tools/cmd/goimports
+    - name: Install goimports and gofumpt
+      run: |
+        go get golang.org/x/tools/cmd/goimports
+        go install mvdan.cc/gofumpt@latest
 
     - name: Run gofmt
       uses: Jerome1337/gofmt-action@v1.0.4
@@ -89,9 +91,7 @@ jobs:
       if: failure()
 
     - name: Run gofumpt
-      run: |
-        go install mvdan.cc/gofumpt@latest
-        test -z "$(set -o pipefail && $(go env GOPATH)/bin/gofumpt -l apiserver/ ray-operator/ cli/ | tee gofumpt.out)" || { cat gofumpt.out && exit 1; }
+      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/gofumpt -l apiserver/ ray-operator/ cli/ | tee gofumpt.out)" || { cat gofumpt.out && exit 1; }
 
     - name: Open this to see how to fix gofumpt if it fails
       run: |
