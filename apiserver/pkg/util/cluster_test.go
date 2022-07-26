@@ -16,7 +16,19 @@ var testVolume = &api.Volume{
 	ReadOnly:   true,
 }
 
-func TestBuildVolumeMounts(t *testing.T) {
+// There is only an fake case for test both MountPropagationMode and file type
+// in real case hostToContainer mode may only valid for directory
+var testFileVolume = &api.Volume{
+	Name:                 "test-file",
+	VolumeType:           api.Volume_HOST_PATH,
+	MountPropagationMode: api.Volume_HOSTTOCONTAINER,
+	Source:               "/root/proc/stat",
+	MountPath:            "/proc/stat",
+	HostPathType:         api.Volume_FILE,
+	ReadOnly:             true,
+}
+
+func TestBuildVolumes(t *testing.T) {
 	targetVolume := v1.Volume{
 		Name: testVolume.Name,
 		VolumeSource: v1.VolumeSource{
@@ -26,7 +38,15 @@ func TestBuildVolumeMounts(t *testing.T) {
 			},
 		},
 	}
-
+	targetFileVolume := v1.Volume{
+		Name: testFileVolume.Name,
+		VolumeSource: v1.VolumeSource{
+			HostPath: &v1.HostPathVolumeSource{
+				Path: testFileVolume.Source,
+				Type: newHostPathType(string(v1.HostPathFile)),
+			},
+		},
+	}
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -35,9 +55,9 @@ func TestBuildVolumeMounts(t *testing.T) {
 		{
 			"normal test",
 			[]*api.Volume{
-				testVolume,
+				testVolume, testFileVolume,
 			},
-			[]v1.Volume{targetVolume},
+			[]v1.Volume{targetVolume, targetFileVolume},
 		},
 	}
 	for _, tt := range tests {
@@ -50,11 +70,18 @@ func TestBuildVolumeMounts(t *testing.T) {
 	}
 }
 
-func TestBuildVolumes(t *testing.T) {
+func TestBuildVolumeMounts(t *testing.T) {
+	hostToContainer := v1.MountPropagationHostToContainer
 	targetVolumeMount := v1.VolumeMount{
 		Name:      testVolume.Name,
 		ReadOnly:  testVolume.ReadOnly,
 		MountPath: testVolume.MountPath,
+	}
+	targetFileVolumeMount := v1.VolumeMount{
+		Name:             testFileVolume.Name,
+		ReadOnly:         testFileVolume.ReadOnly,
+		MountPath:        testFileVolume.MountPath,
+		MountPropagation: &hostToContainer,
 	}
 	tests := []struct {
 		name      string
@@ -65,9 +92,11 @@ func TestBuildVolumes(t *testing.T) {
 			"normal test",
 			[]*api.Volume{
 				testVolume,
+				testFileVolume,
 			},
 			[]v1.VolumeMount{
 				targetVolumeMount,
+				targetFileVolumeMount,
 			},
 		},
 	}
