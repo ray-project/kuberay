@@ -124,6 +124,8 @@ def create_kuberay_service(template_name):
 
     shell_run('kubectl get pods -A')
 
+    time.sleep(20)
+
     wait_for_condition(
         lambda: shell_run('kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
         timeout=900,
@@ -514,11 +516,14 @@ class RayServiceTestCase(unittest.TestCase):
             timeout=60,
         )
         create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
+        self.port_forwarding_proc.kill()
+        self.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+
         wait_for_condition(
             lambda: shell_run(curl_cmd) == 0,
-            timeout=60,
+            timeout=180,
         )
 
     @classmethod

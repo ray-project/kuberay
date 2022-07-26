@@ -81,13 +81,6 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: status.podIP
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 1Gi
-                requests:
-                  cpu: 1
-                  memory: 1Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -101,7 +94,7 @@ spec:
       # the pod replicas in this group typed worker
       - replicas: 1
         minReplicas: 1
-        maxReplicas: 5
+        maxReplicas: 2
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
         # if worker pods need to be added, we can simply increment the replicas
@@ -176,11 +169,5 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-                resources:
-                  limits:
-                    cpu: "1"
-                    memory: "1Gi"
-                  requests:
-                    cpu: "1"
-                    memory: "1Gi"
+
 

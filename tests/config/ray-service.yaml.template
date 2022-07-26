@@ -81,13 +81,6 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: status.podIP
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 1Gi
-                requests:
-                  cpu: 1
-                  memory: 1Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -176,11 +169,5 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-                resources:
-                  limits:
-                    cpu: "1"
-                    memory: "1Gi"
-                  requests:
-                    cpu: "500m"
-                    memory: "1Gi"
+
 
