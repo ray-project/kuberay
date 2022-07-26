@@ -752,7 +752,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 				logger.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markRestart(rayServiceInstance)
 			}
-			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.FailedServeDeploy, err)
+			err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForServeDeploymentReady, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 		}
 

@@ -131,7 +131,7 @@ def download_images():
     client.close()
 
 
-class BasicRayTestCase():
+class BasicRayTestCase(unittest.TestCase):
     cluster_template_file = 'tests/config/ray-cluster.mini.yaml.template'
 
     @classmethod
@@ -229,7 +229,7 @@ def ray_ha_supported():
     return True
 
 
-class RayHATestCase():
+class RayHATestCase(unittest.TestCase):
     cluster_template_file = 'tests/config/ray-cluster.ray-ha.yaml.template'
 
     @classmethod
