@@ -496,14 +496,14 @@ class RayServiceTestCase(unittest.TestCase):
         apply_kuberay_resources()
         download_images()
         create_kuberay_service(RayServiceTestCase.service_template_file)
-        cls.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
-        time.sleep(5)
 
     def setUp(self):
         if not ray_service_supported():
             raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
+        cls.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         wait_for_condition(
             lambda: shell_run(curl_cmd) == 0,
@@ -528,11 +528,6 @@ class RayServiceTestCase(unittest.TestCase):
             lambda: shell_run(curl_cmd) == 0,
             timeout=180,
         )
-
-    @classmethod
-    def tearDownClass(cls):
-        if not ray_service_supported():
-            return
         cls.port_forwarding_proc.kill()
 
 def parse_environment():
