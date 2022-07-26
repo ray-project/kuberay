@@ -134,7 +134,7 @@ func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client,
 		return "", err
 	}
 
-	log.V(1).Info("fetchDashboardURL ", "dashboard service found", headSvc.Name)
+	log.V(3).Info("fetchDashboardURL ", "dashboard service found", headSvc.Name)
 	servicePorts := headSvc.Spec.Ports
 	dashboardPort := int32(-1)
 
@@ -319,7 +319,10 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 		return nil, nil
 	}
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	var jobInfo RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
@@ -338,7 +341,7 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Submit a ray job: %s", string(rayJobJson)))
+	log.Info("Submit a ray job", "rayJob", rayJob.Name, "jobInfo", string(rayJobJson))
 
 	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
 	if err != nil {
@@ -378,7 +381,7 @@ func ConvertRayJobToReq(rayJob *rayv1alpha1.RayJob) (*RayJobRequest, error) {
 	var runtimeEnv map[string]interface{}
 	err = json.Unmarshal(decodeBytes, &runtimeEnv)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal runtimeEnv: %v: %v", decodeBytes, err)
+		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", decodeBytes, err)
 	}
 	req.RuntimeEnv = runtimeEnv
 	return req, nil

@@ -73,15 +73,15 @@ const (
 	LOCAL_HOST = "127.0.0.1"
 	// Ray HA default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
-	DefaultReadinessProbeTimeoutSeconds      = 0
-	DefaultReadinessProbePeriodSeconds       = 0
+	DefaultReadinessProbeTimeoutSeconds      = 1
+	DefaultReadinessProbePeriodSeconds       = 3
 	DefaultReadinessProbeSuccessThreshold    = 0
 	DefaultReadinessProbeFailureThreshold    = 20
 
 	// Ray HA default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 10
-	DefaultLivenessProbeTimeoutSeconds      = 0
-	DefaultLivenessProbePeriodSeconds       = 0
+	DefaultLivenessProbeTimeoutSeconds      = 1
+	DefaultLivenessProbePeriodSeconds       = 3
 	DefaultLivenessProbeSuccessThreshold    = 0
 	DefaultLivenessProbeFailureThreshold    = 40
 

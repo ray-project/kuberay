@@ -327,12 +327,22 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 }
 
 func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
-	var volMounts []v1.VolumeMount
+	var (
+		volMounts       []v1.VolumeMount
+		hostToContainer = v1.MountPropagationHostToContainer
+		bidirectonal    = v1.MountPropagationBidirectional
+	)
 	for _, vol := range apiVolumes {
 		volMount := v1.VolumeMount{
 			Name:      vol.Name,
 			ReadOnly:  vol.ReadOnly,
 			MountPath: vol.MountPath,
+		}
+		switch vol.MountPropagationMode {
+		case api.Volume_HOSTTOCONTAINER:
+			volMount.MountPropagation = &hostToContainer
+		case api.Volume_BIDIRECTIONAL:
+			volMount.MountPropagation = &bidirectonal
 		}
 		volMounts = append(volMounts, volMount)
 	}
@@ -354,9 +364,16 @@ func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 				VolumeSource: v1.VolumeSource{
 					HostPath: &v1.HostPathVolumeSource{
 						Path: rayVol.Source,
-						Type: newHostPathType(string(v1.HostPathDirectory)),
 					},
 				},
+			}
+			switch rayVol.HostPathType {
+			case api.Volume_DIRECTORY:
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathDirectory))
+			case api.Volume_FILE:
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathFile))
+			default:
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathDirectory))
 			}
 			vols = append(vols, vol)
 		}

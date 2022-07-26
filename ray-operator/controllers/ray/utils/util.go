@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"k8s.io/apimachinery/pkg/util/json"
@@ -329,4 +330,10 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 		return false
 	}
 	return reflect.DeepEqual(v1, v2)
+}
+
+func ConvertUnixTimeToMetav1Time(unixTime int64) *metav1.Time {
+	t := time.Unix(unixTime, 0)
+	kt := metav1.NewTime(t)
+	return &kt
 }

@@ -46,7 +46,7 @@ def shell_assert_failure(cmd):
 def create_cluster():
     shell_assert_success(
         'kind create cluster --config {}'.format(kindcluster_config_file))
-    time.sleep(30)
+    time.sleep(60)
     rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
@@ -86,7 +86,7 @@ def create_kuberay_cluster(template_name):
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
 
-    time.sleep(120)
+    time.sleep(180)
 
     shell_run('kubectl get pods -A')
 
@@ -286,7 +286,7 @@ class RayHATestCase(unittest.TestCase):
             shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
             shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
             shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-        assert  rtn == 0
+        assert rtn == 0
 
     def test_ray_serve(self):
         client = docker.from_env()

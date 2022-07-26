@@ -180,6 +180,21 @@ message Volume {
   string name = 3;
   string source = 4;
   bool read_only = 5;
+  
+  // If indicate hostpath, we need to let user indicate which type 
+  // they would like to use.
+  enum HostPathType {
+    DIRECTORY = 0;
+    FILE = 1;
+  }
+  HostPathType host_path_type = 6;
+
+  enum MountPropagationMode {
+    NONE = 0;
+    HOSTTOCONTAINER = 1;
+    BIDIRECTIONAL = 2;
+  }
+  MountPropagationMode mount_propagation_mode = 7;
 }
 
 message HeadGroupSpec {

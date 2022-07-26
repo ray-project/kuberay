@@ -24,7 +24,7 @@
   "paths": {
     "/apis/v1alpha2/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
         "responses": {
           "200": {
