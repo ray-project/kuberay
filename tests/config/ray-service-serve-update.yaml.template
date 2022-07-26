@@ -59,6 +59,7 @@ spec:
         num-cpus: '2' # can be auto-completed from the limits
         node-ip-address: $$MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
+        num-cpus: "1000"
       #pod template
       template:
         metadata:
@@ -110,6 +111,7 @@ spec:
         rayStartParams:
           node-ip-address: $$MY_POD_IP
           block: 'true'
+          num-cpus: "1000"
         #pod template
         template:
           metadata:
