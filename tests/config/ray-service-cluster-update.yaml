@@ -13,7 +13,7 @@ spec:
       - name: MangoStand
         numReplicas: 1
         userConfig: |
-          price: 3
+          price: 4
         rayActorOptions:
           numCpus: 0.1
       - name: OrangeStand
@@ -184,6 +184,6 @@ spec:
                     cpu: "1"
                     memory: "2Gi"
                   requests:
-                    cpu: "500m"
+                    cpu: "1"
                     memory: "2Gi"
 

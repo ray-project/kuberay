@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import unittest
+import subprocess
 from string import Template
 
 import docker
@@ -99,6 +100,23 @@ def create_kuberay_cluster(template_name):
     assert rtn == 0
 
     shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
+
+
+def create_kuberay_service(service_config_file_name):
+    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
+    if rtn != 0:
+        shell_run('kubectl get pods -A')
+    assert rtn == 0
+    assert service_config_file_name is not None
+    shell_assert_success('kubectl apply -f {}'.format(service_config_file_name))
+
+    shell_run('kubectl get pods -A')
+
+    wait_for_condition(
+        lambda: shell_run('kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
+        timeout=900,
+        retry_interval_ms=5000,
+    )
 
 
 def delete_cluster():
@@ -439,7 +457,9 @@ else:
 
 
 class RayServiceTestCase(unittest.TestCase):
-    service_template_file = 'tests/config/ray-service.yaml.template'
+    service_config_file = 'tests/config/ray-service.yaml'
+    service_serve_update_config_file = 'tests/config/ray-service-serve-update.yaml'
+    service_cluster_update_config_file = 'tests/config/ray-service-cluster-update.yaml'
 
     @classmethod
     def setUpClass(cls):
@@ -452,16 +472,33 @@ class RayServiceTestCase(unittest.TestCase):
         create_cluster()
         apply_kuberay_resources()
         download_images()
-        create_kuberay_cluster(RayServiceTestCase.service_template_file)
-        time.sleep(180)
-        shell_run('kubectl wait --for=condition=ready service -l ray.io/serve=rayservice-sample-serve --all --timeout=900s')
-        shell_run('kubectl port-forward service/rayservice-sample-serve-svc 8000')
+        create_kuberay_service(RayServiceTestCase.service_config_file)
+        cls.port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
 
-    def test_service_info(self):
-        print("fake test")
+    def test_ray_serve_work(self):
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        shell_run(curl_cmd)
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=5,
+        )
+        create_kuberay_service(RayServiceTestCase.service_serve_update_config_file)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(5)
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=60,
+        )
+        create_kuberay_service(RayServiceTestCase.service_cluster_update_config_file)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(5)
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=60,
+        )
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.port_forwarding_proc.kill()
 
 def parse_environment():
     global ray_version, ray_image, kuberay_sha
