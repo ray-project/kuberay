@@ -225,7 +225,7 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, createdByRayService bool) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -283,7 +283,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, createdByRayService)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
 	// health check only if HA enabled
 	if podTemplateSpec.Annotations != nil {
@@ -487,7 +487,7 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, createdByRayService bool) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
@@ -513,7 +513,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
 	}
-	if createdByRayService {
+	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
 		if !envVarExists(RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
 			deathEnv := v1.EnvVar{Name: RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}

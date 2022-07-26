@@ -55,6 +55,9 @@ const (
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
 
+	// The defaule RayService Identifier.
+	RayServiceCreatorLabelValue = "rayservice"
+
 	// Check node if ready by checking the path exists or not
 	PodReadyFilepath = "POD_READY_FILEPATH"
 

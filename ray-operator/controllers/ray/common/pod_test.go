@@ -270,7 +270,7 @@ func TestBuildPod(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil, false)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil, "")
 
 	// Check RAY_ADDRESS env.
 	checkRayAddress(t, pod, "127.0.0.1:6379")
@@ -310,7 +310,7 @@ func TestBuildPod(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, svcName, "6379")
-	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil, false)
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil, "")
 
 	// Check RAY_ADDRESS env
 	checkRayAddress(t, pod, "raycluster-sample-head-svc:6379")
@@ -335,7 +335,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, false)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, "")
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -391,7 +391,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	svcName := utils.GenerateServiceName(cluster.Name)
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, true)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, RayServiceCreatorLabelValue)
 
 	hasCorrectDeathEnv := false
 	for _, container := range pod.Spec.Containers {
@@ -442,7 +442,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		Resources:          &customResources,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
-	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, false)
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, "")
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy

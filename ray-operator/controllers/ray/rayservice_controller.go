@@ -411,6 +411,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		rayClusterLabel[k] = v
 	}
 	rayClusterLabel[common.RayServiceLabelKey] = rayService.Name
+	rayClusterLabel[common.KubernetesCreatedByLabelKey] = common.RayServiceCreatorLabelValue
 
 	rayClusterAnnotations := make(map[string]string)
 	for k, v := range rayService.Annotations {
