@@ -3,8 +3,8 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 300
-  deploymentUnhealthySecondThreshold: 300
+  serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
   serveDeploymentGraphConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |
