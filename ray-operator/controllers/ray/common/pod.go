@@ -22,7 +22,7 @@ const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
 	RayLogVolumeName            = "ray-logs"
-	RayLogVolumeMountPath       = "/tmp/ray/session_latest/logs"
+	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
 	RayHeadContainer            = "ray-head"
 	ObjectStoreMemoryKey        = "object-store-memory"
@@ -332,7 +332,7 @@ func BuildAutoscalerContainer() v1.Container {
 		Name: AutoscalerContainerName,
 		// TODO: choose right version based on instance.spec.Version
 		// The currently used image reflects the latest changes from Ray master.
-		Image:           "rayproject/ray:a304d1",
+		Image:           "rayproject/ray:0860dd",
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
@@ -362,15 +362,14 @@ func BuildAutoscalerContainer() v1.Container {
 			"--cluster-namespace",
 			"$(RAY_CLUSTER_NAMESPACE)",
 		},
-		// TODO: make resource requirement configurable.
 		Resources: v1.ResourceRequirements{
 			Limits: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("500m"),
 				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse("256m"),
-				v1.ResourceMemory: resource.MustParse("256Mi"),
+				v1.ResourceCPU:    resource.MustParse("500m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
 	}
@@ -388,6 +387,12 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		}
 		if autoscalerOptions.ImagePullPolicy != nil {
 			autoscalerContainer.ImagePullPolicy = *autoscalerOptions.ImagePullPolicy
+		}
+		if len(autoscalerOptions.Env) > 0 {
+			autoscalerContainer.Env = append(autoscalerContainer.Env, autoscalerOptions.Env...)
+		}
+		if len(autoscalerOptions.EnvFrom) > 0 {
+			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
 		}
 	}
 }
