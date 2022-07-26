@@ -18,13 +18,11 @@ func NewRayJobServer(resourceManager *manager.ResourceManager) *RayJobServer {
 	return &RayJobServer{resourceManager: resourceManager}
 }
 
-
 // TODO(basasuya) add event outputs
 type RayJobServer struct {
 	resourceManager *manager.ResourceManager
 	api.UnimplementedRayJobServiceServer
 }
-
 
 func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJobRequest) (*api.RayJob, error) {
 	// use the namespace in the request to override the namespace in the job definition

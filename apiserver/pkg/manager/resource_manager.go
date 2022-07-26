@@ -204,7 +204,6 @@ func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob, job
 	// convert *api.Cluster to v1alpha1.RayCluster
 	rayJob := util.NewRayJob(apiJob, computeTemplateMap)
 
-
 	newRayJob, err := r.getRayJobClient(jobNamespace).Create(ctx, rayJob.Get(), metav1.CreateOptions{})
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to create a job for (%s/%s)", jobNamespace, apiJob.JobId)

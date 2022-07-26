@@ -127,13 +127,13 @@ func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
 
 func FromCrdToApiJob(job *v1alpha1.RayJob) *api.RayJob {
 	pbJob := &api.RayJob{
-		Entrypoint: job.Spec.Entrypoint,
-		Metadata: job.Spec.Metadata,
-		RuntimeEnv: job.Spec.RuntimeEnv,
-		JobId: job.Spec.JobId,
+		Entrypoint:               job.Spec.Entrypoint,
+		Metadata:                 job.Spec.Metadata,
+		RuntimeEnv:               job.Spec.RuntimeEnv,
+		JobId:                    job.Spec.JobId,
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
-		ClusterSelector: job.Spec.ClusterSelector,
-		ClusterSpec: PopulateRayClusterSpec(job.Spec.RayClusterSpec),
+		ClusterSelector:          job.Spec.ClusterSelector,
+		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
 	}
 	return pbJob
 }
