@@ -127,9 +127,9 @@ func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
 
 func FromCrdToApiJob(job *v1alpha1.RayJob) *api.RayJob {
 	pbJob := &api.RayJob{
-		Name:          job.Name,
-		Namespace:     job.Namespace,
-		User:          				job.Labels[util.RayClusterUserLabelKey],
+		Name:                     job.Name,
+		Namespace:                job.Namespace,
+		User:                     job.Labels[util.RayClusterUserLabelKey],
 		Entrypoint:               job.Spec.Entrypoint,
 		Metadata:                 job.Spec.Metadata,
 		RuntimeEnv:               job.Spec.RuntimeEnv,
@@ -137,9 +137,9 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) *api.RayJob {
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
 		ClusterSelector:          job.Spec.ClusterSelector,
 		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
-		TtlSecondsAfterFinished: *job.Spec.TTLSecondsAfterFinished,
-		CreatedAt: &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
-		DeleteAt: &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()},
+		TtlSecondsAfterFinished:  *job.Spec.TTLSecondsAfterFinished,
+		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
+		DeleteAt:                 &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()},
 	}
 	return pbJob
 }
