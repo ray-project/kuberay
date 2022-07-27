@@ -176,7 +176,7 @@ func autoscalerSupportIsStable(rayVersion string) bool {
 		// If in doubt, just assume that the Ray version is >= 2.0.0,
 		// so that we use the Ray image to run the autoscaler.
 		// Currently, there is a lot of "doubt," since the version string is not validated.
-		// Users can always override the operator's choice of image with autoscalerOptions.Image.
+		// Users can always override the operator's choice of image with autoscalerOptions.image.
 		return true
 	}
 }
