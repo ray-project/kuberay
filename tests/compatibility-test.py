@@ -175,23 +175,39 @@ class BasicRayTestCase(unittest.TestCase):
 import ray
 ray.init(address='ray://127.0.0.1:10001')
 
+def retry_with_timeout(func, count=90):
+    tmp = 0
+    err = None
+    while tmp < count:
+        try:
+            return func()
+        except Exception as e:
+            err = e
+            tmp += 1
+    assert err is not None
+    raise err
+
 @ray.remote
 def f(x):
     return x * x
 
-futures = [f.remote(i) for i in range(4)]
-print(ray.get(futures))
+def get_result():
+    futures = [f.remote(i) for i in range(4)]
+    print(ray.get(futures))
+    return 0
+rtn = retry_with_timeout(get_result)
+assert rtn == 0
 '''],
                                               demux=True)
-        stdout_str, _ = output
+        stdout_str, stderr_str = output
 
         container.stop()
 
         if stdout_str != b'[0, 1, 4, 9]\n':
             logger.error('test_simple_code returns {}'.format(output))
             raise Exception(('test_simple_code returns invalid result. ' +
-                             'Expected: {} Actual: {}').format(b'[0, 1, 4, 9]',
-                                                               stdout_str))
+                             'Expected: {} Actual: {} Stderr: {}').format(
+                b'[0, 1, 4, 9]', stdout_str, stderr_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
             logger.error(msg)
@@ -238,7 +254,7 @@ def ray_ha_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor < 113:
+    if major * 100 + minor <= 113:
         return False
     return True
 
@@ -246,7 +262,7 @@ def ray_service_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor < 113:
+    if major * 100 + minor <= 113:
         return False
     return True
 
