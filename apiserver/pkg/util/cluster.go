@@ -220,7 +220,7 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 					Image: image,
 					Env: []v1.EnvVar{
 						{
-							Name:  "RAY_DISABLE_DOCKER_CPU_WRARNING",
+							Name:  "RAY_DISABLE_DOCKER_CPU_WARNING",
 							Value: "1",
 						},
 						{
