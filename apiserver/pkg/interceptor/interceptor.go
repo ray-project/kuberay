@@ -14,7 +14,6 @@ func ApiServerInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	klog.Infof("%v handler starting", info.FullMethod)
 	resp, err = handler(ctx, req)
 	if err != nil {
-		// TODO: handle errors
 		klog.Warning(err)
 	}
 	klog.Infof("%v handler finished", info.FullMethod)
