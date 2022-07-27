@@ -112,10 +112,9 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
 
 		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
-		rayImage := podTemplate.Spec.Containers[rayContainerIndex].Image
-		// determine the default image to use for the Ray container
-		// (the image is subject to user override from autoscalerOptions.image)
-		autoscalerImage := getAutoscalerImage(instance.Spec.RayVersion, rayImage)
+		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
+		// Determine the default image to use for the Ray container.
+		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -145,10 +144,10 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 }
 
 // getAutoscalerImage determines the default autoscaler image
-func getAutoscalerImage(rayImage string, rayVersion string) string {
+func getAutoscalerImage(rayHeadImage string, rayVersion string) string {
 	if autoscalerSupportIsStable(rayVersion) {
-		// For Ray versions >= 2.0.0 use the Ray image to run the autoscaler.
-		return rayImage
+		// For Ray versions >= 2.0.0, use the Ray head's image to run the autoscaler.
+		return rayHeadImage
 	} else {
 		// For older Ray versions, use the Ray 2.0.0 image to run the autoscaler.
 		return FallbackDefaultAutoscalerImage
@@ -157,28 +156,26 @@ func getAutoscalerImage(rayImage string, rayVersion string) string {
 
 // Determine if autoscaler support is stable in the given rayVersion.
 // Return false exactly when the major version is successfully parsed and less than 2.
-// Example rayVersion inputs that return true: "2.0.0", "2.0", "nightly", "latest", "unknown".
-// Example inputs that return false: "1.13.0", "1.12".
+// Example rayVersion inputs that return true: "2.0.0", "2.0", "2", "2.0.0rc1", "nightly", "latest", "unknown".
+// Example inputs that return false: "1.13.0", "1.12", "1".
 func autoscalerSupportIsStable(rayVersion string) bool {
-	var majorVersion int
-	var parsedMajorVersion bool
+	// Try to determine major version by extracting everything that comes before the first "."
 	firstDotIndex := strings.Index(rayVersion, ".")
+	var majorVersionString string
 	if firstDotIndex == -1 {
-		parsedMajorVersion = false
+		// If there is no ".", try parsing the entire rayVersion as the major version.
+		majorVersionString = rayVersion
 	} else {
-		majorVersionString := rayVersion[:firstDotIndex]
-		if versionInt, err := strconv.Atoi(majorVersionString); err == nil {
-			parsedMajorVersion = true
-			majorVersion = versionInt
-		} else {
-			parsedMajorVersion = false
-		}
+		// Everything up to the first "."
+		majorVersionString = rayVersion[:firstDotIndex]
 	}
 
-	if parsedMajorVersion {
+	if majorVersion, err := strconv.Atoi(majorVersionString); err == nil {
 		return majorVersion >= 2
 	} else {
-		// If in doubt, just assume that the Ray version is >= 2.0.0, so that we use the Ray image to run the autoscaler.
+		// If in doubt, just assume that the Ray version is >= 2.0.0,
+		// so that we use the Ray image to run the autoscaler.
+		// Currently, there is a lot of "doubt," since the version string is not validated.
 		// Users can always override the operator's choice of image with autoscalerOptions.Image.
 		return true
 	}
