@@ -6,20 +6,20 @@ import (
 	"strconv"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayclusterapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type RayCluster struct {
-	*rayclusterapi.RayCluster
+	*rayalphaapi.RayCluster
 }
 
 // NewRayCluster creates a RayCluster.
 // func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
 func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) *RayCluster {
-	rayCluster := &rayclusterapi.RayCluster{
+	rayCluster := &rayalphaapi.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
 			Namespace:   apiCluster.Namespace,
@@ -49,19 +49,19 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 	return annotations
 }
 
-func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayclusterapi.RayClusterSpec {
+func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayClusterSpec {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
 	headPodTemplate := buildHeadPodTemplate(imageVersion, clusterSpec.HeadGroupSpec, computeTemplate)
 	headReplicas := int32(1)
-	rayClusterSpec := &rayclusterapi.RayClusterSpec{
+	rayClusterSpec := &rayalphaapi.RayClusterSpec{
 		RayVersion: imageVersion,
-		HeadGroupSpec: rayclusterapi.HeadGroupSpec{
+		HeadGroupSpec: rayalphaapi.HeadGroupSpec{
 			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
 			Template:       headPodTemplate,
 			Replicas:       &headReplicas,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
-		WorkerGroupSpecs: []rayclusterapi.WorkerGroupSpec{},
+		WorkerGroupSpecs: []rayalphaapi.WorkerGroupSpec{},
 	}
 
 	for _, spec := range clusterSpec.WorkerGroupSpec {
@@ -77,7 +77,7 @@ func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, comp
 			maxReplicas = spec.MaxReplicas
 		}
 
-		workerNodeSpec := rayclusterapi.WorkerGroupSpec{
+		workerNodeSpec := rayalphaapi.WorkerGroupSpec{
 			GroupName:      spec.GroupName,
 			MinReplicas:    intPointer(minReplicas),
 			MaxReplicas:    intPointer(maxReplicas),
@@ -392,8 +392,8 @@ func intPointer(value int32) *int32 {
 	return &value
 }
 
-// Get converts this object to a rayclusterapi.Workflow.
-func (c *RayCluster) Get() *rayclusterapi.RayCluster {
+// Get converts this object to a rayalphaapi.Workflow.
+func (c *RayCluster) Get() *rayalphaapi.RayCluster {
 	return c.RayCluster
 }
 

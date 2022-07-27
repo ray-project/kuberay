@@ -6,29 +6,32 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+type JobServerOptions struct {
+	CollectMetrics bool
+}
 
 // implements `type RayJobServiceServer interface` in job_grpc.pb.go
 // RayJobServer is the server API for RayJobServer service.
 
-func NewRayJobServer(resourceManager *manager.ResourceManager) *RayJobServer {
-	return &RayJobServer{resourceManager: resourceManager}
+func NewRayJobServer(resourceManager *manager.ResourceManager, options *JobServerOptions) *RayJobServer {
+	return &RayJobServer{resourceManager: resourceManager, options: options}
 }
 
-// TODO(basasuya) add event outputs
 type RayJobServer struct {
 	resourceManager *manager.ResourceManager
+	options         *JobServerOptions
 	api.UnimplementedRayJobServiceServer
 }
 
+// Creates a new Ray Job.
 func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJobRequest) (*api.RayJob, error) {
 	// use the namespace in the request to override the namespace in the job definition
 	request.Job.Namespace = request.Namespace
 
-	job, err := s.resourceManager.CreateJob(ctx, request.Job, request.Namespace)
+	job, err := s.resourceManager.CreateJob(ctx, request.Job)
 	if err != nil {
 		return nil, util.Wrap(err, "Create Job failed.")
 	}
@@ -36,6 +39,7 @@ func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJ
 	return model.FromCrdToApiJob(job), nil
 }
 
+// Finds a specific Job by job name.
 func (s *RayJobServer) GetRayJob(ctx context.Context, request *api.GetRayJobRequest) (*api.RayJob, error) {
 	if request.Name == "" {
 		return nil, util.NewInvalidInputError("job name is empty. Please specify a valid value.")
@@ -51,9 +55,9 @@ func (s *RayJobServer) GetRayJob(ctx context.Context, request *api.GetRayJobRequ
 	}
 
 	return model.FromCrdToApiJob(job), nil
-	return nil, status.Errorf(codes.Unimplemented, "method GetRayJob not implemented")
 }
 
+// Finds all Jobs in a given namespace.
 func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobsRequest) (*api.ListRayJobsResponse, error) {
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("job namespace is empty. Please specify a valid value.")
@@ -69,6 +73,7 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 	}, nil
 }
 
+// Finds all Jobs in all namespaces.
 func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
 	jobs, err := s.resourceManager.ListAllJobs(ctx)
 	if err != nil {
@@ -80,6 +85,7 @@ func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllR
 	}, nil
 }
 
+// Deletes an Job
 func (s *RayJobServer) DeleteRayJob(ctx context.Context, request *api.DeleteRayJobRequest) (*emptypb.Empty, error) {
 	if request.Name == "" {
 		return nil, util.NewInvalidInputError("job name is empty. Please specify a valid value.")

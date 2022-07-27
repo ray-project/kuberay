@@ -58,7 +58,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 		grpc.MaxRecvMsgSize(math.MaxInt32))
 	api.RegisterClusterServiceServer(s, server.NewClusterServer(resourceManager, &server.ClusterServerOptions{CollectMetrics: *collectMetricsFlag}))
 	api.RegisterComputeTemplateServiceServer(s, server.NewComputeTemplateServer(resourceManager, &server.ComputeTemplateServerOptions{CollectMetrics: *collectMetricsFlag}))
-	api.RegisterRayJobServiceServer(s, server.NewRayJobServer(resourceManager))
+	api.RegisterRayJobServiceServer(s, server.NewRayJobServer(resourceManager, &server.JobServerOptions{CollectMetrics: *collectMetricsFlag}))
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)

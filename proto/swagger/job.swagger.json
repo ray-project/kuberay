@@ -191,6 +191,24 @@
     }
   },
   "definitions": {
+    "VolumeHostPathType": {
+      "type": "string",
+      "enum": [
+        "DIRECTORY",
+        "FILE"
+      ],
+      "default": "DIRECTORY",
+      "description": "If indicate hostpath, we need to let user indicate which type \nthey would like to use."
+    },
+    "VolumeMountPropagationMode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HOSTTOCONTAINER",
+        "BIDIRECTIONAL"
+      ],
+      "default": "NONE"
+    },
     "VolumeVolumeType": {
       "type": "string",
       "enum": [
@@ -335,9 +353,20 @@
           "$ref": "#/definitions/protoClusterSpec",
           "title": "The cluster template"
         },
-        "logs": {
+        "ttlSecondsAfterFinished": {
+          "type": "integer",
+          "format": "int32",
+          "description": "TTLSecondsAfterFinished is the TTL to clean up RayCluster."
+        },
+        "createdAt": {
           "type": "string",
-          "title": "logs"
+          "format": "date-time",
+          "description": "Output. The time that the job created."
+        },
+        "deleteAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Output. The time that the job deleted."
         }
       },
       "title": "RayJob"
@@ -359,6 +388,12 @@
         },
         "readOnly": {
           "type": "boolean"
+        },
+        "hostPathType": {
+          "$ref": "#/definitions/VolumeHostPathType"
+        },
+        "mountPropagationMode": {
+          "$ref": "#/definitions/VolumeMountPropagationMode"
         }
       }
     },

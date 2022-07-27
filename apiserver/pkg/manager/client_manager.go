@@ -10,7 +10,7 @@ import (
 
 type ClientManagerInterface interface {
 	ClusterClient() client.ClusterClientInterface
-	RayJobClient() client.JobClientInterface
+	JobClient() client.JobClientInterface
 	KubernetesClient() client.KubernetesClientInterface
 	Time() util.TimeInterface
 }
@@ -29,7 +29,7 @@ func (c *ClientManager) ClusterClient() client.ClusterClientInterface {
 	return c.clusterClient
 }
 
-func (c *ClientManager) RayJobClient() client.JobClientInterface {
+func (c *ClientManager) JobClient() client.JobClientInterface {
 	return c.jobClient
 }
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
-	rayclusterclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
+	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -30,6 +30,6 @@ func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options uti
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
 
-	rayClusterClient := rayclusterclient.NewForConfigOrDie(cfg).RayV1alpha1()
+	rayClusterClient := rayclient.NewForConfigOrDie(cfg).RayV1alpha1()
 	return &RayClusterClient{client: rayClusterClient}
 }

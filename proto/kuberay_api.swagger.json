@@ -196,7 +196,7 @@
     },
     "/apis/v1alpha2/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
         "responses": {
           "200": {
@@ -696,6 +696,24 @@
       "default": "DEV",
       "description": "Optional field."
     },
+    "VolumeHostPathType": {
+      "type": "string",
+      "enum": [
+        "DIRECTORY",
+        "FILE"
+      ],
+      "default": "DIRECTORY",
+      "description": "If indicate hostpath, we need to let user indicate which type \nthey would like to use."
+    },
+    "VolumeMountPropagationMode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HOSTTOCONTAINER",
+        "BIDIRECTIONAL"
+      ],
+      "default": "NONE"
+    },
     "VolumeVolumeType": {
       "type": "string",
       "enum": [
@@ -911,6 +929,12 @@
         },
         "readOnly": {
           "type": "boolean"
+        },
+        "hostPathType": {
+          "$ref": "#/definitions/VolumeHostPathType"
+        },
+        "mountPropagationMode": {
+          "$ref": "#/definitions/VolumeMountPropagationMode"
         }
       }
     },
@@ -1167,9 +1191,20 @@
           "$ref": "#/definitions/protoClusterSpec",
           "title": "The cluster template"
         },
-        "logs": {
+        "ttlSecondsAfterFinished": {
+          "type": "integer",
+          "format": "int32",
+          "description": "TTLSecondsAfterFinished is the TTL to clean up RayCluster."
+        },
+        "createdAt": {
           "type": "string",
-          "title": "logs"
+          "format": "date-time",
+          "description": "Output. The time that the job created."
+        },
+        "deleteAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Output. The time that the job deleted."
         }
       },
       "title": "RayJob"

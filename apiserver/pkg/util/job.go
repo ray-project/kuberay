@@ -32,11 +32,11 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			Metadata:                 apiJob.Metadata,
 			RuntimeEnv:               apiJob.RuntimeEnv,
 			ShutdownAfterJobFinishes: apiJob.ShutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  &apiJob.TtlSecondsAfterFinished,
 			JobId:                    apiJob.JobId,
 			RayClusterSpec:           clusterSpec,
 			ClusterSelector:          apiJob.ClusterSelector,
 		},
-		Status: rayalphaapi.RayJobStatus{},
 	}
 
 	return &RayJob{
