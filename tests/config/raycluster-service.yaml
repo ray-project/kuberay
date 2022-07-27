@@ -23,3 +23,7 @@ spec:
       port: 52365
       targetPort: 52365
       nodePort: 32365
+    - name: rayservice
+      port: 8000
+      targetPort: 8000
+      nodePort: 30800
