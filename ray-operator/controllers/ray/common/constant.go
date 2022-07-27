@@ -92,6 +92,9 @@ const (
 	// Ray health check related configurations
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
+
+	// Default autoscaler image when running Ray at versions older than 2.0.0
+	FallbackDefaultAutoscalerImage = "rayproject/ray:2.0.0"
 )
 
 type ServiceType string
