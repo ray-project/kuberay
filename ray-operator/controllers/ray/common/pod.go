@@ -178,8 +178,7 @@ func autoscalerSupportIsStable(rayVersion string) bool {
 	if parsedMajorVersion {
 		return majorVersion >= 2
 	} else {
-		// The rayVersion field is not currently validated. If in doubt, just assume that
-		// the Ray version is >= 2.0.0, so that we use the Ray image to run the autoscaler.
+		// If in doubt, just assume that the Ray version is >= 2.0.0, so that we use the Ray image to run the autoscaler.
 		// Users can always override the operator's choice of image with autoscalerOptions.Image.
 		return true
 	}
@@ -280,7 +279,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := getRayContainerIndex(pod)
+	rayContainerIndex := getRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
