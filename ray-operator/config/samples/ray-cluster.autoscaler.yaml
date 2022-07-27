@@ -26,7 +26,7 @@ spec:
     # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     idleTimeoutSeconds: 60
     # image optionally overrides the autoscaler's container image.
-    # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will use the same image as
+    # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will default to the same image as
     # the ray container by default. For older Ray versions, the autoscaler will default to using the Ray 2.0.0 image.
     ## image: "my-repo/my-custom-autoscaler-image:tag"
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
