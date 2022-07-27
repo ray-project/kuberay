@@ -219,11 +219,15 @@ func (e *UserError) String() string {
 		e.internalError)
 }
 
+func (e *UserError) ErrorStringWithoutStackTrace() string {
+	return fmt.Sprintf("%v: %v", e.externalMessage, e.internalError)
+}
+
 // GRPCStatus implements `GRPCStatus` to make sure `FromError` in grpc-go can honor the code.
 // Otherwise, it will always return codes.Unknown(2).
 // https://github.com/grpc/grpc-go/blob/2c0949c22d46095edc579d9e66edcd025192b98c/status/status.go#L91-L92
 func (e *UserError) GRPCStatus() *status.Status {
-	return status.New(e.externalStatusCode, e.externalMessage)
+	return status.New(e.externalStatusCode, e.ErrorStringWithoutStackTrace())
 }
 
 func (e *UserError) wrapf(format string, args ...interface{}) *UserError {
