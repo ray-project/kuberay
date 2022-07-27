@@ -65,23 +65,28 @@ type ScaleStrategy struct {
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
-	// Resources specifies resource requests and limits for the autoscaler container.
-	// Default values: 256m CPU request, 512m CPU limit, 256Mi memory request, 512Mi memory limit.
+	// Resources specifies optional resource request and limit overrides for the autoscaler container.
+	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
 	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
 	ImagePullPolicy *v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// Optional list of environment variables to set in the autoscaler container.
+	Env []v1.EnvVar `json:"env,omitempty"`
+	// Optional list of sources to populate environment variables in the autoscaler container.
+	EnvFrom []v1.EnvFromSource `json:"envFrom,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-	// Defaults to 300 (five minutes).
+	// Defaults to 60 (one minute).
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
-	// UpscalingMode is "Default" or "Aggressive."
-	// Default: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
-	// Aggressive: Upscaling is not rate-limited.
+	// UpscalingMode is "Conservative", "Default", or "Aggressive."
+	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+	// Default: Upscaling is not rate-limited.
+	// Aggressive: An alias for Default; upscaling is not rate-limited.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Default;Aggressive
+// +kubebuilder:validation:Enum=Default;Aggressive;Conservative
 type UpscalingMode string
 
 // The overall state of the Ray cluster.

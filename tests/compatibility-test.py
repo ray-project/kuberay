@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import unittest
+import subprocess
 from string import Template
 
 import docker
@@ -45,7 +46,7 @@ def shell_assert_failure(cmd):
 def create_cluster():
     shell_assert_success(
         'kind create cluster --config {}'.format(kindcluster_config_file))
-    time.sleep(30)
+    time.sleep(60)
     rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
@@ -85,7 +86,7 @@ def create_kuberay_cluster(template_name):
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
 
-    time.sleep(120)
+    time.sleep(180)
 
     shell_run('kubectl get pods -A')
 
@@ -99,6 +100,37 @@ def create_kuberay_cluster(template_name):
     assert rtn == 0
 
     shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
+
+
+def create_kuberay_service(template_name):
+    template = None
+    with open(template_name, mode='r') as f:
+        template = Template(f.read())
+
+    rayservice_spec_buf = template.substitute(
+        {'ray_image': ray_image, 'ray_version': ray_version})
+
+    service_config_file = None
+    with tempfile.NamedTemporaryFile('w', delete=False) as f:
+        f.write(rayservice_spec_buf)
+        service_config_file = f.name
+
+    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
+    if rtn != 0:
+        shell_run('kubectl get pods -A')
+    assert rtn == 0
+    assert service_config_file is not None
+    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
+
+    shell_run('kubectl get pods -A')
+
+    time.sleep(20)
+
+    wait_for_condition(
+        lambda: shell_run('kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
+        timeout=900,
+        retry_interval_ms=5000,
+    )
 
 
 def delete_cluster():
@@ -143,23 +175,39 @@ class BasicRayTestCase(unittest.TestCase):
 import ray
 ray.init(address='ray://127.0.0.1:10001')
 
+def retry_with_timeout(func, count=90):
+    tmp = 0
+    err = None
+    while tmp < count:
+        try:
+            return func()
+        except Exception as e:
+            err = e
+            tmp += 1
+    assert err is not None
+    raise err
+
 @ray.remote
 def f(x):
     return x * x
 
-futures = [f.remote(i) for i in range(4)]
-print(ray.get(futures))
+def get_result():
+    futures = [f.remote(i) for i in range(4)]
+    print(ray.get(futures))
+    return 0
+rtn = retry_with_timeout(get_result)
+assert rtn == 0
 '''],
                                               demux=True)
-        stdout_str, _ = output
+        stdout_str, stderr_str = output
 
         container.stop()
 
         if stdout_str != b'[0, 1, 4, 9]\n':
             logger.error('test_simple_code returns {}'.format(output))
             raise Exception(('test_simple_code returns invalid result. ' +
-                             'Expected: {} Actual: {}').format(b'[0, 1, 4, 9]',
-                                                               stdout_str))
+                             'Expected: {} Actual: {} Stderr: {}').format(
+                b'[0, 1, 4, 9]', stdout_str, stderr_str))
         if rtn_code != 0:
             msg = 'invalid return code {}'.format(rtn_code)
             logger.error(msg)
@@ -206,7 +254,15 @@ def ray_ha_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor < 113:
+    if major * 100 + minor <= 113:
+        return False
+    return True
+
+def ray_service_supported():
+    if ray_version == "nightly":
+        return True
+    major, minor, patch = parse_ray_version(ray_version)
+    if major * 100 + minor <= 113:
         return False
     return True
 
@@ -246,7 +302,7 @@ class RayHATestCase(unittest.TestCase):
             shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
             shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
             shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-        assert  rtn == 0
+        assert rtn == 0
 
     def test_ray_serve(self):
         client = docker.from_env()
@@ -438,6 +494,58 @@ else:
         client.close()
 
 
+class RayServiceTestCase(unittest.TestCase):
+    service_template_file = 'tests/config/ray-service.yaml.template'
+    service_serve_update_template_file = 'tests/config/ray-service-serve-update.yaml.template'
+    service_cluster_update_template_file = 'tests/config/ray-service-cluster-update.yaml.template'
+
+    @classmethod
+    def setUpClass(cls):
+        if not ray_service_supported():
+            return
+        # Ray Service is running inside a local Kind environment.
+        # We use the Ray nightly version now.
+        # We wait for the serve service ready.
+        # The test will check the successful response from serve service.
+        delete_cluster()
+        create_cluster()
+        apply_kuberay_resources()
+        download_images()
+        create_kuberay_service(RayServiceTestCase.service_template_file)
+
+    def setUp(self):
+        if not ray_service_supported():
+            raise unittest.SkipTest("ray service is not supported")
+
+    def test_ray_serve_work(self):
+        port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        time.sleep(5)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=5,
+        )
+        create_kuberay_service(RayServiceTestCase.service_serve_update_template_file)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(5)
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=60,
+        )
+        create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
+        time.sleep(5)
+        port_forwarding_proc.kill()
+        time.sleep(5)
+        port_forwarding_proc = subprocess.Popen('kubectl port-forward service/rayservice-sample-serve-svc 8000', shell=True)
+        time.sleep(5)
+        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+
+        wait_for_condition(
+            lambda: shell_run(curl_cmd) == 0,
+            timeout=180,
+        )
+        port_forwarding_proc.kill()
+
 def parse_environment():
     global ray_version, ray_image, kuberay_sha
     for k, v in os.environ.items():
@@ -448,6 +556,34 @@ def parse_environment():
         if k == 'KUBERAY_IMG_SHA':
             logger.info('Using KubeRay docker build SHA: {}'.format(v))
             kuberay_sha = v
+
+
+def wait_for_condition(
+    condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
+):
+    """Wait until a condition is met or time out with an exception.
+
+    Args:
+        condition_predictor: A function that predicts the condition.
+        timeout: Maximum timeout in seconds.
+        retry_interval_ms: Retry interval in milliseconds.
+
+    Raises:
+        RuntimeError: If the condition is not met before the timeout expires.
+    """
+    start = time.time()
+    last_ex = None
+    while time.time() - start <= timeout:
+        try:
+            if condition_predictor(**kwargs):
+                return
+        except Exception as ex:
+            last_ex = ex
+        time.sleep(retry_interval_ms / 1000.0)
+    message = "The condition wasn't met before the timeout expired."
+    if last_ex is not None:
+        message += f" Last exception: {last_ex}"
+    raise RuntimeError(message)
 
 
 if __name__ == '__main__':

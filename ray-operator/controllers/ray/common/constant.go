@@ -55,17 +55,21 @@ const (
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
 
+	// The defaule RayService Identifier.
+	RayServiceCreatorLabelValue = "rayservice"
+
 	// Check node if ready by checking the path exists or not
 	PodReadyFilepath = "POD_READY_FILEPATH"
 
 	// Use as container env variable
-	NAMESPACE               = "NAMESPACE"
-	CLUSTER_NAME            = "CLUSTER_NAME"
-	RAY_IP                  = "RAY_IP"
-	RAY_PORT                = "RAY_PORT"
-	RAY_ADDRESS             = "RAY_ADDRESS"
-	REDIS_PASSWORD          = "REDIS_PASSWORD"
-	RAY_EXTERNAL_STORAGE_NS = "RAY_external_storage_namespace"
+	NAMESPACE                               = "NAMESPACE"
+	CLUSTER_NAME                            = "CLUSTER_NAME"
+	RAY_IP                                  = "RAY_IP"
+	RAY_PORT                                = "RAY_PORT"
+	RAY_ADDRESS                             = "RAY_ADDRESS"
+	REDIS_PASSWORD                          = "REDIS_PASSWORD"
+	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
+	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
@@ -73,15 +77,15 @@ const (
 	LOCAL_HOST = "127.0.0.1"
 	// Ray HA default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
-	DefaultReadinessProbeTimeoutSeconds      = 0
-	DefaultReadinessProbePeriodSeconds       = 0
+	DefaultReadinessProbeTimeoutSeconds      = 1
+	DefaultReadinessProbePeriodSeconds       = 3
 	DefaultReadinessProbeSuccessThreshold    = 0
 	DefaultReadinessProbeFailureThreshold    = 20
 
 	// Ray HA default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 10
-	DefaultLivenessProbeTimeoutSeconds      = 0
-	DefaultLivenessProbePeriodSeconds       = 0
+	DefaultLivenessProbeTimeoutSeconds      = 1
+	DefaultLivenessProbePeriodSeconds       = 3
 	DefaultLivenessProbeSuccessThreshold    = 0
 	DefaultLivenessProbeFailureThreshold    = 40
 

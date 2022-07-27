@@ -147,17 +147,11 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		return ctrl.Result{}, nil
 	}
 
-	needUpdate := true
-	if !utils.IsRunningAndReady(unhealthyPod) && unhealthyPod.Annotations != nil {
-		r.Log.Info("mark pod unhealthy and need for a rebuild", "pod name", unhealthyPod.Name)
-		for k, v := range unhealthyPod.GetAnnotations() {
-			if k == common.RayNodeHealthStateAnnotationKey && v == common.PodUnhealthy {
-				needUpdate = false
-			}
-		}
-		if needUpdate {
+	if !utils.IsRunningAndReady(unhealthyPod) {
+		if v, ok := unhealthyPod.Annotations[common.RayNodeHealthStateAnnotationKey]; !ok || v != common.PodUnhealthy {
 			updatedPod := unhealthyPod.DeepCopy()
 			updatedPod.Annotations[common.RayNodeHealthStateAnnotationKey] = common.PodUnhealthy
+			r.Log.Info("mark pod unhealthy and need for a rebuild", "pod", unhealthyPod)
 			if err := r.Update(context.TODO(), updatedPod); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -442,10 +436,10 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				continue
 			}
 			if v, ok := workerPod.Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
+				r.Log.Info(fmt.Sprintf("deleting unhealthy worker pod %s", workerPod.Name))
 				if err := r.Delete(context.TODO(), &workerPod); err != nil {
 					return err
 				}
-				r.Log.Info(fmt.Sprintf("need to delete unhealthy worker pod %s", workerPod.Name))
 				// we are deleting one worker pod now, let's reconcile again later
 				return nil
 			}
@@ -695,13 +689,27 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName, headPort)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled)
+	creatorName := getCreator(instance)
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
 	return pod
+}
+
+func getCreator(instance rayiov1alpha1.RayCluster) string {
+	if instance.Labels == nil {
+		return ""
+	}
+	creatorName, exist := instance.Labels[common.KubernetesCreatedByLabelKey]
+
+	if !exist {
+		return ""
+	}
+
+	return creatorName
 }
 
 // Build worker instance pods.
@@ -713,7 +721,8 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName, headPort)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled)
+	creatorName := getCreator(instance)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")

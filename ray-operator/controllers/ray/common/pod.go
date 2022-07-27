@@ -22,7 +22,7 @@ const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
 	RayLogVolumeName            = "ray-logs"
-	RayLogVolumeMountPath       = "/tmp/ray/session_latest/logs"
+	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
 	RayHeadContainer            = "ray-head"
 	ObjectStoreMemoryKey        = "object-store-memory"
@@ -225,7 +225,7 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -283,7 +283,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
 	// health check only if HA enabled
 	if podTemplateSpec.Annotations != nil {
@@ -332,7 +332,7 @@ func BuildAutoscalerContainer() v1.Container {
 		Name: AutoscalerContainerName,
 		// TODO: choose right version based on instance.spec.Version
 		// The currently used image reflects the latest changes from Ray master.
-		Image:           "rayproject/ray:a304d1",
+		Image:           "rayproject/ray:0860dd",
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
@@ -362,15 +362,14 @@ func BuildAutoscalerContainer() v1.Container {
 			"--cluster-namespace",
 			"$(RAY_CLUSTER_NAMESPACE)",
 		},
-		// TODO: make resource requirement configurable.
 		Resources: v1.ResourceRequirements{
 			Limits: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("500m"),
 				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse("256m"),
-				v1.ResourceMemory: resource.MustParse("256Mi"),
+				v1.ResourceCPU:    resource.MustParse("500m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
 	}
@@ -388,6 +387,12 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		}
 		if autoscalerOptions.ImagePullPolicy != nil {
 			autoscalerContainer.ImagePullPolicy = *autoscalerOptions.ImagePullPolicy
+		}
+		if len(autoscalerOptions.Env) > 0 {
+			autoscalerContainer.Env = append(autoscalerContainer.Env, autoscalerOptions.Env...)
+		}
+		if len(autoscalerOptions.EnvFrom) > 0 {
+			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
 		}
 	}
 }
@@ -487,7 +492,7 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
@@ -512,6 +517,13 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
+	}
+	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
+		// Only add this env for Ray Service cluster to improve service SLA.
+		if !envVarExists(RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
+			deathEnv := v1.EnvVar{Name: RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}
+			container.Env = append(container.Env, deathEnv)
+		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.

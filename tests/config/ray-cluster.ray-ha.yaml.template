@@ -108,10 +108,14 @@ spec:
                 name: client
             livenessProbe:
               initialDelaySeconds: 30
-              failureThreshold: 200
+              periodSeconds: 3
+              timeoutSeconds: 1
+              failureThreshold: 400
             readinessProbe:
               initialDelaySeconds: 30
-              failureThreshold: 120
+              periodSeconds: 3
+              timeoutSeconds: 1
+              failureThreshold: 300
   workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 2
@@ -170,10 +174,14 @@ spec:
                   cpu: "200m"
               livenessProbe:
                 initialDelaySeconds: 30
-                failureThreshold: 200
+                periodSeconds: 3
+                timeoutSeconds: 1
+                failureThreshold: 400
               readinessProbe:
                 initialDelaySeconds: 30
-                failureThreshold: 120
+                periodSeconds: 3
+                timeoutSeconds: 1
+                failureThreshold: 300
           volumes:
             - name: log-volume
               emptyDir: {}
