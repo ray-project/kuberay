@@ -225,7 +225,7 @@ func buildWorkerPodTemplate(imageVersion string, spec *api.WorkerGroupSpec, comp
 					Image: image,
 					Env: []v1.EnvVar{
 						{
-							Name:  "RAY_DISABLE_DOCKER_CPU_WRARNING",
+							Name:  "RAY_DISABLE_DOCKER_CPU_WARNING",
 							Value: "1",
 						},
 						{

@@ -111,8 +111,12 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// set custom service account with proper roles bound.
 		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
 
+		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
+		// Determine the default image to use for the Ray container.
+		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
 		// inject autoscaler container into head pod
-		autoscalerContainer := BuildAutoscalerContainer()
+		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -137,6 +141,44 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	}
 
 	return podTemplate
+}
+
+// getAutoscalerImage determines the default autoscaler image
+func getAutoscalerImage(rayHeadImage string, rayVersion string) string {
+	if autoscalerSupportIsStable(rayVersion) {
+		// For Ray versions >= 2.0.0, use the Ray head's image to run the autoscaler.
+		return rayHeadImage
+	} else {
+		// For older Ray versions, use the Ray 2.0.0 image to run the autoscaler.
+		return FallbackDefaultAutoscalerImage
+	}
+}
+
+// Determine if autoscaler support is stable in the given rayVersion.
+// Return false exactly when the major version is successfully parsed and less than 2.
+// Example rayVersion inputs that return true: "2.0.0", "2.0", "2", "2.0.0rc1", "nightly", "latest", "unknown".
+// Example inputs that return false: "1.13.0", "1.12", "1".
+func autoscalerSupportIsStable(rayVersion string) bool {
+	// Try to determine major version by extracting everything that comes before the first "."
+	firstDotIndex := strings.Index(rayVersion, ".")
+	var majorVersionString string
+	if firstDotIndex == -1 {
+		// If there is no ".", try parsing the entire rayVersion as the major version.
+		majorVersionString = rayVersion
+	} else {
+		// Everything up to the first "."
+		majorVersionString = rayVersion[:firstDotIndex]
+	}
+
+	if majorVersion, err := strconv.Atoi(majorVersionString); err == nil {
+		return majorVersion >= 2
+	} else {
+		// If in doubt, just assume that the Ray version is >= 2.0.0,
+		// so that we use the Ray image to run the autoscaler.
+		// Currently, there is a lot of "doubt," since the version string is not validated.
+		// Users can always override the operator's choice of image with autoscalerOptions.image.
+		return true
+	}
 }
 
 // DefaultWorkerPodTemplate sets the config values
@@ -234,7 +276,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := getRayContainerIndex(pod)
+	rayContainerIndex := getRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -327,12 +369,10 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 }
 
 // BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
-func BuildAutoscalerContainer() v1.Container {
+func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 	container := v1.Container{
-		Name: AutoscalerContainerName,
-		// TODO: choose right version based on instance.spec.Version
-		// The currently used image reflects the latest changes from Ray master.
-		Image:           "rayproject/ray:0860dd",
+		Name:            AutoscalerContainerName,
+		Image:           autoscalerImage,
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
@@ -412,11 +452,11 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainerIndex(pod v1.Pod) (rayContainerIndex int) {
+func getRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
 	// a ray pod can have multiple containers.
 	// we identify the ray container based on env var: RAY=true
 	// if the env var is missing, we choose containers[0].
-	for i, container := range pod.Spec.Containers {
+	for i, container := range podSpec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
 				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")

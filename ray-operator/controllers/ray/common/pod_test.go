@@ -27,7 +27,7 @@ var instance = rayiov1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayiov1alpha1.RayClusterSpec{
-		RayVersion: "12.0.1",
+		RayVersion: "2.0.0",
 		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 			ServiceType: "ClusterIP",
 			Replicas:    pointer.Int32Ptr(1),
@@ -51,7 +51,7 @@ var instance = rayiov1alpha1.RayCluster{
 					Containers: []v1.Container{
 						{
 							Name:  "ray-head",
-							Image: "rayproject/ray:12.0.1",
+							Image: "repo/image:custom",
 							Env: []v1.EnvVar{
 								{
 									Name: "MY_POD_IP",
@@ -101,7 +101,7 @@ var instance = rayiov1alpha1.RayCluster{
 						Containers: []v1.Container{
 							{
 								Name:  "ray-worker",
-								Image: "rayproject/autoscaler",
+								Image: "repo/image:custom",
 								Resources: v1.ResourceRequirements{
 									Limits: v1.ResourceList{
 										"nvidia.com/gpu": resource.MustParse("3"),
@@ -181,7 +181,7 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
-	Image:           "rayproject/ray:0860dd",
+	Image:           "repo/image:custom",
 	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{
@@ -231,6 +231,31 @@ var autoscalerContainer = v1.Container{
 
 var trueFlag = true
 
+func TestGetAutoscalerImage(t *testing.T) {
+	// rayVersion strings for which we judge autoscaler support is stable and thus
+	// use the same image for the autoscaler as for the Ray container.
+	newRayVersions := []string{"2.0.0", "2.0.0rc0", "2.0", "2", "latest", "nightly", "what's this"}
+	rayImage := "repo/image:tag"
+	for _, rayVersion := range newRayVersions {
+		expectedAutoscalerImage := rayImage
+		actualAutoscalerImage := getAutoscalerImage(rayImage, rayVersion)
+		if actualAutoscalerImage != expectedAutoscalerImage {
+			t.Fatalf("Expected `%v` but got `%v`", expectedAutoscalerImage, actualAutoscalerImage)
+		}
+	}
+
+	// rayVersion strings for which we judge autoscaler support is not stable and thus
+	// use the default Ray 2.0.0 image to run the autoscaler.
+	oldRayVersions := []string{"1", "1.13", "1.13.0"}
+	for _, rayVersion := range oldRayVersions {
+		expectedAutoscalerImage := "rayproject/ray:2.0.0"
+		actualAutoscalerImage := getAutoscalerImage(rayImage, rayVersion)
+		if actualAutoscalerImage != expectedAutoscalerImage {
+			t.Fatalf("Expected `%v` but got `%v`", expectedAutoscalerImage, actualAutoscalerImage)
+		}
+	}
+}
+
 func TestGetHeadPort(t *testing.T) {
 	headStartParams := make(map[string]string)
 	actualResult := GetHeadPort(headStartParams)
@@ -242,7 +267,7 @@ func TestGetHeadPort(t *testing.T) {
 	headStartParams["port"] = "9999"
 	actualResult = GetHeadPort(headStartParams)
 	expectedResult = "9999"
-	if !(actualResult == expectedResult) {
+	if actualResult != expectedResult {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 }
