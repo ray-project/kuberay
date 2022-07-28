@@ -191,8 +191,11 @@ You can see RayService is preparing a pending cluster. After the pending cluster
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
 You can also use `kubectl describe rayservices rayservice-sample` to check the states and event logs of your RayService instance.
 
-You can also login the head pod and use Ray cli to check the logs.
+For ray serve monitoring, you can refer to the [Ray observability documentation](https://docs.ray.io/en/master/ray-observability/state/state-api.html).
+To run Ray state APIs, you can login the head pod and use Ray cli.
 `kubectl exec -it <head-node-pod> bash`
+Or you can run the command locally:
+`kubectl exec -it <head-node-pod> -- <ray state api>`
 
 ### Delete the RayService instance
 `$ kubectl delete -f config/samples/ray_v1alpha1_rayservice.yaml`
