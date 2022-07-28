@@ -3,7 +3,7 @@
 # with capacity to scale up to 10 worker pods.
 # Each pod requests 54 Gi memory and 14 CPU.
 # Each pod can be scheduled on a virtual machine with roughly 64 Gi memory and 16 CPU.
-# (AWS: m5.2xlarge GCP: e2-standard-16 Azure: Standard_D5_v2)
+# (AWS: m5.2xlarge, GCP: e2-standard-16, Azure: Standard_D5_v2)
 # Optimal resource allocation will depend on your Kubernetes infrastructure and might
 # require some experimentation.
 
