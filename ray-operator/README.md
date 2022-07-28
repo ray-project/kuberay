@@ -64,13 +64,24 @@ kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"
 
 ### Running an example cluster
 
-There are three example config files to deploy RayClusters included here:
+We include a few example config files to deploy RayClusters:
 
 Sample  | Description
 ------------- | -------------
 [ray-cluster.mini.yaml](config/samples/ray-cluster.mini.yaml)   | Small example consisting of 1 head pod.
 [ray-cluster.heterogeneous.yaml](config/samples/ray-cluster.heterogeneous.yaml)  | Example with heterogenous worker types. 1 head pod and 2 worker pods, each of which has a different resource quota.
-[ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resouce properties.
+[ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resource properties.
+[ray-cluster.autoscaler.yaml](config/samples/ray-cluster.autoscaler.yaml)  | Shows all available custom resource properties and demonstrates autoscaling.
+[ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml)  | Demonstrates resource configuration for production use-cases.
+[ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml)  | Demonstrates resource configuration for autoscaling Ray clusters in production.
+
+!!! note
+
+    For production use-cases, make sure to allocate sufficient resources for your Ray pods in production; it usually makes
+    sense to run one large Ray pod per Kubernetes node.
+    See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
+    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for guidance. The rest of the sample configs above are geared towards
+    experimentation in local kind or minikube environments.
 
 ```shell
 # Create a configmap with a hello world Ray code.
