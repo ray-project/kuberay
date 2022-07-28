@@ -1,4 +1,4 @@
-# For most use-cases, it makes sense to schedule one Ray pod per Kubernetes node:
+# For most use-cases, it makes sense to schedule one Ray pod per Kubernetes node.
 # This is a configuration for a RayCluster with 1 Ray head pod and 1 Ray worker pod.
 # Each pod requests 54 Gi memory and 14 CPU.
 # Each pod can be scheduled on a virtual machine with roughly 64 Gi memory and 16 CPU.
