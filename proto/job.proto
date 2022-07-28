@@ -129,4 +129,10 @@ message RayJob {
   google.protobuf.Timestamp created_at = 12;
   // Output. The time that the job deleted.     
   google.protobuf.Timestamp delete_at = 13;
+  // Output. The current job status
+  string job_status = 14;
+  // Output. The current job deployment status
+  string job_deployment_status = 15;
+  // Output. A human-readable description of the status of this operation.
+  string message = 16;
 }

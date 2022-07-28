@@ -1205,6 +1205,18 @@
           "type": "string",
           "format": "date-time",
           "description": "Output. The time that the job deleted."
+        },
+        "jobStatus": {
+          "type": "string",
+          "title": "Output. The current job status"
+        },
+        "jobDeploymentStatus": {
+          "type": "string",
+          "title": "Output. The current job deployment status"
+        },
+        "message": {
+          "type": "string",
+          "description": "Output. A human-readable description of the status of this operation."
         }
       },
       "title": "RayJob"

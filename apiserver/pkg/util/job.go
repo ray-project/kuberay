@@ -57,7 +57,6 @@ func buildRayJobLabels(job *api.RayJob) map[string]string {
 	return labels
 }
 
-func buildRayJobAnnotations(cluster *api.RayJob) map[string]string {
-	annotations := map[string]string{}
-	return annotations
+func buildRayJobAnnotations(job *api.RayJob) map[string]string {
+	return job.Metadata
 }

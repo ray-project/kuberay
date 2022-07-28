@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"github.com/golang/glog"
 	"strconv"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -125,21 +126,41 @@ func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
 	return apiJobs
 }
 
-func FromCrdToApiJob(job *v1alpha1.RayJob) *api.RayJob {
-	pbJob := &api.RayJob{
+func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			glog.Errorf("failed to transfer ray job, err: %v, item: %v", err, job)
+		}
+	}()
+
+	var ttl int32 = -1
+	if job.Spec.TTLSecondsAfterFinished != nil {
+		ttl = *job.Spec.TTLSecondsAfterFinished
+	}
+
+	var deleteTime int64 = -1
+	if job.DeletionTimestamp != nil {
+		deleteTime = job.DeletionTimestamp.Unix()
+	}
+
+	pbJob = &api.RayJob{
 		Name:                     job.Name,
 		Namespace:                job.Namespace,
 		User:                     job.Labels[util.RayClusterUserLabelKey],
 		Entrypoint:               job.Spec.Entrypoint,
 		Metadata:                 job.Spec.Metadata,
 		RuntimeEnv:               job.Spec.RuntimeEnv,
-		JobId:                    job.Spec.JobId,
+		JobId:                    job.Status.JobId,
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
 		ClusterSelector:          job.Spec.ClusterSelector,
 		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
-		TtlSecondsAfterFinished:  *job.Spec.TTLSecondsAfterFinished,
+		TtlSecondsAfterFinished:  ttl,
 		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
-		DeleteAt:                 &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()},
+		DeleteAt:                 &timestamp.Timestamp{Seconds: deleteTime},
+		JobStatus:                string(job.Status.JobStatus),
+		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
+		Message:                  job.Status.Message,
 	}
 	return pbJob
 }

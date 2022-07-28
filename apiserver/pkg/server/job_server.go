@@ -29,6 +29,10 @@ type RayJobServer struct {
 
 // Creates a new Ray Job.
 func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJobRequest) (*api.RayJob, error) {
+	if err := ValidateCreateJobRequest(request); err != nil {
+		return nil, util.Wrap(err, "Validate job request failed.")
+	}
+
 	// use the namespace in the request to override the namespace in the job definition
 	request.Job.Namespace = request.Namespace
 
@@ -101,4 +105,47 @@ func (s *RayJobServer) DeleteRayJob(ctx context.Context, request *api.DeleteRayJ
 	}
 
 	return &emptypb.Empty{}, nil
+}
+
+func ValidateCreateJobRequest(request *api.CreateRayJobRequest) error {
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
+	if request.Namespace != request.Job.Namespace {
+		return util.NewInvalidInputError("The namespace in the request is different from the namespace in the job definition.")
+	}
+
+	if request.Job.Name == "" {
+		return util.NewInvalidInputError("Job name is empty. Please specify a valid value.")
+	}
+
+	if request.Job.User == "" {
+		return util.NewInvalidInputError("User who create the job is empty. Please specify a valid value.")
+	}
+
+	if len(request.Job.ClusterSelector) != 0 {
+		return nil
+	}
+
+	if len(request.Job.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
+		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
+	}
+
+	for index, spec := range request.Job.ClusterSpec.WorkerGroupSpec {
+		if len(spec.GroupName) == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
+		}
+		if len(spec.ComputeTemplate) == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d compute template is empty. Please specify a valid value.", index)
+		}
+		if spec.MaxReplicas == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d MaxReplicas can not be 0. Please specify a valid value.", index)
+		}
+		if spec.MinReplicas > spec.MaxReplicas {
+			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
+		}
+	}
+
+	return nil
 }

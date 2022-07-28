@@ -83,6 +83,7 @@ rules:
   - ray.io
   resources:
   - rayclusters
+  - rayjobs
   verbs:
   - create
   - delete
