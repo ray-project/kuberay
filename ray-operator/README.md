@@ -77,7 +77,7 @@ Sample  | Description
 
 !!! note
 
-    For production use-cases, make sure to allocate sufficient resources for your Ray pods in production; it usually makes
+    For production use-cases, make sure to allocate sufficient resources for your Ray pods; it usually makes
     sense to run one large Ray pod per Kubernetes node.
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
     [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for guidance. The rest of the sample configs above are geared towards
