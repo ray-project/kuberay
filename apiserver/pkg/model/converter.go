@@ -2,8 +2,9 @@ package model
 
 import (
 	"fmt"
-	"github.com/golang/glog"
 	"strconv"
+
+	"github.com/golang/glog"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
