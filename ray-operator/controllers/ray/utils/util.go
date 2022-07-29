@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -212,9 +211,13 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	return count
 }
 
-func Contains(s []string, searchTerm string) bool {
-	i := sort.SearchStrings(s, searchTerm)
-	return i < len(s) && s[i] == searchTerm
+func Contains(elems []string, searchTerm string) bool {
+	for _, s := range elems {
+		if searchTerm == s {
+			return true
+		}
+	}
+	return false
 }
 
 func FilterContainerByName(containers []corev1.Container, name string) (corev1.Container, error) {
