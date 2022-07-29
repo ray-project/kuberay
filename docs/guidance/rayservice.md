@@ -191,8 +191,35 @@ You can see RayService is preparing a pending cluster. After the pending cluster
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
 You can also use `kubectl describe rayservices rayservice-sample` to check the states and event logs of your RayService instance.
 
-You can also login the head pod and use Ray cli to check the logs.
+For ray serve monitoring, you can refer to the [Ray observability documentation](https://docs.ray.io/en/master/ray-observability/state/state-api.html).
+To run Ray state APIs, you can log in to the head pod and use the Ray CLI.
 `kubectl exec -it <head-node-pod> bash`
+Or you can run the command locally:
+`kubectl exec -it <head-node-pod> -- <ray state api>`
+For example:
+`kubectl exec -it <head-node-pod> -- ray summary tasks`
+Output
+```shell
+======== Tasks Summary: 2022-07-28 15:10:24.801670 ========
+Stats:
+------------------------------------
+total_actor_scheduled: 17
+total_actor_tasks: 5
+total_tasks: 0
+
+
+Table (group by func_name):
+------------------------------------
+    FUNC_OR_CLASS_NAME                 STATE_COUNTS    TYPE
+0   ServeController.listen_for_change  RUNNING: 5      ACTOR_TASK
+1   ServeReplica:MangoStand.__init__   FINISHED: 3     ACTOR_CREATION_TASK
+2   HTTPProxyActor.__init__            FINISHED: 2     ACTOR_CREATION_TASK
+3   ServeReplica:PearStand.__init__    FINISHED: 3     ACTOR_CREATION_TASK
+4   ServeReplica:OrangeStand.__init__  FINISHED: 3     ACTOR_CREATION_TASK
+5   ServeReplica:FruitMarket.__init__  FINISHED: 3     ACTOR_CREATION_TASK
+6   ServeReplica:DAGDriver.__init__    FINISHED: 2     ACTOR_CREATION_TASK
+7   ServeController.__init__           FINISHED: 1     ACTOR_CREATION_TASK
+```
 
 ### Delete the RayService instance
 `$ kubectl delete -f config/samples/ray_v1alpha1_rayservice.yaml`
