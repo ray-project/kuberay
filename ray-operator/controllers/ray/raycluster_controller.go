@@ -164,6 +164,8 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instance *rayiov1alpha1.RayCluster) (ctrl.Result, error) {
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
+	r.Log.Info("reconciling RayCluster", "head envs", instance.Spec.HeadGroupSpec.Envs)
+	r.Log.Info("reconciling RayCluster", "head start params", instance.Spec.HeadGroupSpec.RayStartParams)
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
@@ -214,6 +216,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
+	r.Log.Info("reconciling RayCluster 2", "head envs", instance.Spec.HeadGroupSpec.Envs)
 	// update the status if needed
 	if err := r.updateStatus(instance); err != nil {
 		if errors.IsNotFound(err) {

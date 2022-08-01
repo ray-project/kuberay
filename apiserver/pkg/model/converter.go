@@ -64,6 +64,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		ServiceType:     string(spec.ServiceType),
 		Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
 		ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
+		Envs:            spec.Envs,
 	}
 
 	return headNodeSpec

@@ -391,6 +391,12 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to head pod"
+        },
+        "envs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

@@ -89,6 +89,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
+	log.Info("DefaultHeadPodTemplate called", "head envs ", headSpec.Envs)
 	podTemplate := headSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -140,6 +141,10 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
 	}
 
+	podTemplate.Spec.Containers[0].Env = append(podTemplate.Spec.Containers[0].Env, v1.EnvVar{
+		Name:  "WANXING_TEST_ENV",
+		Value: "true",
+	})
 	return podTemplate
 }
 

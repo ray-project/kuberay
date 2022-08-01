@@ -208,6 +208,7 @@ message HeadGroupSpec {
   map<string, string> ray_start_params = 4;
   // Optional. The volumes mount to head pod
   repeated Volume volumes = 5;
+  map<string, string> envs = 6;
 }
 
 message WorkerGroupSpec {

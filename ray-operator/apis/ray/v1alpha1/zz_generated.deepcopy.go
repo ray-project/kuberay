@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -125,6 +125,13 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Envs != nil {
+		in, out := &in.Envs, &out.Envs
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
