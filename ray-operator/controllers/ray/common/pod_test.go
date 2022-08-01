@@ -38,6 +38,8 @@ var instance = rayiov1alpha1.RayCluster{
 				"object-store-memory": "100000000",
 				"redis-password":      "LetMeInRay",
 				"num-cpus":            "1",
+				"include-dashboard":   "true",
+				"log-color":           "true",
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -562,6 +564,9 @@ func TestValidateHeadRayStartParams_OK(t *testing.T) {
 	isValid, err := ValidateHeadRayStartParams(*input)
 	assert.Equal(t, true, isValid)
 	assert.Nil(t, err)
+	command := convertParamMap(input.RayStartParams)
+	assert.True(t, strings.Contains(command, "--include-dashboard=true"))
+	assert.True(t, strings.Contains(command, "--log-color=true"))
 }
 
 func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T) {

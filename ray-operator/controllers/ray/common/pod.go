@@ -675,8 +675,9 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
+	nonFlagParams := []string{"log-color", "include-dashboard"}
 	for k, v := range rayStartParams {
-		if strings.ToLower(v) == "true" {
+		if strings.ToLower(v) == "true" && !utils.Contains(nonFlagParams, k) {
 			fmt.Fprintf(flags, " --%s ", k)
 		} else {
 			fmt.Fprintf(flags, " --%s=%s ", k, v)
