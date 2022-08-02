@@ -28,6 +28,7 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 		Environment:  api.Cluster_Environment(api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]]),
 		CreatedAt:    &timestamp.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
 		ClusterState: string(cluster.Status.State),
+		Envs:         cluster.Spec.Envs,
 	}
 
 	// loop container and find the resource
@@ -64,7 +65,6 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		ServiceType:     string(spec.ServiceType),
 		Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
 		ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
-		Envs:            spec.Envs,
 	}
 
 	return headNodeSpec

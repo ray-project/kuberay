@@ -130,13 +130,6 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.Envs != nil {
-		in, out := &in.Envs, &out.Envs
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	in.Template.DeepCopyInto(&out.Template)
 }
 
@@ -264,6 +257,13 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 		in, out := &in.AutoscalerOptions, &out.AutoscalerOptions
 		*out = new(AutoscalerOptions)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.Envs != nil {
+		in, out := &in.Envs, &out.Envs
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 }
 

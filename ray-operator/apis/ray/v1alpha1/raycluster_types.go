@@ -22,6 +22,7 @@ type RayClusterSpec struct {
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	Envs              map[string]string  `json:"Envs"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -34,7 +35,6 @@ type HeadGroupSpec struct {
 	Replicas *int32 `json:"replicas,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
-	Envs           map[string]string `json:"Envs"`
 	// Template is the eaxct pod template used in K8s depoyments, statefulsets, etc.
 	Template v1.PodTemplateSpec `json:"template"`
 }

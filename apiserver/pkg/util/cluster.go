@@ -10,7 +10,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 )
 
 type RayCluster struct {
@@ -25,7 +24,6 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 	headPodTemplate := buildHeadPodTemplate(apiCluster, apiCluster.ClusterSpec.HeadGroupSpec, computeTemplate)
 	headReplicas := int32(1)
 	//log.Info("NewRayCluster: ", "HeadGroupSpec.Envs", apiCluster.ClusterSpec.HeadGroupSpec.Envs)
-	klog.Warningf("NewRayCluster HeadGroupSpec.Envs: %s", apiCluster.ClusterSpec.HeadGroupSpec.Envs)
 	rayCluster := &rayclusterapi.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
@@ -40,9 +38,9 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 				Template:       headPodTemplate,
 				Replicas:       &headReplicas,
 				RayStartParams: apiCluster.ClusterSpec.HeadGroupSpec.RayStartParams,
-				Envs:           apiCluster.ClusterSpec.HeadGroupSpec.Envs,
 			},
 			WorkerGroupSpecs: []rayclusterapi.WorkerGroupSpec{},
+			Envs:             apiCluster.Envs,
 		},
 	}
 

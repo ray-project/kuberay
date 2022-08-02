@@ -41,6 +41,10 @@ spec:
                 description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
                   NOTE: json tags are required.'
                 properties:
+                  Envs:
+                    additionalProperties:
+                      type: string
+                    type: object
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
                       for the Ray autoscaler.
@@ -11608,6 +11612,7 @@ spec:
                       type: object
                     type: array
                 required:
+                - Envs
                 - headGroupSpec
                 type: object
               serveDeploymentGraphConfig:

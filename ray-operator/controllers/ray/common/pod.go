@@ -89,7 +89,6 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
-	log.Info("DefaultHeadPodTemplate called", "head envs ", headSpec.Envs)
 	podTemplate := headSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -140,11 +139,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	} else {
 		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
 	}
-
-	podTemplate.Spec.Containers[0].Env = append(podTemplate.Spec.Containers[0].Env, v1.EnvVar{
-		Name:  "WANXING_TEST_ENV",
-		Value: "true",
-	})
+	
 	return podTemplate
 }
 
@@ -272,7 +267,8 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string,
+	envs map[string]string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -330,7 +326,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator, envs)
 
 	// health check only if HA enabled
 	if podTemplateSpec.Annotations != nil {
@@ -537,7 +533,8 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string,
+	envs map[string]string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
@@ -593,6 +590,13 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 				container.Env = append(container.Env, storageNS)
 			}
 		}
+	}
+
+	for k, v := range envs {
+		log.Info("setContainerEnvVars for container", "index", rayContainerIndex, "k:", k, "v:", v)
+		container.Env = append(container.Env, v1.EnvVar{
+			Name: k, Value: v,
+		})
 	}
 }
 

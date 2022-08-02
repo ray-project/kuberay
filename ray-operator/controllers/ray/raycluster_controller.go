@@ -164,8 +164,8 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instance *rayiov1alpha1.RayCluster) (ctrl.Result, error) {
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
-	r.Log.Info("reconciling RayCluster", "head envs", instance.Spec.HeadGroupSpec.Envs)
-	r.Log.Info("reconciling RayCluster", "head start params", instance.Spec.HeadGroupSpec.RayStartParams)
+	r.Log.Info("reconciling RayCluster ", "container envs", instance.Spec.Envs)
+	r.Log.Info("reconciling RayCluster ", "head start params", instance.Spec.HeadGroupSpec.RayStartParams)
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
@@ -216,7 +216,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	r.Log.Info("reconciling RayCluster 2", "head envs", instance.Spec.HeadGroupSpec.Envs)
 	// update the status if needed
 	if err := r.updateStatus(instance); err != nil {
 		if errors.IsNotFound(err) {
@@ -693,7 +692,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName, headPort)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName, instance.Spec.Envs)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -725,7 +724,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName, headPort)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
+	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName, instance.Spec.Envs)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")

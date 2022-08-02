@@ -1,7 +1,4 @@
-# Make sure to increase resource requests and limits before using this example in production.
-# For examples with more realistic resource configuration, see
-# ray-cluster.complete.large.yaml and
-# ray-cluster.autoscaler.large.yaml.
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -58,6 +55,10 @@ spec:
               rayClusterSpec:
                 description: RayClusterSpec is the cluster template to run the job
                 properties:
+                  Envs:
+                    additionalProperties:
+                      type: string
+                    type: object
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
                       for the Ray autoscaler.
@@ -11625,6 +11626,7 @@ spec:
                       type: object
                     type: array
                 required:
+                - Envs
                 - headGroupSpec
                 type: object
               runtimeEnv:
