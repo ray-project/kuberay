@@ -23,7 +23,7 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 	// Envs are the environment variables for all containers.
-	Envs map[string]string `json:"envs"`
+	Envs map[string]string `json:"envs,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
