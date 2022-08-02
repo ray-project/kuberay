@@ -184,6 +184,7 @@ var myRayService = &RayService{
 					},
 				},
 			},
+			Envs: map[string]string{},
 		},
 	},
 }
@@ -366,6 +367,8 @@ var expected = `{
                }
             }
          ],
+         "envs":{
+		 },
          "rayVersion":"1.12.1"
       }
    },
