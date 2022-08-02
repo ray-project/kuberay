@@ -488,7 +488,6 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 }
 
 func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
-	t.Log("TestHeadPodTemplate_WithAutoscalingEnabled called")
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))

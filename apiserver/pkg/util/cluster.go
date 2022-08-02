@@ -23,7 +23,6 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 	computeTemplate := computeTemplateMap[apiCluster.ClusterSpec.HeadGroupSpec.ComputeTemplate]
 	headPodTemplate := buildHeadPodTemplate(apiCluster, apiCluster.ClusterSpec.HeadGroupSpec, computeTemplate)
 	headReplicas := int32(1)
-	//log.Info("NewRayCluster: ", "HeadGroupSpec.Envs", apiCluster.ClusterSpec.HeadGroupSpec.Envs)
 	rayCluster := &rayclusterapi.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
