@@ -125,6 +125,9 @@ var instance = rayiov1alpha1.RayCluster{
 				},
 			},
 		},
+		Envs: map[string]string{
+			"TEST_ENV_NAME": "TEST_ENV_VALUE",
+		},
 	},
 }
 
@@ -274,19 +277,19 @@ func TestGetHeadPort(t *testing.T) {
 	}
 }
 
-func checkRayAddress(t *testing.T, pod v1.Pod, expectedRayAddress string) {
+func checkPodEnv(t *testing.T, pod v1.Pod, envName string, expectedValue string) {
 	foundEnv := false
 	for _, env := range pod.Spec.Containers[0].Env {
-		if env.Name == RAY_ADDRESS {
-			if !(env.Value == expectedRayAddress) {
-				t.Fatalf("Expected `%v` but got `%v`", expectedRayAddress, env.Value)
+		if env.Name == envName {
+			if !(env.Value == expectedValue) {
+				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
 			}
 			foundEnv = true
 			break
 		}
 	}
 	if !foundEnv {
-		t.Fatalf("Couldn't find RAY_ADDRESS env on pod.")
+		t.Fatalf("Couldn't find `%v` env on pod.", envName)
 	}
 }
 
@@ -300,7 +303,7 @@ func TestBuildPod(t *testing.T) {
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil, "", cluster.Spec.Envs)
 
 	// Check RAY_ADDRESS env.
-	checkRayAddress(t, pod, "127.0.0.1:6379")
+	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
 
 	// Check labels.
 	actualResult := pod.Labels[RayClusterLabelKey]
@@ -340,7 +343,7 @@ func TestBuildPod(t *testing.T) {
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, "6379", nil, "", cluster.Spec.Envs)
 
 	// Check RAY_ADDRESS env
-	checkRayAddress(t, pod, "raycluster-sample-head-svc:6379")
+	checkPodEnv(t, pod, RAY_ADDRESS, "raycluster-sample-head-svc:6379")
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", svcName)
@@ -354,6 +357,9 @@ func TestBuildPod(t *testing.T) {
 	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
 	}
+
+	// Check Envs
+	checkPodEnv(t, pod, "TEST_ENV_NAME", "TEST_ENV_VALUE")
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
