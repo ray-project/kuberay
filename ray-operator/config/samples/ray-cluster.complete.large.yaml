@@ -79,7 +79,7 @@ spec:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7 
-    # the following params are used to complete the ray start: ray start --block
+    # the following params are used to complete the ray start: ray start --block ...
     rayStartParams:
       block: 'true'
     #pod template
