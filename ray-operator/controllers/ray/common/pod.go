@@ -304,7 +304,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	if !strings.Contains(cmd, "ray start") {
 		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
 		// replacing the old command
-		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
+		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
