@@ -591,11 +591,6 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 	}
 
 	// Set all fields in envs to the container.
-	//for k, v := range envs {
-	//	container.Env = append(container.Env, v1.EnvVar{
-	//		Name: k, Value: v,
-	//	})
-	//}
 	container.Env = append(container.Env, envs...)
 }
 
