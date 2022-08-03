@@ -12,7 +12,7 @@ metadata:
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
   rayVersion: '1.13.0'
-  # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
+  # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head container.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
