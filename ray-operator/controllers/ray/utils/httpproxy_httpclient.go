@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -50,6 +51,11 @@ func (r *RayHttpProxyClient) CheckHealth() error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("RayHttpProxyClient CheckHealth fail: %s %s", resp.Status, string(body))
+	}
 
 	return nil
 }
