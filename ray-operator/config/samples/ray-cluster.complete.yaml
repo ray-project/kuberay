@@ -7,17 +7,19 @@ kind: RayCluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-    # An unique identifier for the head node and workers of this cluster.
+    # A unique identifier for the head node and workers of this cluster.
   name: raycluster-complete
 spec:
   rayVersion: '1.11.0'
-  ######################headGroupSpecs#################################
+  ######################headGroupSpec#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
     # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
     replicas: 1
+    # logical group name, for this called head-group, also can be functional
+    # pod type head or worker
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
@@ -82,9 +84,6 @@ spec:
           rayCluster: raycluster-complete # will be injected if missing
           rayNodeType: worker # will be injected if missing
           groupName: small-group # will be injected if missing
-        # annotations for pod
-        annotations:
-          key: value
       spec:
         initContainers:
         # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
