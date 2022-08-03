@@ -73,7 +73,7 @@ spec:
     template:
       spec:
         containers:
-        # The Ray head pod
+        # The Ray head container
         - name: ray-head
           image: rayproject/ray:1.13.0
           imagePullPolicy: Always
