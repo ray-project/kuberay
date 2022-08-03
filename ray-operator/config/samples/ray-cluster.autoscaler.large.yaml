@@ -77,17 +77,6 @@ spec:
         - name: ray-head
           image: rayproject/ray:1.13.0
           imagePullPolicy: Always
-          ports:
-          - containerPort: 6379
-            name: gcs
-          - containerPort: 8265
-            name: dashboard
-          - containerPort: 10001
-            name: client
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
@@ -99,6 +88,17 @@ spec:
             requests:
               cpu: 14
               memory: 54Gi
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh","-c","ray stop"]
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
