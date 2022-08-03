@@ -18,16 +18,9 @@ spec:
     serviceType: ClusterIP
     # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
     replicas: 1
-    # logical group name, for this called head-group, also can be functional
-    # pod type head or worker
-    # rayNodeType: head # Not needed since it is under the headgroup
-    # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
+    # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
-      port: '6379'
-      object-store-memory: '100000000'
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
-      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
     #pod template
     template:
@@ -45,31 +38,6 @@ spec:
         containers:
         - name: ray-head
           image: rayproject/ray:1.11.0
-          env:
-          - name: CPU_REQUEST
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: requests.cpu
-          - name: CPU_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: limits.cpu
-          - name: MEMORY_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: limits.memory
-          - name: MEMORY_REQUESTS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: requests.memory
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
           ports:
           - containerPort: 6379
             name: gcs
@@ -104,10 +72,8 @@ spec:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7 
-    # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
+    # the following params are used to complete the ray start: ray start --block
     rayStartParams:
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
-      node-ip-address: $MY_POD_IP
       block: 'true'
     #pod template
     template:
@@ -131,41 +97,6 @@ spec:
           image: rayproject/ray:1.11.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
-          env:
-          - name:  RAY_DISABLE_DOCKER_CPU_WARNING
-            value: "1"
-          - name: TYPE
-            value: "worker"
-          - name: CPU_REQUEST
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: requests.cpu
-          - name: CPU_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: limits.cpu
-          - name: MEMORY_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: limits.memory
-          - name: MEMORY_REQUESTS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: requests.memory
-          - name: MY_POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
-          ports:
-          - containerPort: 80
           lifecycle:
             preStop:
               exec:
