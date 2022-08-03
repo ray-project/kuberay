@@ -63,17 +63,17 @@ spec:
   - replicas: 1
     minReplicas: 1
     maxReplicas: 10
-    # logical group name, for this called small-group, also can be functional
-    groupName: small-group
+    # logical group name, for this called large-group, also can be functional
+    groupName: large-group
     # if worker pods need to be added, we can simply increment the replicas
     # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
     # the operator will remove pods from the list until the number of replicas is satisfied
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - raycluster-complete-worker-small-group-bdtwh
-    #  - raycluster-complete-worker-small-group-hv457
-    #  - raycluster-complete-worker-small-group-k8tj7 
+    #  - raycluster-complete-worker-large-group-bdtwh
+    #  - raycluster-complete-worker-large-group-hv457
+    #  - raycluster-complete-worker-large-group-k8tj7 
     # the following params are used to complete the ray start: ray start --block
     rayStartParams:
       block: 'true'

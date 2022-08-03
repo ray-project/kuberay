@@ -102,11 +102,8 @@ spec:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
-    # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
+    # the following params are used to complete the ray start: ray start --block
     rayStartParams:
-      #redis-password: '5241590000000000'
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
-      node-ip-address: $MY_POD_IP
       block: 'true'
     #pod template
     template:
