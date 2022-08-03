@@ -18,10 +18,9 @@ spec:
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
-    # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
+    # for the head group, replicas should always be 1.
+    # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
     replicas: 1
-    # logical group name, for this called head-group, also can be functional
-    # pod type head or worker
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
