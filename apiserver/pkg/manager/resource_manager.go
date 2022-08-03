@@ -30,6 +30,11 @@ type ResourceManagerInterface interface {
 	GetComputeTemplate(ctx context.Context, name string, namespace string) (*v1.ConfigMap, error)
 	ListComputeTemplates(ctx context.Context, namespace string) ([]*v1.ConfigMap, error)
 	DeleteComputeTemplate(ctx context.Context, name string, namespace string) error
+	CreateJob(ctx context.Context, apiJob *api.RayJob) (*v1alpha1.RayJob, error)
+	GetJob(ctx context.Context, jobName string, namespace string) (*v1alpha1.RayJob, error)
+	ListJobs(ctx context.Context, namespace string) ([]*v1alpha1.RayJob, error)
+	ListAllJobs(ctx context.Context) ([]*v1alpha1.RayJob, error)
+	DeleteJob(ctx context.Context, jobName string, namespace string) error
 }
 
 type ResourceManager struct {
@@ -48,6 +53,10 @@ func (r *ResourceManager) getRayClusterClient(namespace string) rayiov1alpha1.Ra
 	return r.clientManager.ClusterClient().RayClusterClient(namespace)
 }
 
+func (r *ResourceManager) getRayJobClient(namespace string) rayiov1alpha1.RayJobInterface {
+	return r.clientManager.JobClient().RayJobClient(namespace)
+}
+
 func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv1.ConfigMapInterface {
 	return r.clientManager.KubernetesClient().ConfigMapClient(namespace)
 }
@@ -63,7 +72,7 @@ func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInter
 // clusters
 func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error) {
 	// populate cluster map
-	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiCluster)
+	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiCluster.ClusterSpec, apiCluster.Namespace)
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiCluster.Namespace, apiCluster.Name)
 	}
@@ -83,11 +92,11 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	return newRayCluster, nil
 }
 
-func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *api.Cluster) (map[string]*api.ComputeTemplate, error) {
+func (r *ResourceManager) populateComputeTemplate(ctx context.Context, clusterSpec *api.ClusterSpec, nameSpace string) (map[string]*api.ComputeTemplate, error) {
 	dict := map[string]*api.ComputeTemplate{}
 	// populate head compute template
-	name := cluster.ClusterSpec.HeadGroupSpec.ComputeTemplate
-	configMap, err := r.GetComputeTemplate(ctx, name, cluster.Namespace)
+	name := clusterSpec.HeadGroupSpec.ComputeTemplate
+	configMap, err := r.GetComputeTemplate(ctx, name, nameSpace)
 	if err != nil {
 		return nil, err
 	}
@@ -95,10 +104,10 @@ func (r *ResourceManager) populateComputeTemplate(ctx context.Context, cluster *
 	dict[name] = computeTemplate
 
 	// populate worker compute template
-	for _, spec := range cluster.ClusterSpec.WorkerGroupSpec {
+	for _, spec := range clusterSpec.WorkerGroupSpec {
 		name := spec.ComputeTemplate
 		if _, exist := dict[name]; !exist {
-			configMap, err := r.GetComputeTemplate(ctx, name, cluster.Namespace)
+			configMap, err := r.GetComputeTemplate(ctx, name, nameSpace)
 			if err != nil {
 				return nil, err
 			}
@@ -176,6 +185,100 @@ func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string,
 	if err := client.Delete(ctx, cluster.Name, metav1.DeleteOptions{}); err != nil {
 		// API won't need to delete the ray cluster CR
 		return util.NewInternalServerError(err, "Failed to delete cluster %v.", clusterName)
+	}
+
+	return nil
+}
+
+func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob) (*v1alpha1.RayJob, error) {
+	computeTemplateMap := make(map[string]*api.ComputeTemplate)
+	var err error
+
+	if apiJob.ClusterSpec != nil && len(apiJob.ClusterSelector) == 0 {
+		// populate cluster map
+		computeTemplateMap, err = r.populateComputeTemplate(ctx, apiJob.ClusterSpec, apiJob.Namespace)
+		if err != nil {
+			return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiJob.Namespace, apiJob.JobId)
+		}
+	}
+
+	// convert *api.Cluster to v1alpha1.RayCluster
+	rayJob := util.NewRayJob(apiJob, computeTemplateMap)
+
+	newRayJob, err := r.getRayJobClient(apiJob.Namespace).Create(ctx, rayJob.Get(), metav1.CreateOptions{})
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to create a job for (%s/%s)", apiJob.Namespace, apiJob.JobId)
+	}
+
+	return newRayJob, nil
+}
+
+func (r *ResourceManager) GetJob(ctx context.Context, jobName string, namespace string) (*v1alpha1.RayJob, error) {
+	client := r.getRayJobClient(namespace)
+	return getJobByName(ctx, client, jobName)
+}
+
+func (r *ResourceManager) ListJobs(ctx context.Context, namespace string) ([]*v1alpha1.RayJob, error) {
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
+	rayJobList, err := r.getRayJobClient(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	})
+	if err != nil {
+		return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
+	}
+
+	var result []*v1alpha1.RayJob
+	length := len(rayJobList.Items)
+	for i := 0; i < length; i++ {
+		result = append(result, &rayJobList.Items[i])
+	}
+
+	return result, nil
+}
+
+func (r *ResourceManager) ListAllJobs(ctx context.Context) ([]*v1alpha1.RayJob, error) {
+	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
+	}
+
+	var result []*v1alpha1.RayJob
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
+	for _, namespace := range namespaces.Items {
+		rayJobList, err := r.getRayJobClient(namespace.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		})
+		if err != nil {
+			return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace.Name))
+		}
+
+		length := len(rayJobList.Items)
+		for i := 0; i < length; i++ {
+			result = append(result, &rayJobList.Items[i])
+		}
+	}
+	return result, nil
+}
+
+func (r *ResourceManager) DeleteJob(ctx context.Context, jobName string, namespace string) error {
+	client := r.getRayJobClient(namespace)
+	job, err := getJobByName(ctx, client, jobName)
+	if err != nil {
+		return util.Wrap(err, "Get job failure")
+	}
+
+	// Delete Kubernetes resources
+	if err := client.Delete(ctx, job.Name, metav1.DeleteOptions{}); err != nil {
+		// API won't need to delete the ray cluster CR
+		return util.NewInternalServerError(err, "Failed to delete cluster %v.", jobName)
 	}
 
 	return nil
@@ -275,6 +378,23 @@ func getClusterByName(ctx context.Context, client rayiov1alpha1.RayClusterInterf
 	}
 
 	return cluster, nil
+}
+
+// getJobByName returns the Kubernetes RayJob object by given name and client
+func getJobByName(ctx context.Context, client rayiov1alpha1.RayJobInterface, name string) (*v1alpha1.RayJob, error) {
+	job, err := client.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, util.NewNotFoundError(err, "Job %s not found", name)
+		}
+
+		return nil, util.Wrap(err, "Get Job failed")
+	}
+	if managedBy, ok := job.Labels[util.KubernetesManagedByLabelKey]; !ok || managedBy != util.ComponentName {
+		return nil, fmt.Errorf("RayCluster with name %s not managed by %s", name, util.ComponentName)
+	}
+
+	return job, nil
 }
 
 // getComputeTemplateByName returns the Kubernetes configmap object by given name and client

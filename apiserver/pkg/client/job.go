@@ -10,19 +10,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-type ClusterClientInterface interface {
-	RayClusterClient(namespace string) rayiov1alpha1.RayClusterInterface
+type JobClientInterface interface {
+	RayJobClient(namespace string) rayiov1alpha1.RayJobInterface
 }
 
-type RayClusterClient struct {
+type RayJobClient struct {
 	client rayiov1alpha1.RayV1alpha1Interface
 }
 
-func (cc RayClusterClient) RayClusterClient(namespace string) rayiov1alpha1.RayClusterInterface {
-	return cc.client.RayClusters(namespace)
+func (cc RayJobClient) RayJobClient(namespace string) rayiov1alpha1.RayJobInterface {
+	return cc.client.RayJobs(namespace)
 }
 
-func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) ClusterClientInterface {
+func NewRayJobClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) JobClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		glog.Fatalf("Failed to create RayCluster client. Error: %v", err)
@@ -30,6 +30,6 @@ func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options uti
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
 
-	rayClusterClient := rayclient.NewForConfigOrDie(cfg).RayV1alpha1()
-	return &RayClusterClient{client: rayClusterClient}
+	rayJobClient := rayclient.NewForConfigOrDie(cfg).RayV1alpha1()
+	return &RayJobClient{client: rayJobClient}
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/golang/glog"
+
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -31,9 +33,7 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 	}
 
 	// loop container and find the resource
-	pbCluster.ClusterSpec = &api.ClusterSpec{}
-	pbCluster.ClusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(cluster.Spec.HeadGroupSpec)
-	pbCluster.ClusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(cluster.Spec.WorkerGroupSpecs)
+	pbCluster.ClusterSpec = PopulateRayClusterSpec(cluster.Spec)
 
 	// parse events
 	for _, event := range events {
@@ -56,6 +56,13 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 		pbCluster.ServiceEndpoint[name] = port
 	}
 	return pbCluster
+}
+
+func PopulateRayClusterSpec(spec v1alpha1.RayClusterSpec) *api.ClusterSpec {
+	clusterSpec := &api.ClusterSpec{}
+	clusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(spec.HeadGroupSpec)
+	clusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(spec.WorkerGroupSpecs)
+	return clusterSpec
 }
 
 func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
@@ -110,4 +117,51 @@ func FromKubeToAPIComputeTemplates(configMaps []*v1.ConfigMap) []*api.ComputeTem
 		apiComputeTemplates = append(apiComputeTemplates, FromKubeToAPIComputeTemplate(configMap))
 	}
 	return apiComputeTemplates
+}
+
+func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
+	apiJobs := make([]*api.RayJob, 0)
+	for _, job := range jobs {
+		apiJobs = append(apiJobs, FromCrdToApiJob(job))
+	}
+	return apiJobs
+}
+
+func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			glog.Errorf("failed to transfer ray job, err: %v, item: %v", err, job)
+		}
+	}()
+
+	var ttl int32 = -1
+	if job.Spec.TTLSecondsAfterFinished != nil {
+		ttl = *job.Spec.TTLSecondsAfterFinished
+	}
+
+	var deleteTime int64 = -1
+	if job.DeletionTimestamp != nil {
+		deleteTime = job.DeletionTimestamp.Unix()
+	}
+
+	pbJob = &api.RayJob{
+		Name:                     job.Name,
+		Namespace:                job.Namespace,
+		User:                     job.Labels[util.RayClusterUserLabelKey],
+		Entrypoint:               job.Spec.Entrypoint,
+		Metadata:                 job.Spec.Metadata,
+		RuntimeEnv:               job.Spec.RuntimeEnv,
+		JobId:                    job.Status.JobId,
+		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
+		ClusterSelector:          job.Spec.ClusterSelector,
+		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
+		TtlSecondsAfterFinished:  ttl,
+		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
+		DeleteAt:                 &timestamp.Timestamp{Seconds: deleteTime},
+		JobStatus:                string(job.Status.JobStatus),
+		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
+		Message:                  job.Status.Message,
+	}
+	return pbJob
 }

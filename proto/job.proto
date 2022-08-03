@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "cluster.proto";
+
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  schemes: HTTP;
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+service RayJobService {
+  // Creates a new compute template.
+  rpc CreateRayJob(CreateRayJobRequest) returns (RayJob) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha2/jobs"
+      body: "job"
+    };
+  }
+
+  // Finds a specific compute template by its name and namespace.
+  rpc GetRayJob(GetRayJobRequest) returns (RayJob) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
+    };
+  }
+
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListRayJobs(ListRayJobsRequest) returns (ListRayJobsResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/namespaces/{namespace}/jobs"
+    };
+  }
+
+  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListAllRayJobs(ListAllRayJobsRequest) returns (ListAllRayJobsResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/jobs"
+    };
+  }
+
+  // Deletes a compute template by its name and namespace 
+  rpc DeleteRayJob(DeleteRayJobRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
+    };
+  }
+}
+
+message CreateRayJobRequest {
+  // The compute template to be created.
+  RayJob job = 1;
+  // The namespace of the compute template to be created
+  string namespace = 2;
+}
+
+message GetRayJobRequest {
+  // The name of the RayJob to be retrieved.
+  string name = 1;
+  // The namespace of the compute template to be retrieved.
+  string namespace = 2;
+}
+
+message ListRayJobsRequest {
+  // The namespace of the compute templates to be retrieved. 
+  string namespace = 1;
+  // TODO: support paganation later
+}
+
+message ListRayJobsResponse {
+  repeated RayJob jobs = 1;
+}
+
+message ListAllRayJobsRequest {
+  // TODO: support paganation later
+}
+
+message ListAllRayJobsResponse {
+  repeated RayJob jobs = 1;
+}
+
+message DeleteRayJobRequest {
+  // The name of the compute template to be deleted.
+  string name = 1;
+  // The namespace of the compute template to be deleted.
+  string namespace = 2;
+}
+
+// RayJob
+message RayJob {
+  // Required input field. Unique job name provided by user.
+  string name = 1;
+  // Required input field. job namespace provided by user
+  string namespace = 2;
+  // Required field. This field indicates the user who owns the job.
+  string user = 3;
+  // The entrypoint of the RayJob
+  string entrypoint = 4;
+  // Metadata is data to store along with this job.
+  map<string, string> metadata = 5;
+  // RuntimeEnv is base64 encoded string which stores runtime configuration
+  string runtime_env = 6;
+  // If jobId is not set, a new jobId will be auto-generated.
+  string job_id = 7;
+  // If set to true, the rayCluster will be deleted after the rayJob finishes
+  bool ShutdownAfterJobFinishes = 8;
+  // The label selector to choose exiting clusters
+  map<string, string> cluster_selector = 9;
+  // The cluster template
+  ClusterSpec cluster_spec = 10;
+  // TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+  int32 ttl_seconds_after_finished = 11;
+  // Output. The time that the job created.
+  google.protobuf.Timestamp created_at = 12;
+  // Output. The time that the job deleted.     
+  google.protobuf.Timestamp delete_at = 13;
+  // Output. The current job status
+  string job_status = 14;
+  // Output. The current job deployment status
+  string job_deployment_status = 15;
+  // Output. A human-readable description of the status of this operation.
+  string message = 16;
+}
