@@ -39,7 +39,6 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 				RayStartParams: apiCluster.ClusterSpec.HeadGroupSpec.RayStartParams,
 			},
 			WorkerGroupSpecs: []rayclusterapi.WorkerGroupSpec{},
-			Envs:             apiCluster.Envs,
 		},
 	}
 
@@ -176,6 +175,11 @@ func buildHeadPodTemplate(cluster *api.Cluster, spec *api.HeadGroupSpec, compute
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
+	for k, v := range cluster.Envs {
+		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+			Name: k, Value: v,
+		})
+	}
 	return podTemplateSpec
 }
 
@@ -324,6 +328,11 @@ func buildWorkerPodTemplate(cluster *api.Cluster, spec *api.WorkerGroupSpec, com
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
+	for k, v := range cluster.Envs {
+		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+			Name: k, Value: v,
+		})
+	}
 	return podTemplateSpec
 }
 
