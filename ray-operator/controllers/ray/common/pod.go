@@ -267,7 +267,7 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string, envs []v1.EnvVar) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -325,7 +325,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator, envs)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
 	// health check only if HA enabled
 	if podTemplateSpec.Annotations != nil {
@@ -532,7 +532,7 @@ func setInitContainerEnvVars(container *v1.Container, svcName string) {
 	}
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string, envs []v1.EnvVar) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string) {
 	// set IP to local host if head, or the the svc otherwise  RAY_IP
 	// set the port RAY_PORT
 	// set the password?
@@ -589,9 +589,6 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			}
 		}
 	}
-
-	// Set all fields in envs to the container.
-	container.Env = append(container.Env, envs...)
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
