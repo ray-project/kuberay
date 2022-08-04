@@ -20,7 +20,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 	var clusterSpec rayalphaapi.RayClusterSpec
 
 	if apiJob.ClusterSpec != nil && len(apiJob.ClusterSelector) == 0 {
-		clusterSpec = *buildRayClusterSpec(rayJobDefaultVersion, apiJob.ClusterSpec, computeTemplateMap)
+		clusterSpec = *buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
 	}
 
 	// transfer json to runtimeEnv
