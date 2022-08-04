@@ -26,7 +26,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 			Labels:      buildRayClusterLabels(apiCluster),
 			Annotations: buildRayClusterAnnotations(apiCluster),
 		},
-		Spec: *buildRayClusterSpec(apiCluster.Version, apiCluster.ClusterSpec, computeTemplateMap),
+		Spec: *buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap),
 	}
 
 	return &RayCluster{rayCluster}
@@ -49,9 +49,11 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 	return annotations
 }
 
-func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayClusterSpec {
+// TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
+// such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
+func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayClusterSpec {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
-	headPodTemplate := buildHeadPodTemplate(imageVersion, clusterSpec.HeadGroupSpec, computeTemplate)
+	headPodTemplate := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
 	headReplicas := int32(1)
 	rayClusterSpec := &rayalphaapi.RayClusterSpec{
 		RayVersion: imageVersion,
@@ -66,7 +68,7 @@ func buildRayClusterSpec(imageVersion string, clusterSpec *api.ClusterSpec, comp
 
 	for _, spec := range clusterSpec.WorkerGroupSpec {
 		computeTemplate = computeTemplateMap[spec.ComputeTemplate]
-		workerPodTemplate := buildWorkerPodTemplate(imageVersion, spec, computeTemplate)
+		workerPodTemplate := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate)
 
 		minReplicas := spec.Replicas
 		maxReplicas := spec.Replicas
@@ -99,7 +101,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
-func buildHeadPodTemplate(imageVersion string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -180,7 +182,7 @@ func buildHeadPodTemplate(imageVersion string, spec *api.HeadGroupSpec, computeR
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
-	for k, v := range cluster.Envs {
+	for k, v := range envs {
 		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
 			Name: k, Value: v,
 		})
@@ -192,7 +194,7 @@ func constructRayImage(containerImage string, version string) string {
 	return fmt.Sprintf("%s:%s", containerImage, version)
 }
 
-func buildWorkerPodTemplate(imageVersion string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -333,7 +335,7 @@ func buildWorkerPodTemplate(imageVersion string, spec *api.WorkerGroupSpec, comp
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
-	for k, v := range cluster.Envs {
+	for k, v := range envs {
 		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
 			Name: k, Value: v,
 		})
