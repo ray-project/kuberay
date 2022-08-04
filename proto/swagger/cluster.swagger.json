@@ -299,6 +299,13 @@
             "type": "string"
           },
           "title": "Output. The service endpoint of the cluster"
+        },
+        "envs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional input field. Container environment variables from user."
         }
       }
     },

@@ -180,6 +180,11 @@ func buildHeadPodTemplate(imageVersion string, spec *api.HeadGroupSpec, computeR
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
+	for k, v := range cluster.Envs {
+		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+			Name: k, Value: v,
+		})
+	}
 	return podTemplateSpec
 }
 
@@ -328,6 +333,11 @@ func buildWorkerPodTemplate(imageVersion string, spec *api.WorkerGroupSpec, comp
 		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 	}
 
+	for k, v := range cluster.Envs {
+		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+			Name: k, Value: v,
+		})
+	}
 	return podTemplateSpec
 }
 

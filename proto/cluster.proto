@@ -161,6 +161,9 @@ message Cluster {
   
   // Output. The service endpoint of the cluster
   map<string, string> service_endpoint = 11;
+
+  // Optional input field. Container environment variables from user.
+  map<string, string> envs = 12;
 }
 
 message ClusterSpec {
