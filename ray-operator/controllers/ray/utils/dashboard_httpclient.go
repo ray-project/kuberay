@@ -178,6 +178,9 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 	defer resp.Body.Close()
 
 	body, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("GetDeployments fail: %s %s", resp.Status, string(body))
+	}
 
 	return string(body), nil
 }
@@ -210,6 +213,11 @@ func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeployment
 	}
 	defer resp.Body.Close()
 
+	body, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
+	}
+
 	return nil
 }
 
@@ -227,6 +235,10 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, e
 	defer resp.Body.Close()
 
 	body, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("GetDeploymentsStatus fail: %s %s", resp.Status, string(body))
+	}
 
 	var serveStatuses ServeDeploymentStatuses
 	if err = json.Unmarshal(body, &serveStatuses); err != nil {
