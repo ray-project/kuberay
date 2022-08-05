@@ -564,6 +564,14 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			deathEnv := v1.EnvVar{Name: RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}
 			container.Env = append(container.Env, deathEnv)
 		}
+		if !envVarExists(RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
+			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
+			container.Env = append(container.Env, gcsTimeoutEnv)
+		}
+		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
+			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
+			container.Env = append(container.Env, serveKvTimeoutEnv)
+		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
