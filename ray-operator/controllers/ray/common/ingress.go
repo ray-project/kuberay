@@ -43,7 +43,7 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
-					Name: utils.GenerateServiceName(cluster.Name),
+					Name: utils.CheckName(utils.GenerateServiceName(cluster.Name)),
 					Port: networkingv1.ServiceBackendPort{
 						Number: dashboardPort,
 					},
