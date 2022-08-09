@@ -72,6 +72,7 @@ const (
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
+	SERVE_DEPLOYMENT_HANDLE_IS_SYNC         = "SERVE_DEPLOYMENT_HANDLE_IS_SYNC"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"

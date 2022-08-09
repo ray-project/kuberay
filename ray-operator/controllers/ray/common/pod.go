@@ -568,6 +568,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
 		}
+		if !envVarExists(SERVE_DEPLOYMENT_HANDLE_IS_SYNC, container.Env) {
+			serveHandleSync := v1.EnvVar{Name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC, Value: "1"}
+			container.Env = append(container.Env, serveHandleSync)
+		}
 		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
