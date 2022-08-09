@@ -226,16 +226,16 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNode
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
@@ -249,16 +249,16 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
