@@ -4,8 +4,11 @@ on:
   push:
     branches:
     - master
+    - release-0.3
   pull_request:
-    branches: [ master ]
+    branches: 
+    - master
+    - release-0.3
 
 jobs:
   lint:
