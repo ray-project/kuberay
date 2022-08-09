@@ -226,16 +226,16 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNode
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
@@ -249,16 +249,16 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
@@ -567,6 +567,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		if !envVarExists(RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
 			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
+		}
+		if !envVarExists(SERVE_DEPLOYMENT_HANDLE_IS_SYNC, container.Env) {
+			serveHandleSync := v1.EnvVar{Name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC, Value: "1"}
+			container.Env = append(container.Env, serveHandleSync)
 		}
 		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
