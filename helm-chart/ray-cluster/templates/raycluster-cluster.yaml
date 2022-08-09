@@ -5,6 +5,12 @@ metadata:
 {{ include "ray-cluster.labels" . | indent 4 }}
   name: {{ include "ray-cluster.fullname" . }}
 spec:
+  {{- if .Values.head.rayVersion }}
+  rayVersion: {{ .Values.head.rayVersion }}
+  {{- end }}
+  {{- if .Values.head.enableInTreeAutoscaling }}
+  enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
+  {{- end }}
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:
