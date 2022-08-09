@@ -52,6 +52,8 @@ head:
 
 
 worker:
+  ## If you want to disable the default worker group
+  # disabled: true
   groupName: workergroup
   replicas: 1
   type: worker
@@ -99,6 +101,82 @@ worker:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+
+extraWorkers:
+  generic:
+    disabled: true
+    type: worker
+    annotations: {}
+    labels: {}
+    rayStartParams:
+      redis-password: 'LetMeInRay'
+      node-ip-address: $MY_POD_IP
+      block: 'true'
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 3 # sane default for testing ray cluster
+    containerExtraEnv: {}
+    containerDefaultEnv:
+    - name: CPU_REQUEST
+      valueFrom:
+        resourceFieldRef:
+          containerName: generic
+          resource: requests.cpu
+    - name: CPU_LIMITS
+      valueFrom:
+        resourceFieldRef:
+          containerName: generic
+          resource: limits.cpu
+    - name: MEMORY_LIMITS
+      valueFrom:
+        resourceFieldRef:
+          containerName: generic
+          resource: limits.memory
+    - name: MEMORY_REQUESTS
+      valueFrom:
+        resourceFieldRef:
+          containerName: generic
+          resource: requests.memory
+    - name: MY_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name:  RAY_DISABLE_DOCKER_CPU_WARNING
+      value: "1"
+    - name: TYPE
+      value: "worker"
+    ports:
+      http: 80
+    resources:
+      limits:
+        cpu: "1"
+      requests:
+        cpu: "200m"
+    initContainers:
+      init-generic:
+        image: busybox:1.28
+        command:
+        - 'sh'
+        - '-c'
+        - "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for generic; sleep 2; done"
+    lifecycle:
+      preStop:
+        exec:
+          command: ["/bin/sh","-c","ray stop"]
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+    volumes:
+    - name: log-volume
+      emptyDir: {}
+    volumeMounts:
+    - mountPath: /tmp/ray
+      name: log-volume
+
 
 headServiceSuffix: "ray-operator.svc"
 

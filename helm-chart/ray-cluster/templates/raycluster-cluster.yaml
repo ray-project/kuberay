@@ -47,6 +47,113 @@ spec:
 {{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
+  {{- range $groupName, $values := .Values.extraWorkers }}
+  {{- if ne $values.disabled "true" }}
+  - groupName: {{ $groupName | quote }}
+    replicas: {{ $values.replicas }}
+    minReplicas: {{ $values.minReplicas | default 1 }}
+    maxReplicas: {{ $values.maxReplicas | default 2147483647 }}
+    {{- if $values.rayStartParams }}
+    rayStartParams:
+    {{- range $key, $val := $values.rayStartParams }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    {{- end }}
+    template:
+      metadata:
+        labels:
+          rayNodeType: {{ $values.type }}
+          groupName: {{ $groupName }}
+          rayCluster: {{ include "ray-cluster.fullname" $ }}
+{{ include "ray-cluster.labels" $ | indent 10 }}
+          {{- range $key, $val := $values.labels }}
+          {{ $key }}: {{ $val | quote }}
+          {{- end }}
+        {{- if $values.annotations }}
+        annotations:
+        {{- range $key, $val := $values.annotations }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+        {{- end }}
+      spec:
+        {{- if $values.nodeSelector }}
+        nodeSelector:
+        {{- toYaml $values.nodeSelector | nindent 10 }}
+        {{- end }}
+        {{- if $values.tolerations }}
+        tolerations:
+        {{- toYaml $values.tolerations | nindent 10 }}
+        {{- end }}
+        {{- if $values.affinity }}
+        affinity: {{- toYaml $values.affinity | nindent 10 }}
+        {{- end }}
+        {{- if $values.initContainers }}
+        initContainers:
+        {{- range $key, $val := $values.initContainers }}
+        - name: {{ $key }}
+          image: {{ $val.image }}
+          command:
+          {{- range $k, $v := $val.command }}
+          - {{ $v }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        containers:
+        - name: {{ $groupName }}
+          image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- if $values.args }}
+          args:
+          {{- range $key, $val := $values.args }}
+          - {{ $val }}
+          {{- end }}
+          {{- end }}
+          {{- if $values.command }}
+          command:
+          {{- range $key, $val := $values.command }}
+          - {{ $val }}
+          {{- end }}
+          {{- end }}
+          {{- if or $values.containerDefaultEnv $values.containerExtraEnv }}
+          env:
+          {{- if $values.containerDefaultEnv }}
+          {{- toYaml $values.containerDefaultEnv | nindent 10}}
+          {{- end }}
+          {{- if $values.containerExtraEnv }}
+          {{- toYaml $values.containerExtraEnv | nindent 10}}
+          {{- end }}
+          {{- end }}
+          {{- if $values.ports }}
+          ports:
+          {{- range $key, $val := $values.ports }}
+          - containerPort: {{ $val }}
+            name: {{ $key | quote }}
+          {{- end }}
+          {{- end }}
+          {{- if $values.lifecycle }}
+          lifecycle:
+          {{- toYaml $values.lifecycle | nindent 12 }}
+          {{- end }}
+          {{- if $values.resources }}
+          resources:
+            {{- if $values.resources.limits }}
+            limits:
+            {{- toYaml $values.resources.limits | nindent 14 }}
+            {{- end }}
+            {{- if $values.resources.requests }}
+            requests:
+            {{- toYaml $values.resources.requests | nindent 14 }}
+            {{- end }}
+          {{- end }}
+          {{- if $values.volumeMounts }}
+          volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
+          {{- end }}
+        {{- if $values.volumes }}
+        volumes: {{- toYaml $values.volumes | nindent 10 }}
+        {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- if ne .Values.worker.disabled "true" }}
   - rayStartParams:
     {{- range $key, $val := .Values.worker.initArgs }}
       {{ $key }}: {{ $val | quote }}
@@ -87,3 +194,4 @@ spec:
           groupName: {{ .Values.worker.groupName }}
           rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
+  {{- end }}
