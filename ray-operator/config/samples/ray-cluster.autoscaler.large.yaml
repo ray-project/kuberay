@@ -3,7 +3,7 @@
 # with capacity to scale up to 10 worker pods.
 # Each pod requests 54 Gi memory and 14 CPU.
 # Each pod can be scheduled on a virtual machine with roughly 64 Gi memory and 16 CPU.
-# (AWS: m5.2xlarge, GCP: e2-standard-16, Azure: Standard_D5_v2)
+# (AWS: m5.4xlarge, GCP: e2-standard-16, Azure: Standard_D5_v2)
 # Optimal resource allocation will depend on your Kubernetes infrastructure and might
 # require some experimentation.
 
@@ -16,8 +16,8 @@ kind: RayCluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-    # An unique identifier for the head node and workers of this cluster.
-  name: raycluster-autoscaler-large
+    # A unique identifier for the head node and workers of this cluster.
+  name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
   rayVersion: '1.13.0'
@@ -37,7 +37,9 @@ spec:
     # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     idleTimeoutSeconds: 60
     # image optionally overrides the autoscaler's container image.
-    image: "rayproject/ray:0860dd"
+    # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will default to the same image as
+    # the ray container by. For older Ray versions, the autoscaler will default to using the Ray 2.0.0 image.
+    ## image: "my-repo/my-custom-autoscaler-image:tag"
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
     imagePullPolicy: Always
     # resources specifies optional resource request and limit overrides for the autoscaler container.
@@ -49,7 +51,7 @@ spec:
       requests:
         cpu: "500m"
         memory: "512Mi"
-  ######################headGroupSpecs#################################
+  ######################headGroupSpec#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
@@ -59,16 +61,13 @@ spec:
     # rayNodeType: head # Not needed since it is under the headgroup
     # the following params are used to complete the ray start: ray start --head --block --port=6379 ...
     rayStartParams:
-      # Flag "no-monitor" must be set when running the autoscaler in
-      # a sidecar container.
-      port: '6379'
+      # Flag "no-monitor" will be automatically set when autoscaling is enabled.
       dashboard-host: '0.0.0.0'
-      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
       block: 'true'
-      num-cpus: '1' # can be auto-completed from the limits
+      # num-cpus: '14' # can be auto-completed from the limits
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
-      # Currently, `resources` must be provided in the unfortunate format demonstrated below:
+      # Currently, `resources` must be provided in the specific format demonstrated below:
       # resources: '"{\"Custom1\": 1, \"Custom2\": 5}"'
     #pod template
     template:
@@ -84,36 +83,11 @@ spec:
           # resource accounting. K8s requests are not used by Ray.
           resources:
             limits:
-              cpu: "14"
-              memory: "54Gi"
+              cpu: 14
+              memory: 54Gi
             requests:
-              cpu: "14"
-              memory: "54Gi"
-          env:
-          - name: CPU_REQUEST
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: requests.cpu
-          - name: CPU_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: limits.cpu
-          - name: MEMORY_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: limits.memory
-          - name: MEMORY_REQUESTS
-            valueFrom:
-              resourceFieldRef:
-                containerName: ray-head
-                resource: requests.memory
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
+              cpu: 14
+              memory: 54Gi
           ports:
           - containerPort: 6379
             name: gcs
@@ -130,7 +104,7 @@ spec:
   - replicas: 1
     minReplicas: 1
     maxReplicas: 10
-    # logical group name, for this called small-group, also can be functional
+    # logical group name, for this called large-group, also can be functional
     groupName: large-group
     # if worker pods need to be added, we can simply increment the replicas
     # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
@@ -138,14 +112,11 @@ spec:
     # when a pod is confirmed to be deleted, its name will be removed from the list below
     #scaleStrategy:
     #  workersToDelete:
-    #  - raycluster-complete-worker-small-group-bdtwh
-    #  - raycluster-complete-worker-small-group-hv457
-    #  - raycluster-complete-worker-small-group-k8tj7
+    #  - raycluster-complete-worker-large-group-bdtwh
+    #  - raycluster-complete-worker-large-group-hv457
+    #  - raycluster-complete-worker-large-group-k8tj7
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
     rayStartParams:
-      #redis-password: '5241590000000000'
-      redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
-      node-ip-address: $MY_POD_IP
       block: 'true'
     #pod template
     template:
@@ -170,48 +141,11 @@ spec:
           # resource accounting. K8s requests are not used by Ray.
           resources:
             limits:
-              cpu: "14"
-              memory: "54Gi"
+              cpu: 14
+              memory: 54Gi
             requests:
-              cpu: "14"
-              memory: "54Gi"
-          # environment variables to set in the container.Optional.
-          # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
-          env:
-          - name: RAY_DISABLE_DOCKER_CPU_WARNING
-            value: "1"
-          - name: TYPE
-            value: "worker"
-          - name: CPU_REQUEST
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: requests.cpu
-          - name: CPU_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: limits.cpu
-          - name: MEMORY_LIMITS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: limits.memory
-          - name: MEMORY_REQUESTS
-            valueFrom:
-              resourceFieldRef:
-                containerName: machine-learning
-                resource: requests.memory
-          - name: MY_POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
-          ports:
-          - containerPort: 80
+              cpu: 14
+              memory: 54Gi
           lifecycle:
             preStop:
               exec:
