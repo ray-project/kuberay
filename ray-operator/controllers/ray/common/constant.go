@@ -73,6 +73,7 @@ const (
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
 	SERVE_DEPLOYMENT_HANDLE_IS_SYNC         = "SERVE_DEPLOYMENT_HANDLE_IS_SYNC"
+	SERVE_CONTROLLER_PIN_ON_NODE            = "RAY_INTERNAL_SERVE_CONTROLLER_PIN_ON_NODE"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
