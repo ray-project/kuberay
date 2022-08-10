@@ -34,6 +34,9 @@ spec:
             {{- with .Values.head.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
+            {{- if .Values.head.ports }}
+            ports: {{- toYaml .Values.head.ports | nindent 14}}
+            {{- end }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
@@ -133,3 +136,4 @@ spec:
           rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
   {{- end }}
+
