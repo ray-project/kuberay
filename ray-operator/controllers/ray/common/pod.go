@@ -576,6 +576,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
 		}
+		if !envVarExists(SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
+			servePinOnNode := v1.EnvVar{Name: SERVE_CONTROLLER_PIN_ON_NODE, Value: "0"}
+			container.Env = append(container.Env, servePinOnNode)
+		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
