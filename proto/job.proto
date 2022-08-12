@@ -25,7 +25,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 };
 
 service RayJobService {
-  // Creates a new compute template.
+  // Creates a new job.
   rpc CreateRayJob(CreateRayJobRequest) returns (RayJob) {
     option (google.api.http) = {
       post: "/apis/v1alpha2/jobs"
@@ -33,28 +33,28 @@ service RayJobService {
     };
   }
 
-  // Finds a specific compute template by its name and namespace.
+  // Finds a specific job by its name and namespace.
   rpc GetRayJob(GetRayJobRequest) returns (RayJob) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
     };
   }
 
-  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all job in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListRayJobs(ListRayJobsRequest) returns (ListRayJobsResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/jobs"
     };
   }
 
-  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all job in all namespaces. Supports pagination, and sorting on certain fields.
   rpc ListAllRayJobs(ListAllRayJobsRequest) returns (ListAllRayJobsResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/jobs"
     };
   }
 
-  // Deletes a compute template by its name and namespace 
+  // Deletes a job by its name and namespace.
   rpc DeleteRayJob(DeleteRayJobRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
@@ -63,21 +63,21 @@ service RayJobService {
 }
 
 message CreateRayJobRequest {
-  // The compute template to be created.
+  // The job to be created.
   RayJob job = 1;
-  // The namespace of the compute template to be created
+  // The namespace of the job to be created
   string namespace = 2;
 }
 
 message GetRayJobRequest {
-  // The name of the RayJob to be retrieved.
+  // The name of the job to be retrieved.
   string name = 1;
-  // The namespace of the compute template to be retrieved.
+  // The namespace of the job to be retrieved.
   string namespace = 2;
 }
 
 message ListRayJobsRequest {
-  // The namespace of the compute templates to be retrieved. 
+  // The namespace of the job to be retrieved. 
   string namespace = 1;
   // TODO: support paganation later
 }
@@ -95,13 +95,13 @@ message ListAllRayJobsResponse {
 }
 
 message DeleteRayJobRequest {
-  // The name of the compute template to be deleted.
+  // The name of the job to be deleted.
   string name = 1;
-  // The namespace of the compute template to be deleted.
+  // The namespace of the job to be deleted.
   string namespace = 2;
 }
 
-// RayJob
+// RayJob defination
 message RayJob {
   // Required input field. Unique job name provided by user.
   string name = 1;
@@ -118,7 +118,7 @@ message RayJob {
   // If jobId is not set, a new jobId will be auto-generated.
   string job_id = 7;
   // If set to true, the rayCluster will be deleted after the rayJob finishes
-  bool ShutdownAfterJobFinishes = 8;
+  bool shutdown_after_job_finishes = 8;
   // The label selector to choose exiting clusters
   map<string, string> cluster_selector = 9;
   // The cluster template
