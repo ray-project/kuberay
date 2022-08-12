@@ -8,6 +8,17 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
+// HeadServiceLabels returns the default labels for a cluster's head service.
+func HeadServiceLabels(cluster rayiov1alpha1.RayCluster) map[string]string {
+	return map[string]string{
+		RayClusterLabelKey:                cluster.Name,
+		RayNodeTypeLabelKey:               string(rayiov1alpha1.HeadNode),
+		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode)),
+		KubernetesApplicationNameLabelKey: ApplicationName,
+		KubernetesCreatedByLabelKey:       ComponentName,
+	}
+}
+
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]string) (*corev1.Service, error) {
@@ -15,13 +26,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		labels = make(map[string]string)
 	}
 
-	default_labels := map[string]string{
-		RayClusterLabelKey:                cluster.Name,
-		RayNodeTypeLabelKey:               string(rayiov1alpha1.HeadNode),
-		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode)),
-		KubernetesApplicationNameLabelKey: ApplicationName,
-		KubernetesCreatedByLabelKey:       ComponentName,
-	}
+	default_labels := HeadServiceLabels(cluster)
 
 	for k, v := range default_labels {
 		if _, ok := labels[k]; !ok {
