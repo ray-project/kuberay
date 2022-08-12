@@ -11471,7 +11471,7 @@ spec:
                 required:
                 - headGroupSpec
                 type: object
-              serveDeploymentGraphConfig:
+              serveConfig:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'
                 properties:
@@ -11479,7 +11479,7 @@ spec:
                     type: string
                   runtimeEnv:
                     type: string
-                  serveConfigs:
+                  deployments:
                     items:
                       description: ServeConfigSpec defines the desired state of RayService
                         Reference to http://rayserve.org

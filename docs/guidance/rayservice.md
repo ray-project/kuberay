@@ -130,7 +130,7 @@ Then you can open your web browser with the url localhost:8265 to see your Ray d
 
 ### Update Ray Serve Deployment Graph
 
-You can update the `serveDeploymentGraphConfig` in your RayService config file.
+You can update the `serveConfig` in your RayService config file.
 For example, if you update the mango price to 4 in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml).
 ```shell
   - name: MangoStand
