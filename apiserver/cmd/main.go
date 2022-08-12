@@ -87,7 +87,7 @@ func startHttpProxy() {
 			MarshalOptions: protojson.MarshalOptions{
 				UseProtoNames:  false,
 				UseEnumNumbers: true,
-				AllowPartial: true,
+				AllowPartial:   true,
 			},
 		}),
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
