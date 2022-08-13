@@ -26,9 +26,9 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 
 service RayServeService {
   // Create a new ray serve.
-  rpc CreateRayServe(CreateRayServiceRequest) returns (RayService) {
+  rpc CreateRayService(CreateRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/services"
+      post: "/apis/v1alpha2/namespaces/{namespace}/services"
       body: "service"
     };
   }
@@ -99,11 +99,11 @@ message ListAllRayServicesRequest {
   // A page token to request the next page of results. The token is acquried
   // from the nextPageToken field of the response from the previous
   // ListRayServices call or can be omitted when fetching the first page.
-  string page_token = 2;
+  string page_token = 1;
   // The number of RayServices to be listed per page. If there are more
   // RayServices than this number, the response message will contain a
   // nextPageToken field you can use to fetch the next page.
-  int32 page_size = 3;
+  int32 page_size = 2;
 }
 
 message ListAllRayServicesResponse {
@@ -168,8 +168,8 @@ message ServeConfig {
 
 message ActorOptions {
   string runtime_env = 1;
-  float cpus = 2;
-  float gpu = 3;
+  double cpus = 2;
+  double gpu = 3;
   int32 memory = 4;
   int32 object_store_memory = 5;
   string resource = 6;
@@ -189,6 +189,8 @@ message RayServiceStatus {
   string ray_cluster_name = 5;
   // The state for ray cluster.
   string ray_cluster_state = 6;
+  // The service endpoint of the cluster and service.
+  map<string, string> service_endpoint = 7;
 }
 
 message ServeDeploymentStatus {
@@ -198,8 +200,6 @@ message ServeDeploymentStatus {
   string status = 2;
   // A human-readable description of the status of this operation.
   string message = 3;
-  // The endpoint for sending request to the deployment. 
-  string endpoint = 4;
 }
 
 message RayServiceEvent {

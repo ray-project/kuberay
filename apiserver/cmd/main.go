@@ -59,6 +59,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 	api.RegisterClusterServiceServer(s, server.NewClusterServer(resourceManager, &server.ClusterServerOptions{CollectMetrics: *collectMetricsFlag}))
 	api.RegisterComputeTemplateServiceServer(s, server.NewComputeTemplateServer(resourceManager, &server.ComputeTemplateServerOptions{CollectMetrics: *collectMetricsFlag}))
 	api.RegisterRayJobServiceServer(s, server.NewRayJobServer(resourceManager, &server.JobServerOptions{CollectMetrics: *collectMetricsFlag}))
+	api.RegisterRayServeServiceServer(s, server.NewRayServiceServer(resourceManager, &server.ServiceServerOptions{CollectMetrics: *collectMetricsFlag}))
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -97,6 +98,7 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", ctx, runtimeMux)
+	registerHttpHandlerFromEndpoint(api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", ctx, runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()

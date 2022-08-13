@@ -11,6 +11,7 @@ import (
 type ClientManagerInterface interface {
 	ClusterClient() client.ClusterClientInterface
 	JobClient() client.JobClientInterface
+	ServiceClient() client.ServiceClientInterface
 	KubernetesClient() client.KubernetesClientInterface
 	Time() util.TimeInterface
 }
@@ -20,6 +21,7 @@ type ClientManager struct {
 	// Kubernetes clients
 	clusterClient    client.ClusterClientInterface
 	jobClient        client.JobClientInterface
+	serviceClient    client.ServiceClientInterface
 	kubernetesClient client.KubernetesClientInterface
 	// auxiliary tools
 	time util.TimeInterface
@@ -31,6 +33,10 @@ func (c *ClientManager) ClusterClient() client.ClusterClientInterface {
 
 func (c *ClientManager) JobClient() client.JobClientInterface {
 	return c.jobClient
+}
+
+func (c *ClientManager) ServiceClient() client.ServiceClientInterface {
+	return c.serviceClient
 }
 
 func (c *ClientManager) KubernetesClient() client.KubernetesClientInterface {
@@ -59,6 +65,7 @@ func (c *ClientManager) init() {
 	// 2. kubernetes client initialization
 	c.clusterClient = client.NewRayClusterClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
 	c.jobClient = client.NewRayJobClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
+	c.serviceClient = client.NewRayServiceClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
 	c.kubernetesClient = client.CreateKubernetesCoreOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
 
 	klog.Infof("Client manager initialized successfully")
