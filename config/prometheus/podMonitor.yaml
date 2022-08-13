@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ray-workers-monitor
+  namespace: prometheus-system
+spec:
+  jobLabel: ray-workers
+  namespaceSelector:
+    matchNames:
+      - default
+      - ray-system
+  selector:
+    matchLabels:
+      rayNodeType: worker
+      ray.io/node-type: worker
+      ray.io/is-ray-node: "yes"
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 1m
+    scrapeTimeout: 10s
+  # - targetPort: 90001
+  #   interval: 1m
+  #   scrapeTimeout: 10s
+
