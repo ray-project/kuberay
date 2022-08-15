@@ -336,6 +336,10 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 }
 
 func ConvertUnixTimeToMetav1Time(unixTime int64) *metav1.Time {
+	// in new ray version, return time is timestamp in ms
+	if unixTime > 9999999999 {
+		unixTime = unixTime / 1000
+	}
 	t := time.Unix(unixTime, 0)
 	kt := metav1.NewTime(t)
 	return &kt

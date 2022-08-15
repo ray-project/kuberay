@@ -48,7 +48,7 @@ var _ = Context("Inside the default namespace", func() {
 		},
 		Spec: rayiov1alpha1.RayJobSpec{
 			Entrypoint: "sleep 999",
-			RayClusterSpec: rayiov1alpha1.RayClusterSpec{
+			RayClusterSpec: &rayiov1alpha1.RayClusterSpec{
 				RayVersion: "1.12.1",
 				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
@@ -179,6 +179,17 @@ var _ = Context("Inside the default namespace", func() {
 
 	myRayCluster := &rayiov1alpha1.RayCluster{}
 
+	myRayJobWithClusterSelector := &rayiov1alpha1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rayjob-test-2",
+			Namespace: "default",
+		},
+		Spec: rayiov1alpha1.RayJobSpec{
+			Entrypoint:      "sleep 999",
+			ClusterSelector: map[string]string{},
+		},
+	}
+
 	Describe("When creating a rayjob", func() {
 		It("should create a rayjob object", func() {
 			err := k8sClient.Create(ctx, myRayJob)
@@ -215,7 +226,23 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getDashboardURLForRayJob(ctx, myRayJob),
 				time.Second*3, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
+
 		})
+
+		It("test cluster selector", func() {
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, myRayJob)
+			Expect(err).To(BeNil())
+
+			myRayJobWithClusterSelector.Spec.ClusterSelector["ray.io/cluster"] = myRayJob.Status.RayClusterName
+
+			err = k8sClient.Create(ctx, myRayJobWithClusterSelector)
+			Expect(err).NotTo(HaveOccurred(), "failed to create RayJob resource")
+
+			Eventually(
+				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
+				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
+		})
+
 	})
 })
 

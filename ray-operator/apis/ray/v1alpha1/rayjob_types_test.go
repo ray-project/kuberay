@@ -22,7 +22,7 @@ var expectedRayJob = RayJob{
 		Metadata: map[string]string{
 			"owner": "userA",
 		},
-		RayClusterSpec: RayClusterSpec{
+		RayClusterSpec: &RayClusterSpec{
 			RayVersion: "1.12.1",
 			HeadGroupSpec: HeadGroupSpec{
 				ServiceType: corev1.ServiceTypeClusterIP,

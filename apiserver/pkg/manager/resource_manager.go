@@ -194,8 +194,8 @@ func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob) (*v
 	computeTemplateMap := make(map[string]*api.ComputeTemplate)
 	var err error
 
-	if apiJob.ClusterSpec != nil && len(apiJob.ClusterSelector) == 0 {
-		// populate cluster map
+	// populate cluster map
+	if apiJob.ClusterSpec != nil {
 		computeTemplateMap, err = r.populateComputeTemplate(ctx, apiJob.ClusterSpec, apiJob.Namespace)
 		if err != nil {
 			return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiJob.Namespace, apiJob.JobId)

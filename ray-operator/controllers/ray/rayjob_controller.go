@@ -280,9 +280,23 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 			rayJob.Status.JobId = utils.GenerateRayJobId(rayJob.Name)
 		}
 	}
+
 	if rayJob.Status.RayClusterName == "" {
 		shouldUpdateStatus = true
-		rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
+		// if the clusterSelector is not empty, default use this cluster name
+		// we assume the length of clusterSelector is one
+		if len(rayJob.Spec.ClusterSelector) != 0 {
+			var useValue string
+			for _, value := range rayJob.Spec.ClusterSelector {
+				useValue = value
+				break
+			}
+
+			rayJob.Status.RayClusterName = useValue
+			rayJob.Spec.ShutdownAfterJobFinishes = false
+		} else {
+			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
+		}
 	}
 
 	if shouldUpdateStatus {
@@ -326,10 +340,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance)
 	if err == nil {
 		r.Log.Info("RayJob associated rayCluster found", "rayjob", rayJobInstance.Name, "raycluster", rayClusterNamespacedName)
-		if utils.CompareJsonStruct(rayClusterInstance.Spec, rayJobInstance.Spec.RayClusterSpec) {
+		// just return the rayClusterInstance if cluster spec is nil
+		if rayJobInstance.Spec.RayClusterSpec == nil {
 			return rayClusterInstance, nil
 		}
-		rayClusterInstance.Spec = rayJobInstance.Spec.RayClusterSpec
+
+		if utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
+			return rayClusterInstance, nil
+		}
+		rayClusterInstance.Spec = *rayJobInstance.Spec.RayClusterSpec
 
 		r.Log.Info("Update ray cluster spec", "raycluster", rayClusterNamespacedName)
 		if err := r.Update(ctx, rayClusterInstance); err != nil {
@@ -338,6 +357,12 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return nil, client.IgnoreNotFound(err)
 		}
 	} else if errors.IsNotFound(err) {
+		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
+			err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
+			r.Log.Error(err, "Get rayCluster instance error!")
+			return nil, err
+		}
+
 		// one special case is the job is complete status and cluster has been recycled.
 		if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1alpha1.JobDeploymentStatusComplete {
 			r.Log.Info("The cluster has been recycled for the job, skip duplicate creation", "rayjob", rayJobInstance.Name)

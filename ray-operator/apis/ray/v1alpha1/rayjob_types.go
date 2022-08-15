@@ -48,7 +48,7 @@ type RayJobSpec struct {
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
-	RayClusterSpec RayClusterSpec `json:"rayClusterSpec,omitempty"`
+	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
 }
