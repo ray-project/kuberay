@@ -11,6 +11,7 @@ rules:
   - ray.io
   resources:
   - rayclusters
+  - rayjobs
   verbs:
   - create
   - delete
@@ -34,9 +35,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
+  verbs:
+  - list
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
-  - get 
+  - get
   - list
-  - watch
 {{- end }}
