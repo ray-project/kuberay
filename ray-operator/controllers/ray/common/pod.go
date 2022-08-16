@@ -47,12 +47,12 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return headPort
 }
 
-// rayClusterHAEnabled check if RayCluster enabled HA in annotations
+// rayClusterHAEnabled check if RayCluster enabled FT in annotations
 func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
 	if instance.Annotations == nil {
 		return false
 	}
-	if v, ok := instance.Annotations[RayHAEnabledAnnotationKey]; ok {
+	if v, ok := instance.Annotations[RayFTEnabledAnnotationKey]; ok {
 		if strings.ToLower(v) == "true" {
 			return true
 		}
@@ -65,14 +65,14 @@ func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.
 		podTemplate.Annotations = make(map[string]string)
 	}
 
-	// For now, we just set ray external storage enabled/disabled by checking if HA is enalled/disabled.
+	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
 	// This may need to be updated in the future.
 	if rayClusterHAEnabled(instance) {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
-		// if we have HA enabled, we need to set up a default external storage namespace.
+		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "true"
+		// if we have FT enabled, we need to set up a default external storage namespace.
 		podTemplate.Annotations[RayExternalStorageNSAnnotationKey] = string(instance.UID)
 	} else {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "false"
 	}
 	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
 
@@ -226,16 +226,16 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNode
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node liveness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
@@ -249,16 +249,16 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 		if rayNodeType == rayiov1alpha1.HeadNode {
 			// head node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardPort, RayDashboardGCSHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
 			// worker node readiness probe
 			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -q -O- http://localhost:%d/%s | grep success",
+				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
@@ -327,11 +327,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
-	// health check only if HA enabled
+	// health check only if FT enabled
 	if podTemplateSpec.Annotations != nil {
-		if enabledString, ok := podTemplateSpec.Annotations[RayHAEnabledAnnotationKey]; ok {
+		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
 			if strings.ToLower(enabledString) == "true" {
-				// Ray HA is enabled and we need to add health checks
+				// Ray FT is enabled and we need to add health checks
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
 					// it is possible that some user have the probe parameters to override the default,
 					// in this case, this if condition is skipped
@@ -568,9 +568,17 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
 		}
+		if !envVarExists(SERVE_DEPLOYMENT_HANDLE_IS_SYNC, container.Env) {
+			serveHandleSync := v1.EnvVar{Name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC, Value: "1"}
+			container.Env = append(container.Env, serveHandleSync)
+		}
 		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
+		}
+		if !envVarExists(SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
+			servePinOnNode := v1.EnvVar{Name: SERVE_CONTROLLER_PIN_ON_NODE, Value: "0"}
+			container.Env = append(container.Env, servePinOnNode)
 		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
@@ -767,21 +775,18 @@ func checkIfVolumeExists(pod *v1.Pod, volumeName string) bool {
 func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 	// if a volumeMount is specified in the container,
 	// but has no corresponding pod volume, it is removed
-	for index, mountedVol := range container.VolumeMounts {
-		valid := false
+	k := 0
+	for _, mountedVol := range container.VolumeMounts {
 		for _, podVolume := range pod.Spec.Volumes {
 			if mountedVol.Name == podVolume.Name {
 				// valid mount, moving on...
-				valid = true
+				container.VolumeMounts[k] = mountedVol
+				k++
 				break
 			}
 		}
-		if !valid {
-			// remove the VolumeMount
-			container.VolumeMounts[index] = container.VolumeMounts[len(container.VolumeMounts)-1]
-			container.VolumeMounts = container.VolumeMounts[:len(container.VolumeMounts)-1]
-		}
 	}
+	container.VolumeMounts = container.VolumeMounts[:k]
 }
 
 func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {

@@ -11,8 +11,8 @@ const (
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 	RayClusterServingServiceLabelKey   = "ray.io/serve"
 
-	// Ray GCS HA related annotations
-	RayHAEnabledAnnotationKey         = "ray.io/ha-enabled"
+	// Ray GCS FT related annotations
+	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 	RayNodeHealthStateAnnotationKey   = "ray.io/health-state"
 
@@ -72,19 +72,21 @@ const (
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
+	SERVE_DEPLOYMENT_HANDLE_IS_SYNC         = "SERVE_DEPLOYMENT_HANDLE_IS_SYNC"
+	SERVE_CONTROLLER_PIN_ON_NODE            = "RAY_INTERNAL_SERVE_CONTROLLER_PIN_ON_NODE"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
 
 	LOCAL_HOST = "127.0.0.1"
-	// Ray HA default readiness probe values
+	// Ray FT default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
 	DefaultReadinessProbeTimeoutSeconds      = 1
 	DefaultReadinessProbePeriodSeconds       = 3
 	DefaultReadinessProbeSuccessThreshold    = 0
 	DefaultReadinessProbeFailureThreshold    = 20
 
-	// Ray HA default liveness probe values
+	// Ray FT default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 10
 	DefaultLivenessProbeTimeoutSeconds      = 1
 	DefaultLivenessProbePeriodSeconds       = 3

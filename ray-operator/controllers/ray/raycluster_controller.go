@@ -137,9 +137,9 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		return ctrl.Result{}, nil
 	}
 
-	if enabledString, ok := unhealthyPod.Annotations[common.RayHAEnabledAnnotationKey]; ok {
+	if enabledString, ok := unhealthyPod.Annotations[common.RayFTEnabledAnnotationKey]; ok {
 		if strings.ToLower(enabledString) != "true" {
-			r.Log.Info("HA not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
+			r.Log.Info("FT not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
 			return ctrl.Result{}, nil
 		}
 	} else {
@@ -685,6 +685,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
+	svcName = utils.CheckName(svcName)
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
@@ -717,6 +718,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
 	podName = utils.CheckName(podName) // making sure the name is valid
 	svcName := utils.GenerateServiceName(instance.Name)
+	svcName = utils.CheckName(svcName)
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling

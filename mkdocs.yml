@@ -30,7 +30,7 @@ nav:
   - Features:
     - RayService: guidance/rayservice.md
     - RayJob: guidance/rayjob.md
-    - Ray GCS HA: guidance/gcs-ha.md
+    - Ray GCS FT: guidance/gcs-ft.md
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
     - Observability: guidance/observability.md
