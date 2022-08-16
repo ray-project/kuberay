@@ -1,8 +1,8 @@
-## Ray GCS HA (Experimental)
+## Ray GCS Fault Tolerance(GCS FT) (Experimental)
 
 > Note: This feature is still experimental, there are a few limitations and stabilization will be done in future release from both Ray and KubeRay side.
 
-Ray GCS HA enables GCS server to use external storage backend. As a result, Ray clusters can tolerant GCS failures and recover from failures
+Ray GCS FT enables GCS server to use external storage backend. As a result, Ray clusters can tolerant GCS failures and recover from failures
 without affecting important services such as detached Actors & RayServe deployments.
 
 ### Prerequisite
@@ -10,9 +10,9 @@ without affecting important services such as detached Actors & RayServe deployme
 * Ray 2.0 is required.
 * You need to support external Redis server for Ray. (Redis HA cluster is highly recommended.)
 
-### Enable Ray GCS HA
+### Enable Ray GCS FT
 
-To enable Ray GCS HA in your newly KubeRay-managed Ray cluster, you need to enable it by adding an annotation to the
+To enable Ray GCS FT in your newly KubeRay-managed Ray cluster, you need to enable it by adding an annotation to the
 RayCluster YAML file.
 
 ```yaml
@@ -20,13 +20,13 @@ RayCluster YAML file.
 kind: RayCluster
 metadata:
   annotations:
-    ray.io/ha-enabled: "true" # <- add this annotation enable GCS HA
+    ray.io/ft-enabled: "true" # <- add this annotation enable GCS FT
     ray.io/external-storage-namespace: "my-raycluster-storage-namespace" # <- optional, to specify the external storage namespace
 ...
 ```
 An example can be found at [ray-cluster.external-redis.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.external-redis.yaml)
 
-When annotation `ray.io/ha-enabled` is added with a `true` value, KubeRay will enable Ray GCS HA feature. This feature
+When annotation `ray.io/ft-enabled` is added with a `true` value, KubeRay will enable Ray GCS FT feature. This feature
 contains several components:
 
 1. Newly created Ray cluster has `Readiness Probe` and `Liveness Probe` added to all the head/worker nodes.
@@ -37,7 +37,7 @@ contains several components:
 
 #### Readiness Probe vs Liveness Probe
 
-These are the two types of probes we used in Ray GCS HA. 
+These are the two types of probes we used in Ray GCS FT. 
 
 The readiness probe is used to notify KubeRay in case of failures in the corresponding Ray cluster. KubeRay can try its best to
 recover the Ray cluster. If KubeRay cannot recover the failed head/worker node, the liveness probe gets in, delete the old pod
@@ -53,14 +53,14 @@ On Ray head node, we access a local Ray dashboard http endpoint and a Raylet htt
 healthy state. Since Ray dashboard does not reside Ray worker node, we only check the local Raylet http endpoint to make sure
 the worker node is healthy.
 
-#### Ray GCS HA Annotation
+#### Ray GCS FT Annotation
 
-Our Ray GCS HA feature checks if an annotation called `ray.io/ha-enabled` is set to `true` in `RayCluster` YAML file. If so, KubeRay
+Our Ray GCS FT feature checks if an annotation called `ray.io/ft-enabled` is set to `true` in `RayCluster` YAML file. If so, KubeRay
 will also add such annotation to the pod whenever the head/worker node is created.
 
 #### Use External Redis Cluster
 
-To use external Redis cluster as the backend storage(required by Ray GCS HA),
+To use external Redis cluster as the backend storage(required by Ray GCS FT),
 you need to add `RAY_REDIS_ADDRESS` environment variable to the head node template.
 
 Also, you can specify a storage namespace for your Ray cluster by using an annotation `ray.io/external-storage-namespace`
@@ -70,8 +70,8 @@ An example can be found at [ray-cluster.external-redis.yaml](https://github.com/
 #### KubeRay Operator Controller
 
 KubeRay Operator controller watches for new `Event` reconcile call. If this Event object is to notify the failed readiness probe,
-controller checks if this pod has `ray.io/ha-enabled` set to `true`. If this pod has this annotation set to true, that means this pod
-belongs to a Ray cluster that has Ray GCS HA enabled.
+controller checks if this pod has `ray.io/ft-enabled` set to `true`. If this pod has this annotation set to true, that means this pod
+belongs to a Ray cluster that has Ray GCS FT enabled.
 
 After this, the controller will try to recover the failed pod. If controller cannot recover it, an annotation named 
 `ray.io/health-state` with a value `Unhealthy` is added to this pod.
@@ -82,7 +82,7 @@ In every KubeRay Operator controller reconcile loop, it monitors any pod in Ray 
 #### External Storage Namespace
 
 External storage namespaces can be used to share a single storage backend among multiple Ray clusters. By default, `ray.io/external-storage-namespace`
-uses the RayCluster UID as its value when GCS HA is enabled. Or if the user wants to use customized external storage namespace,
+uses the RayCluster UID as its value when GCS FT is enabled. Or if the user wants to use customized external storage namespace,
 the user can add `ray.io/external-storage-namespace` annotation to RayCluster yaml file.
 
 Whenever `ray.io/external-storage-namespace` annotation is set, the head/worker node will have `RAY_external_storage_namespace` environment
@@ -92,9 +92,9 @@ variable set which Ray can pick up later.
 
 1. For now, Ray head/worker node that fails the readiness probe recovers itself by restarting itself. More fine-grained control and recovery mechanisms are expected in the future.
 
-### Test Ray GCS HA
+### Test Ray GCS FT
 
-Currently, two tests are responsible for ensuring Ray GCS HA is working correctly.
+Currently, two tests are responsible for ensuring Ray GCS FT is working correctly.
 
 1. Detached actor test
 2. RayServe test

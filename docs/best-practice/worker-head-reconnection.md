@@ -22,7 +22,7 @@ It retries 600 times and each interval is 1s, resulting in total 600s timeout, i
 
 ## Best Practice
 
-GCS HA feature [#20498](https://github.com/ray-project/ray/issues/20498) is planned in Ray Core Roadmap. When this feature is released, expect a stable head and GCS such that worker-head connection lost issue will not appear anymore. 
+GCS FT feature [#20498](https://github.com/ray-project/ray/issues/20498) is planned in Ray Core Roadmap. When this feature is released, expect a stable head and GCS such that worker-head connection lost issue will not appear anymore. 
 
 Before that, to solve the workers-head connection lost, there are two options:
 
@@ -30,4 +30,4 @@ Before that, to solve the workers-head connection lost, there are two options:
 
 - Make reconnection shorter: for version <= 1.9.1, you can set this head param --system-config='{"ping_gcs_rpc_server_max_retries": 20}' to reduce the delay from 600s down to 20s before workers reconnect to the new head. 
 
-> Note: we should update this doc when GCS HA feature gets updated.
+> Note: we should update this doc when GCS FT feature gets updated.

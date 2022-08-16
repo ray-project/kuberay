@@ -252,7 +252,7 @@ print(len(ray.nodes()))
         client.close()
 
 
-def ray_ha_supported():
+def ray_ft_supported():
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
@@ -269,22 +269,22 @@ def ray_service_supported():
     return True
 
 
-class RayHATestCase(unittest.TestCase):
-    cluster_template_file = 'tests/config/ray-cluster.ray-ha.yaml.template'
+class RayFTTestCase(unittest.TestCase):
+    cluster_template_file = 'tests/config/ray-cluster.ray-ft.yaml.template'
 
     @classmethod
     def setUpClass(cls):
-        if not ray_ha_supported():
+        if not ray_ft_supported():
             return
         delete_cluster()
         create_cluster()
         apply_kuberay_resources()
         download_images()
-        create_kuberay_cluster(RayHATestCase.cluster_template_file)
+        create_kuberay_cluster(RayFTTestCase.cluster_template_file)
 
     def setUp(self):
-        if not ray_ha_supported():
-            raise unittest.SkipTest("ray ha is not supported")
+        if not ray_ft_supported():
+            raise unittest.SkipTest("ray ft is not supported")
 
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
