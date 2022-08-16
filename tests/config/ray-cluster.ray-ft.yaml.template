@@ -68,7 +68,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
   annotations:
-    ray.io/ha-enabled: "true" # enable Ray HA
+    ray.io/ft-enabled: "true" # enable Ray GCS FT
   name: raycluster-external-redis
 spec:
   rayVersion: '$ray_version'
