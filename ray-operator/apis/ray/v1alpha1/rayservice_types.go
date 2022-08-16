@@ -24,7 +24,7 @@ const (
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveDeploymentGraphConfig,omitempty"`
+	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
 	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
@@ -33,7 +33,7 @@ type RayServiceSpec struct {
 type ServeDeploymentGraphSpec struct {
 	ImportPath       string            `json:"importPath"`
 	RuntimeEnv       string            `json:"runtimeEnv,omitempty"`
-	ServeConfigSpecs []ServeConfigSpec `json:"serveConfigs,omitempty"`
+	ServeConfigSpecs []ServeConfigSpec `json:"deployments,omitempty"`
 }
 
 // ServeConfigSpec defines the desired state of RayService
