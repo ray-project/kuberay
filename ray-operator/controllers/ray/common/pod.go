@@ -777,18 +777,13 @@ func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 	// but has no corresponding pod volume, it is removed
 	k := 0
 	for _, mountedVol := range container.VolumeMounts {
-		valid := false
 		for _, podVolume := range pod.Spec.Volumes {
 			if mountedVol.Name == podVolume.Name {
 				// valid mount, moving on...
-				valid = true
+				container.VolumeMounts[k] = mountedVol
+				k++
 				break
 			}
-		}
-		if valid {
-			// remove the VolumeMount
-			container.VolumeMounts[k] = mountedVol
-			k++
 		}
 	}
 	container.VolumeMounts = container.VolumeMounts[:k]
