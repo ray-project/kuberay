@@ -775,7 +775,8 @@ func checkIfVolumeExists(pod *v1.Pod, volumeName string) bool {
 func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 	// if a volumeMount is specified in the container,
 	// but has no corresponding pod volume, it is removed
-	for index, mountedVol := range container.VolumeMounts {
+	k := 0
+	for _, mountedVol := range container.VolumeMounts {
 		valid := false
 		for _, podVolume := range pod.Spec.Volumes {
 			if mountedVol.Name == podVolume.Name {
@@ -784,12 +785,13 @@ func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 				break
 			}
 		}
-		if !valid {
+		if valid {
 			// remove the VolumeMount
-			container.VolumeMounts[index] = container.VolumeMounts[len(container.VolumeMounts)-1]
-			container.VolumeMounts = container.VolumeMounts[:len(container.VolumeMounts)-1]
+			container.VolumeMounts[k] = mountedVol
+			k++
 		}
 	}
+	container.VolumeMounts = container.VolumeMounts[:k]
 }
 
 func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
