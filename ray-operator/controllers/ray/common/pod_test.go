@@ -633,5 +633,7 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 			ReadOnly:  true,
 		},
 	}...)
+	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 3)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[0], &pod)
+	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 1)
 }
