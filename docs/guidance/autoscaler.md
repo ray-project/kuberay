@@ -4,7 +4,7 @@
 ### Prerequisite
 
 Ray Autoscaler integration is beta with KubeRay 0.3.0 and Ray 2.0.0.
-The details of autoscaler behavior and configuration may change in future releases.
+While autoscaling functionality is stable, the details of autoscaler behavior and configuration may change in future releases.
 
 Start by deploying the latest stable version of the KubeRay operator:
 ```
@@ -79,7 +79,7 @@ Demands:
    For Ray versions older than 2.0.0, the image `rayproject/ray:2.0.0` will be used to run the autoscaler.
 
 3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. Autoscaler support
-   is beta as of Ray 2.0.0 and KubeRay 0.3.0. The details of autoscaler behavior and configuration may change in future releases.
+   is beta as of Ray 2.0.0 and KubeRay 0.3.0; while autoscaling functionality is stable, the details of autoscaler behavior and configuration may change in future releases.
 
 ### Test autoscaling
 
