@@ -242,7 +242,6 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
 				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
 		})
-
 	})
 })
 
