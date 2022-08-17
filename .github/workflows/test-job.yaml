@@ -175,8 +175,8 @@ jobs:
       - name: Push Apiserver to DockerHub
         run: |
           docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
-          docker push kuberay/apiserver:nightly
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:release-0.3;
+          docker push kuberay/apiserver:release-0.3
 
         working-directory: ${{env.working-directory}}
         if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
@@ -257,8 +257,8 @@ jobs:
     - name: Push Operator to DockerHub
       run: |
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
-        docker push kuberay/operator:nightly
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:release-0.3;
+        docker push kuberay/operator:release-0.3
 
       working-directory: ${{env.working-directory}}
       if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
