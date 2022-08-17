@@ -241,10 +241,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
 				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
-
-			//Eventually(
-			//	getDashboardURLForRayJob(ctx, myRayJob),
-			//	time.Second*3, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
 		})
 
 	})
