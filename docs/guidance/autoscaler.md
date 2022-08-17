@@ -6,8 +6,8 @@
 Ray Autoscaler integration is Beta with KubeRay 0.3.0 and Ray 2.0.0.
 Start by deploying the latest stable version of the KubeRay operator:
 ```
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0&timeout=90s"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0-rc.1&timeout=90s"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0-rc.1&timeout=90s"
 ```
 
 ### Deploy a cluster with autoscaling enabled
