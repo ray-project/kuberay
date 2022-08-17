@@ -4,21 +4,17 @@
 ### Prerequisite
 
 Ray Autoscaler integration is Beta with KubeRay 0.3.0 and Ray 2.0.0.
-You have to use nightly operator images because [autoscaler support](https://github.com/ray-project/kuberay/pull/163) is merged recently.
-To deploy the nightly RayCluster CRD and KubeRay, run
-
+Start by deploying the latest stable version of the KubeRay operator:
 ```
-git clone https://github.com/ray-project/kuberay.git
-cd kuberay
-kubectl create -k manifests/cluster-scope-resources
-kubectl apply -k manifests/overlays/autoscaling
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0&timeout=90s"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0&timeout=90s"
 ```
 
 ### Deploy a cluster with autoscaling enabled
 
 Next, to deploy a sample autoscaling Ray cluster, run
 ```
-kubectl apply -f ray-operator/config/samples/ray-cluster.autoscaler.yaml
+kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/release-0.3/ray-operator/config/samples/ray-cluster.autoscaler.yaml
 ```
 
 See the above config file for details on autoscaling configuration.
