@@ -19,15 +19,15 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RayJobServiceClient interface {
-	// Creates a new compute template.
+	// Creates a new job.
 	CreateRayJob(ctx context.Context, in *CreateRayJobRequest, opts ...grpc.CallOption) (*RayJob, error)
-	// Finds a specific compute template by its name and namespace.
+	// Finds a specific job by its name and namespace.
 	GetRayJob(ctx context.Context, in *GetRayJobRequest, opts ...grpc.CallOption) (*RayJob, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all job in a given namespace. Supports pagination, and sorting on certain fields.
 	ListRayJobs(ctx context.Context, in *ListRayJobsRequest, opts ...grpc.CallOption) (*ListRayJobsResponse, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all job in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllRayJobs(ctx context.Context, in *ListAllRayJobsRequest, opts ...grpc.CallOption) (*ListAllRayJobsResponse, error)
-	// Deletes a compute template by its name and namespace
+	// Deletes a job by its name and namespace.
 	DeleteRayJob(ctx context.Context, in *DeleteRayJobRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -88,15 +88,15 @@ func (c *rayJobServiceClient) DeleteRayJob(ctx context.Context, in *DeleteRayJob
 // All implementations must embed UnimplementedRayJobServiceServer
 // for forward compatibility
 type RayJobServiceServer interface {
-	// Creates a new compute template.
+	// Creates a new job.
 	CreateRayJob(context.Context, *CreateRayJobRequest) (*RayJob, error)
-	// Finds a specific compute template by its name and namespace.
+	// Finds a specific job by its name and namespace.
 	GetRayJob(context.Context, *GetRayJobRequest) (*RayJob, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all job in a given namespace. Supports pagination, and sorting on certain fields.
 	ListRayJobs(context.Context, *ListRayJobsRequest) (*ListRayJobsResponse, error)
-	// Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all job in all namespaces. Supports pagination, and sorting on certain fields.
 	ListAllRayJobs(context.Context, *ListAllRayJobsRequest) (*ListAllRayJobsResponse, error)
-	// Deletes a compute template by its name and namespace
+	// Deletes a job by its name and namespace.
 	DeleteRayJob(context.Context, *DeleteRayJobRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedRayJobServiceServer()
 }

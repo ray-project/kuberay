@@ -85,8 +85,11 @@ func startHttpProxy() {
 	runtimeMux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
 			MarshalOptions: protojson.MarshalOptions{
-				UseProtoNames:  true,
+				UseProtoNames:  false,
 				UseEnumNumbers: true,
+			},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: true,
 			},
 		}),
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),

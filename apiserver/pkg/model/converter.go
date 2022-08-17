@@ -131,19 +131,9 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			glog.Errorf("failed to transfer ray job, err: %v, item: %v", err, job)
+			glog.Errorf("failed to transfer job crd to job protobuf, err: %v, crd: %+v", err, job)
 		}
 	}()
-
-	var ttl int32 = -1
-	if job.Spec.TTLSecondsAfterFinished != nil {
-		ttl = *job.Spec.TTLSecondsAfterFinished
-	}
-
-	var deleteTime int64 = -1
-	if job.DeletionTimestamp != nil {
-		deleteTime = job.DeletionTimestamp.Unix()
-	}
 
 	pbJob = &api.RayJob{
 		Name:                     job.Name,
@@ -156,12 +146,19 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
 		ClusterSelector:          job.Spec.ClusterSelector,
 		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
-		TtlSecondsAfterFinished:  ttl,
 		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
-		DeleteAt:                 &timestamp.Timestamp{Seconds: deleteTime},
 		JobStatus:                string(job.Status.JobStatus),
 		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
 		Message:                  job.Status.Message,
 	}
+
+	if job.Spec.TTLSecondsAfterFinished != nil {
+		pbJob.TtlSecondsAfterFinished = *job.Spec.TTLSecondsAfterFinished
+	}
+
+	if job.DeletionTimestamp != nil {
+		pbJob.DeleteAt = &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()}
+	}
+
 	return pbJob
 }
