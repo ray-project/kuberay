@@ -3,16 +3,16 @@
 ## RayCluster Status
 
 ### State
-In the RayCluster resource definition, we use `State` to represent the current status of the ray cluster.
+In the RayCluster resource definition, we use `State` to represent the current status of the Ray cluster.
 
-For now, there are three types of the status exposed by the resouce status: `ready`, `unhealthy` and `failed`.
+For now, there are three types of the status exposed by the RayCluster's status.state: `ready`, `unhealthy` and `failed`.
 | State     | Description                                                                                     |
 | --------- | ----------------------------------------------------------------------------------------------- |
-| ready     | the ray cluster is ready for use.                                                               |
-| unhealthy | there is something miss configed in the `startParams` and the ray cluster may not act correctly |
-| failed    | there are some severe fatal and result in the head node or worker node start failed.            |
+| ready     | The Ray cluster is ready for use.                                                               |
+| unhealthy | The `rayStartParams` are misconfigured and the Ray cluster may not function properly.           |
+| failed    | A severe issue has prevented the head node or worker nodes from starting.                       |
 
-If you use apiserver to retrieve the resource, you may find the state in the `clusterState` field.
+If you use the apiserver to retrieve the resource, you may find the state in the `clusterState` field.
 
 ```json
 curl --request GET '<baseUrl>/apis/v1alpha2/namespaces/<namespace>/clusters/<raycluster-name>'
