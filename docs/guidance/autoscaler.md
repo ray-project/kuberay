@@ -1,9 +1,9 @@
-## Autoscaler (Experimental)
+## Autoscaler (Beta)
 
-> Note: This feature is still experimental, there're few limitations and stabilization will be done in future release from both Ray and KubeRay side.
 
 ### Prerequisite
 
+Ray Autoscaler integration is Beta with KubeRay 0.3.0 and Ray 2.0.0.
 You have to use nightly operator images because [autoscaler support](https://github.com/ray-project/kuberay/pull/163) is merged recently.
 To deploy the nightly RayCluster CRD and KubeRay, run
 
@@ -23,7 +23,9 @@ kubectl apply -f ray-operator/config/samples/ray-cluster.autoscaler.yaml
 
 See the above config file for details on autoscaling configuration.
 
-To verify autoscaler is working, **Do not** trust READY container status because autoscaler container has in-built retry and even there's error, it won't crash now.
+The output of `kubectl get pods` should indicate the presence of two containers,
+the Ray container and the autoscaler container.
+
 
 ```
 $ kubectl get pods
@@ -31,7 +33,8 @@ NAME                                             READY   STATUS    RESTARTS   AG
 raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
 ```
 
-The recommended way is to check containers logs. Here's an example of logs from a healthy autoscaler.
+Check the autoscaler container's logs to confirm that the autoscaler is healthy.
+Here's an example of logs from a healthy autoscaler.
 ```
 kubectl logs -f raycluster-autoscaler-head-mgwwk autoscaler
 
@@ -63,21 +66,22 @@ Demands:
 
 #### Notes
 
-1. The operator will recognize the following setting and automatically inject a preconfigured autoscaler container to the head pod.
+1. To enable autoscaling, set your RayCluster CR's `spec.enableInTreeAutoscaling` field to true.
+   The operator will then automatically inject a preconfigured autoscaler container to the head pod.
    The service account, role, and role binding needed by the autoscaler will be created by the operator out-of-box.
    The operator will also configure an empty-dir logging volume for the Ray head pod. The volume will be mounted into the Ray and
    autoscaler containers; this is necessary to support the event logging introduced in [Ray PR #13434](https://github.com/ray-project/ray/pull/13434).
 
     ```
     spec:
-      rayVersion: 'nightly'
       enableInTreeAutoscaling: true
     ```
 
-2. The autoscaler image is `rayproject/ray:a304d1` which reflects the latest changes from the Ray master branch.
+2. If your RayCluster CR's `spec.rayVersion` field is at least `2.0.0`, the autoscaler container will use the same image as the Ray container.
+   For Ray versions older than 2.0.0, the image `rayproject/ray:2.0.0` will be used to run the autoscaler.
 
-3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. The autoscaler image used
-is compatible with all Ray versions >= 1.11.0.
+3. Autoscaling functionality is supported only with Ray versions at least as new as 1.11.0. Autoscaler support
+   is Beta as of Ray 2.0.0 and KubeRay 0.3.0
 
 ### Test autoscaling
 
