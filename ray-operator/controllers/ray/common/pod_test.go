@@ -611,3 +611,29 @@ func splitAndSort(s string) []string {
 	sort.Strings(result)
 	return result
 }
+
+func TestCleanupInvalidVolumeMounts(t *testing.T) {
+	cluster := instance.DeepCopy()
+
+	// Test head pod
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	svcName := utils.GenerateServiceName(cluster.Name)
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", nil, "")
+
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, []v1.VolumeMount{
+		{
+			Name:      "mock-name1",
+			MountPath: "/mock-path1",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "mock-name2",
+			MountPath: "/mock-path2",
+			ReadOnly:  true,
+		},
+	}...)
+	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 3)
+	cleanupInvalidVolumeMounts(&pod.Spec.Containers[0], &pod)
+	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 1)
+}

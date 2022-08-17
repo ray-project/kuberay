@@ -291,7 +291,7 @@ func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigS
 }
 
 // RayJobInfo is the response of "ray job status" api.
-// Reference to https://docs.ray.io/en/master/cluster/jobs-package-ref.html#jobinfo.
+// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
 type RayJobInfo struct {
 	JobStatus  rayv1alpha1.JobStatus `json:"status,omitempty"`
 	Entrypoint string                `json:"entrypoint,omitempty"`
@@ -303,7 +303,7 @@ type RayJobInfo struct {
 }
 
 // RayJobRequest is the request body to submit.
-// Reference to https://docs.ray.io/en/master/cluster/jobs-package-ref.html#jobsubmissionclient.
+// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
 type RayJobRequest struct {
 	Entrypoint string                 `json:"entrypoint"`
 	JobId      string                 `json:"job_id,omitempty"`

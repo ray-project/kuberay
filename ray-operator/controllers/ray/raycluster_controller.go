@@ -137,9 +137,9 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Ev
 		return ctrl.Result{}, nil
 	}
 
-	if enabledString, ok := unhealthyPod.Annotations[common.RayHAEnabledAnnotationKey]; ok {
+	if enabledString, ok := unhealthyPod.Annotations[common.RayFTEnabledAnnotationKey]; ok {
 		if strings.ToLower(enabledString) != "true" {
-			r.Log.Info("HA not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
+			r.Log.Info("FT not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
 			return ctrl.Result{}, nil
 		}
 	} else {
