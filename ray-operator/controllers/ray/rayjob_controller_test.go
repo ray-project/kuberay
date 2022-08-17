@@ -226,21 +226,25 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getDashboardURLForRayJob(ctx, myRayJob),
 				time.Second*3, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
-
 		})
 
 		It("test cluster selector", func() {
-			err := k8sClient.Get(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, myRayJob)
-			Expect(err).To(BeNil())
+			Eventually(
+				getRayClusterNameForRayJob(ctx, myRayJob),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
 
 			myRayJobWithClusterSelector.Spec.ClusterSelector["ray.io/cluster"] = myRayJob.Status.RayClusterName
 
-			err = k8sClient.Create(ctx, myRayJobWithClusterSelector)
+			err := k8sClient.Create(ctx, myRayJobWithClusterSelector)
 			Expect(err).NotTo(HaveOccurred(), "failed to create RayJob resource")
 
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
 				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
+
+			//Eventually(
+			//	getDashboardURLForRayJob(ctx, myRayJob),
+			//	time.Second*3, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
 		})
 
 	})
