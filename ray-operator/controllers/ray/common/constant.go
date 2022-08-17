@@ -11,8 +11,8 @@ const (
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 	RayClusterServingServiceLabelKey   = "ray.io/serve"
 
-	// Ray GCS HA related annotations
-	RayHAEnabledAnnotationKey         = "ray.io/ha-enabled"
+	// Ray GCS FT related annotations
+	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 	RayNodeHealthStateAnnotationKey   = "ray.io/health-state"
 
@@ -79,14 +79,14 @@ const (
 	DefaultRedisPassword = "5241590000000000"
 
 	LOCAL_HOST = "127.0.0.1"
-	// Ray HA default readiness probe values
+	// Ray FT default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
 	DefaultReadinessProbeTimeoutSeconds      = 1
 	DefaultReadinessProbePeriodSeconds       = 3
 	DefaultReadinessProbeSuccessThreshold    = 0
 	DefaultReadinessProbeFailureThreshold    = 20
 
-	// Ray HA default liveness probe values
+	// Ray FT default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 10
 	DefaultLivenessProbeTimeoutSeconds      = 1
 	DefaultLivenessProbePeriodSeconds       = 3

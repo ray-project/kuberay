@@ -47,12 +47,12 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return headPort
 }
 
-// rayClusterHAEnabled check if RayCluster enabled HA in annotations
+// rayClusterHAEnabled check if RayCluster enabled FT in annotations
 func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
 	if instance.Annotations == nil {
 		return false
 	}
-	if v, ok := instance.Annotations[RayHAEnabledAnnotationKey]; ok {
+	if v, ok := instance.Annotations[RayFTEnabledAnnotationKey]; ok {
 		if strings.ToLower(v) == "true" {
 			return true
 		}
@@ -65,14 +65,14 @@ func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.
 		podTemplate.Annotations = make(map[string]string)
 	}
 
-	// For now, we just set ray external storage enabled/disabled by checking if HA is enalled/disabled.
+	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
 	// This may need to be updated in the future.
 	if rayClusterHAEnabled(instance) {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "true"
-		// if we have HA enabled, we need to set up a default external storage namespace.
+		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "true"
+		// if we have FT enabled, we need to set up a default external storage namespace.
 		podTemplate.Annotations[RayExternalStorageNSAnnotationKey] = string(instance.UID)
 	} else {
-		podTemplate.Annotations[RayHAEnabledAnnotationKey] = "false"
+		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "false"
 	}
 	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
 
@@ -327,11 +327,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
-	// health check only if HA enabled
+	// health check only if FT enabled
 	if podTemplateSpec.Annotations != nil {
-		if enabledString, ok := podTemplateSpec.Annotations[RayHAEnabledAnnotationKey]; ok {
+		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
 			if strings.ToLower(enabledString) == "true" {
-				// Ray HA is enabled and we need to add health checks
+				// Ray FT is enabled and we need to add health checks
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
 					// it is possible that some user have the probe parameters to override the default,
 					// in this case, this if condition is skipped
@@ -775,21 +775,18 @@ func checkIfVolumeExists(pod *v1.Pod, volumeName string) bool {
 func cleanupInvalidVolumeMounts(container *v1.Container, pod *v1.Pod) {
 	// if a volumeMount is specified in the container,
 	// but has no corresponding pod volume, it is removed
-	for index, mountedVol := range container.VolumeMounts {
-		valid := false
+	k := 0
+	for _, mountedVol := range container.VolumeMounts {
 		for _, podVolume := range pod.Spec.Volumes {
 			if mountedVol.Name == podVolume.Name {
 				// valid mount, moving on...
-				valid = true
+				container.VolumeMounts[k] = mountedVol
+				k++
 				break
 			}
 		}
-		if !valid {
-			// remove the VolumeMount
-			container.VolumeMounts[index] = container.VolumeMounts[len(container.VolumeMounts)-1]
-			container.VolumeMounts = container.VolumeMounts[:len(container.VolumeMounts)-1]
-		}
 	}
+	container.VolumeMounts = container.VolumeMounts[:k]
 }
 
 func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {

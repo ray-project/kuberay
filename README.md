@@ -30,8 +30,8 @@ Please choose the version you like to install. We will use nightly version `mast
 
 ```
 export KUBERAY_VERSION=master
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}"
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources.
