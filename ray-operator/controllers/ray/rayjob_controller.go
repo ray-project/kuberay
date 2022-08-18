@@ -26,6 +26,7 @@ import (
 
 const (
 	RayJobDefaultRequeueDuration = 3 * time.Second
+	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -287,11 +288,10 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 		// we assume the length of clusterSelector is one
 		if len(rayJob.Spec.ClusterSelector) != 0 {
 			var useValue string
-			for _, value := range rayJob.Spec.ClusterSelector {
-				useValue = value
-				break
+			var ok bool
+			if useValue, ok = rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]; ok == false {
+				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
 			}
-
 			rayJob.Status.RayClusterName = useValue
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			return nil

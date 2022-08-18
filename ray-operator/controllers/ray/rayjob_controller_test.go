@@ -233,7 +233,7 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
 
-			myRayJobWithClusterSelector.Spec.ClusterSelector["ray.io/cluster"] = myRayJob.Status.RayClusterName
+			myRayJobWithClusterSelector.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey] = myRayJob.Status.RayClusterName
 
 			err := k8sClient.Create(ctx, myRayJobWithClusterSelector)
 			Expect(err).NotTo(HaveOccurred(), "failed to create RayJob resource")
