@@ -25,15 +25,17 @@ Please choose the version you like to install. We will use nightly version `mast
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
-|  master  |    N    | v1.23 and above |
-|  v0.2.0  |   Yes   | v1.19 - 1.22 |
+|  master  |    N    | v1.19 - v1.24 |
+|  v0.3.0  |    Y    | v1.19 - v1.24 |
 
 ```
-export KUBERAY_VERSION=master
+export KUBERAY_VERSION=v0.3.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
+> If you like to try nightly version, use `export KUBERAY_VERSION=master` instead.
+> In 1.19+ Ingress API is now `networking.k8s.io/v1`, it's being used to expose RayCluster Head dashboard(optional) and RayService. For Kubernetes version < 1.19, you can still use KubeRay but without Ingress support.
 > Observe that we must use `kubectl create` to install cluster-scoped resources.
 > The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
