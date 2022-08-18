@@ -149,7 +149,7 @@ func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client,
 		return "", fmtErrors.Errorf("dashboard port not found")
 	}
 
-	dashboardURL := fmt.Sprintf("%s.%s:%v",
+	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
 		headSvc.Name,
 		headSvc.Namespace,
 		dashboardPort)
