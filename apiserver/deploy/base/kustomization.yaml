@@ -13,4 +13,4 @@ commonLabels:
 images:
 - name: kuberay/apiserver
   newName: kuberay/apiserver
-  newTag: v0.3.0-rc.2
+  newTag: v0.3.0
