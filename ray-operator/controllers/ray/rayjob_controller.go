@@ -289,7 +289,7 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 		if len(rayJob.Spec.ClusterSelector) != 0 {
 			var useValue string
 			var ok bool
-			if useValue, ok = rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]; ok == false {
+			if useValue, ok = rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]; !ok {
 				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
 			}
 			rayJob.Status.RayClusterName = useValue
