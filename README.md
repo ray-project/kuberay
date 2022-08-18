@@ -26,14 +26,17 @@ Please choose the version you like to install. We will use nightly version `mast
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
 |  master  |    N    | v1.23 and above |
-|  v0.2.0  |   Yes   | v1.19 - 1.22 |
+|  v0.3.0  |    Y    | v1.19 - v1.24 |
+|  v0.2.0  |    Y    | v1.19 - v1.22 |
 
 ```
-export KUBERAY_VERSION=master
+export KUBERAY_VERSION=v0.3.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
+> If you like to try nightly version, use `export KUBERAY_VERSION=master` instead.
+> KubeRay doesn't run Kubernetes cross version compatibility tests, above are recommended versions and it doesn't mean other versions are not compatible. Give it a try on your cluster.
 > Observe that we must use `kubectl create` to install cluster-scoped resources.
 > The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
