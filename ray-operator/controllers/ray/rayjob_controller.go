@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	RayJobDefaultRequeueDuration = 3 * time.Second
+	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 )
 

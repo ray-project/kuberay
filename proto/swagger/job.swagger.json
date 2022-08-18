@@ -21,7 +21,7 @@
   "paths": {
     "/apis/v1alpha2/jobs": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all job in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListAllRayJobs",
         "responses": {
           "200": {
@@ -42,7 +42,7 @@
         ]
       },
       "post": {
-        "summary": "Creates a new compute template.",
+        "summary": "Creates a new job.",
         "operationId": "RayJobService_CreateRayJob",
         "responses": {
           "200": {
@@ -61,7 +61,7 @@
         "parameters": [
           {
             "name": "body",
-            "description": "The compute template to be created.",
+            "description": "The job to be created.",
             "in": "body",
             "required": true,
             "schema": {
@@ -70,7 +70,7 @@
           },
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be created.",
+            "description": "The namespace of the job to be created.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -83,7 +83,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/jobs": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all job in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListRayJobs",
         "responses": {
           "200": {
@@ -102,7 +102,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute templates to be retrieved.",
+            "description": "The namespace of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -115,7 +115,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}": {
       "get": {
-        "summary": "Finds a specific compute template by its name and namespace.",
+        "summary": "Finds a specific job by its name and namespace.",
         "operationId": "RayJobService_GetRayJob",
         "responses": {
           "200": {
@@ -134,14 +134,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be retrieved.",
+            "description": "The namespace of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the RayJob to be retrieved.",
+            "description": "The name of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -152,7 +152,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes a compute template by its name and namespace",
+        "summary": "Deletes a job by its name and namespace.",
         "operationId": "RayJobService_DeleteRayJob",
         "responses": {
           "200": {
@@ -171,14 +171,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be deleted.",
+            "description": "The namespace of the job to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the compute template to be deleted.",
+            "description": "The name of the job to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -338,7 +338,7 @@
           "type": "string",
           "description": "If jobId is not set, a new jobId will be auto-generated."
         },
-        "ShutdownAfterJobFinishes": {
+        "shutdownAfterJobFinishes": {
           "type": "boolean",
           "title": "If set to true, the rayCluster will be deleted after the rayJob finishes"
         },
@@ -381,7 +381,7 @@
           "description": "Output. A human-readable description of the status of this operation."
         }
       },
-      "title": "RayJob"
+      "title": "RayJob defination"
     },
     "protoVolume": {
       "type": "object",
