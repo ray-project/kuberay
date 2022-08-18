@@ -1,0 +1,205 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  annotations:
+    prometheus-operator-validated: "true"
+  name: ray-cluster-gcs-rules
+  namespace: prometheus-system
+spec:
+  groups:
+  - interval: 30s
+    name: ray-cluster-main-staging-gcs.rules
+    rules:
+    - expr: |2
+                      (
+                        100 * (
+                                sum(
+                                     rate(
+                                           ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[30d]
+                                     )
+                                )
+                                /
+                                sum(
+                                     rate(
+                                           ray_gcs_update_resource_usage_time_count{container="ray-head"}[30d]
+                                     )
+                                )
+                        )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_availability_30d
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[5m]
+                                           )
+                                       )
+                                       /
+                                       sum(
+                                            rate(
+                                                  ray_gcs_update_resource_usage_time_count{container="ray-head"}[5m]
+                                            )
+                                       )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_5m
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[1h]
+                                           )
+                                      )
+                                      /
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_count{container="ray-head"}[1h]
+                                           )
+                                      )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_1h
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[30m]
+                                           )
+                                      )
+                                      /
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_count{container="ray-head"}[30m]
+                                           )
+                                      )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_30m
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[6h]
+                                           )
+                                      )
+                                      /
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_count{container="ray-head"}[6h]
+                                           )
+                                      )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_6h
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[2h]
+                                           )
+                                      )
+                                      /
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_count{container="ray-head"}[2h]
+                                           )
+                                      )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_2h
+    - expr: |2
+                      100 - (
+                              100 * (
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[1d]
+                                           )
+                                      )
+                                      /
+                                      sum(
+                                           rate(
+                                                 ray_gcs_update_resource_usage_time_count{container="ray-head"}[1d]
+                                           )
+                                      )
+                              )
+                      )
+      labels:
+        ray_io_cluster: ray-cluster-main
+      record: ray_gcs_error_budget_1d
+    - alert: RayGlobalControlStoreShortWindowSLO
+      annotations:
+        description: Ray GCS Resource Update requests are above the SLO (99.9 > 20ms).
+          Burning rate is 14.4 for short window (5m & 1h)
+        summary: Ray GCS is burning too much error budget (short window)
+      expr: |2
+                      (
+                        ray_gcs_error_budget_5m > 14.4*0.1
+                      )
+                      and
+                      (
+                        ray_gcs_error_budget_1h > 14.4*0.1
+                      )
+      for: 5m
+      labels:
+        severity: critical
+    - alert: RayGlobalControlStoreMidWindowSLO
+      annotations:
+        description: Ray GCS Resource Update requests are above the SLO (99.9 > 20ms).
+          Burning rate is 6 for short window (30m & 6h)
+        summary: Ray GCS is burning too much error budget (mid window)
+      expr: |2
+                      (
+                        ray_gcs_error_budget_30m > 6*0.1
+                      )
+                      and
+                      (
+                        ray_gcs_error_budget_6h > 6*0.1
+                      )
+      for: 5m
+      labels:
+        severity: critical
+    - alert: RayGlobalControlStoreLongWindowSLO
+      annotations:
+        description: Ray GCS Resource Update requests are above the SLO (99.9 > 20ms).
+          Burning rate is 3 for short window (2h & 1d)
+        summary: Ray GCS is burning too much error budget (long window)
+      expr: |2
+                      (
+                        ray_gcs_error_budget_2h > 3*0.1
+                      )
+                      and
+                      (
+                        ray_gcs_error_budget_1d > 3*0.1
+                      )
+      for: 5m
+      labels:
+        severity: critical
+    - alert: MissingMetricRayGlobalControlStore
+      annotations:
+        description: Ray GCS is not emitting any metrics for Resource Update requests
+        summary: Ray GCS is not emitting metrics anymore
+      expr: |2
+                      (
+                       absent(ray_gcs_update_resource_usage_time_bucket) == 1
+                      )
+      for: 5m
+      labels:
+        severity: critical
+
