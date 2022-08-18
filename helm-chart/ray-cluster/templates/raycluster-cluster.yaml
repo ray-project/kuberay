@@ -37,6 +37,10 @@ spec:
             {{- if .Values.head.ports }}
             ports: {{- toYaml .Values.head.ports | nindent 14}}
             {{- end }}
+            {{- if .Values.head.lifecycle }}
+            lifecycle:
+            {{- toYaml .Values.head.lifecycle | nindent 14 }}
+            {{- end }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
@@ -81,6 +85,10 @@ spec:
             envFrom: {{- toYaml $ | nindent 14}}
             {{- end }}
             ports: {{- toYaml $values.ports | nindent 14}}
+            {{- if $values.lifecycle }}
+            lifecycle:
+            {{- toYaml $values.lifecycle | nindent 14 }}
+            {{- end }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
@@ -124,6 +132,10 @@ spec:
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
             ports: {{- toYaml .Values.worker.ports | nindent 14}}
+            {{- if .Values.worker.lifecycle }}
+            lifecycle:
+            {{- toYaml .Values.worker.lifecycle | nindent 14 }}
+            {{- end }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
