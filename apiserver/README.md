@@ -12,7 +12,7 @@ KubeRay APIServer provides the gRPC and HTTP API to manage kuberay resources.
 POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 ```
 
-```
+```json
 {
   "name": "default-template",
   "namespace": "<namespace>",
@@ -29,7 +29,7 @@ POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
 ```
 
-```
+```json
 {
     "compute_templates": [
         {
@@ -71,7 +71,7 @@ POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
 ```
 
 payload
-```
+```json
 {
   "name": "test-cluster",
   "namespace": "<namespace>",
@@ -106,7 +106,7 @@ payload
 GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
 ```
 
-```
+```json
 {
     "clusters": [
         {
@@ -166,6 +166,462 @@ GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
 ```
 
+### RayJob
+
+#### Create ray job in a given namespace
+
+```
+POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs
+```
+
+
+payload
+```json
+{
+  "name": "string",
+  "namespace": "string",
+  "user": "string",
+  "entrypoint": "string",
+  "metadata": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "runtimeEnv": "string",
+  "jobId": "string",
+  "shutdownAfterJobFinishes": true,
+  "clusterSelector": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "string",
+      "image": "string",
+      "serviceType": "string",
+      "rayStartParams": {
+        "additionalProp1": "string",
+        "additionalProp2": "string",
+        "additionalProp3": "string"
+      },
+      "volumes": [
+        {
+          "mountPath": "string",
+          "volumeType": "PERSISTENT_VOLUME_CLAIM",
+          "name": "string",
+          "source": "string",
+          "readOnly": true,
+          "hostPathType": "DIRECTORY",
+          "mountPropagationMode": "NONE"
+        }
+      ]
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "string",
+        "computeTemplate": "string",
+        "image": "string",
+        "replicas": 0,
+        "minReplicas": 0,
+        "maxReplicas": 0,
+        "rayStartParams": {
+          "additionalProp1": "string",
+          "additionalProp2": "string",
+          "additionalProp3": "string"
+        },
+        "volumes": [
+          {
+            "mountPath": "string",
+            "volumeType": "PERSISTENT_VOLUME_CLAIM",
+            "name": "string",
+            "source": "string",
+            "readOnly": true,
+            "hostPathType": "DIRECTORY",
+            "mountPropagationMode": "NONE"
+          }
+        ]
+      }
+    ]
+  },
+  "ttlSecondsAfterFinished": 0,
+  "createdAt": "2022-08-19T21:20:30.494Z",
+  "deleteAt": "2022-08-19T21:20:30.494Z",
+  "jobStatus": "string",
+  "jobDeploymentStatus": "string",
+  "message": "string"
+}
+```
+
+#### List all jobs in a given namespace
+
+```
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs
+```
+
+Response
+```json
+{
+  "jobs": [
+    {
+      "name": "string",
+      "namespace": "string",
+      "user": "string",
+      "entrypoint": "string",
+      "metadata": {
+        "additionalProp1": "string",
+        "additionalProp2": "string",
+        "additionalProp3": "string"
+      },
+      "runtimeEnv": "string",
+      "jobId": "string",
+      "shutdownAfterJobFinishes": true,
+      "clusterSelector": {
+        "additionalProp1": "string",
+        "additionalProp2": "string",
+        "additionalProp3": "string"
+      },
+      "clusterSpec": {
+        "headGroupSpec": {
+          "computeTemplate": "string",
+          "image": "string",
+          "serviceType": "string",
+          "rayStartParams": {
+            "additionalProp1": "string",
+            "additionalProp2": "string",
+            "additionalProp3": "string"
+          },
+          "volumes": [
+            {
+              "mountPath": "string",
+              "volumeType": "PERSISTENT_VOLUME_CLAIM",
+              "name": "string",
+              "source": "string",
+              "readOnly": true,
+              "hostPathType": "DIRECTORY",
+              "mountPropagationMode": "NONE"
+            }
+          ]
+        },
+        "workerGroupSpec": [
+          {
+            "groupName": "string",
+            "computeTemplate": "string",
+            "image": "string",
+            "replicas": 0,
+            "minReplicas": 0,
+            "maxReplicas": 0,
+            "rayStartParams": {
+              "additionalProp1": "string",
+              "additionalProp2": "string",
+              "additionalProp3": "string"
+            },
+            "volumes": [
+              {
+                "mountPath": "string",
+                "volumeType": "PERSISTENT_VOLUME_CLAIM",
+                "name": "string",
+                "source": "string",
+                "readOnly": true,
+                "hostPathType": "DIRECTORY",
+                "mountPropagationMode": "NONE"
+              }
+            ]
+          }
+        ]
+      },
+      "ttlSecondsAfterFinished": 0,
+      "createdAt": "2022-08-19T21:31:24.352Z",
+      "deleteAt": "2022-08-19T21:31:24.352Z",
+      "jobStatus": "string",
+      "jobDeploymentStatus": "string",
+      "message": "string"
+    }
+  ]
+}
+```
+
+#### List all jobs in all namespaces
+
+```
+GET {{baseUrl}}/apis/v1alpha2/jobs
+```
+
+#### Get job by its name and namespace
+
+```
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs/<job_name>
+```
+
+
+#### Delete job by its name and namespace
+
+```
+DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs/<job_name>
+```
+
+
+### RayService
+
+#### Create ray service in a given namespace
+
+```
+POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services
+```
+
+payload
+
+```json
+{
+  "name": "string",
+  "namespace": "string",
+  "user": "string",
+  "serveDeploymentGraphSpec": {
+    "importPath": "string",
+    "runtimeEnv": "string",
+    "serveConfigs": [
+      {
+        "deploymentName": "string",
+        "replicas": 0,
+        "routePrefix": "string",
+        "maxConcurrentQueries": 0,
+        "userConfig": "string",
+        "autoscalingConfig": "string",
+        "actorOptions": {
+          "runtimeEnv": "string",
+          "cpus": 0,
+          "gpu": 0,
+          "memory": 0,
+          "objectStoreMemory": 0,
+          "resource": "string",
+          "accceleratorType": "string"
+        }
+      }
+    ]
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "string",
+      "image": "string",
+      "serviceType": "string",
+      "rayStartParams": {
+        "additionalProp1": "string",
+        "additionalProp2": "string",
+        "additionalProp3": "string"
+      },
+      "volumes": [
+        {
+          "mountPath": "string",
+          "volumeType": "PERSISTENT_VOLUME_CLAIM",
+          "name": "string",
+          "source": "string",
+          "readOnly": true,
+          "hostPathType": "DIRECTORY",
+          "mountPropagationMode": "NONE"
+        }
+      ]
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "string",
+        "computeTemplate": "string",
+        "image": "string",
+        "replicas": 0,
+        "minReplicas": 0,
+        "maxReplicas": 0,
+        "rayStartParams": {
+          "additionalProp1": "string",
+          "additionalProp2": "string",
+          "additionalProp3": "string"
+        },
+        "volumes": [
+          {
+            "mountPath": "string",
+            "volumeType": "PERSISTENT_VOLUME_CLAIM",
+            "name": "string",
+            "source": "string",
+            "readOnly": true,
+            "hostPathType": "DIRECTORY",
+            "mountPropagationMode": "NONE"
+          }
+        ]
+      }
+    ]
+  },
+  "rayServiceStatus": {
+    "applicationStatus": "string",
+    "applicationMessage": "string",
+    "serveDeploymentStatus": [
+      {
+        "deploymentName": "string",
+        "status": "string",
+        "message": "string"
+      }
+    ],
+    "rayServiceEvent": [
+      {
+        "id": "string",
+        "name": "string",
+        "createdAt": "2022-08-19T21:30:01.097Z",
+        "firstTimestamp": "2022-08-19T21:30:01.097Z",
+        "lastTimestamp": "2022-08-19T21:30:01.097Z",
+        "reason": "string",
+        "message": "string",
+        "type": "string",
+        "count": 0
+      }
+    ],
+    "rayClusterName": "string",
+    "rayClusterState": "string",
+    "serviceEndpoint": {
+      "additionalProp1": "string",
+      "additionalProp2": "string",
+      "additionalProp3": "string"
+    }
+  },
+  "createdAt": "2022-08-19T21:30:01.097Z",
+  "deleteAt": "2022-08-19T21:30:01.097Z"
+}
+```
+
+#### List all services in a given namespace
+
+```
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services
+```
+
+Response
+```json
+
+  "name": "string",
+  "namespace": "string",
+  "user": "string",
+  "serveDeploymentGraphSpec": {
+    "importPath": "string",
+    "runtimeEnv": "string",
+    "serveConfigs": [
+      {
+        "deploymentName": "string",
+        "replicas": 0,
+        "routePrefix": "string",
+        "maxConcurrentQueries": 0,
+        "userConfig": "string",
+        "autoscalingConfig": "string",
+        "actorOptions": {
+          "runtimeEnv": "string",
+          "cpus": 0,
+          "gpu": 0,
+          "memory": 0,
+          "objectStoreMemory": 0,
+          "resource": "string",
+          "accceleratorType": "string"
+        }
+      }
+    ]
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "string",
+      "image": "string",
+      "serviceType": "string",
+      "rayStartParams": {
+        "additionalProp1": "string",
+        "additionalProp2": "string",
+        "additionalProp3": "string"
+      },
+      "volumes": [
+        {
+          "mountPath": "string",
+          "volumeType": "PERSISTENT_VOLUME_CLAIM",
+          "name": "string",
+          "source": "string",
+          "readOnly": true,
+          "hostPathType": "DIRECTORY",
+          "mountPropagationMode": "NONE"
+        }
+      ]
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "string",
+        "computeTemplate": "string",
+        "image": "string",
+        "replicas": 0,
+        "minReplicas": 0,
+        "maxReplicas": 0,
+        "rayStartParams": {
+          "additionalProp1": "string",
+          "additionalProp2": "string",
+          "additionalProp3": "string"
+        },
+        "volumes": [
+          {
+            "mountPath": "string",
+            "volumeType": "PERSISTENT_VOLUME_CLAIM",
+            "name": "string",
+            "source": "string",
+            "readOnly": true,
+            "hostPathType": "DIRECTORY",
+            "mountPropagationMode": "NONE"
+          }
+        ]
+      }
+    ]
+  },
+  "rayServiceStatus": {
+    "applicationStatus": "string",
+    "applicationMessage": "string",
+    "serveDeploymentStatus": [
+      {
+        "deploymentName": "string",
+        "status": "string",
+        "message": "string"
+      }
+    ],
+    "rayServiceEvent": [
+      {
+        "id": "string",
+        "name": "string",
+        "createdAt": "2022-08-19T21:33:15.485Z",
+        "firstTimestamp": "2022-08-19T21:33:15.485Z",
+        "lastTimestamp": "2022-08-19T21:33:15.485Z",
+        "reason": "string",
+        "message": "string",
+        "type": "string",
+        "count": 0
+      }
+    ],
+    "rayClusterName": "string",
+    "rayClusterState": "string",
+    "serviceEndpoint": {
+      "additionalProp1": "string",
+      "additionalProp2": "string",
+      "additionalProp3": "string"
+    }
+  },
+  "createdAt": "2022-08-19T21:33:15.485Z",
+  "deleteAt": "2022-08-19T21:33:15.485Z"
+}
+```
+
+#### List all services in all namespaces
+
+```
+GET {{baseUrl}}/apis/v1alpha2/services
+```
+
+#### Get service by its name and namespace
+
+```
+GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services/<service_name>
+```
+
+
+#### Delete service by its name and namespace
+
+```
+DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services/<service_name>
+```
 
 ## Swagger Support
 
