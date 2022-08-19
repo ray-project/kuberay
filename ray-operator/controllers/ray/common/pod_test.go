@@ -110,7 +110,9 @@ var instance = rayiov1alpha1.RayCluster{
 								Image: "repo/image:custom",
 								Resources: v1.ResourceRequirements{
 									Limits: v1.ResourceList{
-										"nvidia.com/gpu": resource.MustParse("3"),
+										v1.ResourceCPU:    resource.MustParse("1"),
+										v1.ResourceMemory: testMemoryLimit,
+										"nvidia.com/gpu":  resource.MustParse("3"),
 									},
 								},
 								Env: []v1.EnvVar{
@@ -358,9 +360,10 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
-	if !reflect.DeepEqual(expectedCommandArg, splitAndSort(pod.Spec.Containers[0].Args[0])) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, pod.Spec.Containers[0].Args[0])
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
+	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
+	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
 	}
 
 	// Check Envs
