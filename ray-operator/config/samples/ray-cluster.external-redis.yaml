@@ -114,6 +114,12 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
   workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 2
@@ -169,8 +175,8 @@ spec:
               # use volumeMounts.Optional.
               # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
               volumeMounts:
-                - mountPath: /var/log
-                  name: log-volume
+                - mountPath: /tmp/ray
+                  name: ray-logs
               resources:
                 limits:
                   cpu: "1"
@@ -179,5 +185,5 @@ spec:
           # use volumes
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumes:
-            - name: log-volume
+            - name: ray-logs
               emptyDir: {}
