@@ -58,11 +58,11 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 			AutoscalingConfig:    serveConfig.AutoscalingConfig,
 			RayActorOptions: rayalphaapi.RayActorOptionSpec{
 				RuntimeEnv:        serveConfig.ActorOptions.RuntimeEnv,
-				NumCpus:           &serveConfig.ActorOptions.Cpus,
-				NumGpus:           &serveConfig.ActorOptions.Gpu,
-				Memory:            &serveConfig.ActorOptions.Memory,
-				ObjectStoreMemory: &serveConfig.ActorOptions.ObjectStoreMemory,
-				Resources:         serveConfig.ActorOptions.Resource,
+				NumCpus:           &serveConfig.ActorOptions.CpusPerActor,
+				NumGpus:           &serveConfig.ActorOptions.GpusPerActor,
+				Memory:            &serveConfig.ActorOptions.MemoryPerActor,
+				ObjectStoreMemory: &serveConfig.ActorOptions.ObjectStoreMemoryPerActor,
+				Resources:         serveConfig.ActorOptions.CustomResource,
 				AcceleratorType:   serveConfig.ActorOptions.AccceleratorType,
 			},
 		}

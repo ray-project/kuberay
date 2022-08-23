@@ -215,13 +215,13 @@ func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.Ser
 			UserConfig:           serveConfigSpec.UserConfig,
 			AutoscalingConfig:    serveConfigSpec.AutoscalingConfig,
 			ActorOptions: &api.ActorOptions{
-				RuntimeEnv:        serveConfigSpec.RayActorOptions.RuntimeEnv,
-				Cpus:              *serveConfigSpec.RayActorOptions.NumCpus,
-				Gpu:               *serveConfigSpec.RayActorOptions.NumGpus,
-				Memory:            *serveConfigSpec.RayActorOptions.Memory,
-				ObjectStoreMemory: *serveConfigSpec.RayActorOptions.ObjectStoreMemory,
-				Resource:          serveConfigSpec.RayActorOptions.Resources,
-				AccceleratorType:  serveConfigSpec.RayActorOptions.AcceleratorType,
+				RuntimeEnv:                serveConfigSpec.RayActorOptions.RuntimeEnv,
+				CpusPerActor:              *serveConfigSpec.RayActorOptions.NumCpus,
+				GpusPerActor:              *serveConfigSpec.RayActorOptions.NumGpus,
+				MemoryPerActor:            *serveConfigSpec.RayActorOptions.Memory,
+				ObjectStoreMemoryPerActor: *serveConfigSpec.RayActorOptions.ObjectStoreMemory,
+				CustomResource:            serveConfigSpec.RayActorOptions.Resources,
+				AccceleratorType:          serveConfigSpec.RayActorOptions.AcceleratorType,
 			},
 		}
 		serveConfigs = append(serveConfigs, serveConfig)
@@ -234,7 +234,7 @@ func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RaySer
 		ApplicationStatus:     serviceStatus.ActiveServiceStatus.ApplicationStatus.Status,
 		ApplicationMessage:    serviceStatus.ActiveServiceStatus.ApplicationStatus.Message,
 		ServeDeploymentStatus: PopulateServeDeploymentStatus(serviceStatus.ActiveServiceStatus.ServeStatuses),
-		RayServiceEvent:       PopulateRayServiceEvent(serviceName, events),
+		RayServiceEvents:      PopulateRayServiceEvent(serviceName, events),
 		RayClusterName:        serviceStatus.ActiveServiceStatus.RayClusterName,
 		RayClusterState:       string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
 	}

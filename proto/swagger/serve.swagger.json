@@ -271,31 +271,39 @@
       "type": "object",
       "properties": {
         "runtimeEnv": {
-          "type": "string"
+          "type": "string",
+          "description": "This deployment's runtime_env used by the actor."
         },
-        "cpus": {
+        "cpusPerActor": {
           "type": "number",
-          "format": "double"
+          "format": "double",
+          "description": "The number of CPUs required by the deployment's application per replica."
         },
-        "gpu": {
+        "gpusPerActor": {
           "type": "number",
-          "format": "double"
+          "format": "double",
+          "description": "The number of GPUs required by the deployment's application per replica."
         },
-        "memory": {
+        "memoryPerActor": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "description": "Restrict the heap memory usage of each replica."
         },
-        "objectStoreMemory": {
+        "objectStoreMemoryPerActor": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "description": "Restrict the object store memory used per replica when creating objects."
         },
-        "resource": {
-          "type": "string"
+        "customResource": {
+          "type": "string",
+          "description": "The custom resources required by each replica."
         },
         "accceleratorType": {
-          "type": "string"
+          "type": "string",
+          "description": "Forces replicas to run on nodes with the specified accelerator type."
         }
-      }
+      },
+      "description": "ActorOptions config actor configuration related to one serve deployement."
     },
     "protoClusterSpec": {
       "type": "object",
@@ -486,7 +494,7 @@
           },
           "description": "The status for each deployment."
         },
-        "rayServiceEvent": {
+        "rayServiceEvents": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoRayServiceEvent"

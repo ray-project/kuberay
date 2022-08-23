@@ -166,13 +166,21 @@ message ServeConfig {
   ActorOptions actor_options = 7;
 }
 
+// ActorOptions config actor configuration related to one serve deployement.
 message ActorOptions {
+  // This deployment's runtime_env used by the actor.
   string runtime_env = 1;
-  double cpus = 2;
-  double gpu = 3;
-  int32 memory = 4;
-  int32 object_store_memory = 5;
-  string resource = 6;
+  // The number of CPUs required by the deployment's application per replica.
+  double cpus_per_actor = 2;
+  // The number of GPUs required by the deployment's application per replica.
+  double gpus_per_actor = 3;
+  // Restrict the heap memory usage of each replica.
+  int32 memory_per_actor = 4;
+  // Restrict the object store memory used per replica when creating objects.
+  int32 object_store_memory_per_actor = 5;
+  // The custom resources required by each replica.
+  string custom_resource = 6;
+  // Forces replicas to run on nodes with the specified accelerator type.
   string acccelerator_type = 7;
 }
 
@@ -184,7 +192,7 @@ message RayServiceStatus {
   // The status for each deployment.
   repeated ServeDeploymentStatus serve_deployment_status = 3;
   // The related event for the ray service.
-  repeated RayServiceEvent ray_service_event = 4;
+  repeated RayServiceEvent ray_service_events = 4;
   // The ray cluster name.
   string ray_cluster_name = 5;
   // The state for ray cluster.
