@@ -23,7 +23,7 @@ $ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=
 > Note that we must use `kubectl create` to install the CRDs.
 > The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
-Please use command below:
+Use the following command to install the chart:
 ```console
 $ helm install kuberay-operator --namespace ray-system --create-namespace $(curl -s https://api.github.com/repos/ray-project/kuberay/releases/latest | grep '"browser_download_url":' | sort | grep -om1 'https.*helm-chart-kuberay-operator.*tgz')
 ```
