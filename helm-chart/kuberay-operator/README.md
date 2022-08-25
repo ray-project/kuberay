@@ -18,8 +18,10 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 To avoid duplicate CRD definitions in this repo, we reuse CRD config in `ray-operator`:
 ```console
-$ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0"
+$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0"
 ```
+> Note that we must use `kubectl create` to install the CRDs.
+> The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
 Please use command below:
 ```console
