@@ -1,0 +1,232 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "cluster.proto";
+
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  schemes: HTTP;
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+service RayServeService {
+  // Create a new ray serve.
+  rpc CreateRayService(CreateRayServiceRequest) returns (RayService) {
+    option (google.api.http) = {
+      post: "/apis/v1alpha2/namespaces/{namespace}/services"
+      body: "service"
+    };
+  }
+  // Find a specific ray serve by name and namespace.
+  rpc GetRayService(GetRayServiceRequest) returns (RayService) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+    };
+  }
+  // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListRayServices(ListRayServicesRequest) returns (ListRayServicesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/namespaces/{namespace}/services"
+    };
+  }
+
+  // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
+  rpc ListAllRayServices(ListAllRayServicesRequest) returns (ListAllRayServicesResponse) {
+    option (google.api.http) = {
+      get: "/apis/v1alpha2/services"
+    };
+  }
+
+  // Deletes a ray service by its name and namespace 
+  rpc DeleteRayService(DeleteRayServiceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+    };
+  }
+}
+
+message CreateRayServiceRequest {
+  // The ray service to be created.
+  RayService service = 1;
+  // The namespace of the ray service to be created.
+  string namespace = 2;
+}
+
+message GetRayServiceRequest {
+  // The name used for retrieving the ray service.
+  string name = 1;
+  // The namespace used for retrieving the ray service.
+  string namespace = 2;
+}
+
+message ListRayServicesRequest {
+  // The namespace of the ray services to be retrieved.
+  string namespace = 1;
+  // A page token to request the next page of results. The token is acquried
+  // from the nextPageToken field of the response from the previous
+  // ListRayServices call or can be omitted when fetching the first page.
+  string page_token = 2;
+  // The number of RayServices to be listed per page. If there are more
+  // RayServices than this number, the response message will contain a
+  // nextPageToken field you can use to fetch the next page.
+  int32 page_size = 3;
+}
+
+message ListRayServicesResponse {
+  repeated RayService services = 1; 
+  // The total number of RayServices for the given query.
+  int32 total_size = 2;
+  // The token to list the next page of RayServices.
+  string next_page_token = 3;
+}
+
+message ListAllRayServicesRequest {
+  // A page token to request the next page of results. The token is acquried
+  // from the nextPageToken field of the response from the previous
+  // ListRayServices call or can be omitted when fetching the first page.
+  string page_token = 1;
+  // The number of RayServices to be listed per page. If there are more
+  // RayServices than this number, the response message will contain a
+  // nextPageToken field you can use to fetch the next page.
+  int32 page_size = 2;
+}
+
+message ListAllRayServicesResponse {
+  repeated RayService services = 1; 
+  // The total number of RayServices for the given query.
+  int32 total_size = 2;
+  // The token to list the next page of RayServices.
+  string next_page_token = 3;
+}
+
+message DeleteRayServiceRequest {
+  // The name of the ray service to be deleted.
+  string name = 1;
+  // The namespace of the ray service to be deleted.
+  string namespace = 2;
+}
+
+message RayService {
+  // Required input field. Unique ray service name provided by user.
+  string name = 1;
+  // Required input field. ray service namespace provided by user
+  string namespace = 2;
+  // Required field. This field indicates the user who owns the ray service.
+  string user = 3;
+  // The config for ray serve deployments.
+  ServeDeploymentGraphSpec serve_deployment_graph_spec = 4;
+  // The cluster template.
+  ClusterSpec cluster_spec = 5;
+  // Output. The status for the ray service.
+  RayServiceStatus ray_service_status = 6;
+  // Output. The time that the ray service created.
+  google.protobuf.Timestamp created_at = 7;
+  // Output. The time that the ray service deleted.     
+  google.protobuf.Timestamp delete_at = 8;
+}
+
+message ServeDeploymentGraphSpec {
+    // Required input field. Import path for load the ray serve.
+    string import_path = 1;
+    // runtime env for loading the ray serve.
+    string runtime_env = 2;
+    // deployments config of the ray serve.
+    repeated ServeConfig serve_configs = 3;
+}
+
+message ServeConfig {
+  // Required input field. Unique ray service deployment name provided by user.
+  string deployment_name = 1;
+  // ray service deployment replicas, default set to 1.  
+  int32 replicas = 2;
+  // ray service deployment route prefix indicated by user.
+  string route_prefix = 3;
+  // max concurrent queries indicate for each ray service deployment.
+  int32 max_concurrent_queries = 4;
+  // user config to the ray serve deployment.
+  string user_config = 5;
+  // auto scaling config for ray serve deployment indicate by user.
+  string autoscaling_config = 6;
+  // actor options indicated resource of each deployment's actor.
+  ActorOptions actor_options = 7;
+}
+
+// ActorOptions config actor configuration related to one serve deployement.
+message ActorOptions {
+  // This deployment's runtime_env used by the actor.
+  string runtime_env = 1;
+  // The number of CPUs required by the deployment's application per replica.
+  double cpus_per_actor = 2;
+  // The number of GPUs required by the deployment's application per replica.
+  double gpus_per_actor = 3;
+  // Restrict the heap memory usage of each replica.
+  int32 memory_per_actor = 4;
+  // Restrict the object store memory used per replica when creating objects.
+  int32 object_store_memory_per_actor = 5;
+  // The custom resources required by each replica.
+  string custom_resource = 6;
+  // Forces replicas to run on nodes with the specified accelerator type.
+  string acccelerator_type = 7;
+}
+
+message RayServiceStatus {
+  // The ray serve application status.
+  string application_status = 1;
+  // A human-readable description of the status of this operation.
+  string application_message = 2;
+  // The status for each deployment.
+  repeated ServeDeploymentStatus serve_deployment_status = 3;
+  // The related event for the ray service.
+  repeated RayServiceEvent ray_service_events = 4;
+  // The ray cluster name.
+  string ray_cluster_name = 5;
+  // The state for ray cluster.
+  string ray_cluster_state = 6;
+  // The service endpoint of the cluster and service.
+  map<string, string> service_endpoint = 7;
+}
+
+message ServeDeploymentStatus {
+  // Unique ray service deployment name.
+  string deployment_name = 1;
+  // Status of single deployment.
+  string status = 2;
+  // A human-readable description of the status of this operation.
+  string message = 3;
+}
+
+message RayServiceEvent {
+  // Output. Unique Event Id.
+  string id = 1;
+  // Output. Human readable name for event.
+  string name = 2;
+  // Output. The creation time of the event. 
+  google.protobuf.Timestamp created_at = 3;
+  // Output. The last time the event occur.
+  google.protobuf.Timestamp first_timestamp = 4;
+  // Output. The first time the event occur
+  google.protobuf.Timestamp last_timestamp = 5;
+  // Output. The reason for the transition into the object's current status.
+  string reason = 6;
+  // Output. A human-readable description of the status of this operation.
+  string message = 7;
+  // Output. Type of this event (Normal, Warning), new types could be added in the future
+  string type = 8;
+  // Output. The number of times this event has occurred.
+  int32 count = 9;
+}

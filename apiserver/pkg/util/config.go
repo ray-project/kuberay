@@ -13,6 +13,7 @@ const (
 	RayClusterUserLabelKey            = "ray.io/user"
 	RayClusterVersionLabelKey         = "ray.io/version"
 	RayClusterEnvironmentLabelKey     = "ray.io/environment"
+	RayServiceLabelKey                = "ray.io/service"
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
 

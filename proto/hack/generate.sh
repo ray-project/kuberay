@@ -28,4 +28,5 @@ jq -s 'reduce .[] as $item ({}; . * $item) | .info.title = "KubeRay API" | .info
   /go/src/github.com/ray-project/kuberay/proto/swagger/config.swagger.json \
   /go/src/github.com/ray-project/kuberay/proto/swagger/error.swagger.json \
   /go/src/github.com/ray-project/kuberay/proto/swagger/job.swagger.json \
+  /go/src/github.com/ray-project/kuberay/proto/swagger/serve.swagger.json \
   > "/go/src/github.com/ray-project/kuberay/proto/kuberay_api.swagger.json"

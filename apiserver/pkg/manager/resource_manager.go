@@ -35,6 +35,13 @@ type ResourceManagerInterface interface {
 	ListJobs(ctx context.Context, namespace string) ([]*v1alpha1.RayJob, error)
 	ListAllJobs(ctx context.Context) ([]*v1alpha1.RayJob, error)
 	DeleteJob(ctx context.Context, jobName string, namespace string) error
+	CreateService(ctx context.Context, apiService *api.RayService) (*v1alpha1.RayService, error)
+	GetService(ctx context.Context, serviceName, namespace string) error
+	ListServices(ctx context.Context, namespace string) ([]*v1alpha1.RayService, error)
+	ListAllServices(ctx context.Context) ([]*v1alpha1.RayService, error)
+	DeleteService(ctx context.Context, serviceName, namespace string) error
+	GetClusterEvents(ctx context.Context, clusterName string, namespace string) ([]v1.Event, error)
+	GetServiceEvents(ctx context.Context, service v1alpha1.RayService) ([]v1.Event, error)
 }
 
 type ResourceManager struct {
@@ -55,6 +62,10 @@ func (r *ResourceManager) getRayClusterClient(namespace string) rayiov1alpha1.Ra
 
 func (r *ResourceManager) getRayJobClient(namespace string) rayiov1alpha1.RayJobInterface {
 	return r.clientManager.JobClient().RayJobClient(namespace)
+}
+
+func (r *ResourceManager) getRayServiceClient(namespace string) rayiov1alpha1.RayServiceInterface {
+	return r.clientManager.ServiceClient().RayServiceClient(namespace)
 }
 
 func (r *ResourceManager) getKubernetesConfigMapClient(namespace string) clientv1.ConfigMapInterface {
@@ -284,6 +295,79 @@ func (r *ResourceManager) DeleteJob(ctx context.Context, jobName string, namespa
 	return nil
 }
 
+func (r *ResourceManager) CreateService(ctx context.Context, apiService *api.RayService) (*v1alpha1.RayService, error) {
+	// populate cluster map
+	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
+	}
+	rayService := util.NewRayService(apiService, computeTemplateDict)
+	createdAt := r.clientManager.Time().Now().String()
+	rayService.Annotations["ray.io/creation-timestamp"] = createdAt
+	newRayService, err := r.getRayServiceClient(apiService.Namespace).Create(ctx, rayService.Get(), metav1.CreateOptions{})
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to create service for (%s/%s)", rayService.Namespace, rayService.Name)
+	}
+
+	return newRayService, nil
+}
+
+func (r *ResourceManager) GetService(ctx context.Context, serviceName, namespace string) (*v1alpha1.RayService, error) {
+	client := r.getRayServiceClient(namespace)
+	return getServiceByName(ctx, client, serviceName)
+}
+
+func (r *ResourceManager) ListServices(ctx context.Context, namespace string) ([]*v1alpha1.RayService, error) {
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
+	rayServiceList, err := r.getRayServiceClient(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	})
+	if err != nil {
+		return nil, util.Wrap(err, fmt.Sprintf("List RayService failed in %s", namespace))
+	}
+	rayServices := make([]*v1alpha1.RayService, 0)
+	for _, service := range rayServiceList.Items {
+		rayServices = append(rayServices, &service)
+	}
+
+	return rayServices, nil
+}
+
+func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*v1alpha1.RayService, error) {
+	rayServices := make([]*v1alpha1.RayService, 0)
+
+	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
+	}
+
+	for _, namespace := range namespaces.Items {
+		servicesByNamespace, err := r.ListServices(ctx, namespace.Name)
+		if err != nil {
+			return nil, util.Wrap(err, "List All Rayservices failed")
+		}
+		rayServices = append(rayServices, servicesByNamespace...)
+	}
+	return rayServices, nil
+}
+
+func (r *ResourceManager) DeleteService(ctx context.Context, serviceName, namespace string) error {
+	client := r.getRayServiceClient(namespace)
+	service, err := getServiceByName(ctx, client, serviceName)
+	if err != nil {
+		return util.Wrap(err, "delete ray service failure")
+	}
+	if err := client.Delete(ctx, service.Name, metav1.DeleteOptions{}); err != nil {
+		return util.NewInternalServerError(err, "failed to delete ray service %s.", service.Name)
+	}
+
+	return nil
+}
+
 // Compute Runtimes
 func (r *ResourceManager) CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 	_, err := r.GetComputeTemplate(ctx, runtime.Name, runtime.Namespace)
@@ -397,6 +481,20 @@ func getJobByName(ctx context.Context, client rayiov1alpha1.RayJobInterface, nam
 	return job, nil
 }
 
+func getServiceByName(ctx context.Context, client rayiov1alpha1.RayServiceInterface, name string) (*v1alpha1.RayService, error) {
+	service, err := client.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, util.NewNotFoundError(err, "Service %s not found", name)
+		}
+		return nil, util.Wrap(err, "get service failed")
+	}
+	if managedBy, ok := service.Labels[util.KubernetesManagedByLabelKey]; !ok || managedBy != util.ComponentName {
+		return nil, fmt.Errorf("RayService with name %s not managed by %s", name, util.ComponentName)
+	}
+	return service, nil
+}
+
 // getComputeTemplateByName returns the Kubernetes configmap object by given name and client
 func getComputeTemplateByName(ctx context.Context, client clientv1.ConfigMapInterface, name string) (*v1.ConfigMap, error) {
 	runtime, err := client.Get(ctx, name, metav1.GetOptions{})
@@ -432,6 +530,38 @@ func getRayClusterEventsByName(ctx context.Context, name string, client clientv1
 	}
 	if len(events.Items) == 0 {
 		return nil, fmt.Errorf("No Event with RayCluster name %s", name)
+	}
+
+	return events.Items, nil
+}
+
+func (r *ResourceManager) GetServiceEvents(ctx context.Context, service v1alpha1.RayService) ([]v1.Event, error) {
+	eventClient := r.getEventsClient(service.Namespace)
+	events, err := getRayServiceEventsByName(ctx, service.Name, eventClient)
+	if err != nil {
+		return nil, err
+	}
+	if len(service.Status.ActiveServiceStatus.RayClusterName) > 0 {
+		clusterEvents, err := r.GetClusterEvents(ctx, service.Status.ActiveServiceStatus.RayClusterName, service.Namespace)
+		if err != nil {
+			clusterEvents = make([]v1.Event, 0)
+		}
+		events = append(events, clusterEvents...)
+	}
+	return events, nil
+}
+
+func getRayServiceEventsByName(ctx context.Context, name string, client clientv1.EventInterface) ([]v1.Event, error) {
+	fieldSelectorById := fmt.Sprintf("involvedObject.name=%s", name)
+	events, err := client.List(ctx, metav1.ListOptions{
+		FieldSelector: fieldSelectorById,
+		TypeMeta:      metav1.TypeMeta{Kind: "RayService"},
+	})
+	if err != nil {
+		return nil, util.Wrap(err, "Get Ray Cluster Events failed")
+	}
+	if len(events.Items) == 0 {
+		return make([]v1.Event, 0), nil
 	}
 
 	return events.Items, nil

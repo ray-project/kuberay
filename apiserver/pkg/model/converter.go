@@ -162,3 +162,117 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 
 	return pbJob
 }
+
+func FromCrdToApiServices(services []*v1alpha1.RayService, serviceEventsMap map[string][]v1.Event) []*api.RayService {
+	apiServices := make([]*api.RayService, 0)
+	for _, service := range services {
+		apiServices = append(apiServices, FromCrdToApiService(service, serviceEventsMap[service.Name]))
+	}
+	return apiServices
+}
+
+func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.RayService {
+	defer func() {
+		err := recover()
+		if err != nil {
+			glog.Errorf("failed to transfer ray service, err: %v, item: %v", err, service)
+		}
+	}()
+
+	var deleteTime int64 = -1
+	if service.DeletionTimestamp != nil {
+		deleteTime = service.DeletionTimestamp.Unix()
+	}
+	pbService := &api.RayService{
+		Name:                     service.Name,
+		Namespace:                service.Namespace,
+		User:                     service.Labels[util.RayClusterUserLabelKey],
+		ServeDeploymentGraphSpec: PopulateServeDeploymentGraphSpec(service.Spec.ServeDeploymentGraphSpec),
+		ClusterSpec:              PopulateRayClusterSpec(service.Spec.RayClusterSpec),
+		RayServiceStatus:         PoplulateRayServiceStatus(service.Name, service.Status, events),
+		CreatedAt:                &timestamp.Timestamp{Seconds: service.CreationTimestamp.Unix()},
+		DeleteAt:                 &timestamp.Timestamp{Seconds: deleteTime},
+	}
+	return pbService
+}
+
+func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
+	return &api.ServeDeploymentGraphSpec{
+		ImportPath:   spec.ImportPath,
+		RuntimeEnv:   spec.RuntimeEnv,
+		ServeConfigs: PopulateServeConfig(spec.ServeConfigSpecs),
+	}
+}
+
+func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.ServeConfig {
+	serveConfigs := make([]*api.ServeConfig, 0)
+	for _, serveConfigSpec := range serveConfigSpecs {
+		serveConfig := &api.ServeConfig{
+			DeploymentName:       serveConfigSpec.Name,
+			Replicas:             *serveConfigSpec.NumReplicas,
+			RoutePrefix:          serveConfigSpec.RoutePrefix,
+			MaxConcurrentQueries: *serveConfigSpec.MaxConcurrentQueries,
+			UserConfig:           serveConfigSpec.UserConfig,
+			AutoscalingConfig:    serveConfigSpec.AutoscalingConfig,
+			ActorOptions: &api.ActorOptions{
+				RuntimeEnv:                serveConfigSpec.RayActorOptions.RuntimeEnv,
+				CpusPerActor:              *serveConfigSpec.RayActorOptions.NumCpus,
+				GpusPerActor:              *serveConfigSpec.RayActorOptions.NumGpus,
+				MemoryPerActor:            *serveConfigSpec.RayActorOptions.Memory,
+				ObjectStoreMemoryPerActor: *serveConfigSpec.RayActorOptions.ObjectStoreMemory,
+				CustomResource:            serveConfigSpec.RayActorOptions.Resources,
+				AccceleratorType:          serveConfigSpec.RayActorOptions.AcceleratorType,
+			},
+		}
+		serveConfigs = append(serveConfigs, serveConfig)
+	}
+	return serveConfigs
+}
+
+func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {
+	status := &api.RayServiceStatus{
+		ApplicationStatus:     serviceStatus.ActiveServiceStatus.ApplicationStatus.Status,
+		ApplicationMessage:    serviceStatus.ActiveServiceStatus.ApplicationStatus.Message,
+		ServeDeploymentStatus: PopulateServeDeploymentStatus(serviceStatus.ActiveServiceStatus.ServeStatuses),
+		RayServiceEvents:      PopulateRayServiceEvent(serviceName, events),
+		RayClusterName:        serviceStatus.ActiveServiceStatus.RayClusterName,
+		RayClusterState:       string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
+	}
+	status.ServiceEndpoint = map[string]string{}
+	for name, port := range serviceStatus.ActiveServiceStatus.RayClusterStatus.Endpoints {
+		status.ServiceEndpoint[name] = port
+	}
+	return status
+}
+
+func PopulateServeDeploymentStatus(serveDeploymentStatuses []v1alpha1.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
+	deploymentStatus := make([]*api.ServeDeploymentStatus, 0)
+	for _, serveDeploymentStatus := range serveDeploymentStatuses {
+		ds := &api.ServeDeploymentStatus{
+			DeploymentName: serveDeploymentStatus.Name,
+			Status:         serveDeploymentStatus.Status,
+			Message:        serveDeploymentStatus.Message,
+		}
+		deploymentStatus = append(deploymentStatus, ds)
+	}
+	return deploymentStatus
+}
+
+func PopulateRayServiceEvent(serviceName string, events []v1.Event) []*api.RayServiceEvent {
+	serviceEvents := make([]*api.RayServiceEvent, 0)
+	for _, event := range events {
+		serviceEvent := &api.RayServiceEvent{
+			Id:             event.Name,
+			Name:           fmt.Sprintf("%s-%s", serviceName, event.Name),
+			CreatedAt:      &timestamp.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
+			FirstTimestamp: &timestamp.Timestamp{Seconds: event.FirstTimestamp.Unix()},
+			LastTimestamp:  &timestamp.Timestamp{Seconds: event.LastTimestamp.Unix()},
+			Reason:         event.Reason,
+			Message:        event.Message,
+			Type:           event.Type,
+			Count:          event.Count,
+		}
+		serviceEvents = append(serviceEvents, serviceEvent)
+	}
+	return serviceEvents
+}
