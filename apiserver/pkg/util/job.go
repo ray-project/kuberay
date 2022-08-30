@@ -3,7 +3,6 @@ package util
 import (
 	"encoding/base64"
 
-	"github.com/golang/glog"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,15 +16,14 @@ const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
 func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) *RayJob {
-	var clusterSpec rayalphaapi.RayClusterSpec
+	var clusterSpec *rayalphaapi.RayClusterSpec
 
-	if apiJob.ClusterSpec != nil && len(apiJob.ClusterSelector) == 0 {
-		clusterSpec = *buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
+	if apiJob.ClusterSpec != nil {
+		clusterSpec = buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
 	}
 
 	// transfer json to runtimeEnv
 	encodedText := base64.StdEncoding.EncodeToString([]byte(apiJob.RuntimeEnv))
-	glog.Infof(encodedText)
 
 	rayJob := &rayalphaapi.RayJob{
 		ObjectMeta: metav1.ObjectMeta{

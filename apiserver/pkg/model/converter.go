@@ -145,11 +145,14 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 		JobId:                    job.Status.JobId,
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
 		ClusterSelector:          job.Spec.ClusterSelector,
-		ClusterSpec:              PopulateRayClusterSpec(job.Spec.RayClusterSpec),
 		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
 		JobStatus:                string(job.Status.JobStatus),
 		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
 		Message:                  job.Status.Message,
+	}
+
+	if job.Spec.RayClusterSpec != nil {
+		pbJob.ClusterSpec = PopulateRayClusterSpec(*job.Spec.RayClusterSpec)
 	}
 
 	if job.Spec.TTLSecondsAfterFinished != nil {

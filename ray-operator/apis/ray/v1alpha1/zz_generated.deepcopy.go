@@ -370,7 +370,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(int32)
 		**out = **in
 	}
-	in.RayClusterSpec.DeepCopyInto(&out.RayClusterSpec)
+	if in.RayClusterSpec != nil {
+		in, out := &in.RayClusterSpec, &out.RayClusterSpec
+		*out = new(RayClusterSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.ClusterSelector != nil {
 		in, out := &in.ClusterSelector, &out.ClusterSelector
 		*out = make(map[string]string, len(*in))
