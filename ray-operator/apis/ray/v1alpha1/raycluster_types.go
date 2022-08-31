@@ -51,7 +51,7 @@ type WorkerGroupSpec struct {
 	MaxReplicas *int32 `json:"maxReplicas"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
-	// Template a pod template for the worker
+	// Template is a pod template for the worker
 	Template v1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
