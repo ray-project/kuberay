@@ -5892,7 +5892,7 @@ spec:
                               type: array
                           type: object
                         template:
-                          description: Template a pod template for the worker
+                          description: Template is a pod template for the worker
                           properties:
                             metadata:
                               description: 'Standard object''s metadata. More info:
@@ -11614,10 +11614,6 @@ spec:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'
                 properties:
-                  importPath:
-                    type: string
-                  runtimeEnv:
-                    type: string
                   deployments:
                     items:
                       description: ServeConfigSpec defines the desired state of RayService
@@ -11674,6 +11670,10 @@ spec:
                       - name
                       type: object
                     type: array
+                  importPath:
+                    type: string
+                  runtimeEnv:
+                    type: string
                 required:
                 - importPath
                 type: object

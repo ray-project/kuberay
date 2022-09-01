@@ -5643,7 +5643,7 @@ spec:
                           type: array
                       type: object
                     template:
-                      description: Template a pod template for the worker
+                      description: Template is a pod template for the worker
                       properties:
                         metadata:
                           description: 'Standard object''s metadata. More info: https://git.k8s.'
