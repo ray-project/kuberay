@@ -64,6 +64,12 @@ spec:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -112,8 +118,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
         initContainers:
         # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
         - name: init-myservice
@@ -123,6 +129,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
 ######################status#################################

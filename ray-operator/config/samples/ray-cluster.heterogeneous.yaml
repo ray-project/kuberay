@@ -63,6 +63,8 @@ spec:
           volumeMounts:
           - mountPath: /opt
             name: config
+          - mountPath: /tmp/ray
+            name: ray-logs
         volumes:
         # You set volumes at the Pod level, then mount them into containers inside that Pod
         - name: config
@@ -73,6 +75,8 @@ spec:
             items:
             - key: sample_code.py
               path: sample_code.py
+        - name: ray-logs
+          emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 3
@@ -137,8 +141,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "1"
@@ -147,7 +151,7 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
   - replicas: 1
     minReplicas: 0
@@ -225,8 +229,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "2"
@@ -235,6 +239,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
 ######################status#################################
