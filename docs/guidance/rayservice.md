@@ -23,7 +23,7 @@ A RayService manages 2 things:
 
 ### Deploy the Operator
 
-`$ kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"`
+`$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.3.0&timeout=90s"`
 
 Check that the controller is running.
 

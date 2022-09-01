@@ -3,15 +3,16 @@
 #### Nightly version
 
 ```
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base"
+export KUBERAY_VERSION=master
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
 #### Stable version
 
 ```
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.2.0"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.2.0"
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0"
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources.

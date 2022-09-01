@@ -43,7 +43,7 @@ An example ray code is defined in this [configmap](config/samples/config-map-ray
 ### Deploy the operator
 
 ```shell
-kubectl apply -k "github.com/ray-project/kuberay/ray-operator/config/default"
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.3.0&timeout=90s"
 ```
 
 Check that the controller is running.
