@@ -56,10 +56,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1G"
+              memory: "2G"
             requests:
               cpu: "500m"
-              memory: "512Mi"
+              memory: "1G"
         volumes:
           - name: ray-logs
             emptyDir: {}
