@@ -13,15 +13,25 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 ## TL;DR;
 
-```console
-$ helm install ray-cluster --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.3.0/helm-chart-ray-cluster-0.1.0.tgz
+```bash
+# Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
+cd helm-chart/ray-cluster
+helm install ray-cluster --namespace ray-system --create-namespace .
+
+# Not working until release 0.4.0.
+helm install ray-cluster --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.4.0/helm-chart-ray-cluster-0.4.0.tgz
 ```
 
 ## Installing the Chart
 
 To install the chart with the release name `my-release`:
-```console
-$ helm install my-release --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.3.0/helm-chart-ray-cluster-0.1.0.tgz
+```bash
+# Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
+cd helm-chart/ray-cluster
+helm install my-release --namespace ray-system --create-namespace .
+
+# Not working until release 0.4.0.
+helm install my-release --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.4.0/helm-chart-ray-cluster-0.4.0.tgz
 ```
 
 > note: The chart will submit a RayCluster.

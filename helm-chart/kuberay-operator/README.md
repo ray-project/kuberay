@@ -18,7 +18,7 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 
 To avoid duplicate CRD definitions in this repo, we reuse CRD config in `ray-operator`:
 ```console
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0"
+$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0&timeout=90s"
 ```
 > Note that we must use `kubectl create` to install the CRDs.
 > The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
@@ -33,7 +33,7 @@ $ helm install kuberay-operator --namespace ray-system --create-namespace $(curl
 To list the `my-release` deployment:
 
 ```console
-$ helm list -n kuberay-operator
+$ helm list -n ray-system
 ```
 
 ## Uninstalling the Chart
