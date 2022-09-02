@@ -4,7 +4,7 @@
 
 image:
   repository: rayproject/ray
-  tag: latest
+  tag: 2.0.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay"
@@ -36,9 +36,9 @@ head:
     #     name: my-env-secret
   resources:
     limits:
-      cpu: 1
+      cpu: 2
     requests:
-       cpu: 200m
+       cpu: 2
   annotations: {}
   nodeSelector: {}
   tolerations: []
