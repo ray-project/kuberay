@@ -36,9 +36,9 @@ head:
     #     name: my-env-secret
   resources:
     limits:
-      cpu: 2
+      cpu: 1
     requests:
-       cpu: 2
+       cpu: 1
   annotations: {}
   nodeSelector: {}
   tolerations: []
