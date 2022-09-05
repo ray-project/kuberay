@@ -2,7 +2,7 @@
 
 Make sure ray-operator has been deployed.
 
-[Ray](https://ray.io/) is an open source framework that provides a simple, universal API for building distributed applications. Ray is packaged with RLlib, a scalable reinforcement learning library, and Tune, a scalable hyperparameter tuning library.
+[Ray](https://ray.io/) is a unified framework for scaling AI and Python applications. Ray consists of a core distributed runtime and a toolkit of libraries (Ray AIR) for simplifying ML compute.
 
 ## Helm
 
@@ -17,9 +17,6 @@ version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa2
 # Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
 cd helm-chart/ray-cluster
 helm install ray-cluster --namespace ray-system --create-namespace .
-
-# Not working until release 0.4.0.
-helm install ray-cluster --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.4.0/helm-chart-ray-cluster-0.4.0.tgz
 ```
 
 ## Installing the Chart
@@ -29,9 +26,6 @@ To install the chart with the release name `my-release`:
 # Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
 cd helm-chart/ray-cluster
 helm install my-release --namespace ray-system --create-namespace .
-
-# Not working until release 0.4.0.
-helm install my-release --namespace ray-system --create-namespace https://github.com/ray-project/kuberay/releases/download/v0.4.0/helm-chart-ray-cluster-0.4.0.tgz
 ```
 
 > note: The chart will submit a RayCluster.
