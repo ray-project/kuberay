@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.6.0
   creationTimestamp: null
-  name: rayservices.ray.io
+  name: rayjobs.ray.io
 spec:
   group: ray.io
   names:
-    kind: RayService
-    listKind: RayServiceList
-    plural: rayservices
-    singular: rayservice
+    kind: RayJob
+    listKind: RayJobList
+    plural: rayjobs
+    singular: rayjob
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: RayService is the Schema for the rayservices API
+        description: RayJob is the Schema for the rayjobs API
         properties:
           apiVersion:
             description: APIVersion defines the versioned schema of this representation
@@ -32,14 +32,28 @@ spec:
           metadata:
             type: object
           spec:
-            description: RayServiceSpec defines the desired state of RayService
+            description: RayJobSpec defines the desired state of RayJob
             properties:
-              deploymentUnhealthySecondThreshold:
-                format: int32
-                type: integer
-              rayClusterConfig:
-                description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                  NOTE: json tags are required.'
+              clusterSelector:
+                additionalProperties:
+                  type: string
+                description: clusterSelector is used to select running rayclusters
+                  by labels
+                type: object
+              entrypoint:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code af'
+                type: string
+              jobId:
+                description: If jobId is not set, a new jobId will be auto-generated.
+                type: string
+              metadata:
+                additionalProperties:
+                  type: string
+                description: Metadata is data to store along with this job.
+                type: object
+              rayClusterSpec:
+                description: RayClusterSpec is the cluster template to run the job
                 properties:
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
@@ -11610,278 +11624,87 @@ spec:
                 required:
                 - headGroupSpec
                 type: object
-              serveConfig:
-                description: 'Important: Run "make" to regenerate code after modifying
-                  this file'
-                properties:
-                  deployments:
-                    items:
-                      description: ServeConfigSpec defines the desired state of RayService
-                        Reference to http://rayserve.org
-                      properties:
-                        autoscalingConfig:
-                          type: string
-                        gracefulShutdownTimeoutS:
-                          format: int32
-                          type: integer
-                        gracefulShutdownWaitLoopS:
-                          format: int32
-                          type: integer
-                        healthCheckPeriodS:
-                          format: int32
-                          type: integer
-                        healthCheckTimeoutS:
-                          format: int32
-                          type: integer
-                        maxConcurrentQueries:
-                          format: int32
-                          type: integer
-                        name:
-                          type: string
-                        numReplicas:
-                          format: int32
-                          type: integer
-                        rayActorOptions:
-                          description: RayActorOptionSpec defines the desired state
-                            of RayActor
-                          properties:
-                            acceleratorType:
-                              type: string
-                            memory:
-                              format: int32
-                              type: integer
-                            numCpus:
-                              type: number
-                            numGpus:
-                              type: number
-                            objectStoreMemory:
-                              format: int32
-                              type: integer
-                            resources:
-                              type: string
-                            runtimeEnv:
-                              type: string
-                          type: object
-                        routePrefix:
-                          type: string
-                        userConfig:
-                          type: string
-                      required:
-                      - name
-                      type: object
-                    type: array
-                  importPath:
-                    type: string
-                  runtimeEnv:
-                    type: string
-                required:
-                - importPath
-                type: object
-              serviceUnhealthySecondThreshold:
+              runtimeEnv:
+                description: RuntimeEnv is base64 encoded.
+                type: string
+              shutdownAfterJobFinishes:
+                description: ShutdownAfterJobFinishes will determine whether to delete
+                  the ray cluster once rayJob succeed or fai
+                type: boolean
+              ttlSecondsAfterFinished:
+                description: TTLSecondsAfterFinished is the TTL to clean up RayCluster.
                 format: int32
                 type: integer
+            required:
+            - entrypoint
             type: object
           status:
-            description: RayServiceStatuses defines the observed state of RayService
+            description: RayJobStatus defines the observed state of RayJob
             properties:
-              activeServiceStatus:
+              dashboardURL:
+                type: string
+              endTime:
+                description: Represents time when the job was ended.
+                format: date-time
+                type: string
+              jobDeploymentStatus:
+                description: JobDeploymentStatus indicates RayJob status including
+                  RayCluster lifecycle management and Job submis
+                type: string
+              jobId:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerat'
+                type: string
+              jobStatus:
+                description: JobStatus is the Ray Job Status. https://docs.ray.io/en/latest/cluster/jobs-package-ref.
+                type: string
+              message:
+                type: string
+              rayClusterName:
+                type: string
+              rayClusterStatus:
+                description: RayClusterStatus defines the observed state of RayCluster
                 properties:
-                  appStatus:
-                    description: 'Important: Run "make" to regenerate code after modifying
-                      this file'
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
-                        format: date-time
-                        type: string
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                      message:
-                        type: string
-                      status:
-                        type: string
+                  availableWorkerReplicas:
+                    description: AvailableWorkerReplicas indicates how many replicas
+                      are available in the cluster
+                    format: int32
+                    type: integer
+                  desiredWorkerReplicas:
+                    description: DesiredWorkerReplicas indicates overall desired replicas
+                      claimed by the user at the cluster level.
+                    format: int32
+                    type: integer
+                  endpoints:
+                    additionalProperties:
+                      type: string
+                    description: Service Endpoints
                     type: object
-                  dashboardStatus:
-                    description: DashboardStatus defines the current states of Ray
-                      Dashboard
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the dashboard is healthy.
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                    type: object
-                  rayClusterName:
+                  lastUpdateTime:
+                    description: LastUpdateTime indicates last update timestamp for
+                      this cluster status.
+                    format: date-time
+                    nullable: true
                     type: string
-                  rayClusterStatus:
-                    description: RayClusterStatus defines the observed state of RayCluster
-                    properties:
-                      availableWorkerReplicas:
-                        description: AvailableWorkerReplicas indicates how many replicas
-                          are available in the cluster
-                        format: int32
-                        type: integer
-                      desiredWorkerReplicas:
-                        description: DesiredWorkerReplicas indicates overall desired
-                          replicas claimed by the user at the cluster level.
-                        format: int32
-                        type: integer
-                      endpoints:
-                        additionalProperties:
-                          type: string
-                        description: Service Endpoints
-                        type: object
-                      lastUpdateTime:
-                        description: LastUpdateTime indicates last update timestamp
-                          for this cluster status.
-                        format: date-time
-                        nullable: true
-                        type: string
-                      maxWorkerReplicas:
-                        description: MaxWorkerReplicas indicates sum of maximum replicas
-                          of each node group.
-                        format: int32
-                        type: integer
-                      minWorkerReplicas:
-                        description: MinWorkerReplicas indicates sum of minimum replicas
-                          of each node group.
-                        format: int32
-                        type: integer
-                      state:
-                        description: 'INSERT ADDITIONAL STATUS FIELD - define observed
-                          state of cluster Important: Run "make" to regenerat'
-                        type: string
-                    type: object
-                  serveDeploymentStatuses:
-                    items:
-                      description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
-                      properties:
-                        healthLastUpdateTime:
-                          description: Keep track of how long the service is healthy.
-                          format: date-time
-                          type: string
-                        lastUpdateTime:
-                          format: date-time
-                          type: string
-                        message:
-                          type: string
-                        name:
-                          description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
-                          type: string
-                        status:
-                          description: 'TODO: change status type to enum'
-                          type: string
-                      type: object
-                    type: array
-                type: object
-              pendingServiceStatus:
-                description: Pending Service Status indicates a RayCluster will be
-                  created or is being created.
-                properties:
-                  appStatus:
-                    description: 'Important: Run "make" to regenerate code after modifying
-                      this file'
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
-                        format: date-time
-                        type: string
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                      message:
-                        type: string
-                      status:
-                        type: string
-                    type: object
-                  dashboardStatus:
-                    description: DashboardStatus defines the current states of Ray
-                      Dashboard
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the dashboard is healthy.
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                    type: object
-                  rayClusterName:
+                  maxWorkerReplicas:
+                    description: MaxWorkerReplicas indicates sum of maximum replicas
+                      of each node group.
+                    format: int32
+                    type: integer
+                  minWorkerReplicas:
+                    description: MinWorkerReplicas indicates sum of minimum replicas
+                      of each node group.
+                    format: int32
+                    type: integer
+                  state:
+                    description: 'INSERT ADDITIONAL STATUS FIELD - define observed
+                      state of cluster Important: Run "make" to regenerat'
                     type: string
-                  rayClusterStatus:
-                    description: RayClusterStatus defines the observed state of RayCluster
-                    properties:
-                      availableWorkerReplicas:
-                        description: AvailableWorkerReplicas indicates how many replicas
-                          are available in the cluster
-                        format: int32
-                        type: integer
-                      desiredWorkerReplicas:
-                        description: DesiredWorkerReplicas indicates overall desired
-                          replicas claimed by the user at the cluster level.
-                        format: int32
-                        type: integer
-                      endpoints:
-                        additionalProperties:
-                          type: string
-                        description: Service Endpoints
-                        type: object
-                      lastUpdateTime:
-                        description: LastUpdateTime indicates last update timestamp
-                          for this cluster status.
-                        format: date-time
-                        nullable: true
-                        type: string
-                      maxWorkerReplicas:
-                        description: MaxWorkerReplicas indicates sum of maximum replicas
-                          of each node group.
-                        format: int32
-                        type: integer
-                      minWorkerReplicas:
-                        description: MinWorkerReplicas indicates sum of minimum replicas
-                          of each node group.
-                        format: int32
-                        type: integer
-                      state:
-                        description: 'INSERT ADDITIONAL STATUS FIELD - define observed
-                          state of cluster Important: Run "make" to regenerat'
-                        type: string
-                    type: object
-                  serveDeploymentStatuses:
-                    items:
-                      description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
-                      properties:
-                        healthLastUpdateTime:
-                          description: Keep track of how long the service is healthy.
-                          format: date-time
-                          type: string
-                        lastUpdateTime:
-                          format: date-time
-                          type: string
-                        message:
-                          type: string
-                        name:
-                          description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
-                          type: string
-                        status:
-                          description: 'TODO: change status type to enum'
-                          type: string
-                      type: object
-                    type: array
                 type: object
-              serviceStatus:
-                description: ServiceStatus indicates the current RayService status.
+              startTime:
+                description: Represents time when the job was acknowledged by the
+                  Ray cluster.
+                format: date-time
                 type: string
             type: object
         type: object
