@@ -81,7 +81,6 @@ type RayJob struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   RayJobSpec   `json:"spec,omitempty"`
-	Status RayJobStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
