@@ -102,7 +102,7 @@ spec:
 {{ include "ray-cluster.labels" $ | indent 10 }}
   {{- end }}
   {{- end }}
-  {{- if ne .Values.worker.disabled true }}
+  {{- if ne (.Values.worker.disabled | default false) true }}
   - rayStartParams:
     {{- range $key, $val := .Values.worker.initArgs }}
       {{ $key }}: {{ $val | quote }}
