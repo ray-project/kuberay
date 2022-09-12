@@ -53,8 +53,8 @@ head:
 
 worker:
   # If you want to disable the default workergroup
-  # change the line below
-  disabled: false
+  # uncomment the line below
+  # disabled: true
   groupName: workergroup
   replicas: 1
   type: worker
