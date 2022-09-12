@@ -29,8 +29,9 @@ jobs:
         uses: helm/chart-testing-action@v2.3.0
 
       - name: Run chart-testing (lint)
-        working-directory: ./helm-chart/
-        run: ct lint --chart-dirs ray-cluster, kuberay-operator, kuberay-apiserver
+        working-directory: ./helm-chart/ray-cluster
+        run: ct lint
+        #  --chart-dirs ray-cluster, kuberay-operator, kuberay-apiserver
 
       - name: Run helm lint
         working-directory: ./helm-chart/ray-cluster
