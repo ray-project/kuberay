@@ -26,12 +26,10 @@ jobs:
           python-version: 3.7
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v3.7.0
+        uses: helm/chart-testing-action@v2.3.0
 
       - name: Run chart-testing (lint)
-        working-directory: ./helm-chart/ray-cluster
-        run: ct lint
-        #  --chart-dirs ray-cluster, kuberay-operator, kuberay-apiserver
+        run: ct lint --all --chart-dirs helm-chart/
 
       - name: Run helm lint
         working-directory: ./helm-chart/ray-cluster
