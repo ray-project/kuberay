@@ -8,7 +8,7 @@ on:
     branches: [ master ]
 
 jobs:
-  lint-test:
+  lint-test-helm-3-4:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -29,8 +29,33 @@ jobs:
         uses: helm/chart-testing-action@v2.3.0
 
       - name: Run chart-testing (lint)
+        # Run 'helm lint', version checking, YAML schema validation on 'Chart.yaml',
+        # YAML linting on 'Chart.yaml' and 'values.yaml', and maintainer.
+        # [Doc]: https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md
         run: ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 
-      - name: Run helm lint
-        working-directory: ./helm-chart/ray-cluster
-        run: helm lint
+  lint-test-helm-3-9:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3.3
+        with:
+          version: v3.9.4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.7
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.3.0
+
+      - name: Run chart-testing (lint)
+        # Run 'helm lint', version checking, YAML schema validation on 'Chart.yaml',
+        # YAML linting on 'Chart.yaml' and 'values.yaml', and maintainer.
+        # [Doc]: https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md
+        run: ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
