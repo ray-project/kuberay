@@ -1,0 +1,52 @@
+name: CRD-consistency-check
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  # Check consistency between types.go and generated API.
+  ray-operator-verify-codegen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Go 1.17.x
+        uses: actions/setup-go@v2
+        with:
+          # Use the same go version with build job
+          go-version: '1.17'
+      - name: Check golang version
+        working-directory: ./ray-operator
+        run: go version
+      - name: Verify Codegen
+        working-directory: ./ray-operator
+        run: ./hack/verify-codegen.sh
+  # Check consistency between types.go and CRD YAML files (manifest)
+  ray-operator-verify-crd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Update CRD YAML files
+        working-directory: ./ray-operator
+        run: make manifests
+      - name: Verify Changed files
+        id: verify-changed-files
+        uses: tj-actions/verify-changed-files@v11.1
+        with:
+          files: |
+            ./config/bases/*.yaml
+      - name: Check changed files
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        uses: actions/github-script@v3
+        with:
+          script: |
+            core.setFailed('Please run \"make manifests\" to synchronize CRD!')
