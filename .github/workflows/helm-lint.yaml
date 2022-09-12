@@ -30,3 +30,6 @@ jobs:
 
       - name: Run chart-testing (lint)
         run: ct lint
+
+      - name: Run helm lint
+        run: helm lint
