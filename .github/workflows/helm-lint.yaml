@@ -29,7 +29,7 @@ jobs:
         uses: helm/chart-testing-action@v2.3.0
 
       - name: Run chart-testing (lint)
-        run: ct lint --all --chart-dirs helm-chart/
+        run: ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 
       - name: Run helm lint
         working-directory: ./helm-chart/ray-cluster
