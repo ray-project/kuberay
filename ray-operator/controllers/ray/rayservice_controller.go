@@ -762,7 +762,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isHealthy bool
-	if isHealthy, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, nil); err != nil {
+	if isHealthy, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
