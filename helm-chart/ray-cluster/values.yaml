@@ -21,10 +21,10 @@ head:
     key: value
   initArgs:
     port: '6379'
-    redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
+    redis-password: 'LetMeInRay'  # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
     dashboard-host: '0.0.0.0'
-    num-cpus: '1' # can be auto-completed from the limits
-    node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+    num-cpus: '1'  # can be auto-completed from the limits
+    node-ip-address: $MY_POD_IP  # auto-completed as the head pod IP
     block: 'true'
   containerEnv:
     - name: MY_POD_IP
@@ -38,14 +38,14 @@ head:
     limits:
       cpu: 1
     requests:
-       cpu: 1
+      cpu: 1
   annotations: {}
   nodeSelector: {}
   tolerations: []
   affinity: {}
   volumes:
     - name: log-volume
-      emptyDir: { }
+      emptyDir: {}
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
@@ -86,11 +86,11 @@ worker:
   ports:
     - containerPort: 80
       protocol: TCP
-  resources: 
+  resources:
     limits:
       cpu: 1
     requests:
-       cpu: 200m
+      cpu: 200m
   annotations:
     key: value
   nodeSelector: {}
@@ -141,11 +141,11 @@ additionalWorkerGroups:
     ports:
       - containerPort: 80
         protocol: TCP
-    resources: 
+    resources:
       limits:
         cpu: 1
       requests:
-         cpu: 200m
+        cpu: 200m
     annotations:
       key: value
     nodeSelector: {}
@@ -157,8 +157,7 @@ additionalWorkerGroups:
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
-  
-  
+
 headServiceSuffix: "ray-operator.svc"
 
 service:
