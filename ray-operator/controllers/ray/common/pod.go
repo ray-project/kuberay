@@ -588,6 +588,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
 	}
+	if !envVarExists(RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
+		usageEnv := v1.EnvVar{Name: RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
+		container.Env = append(container.Env, usageEnv)
+	}
 	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
 		port := v1.EnvVar{Name: REDIS_PASSWORD}

@@ -311,6 +311,8 @@ func TestBuildPod(t *testing.T) {
 
 	// Check RAY_ADDRESS env.
 	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
+	// Check usage stats env.
+	checkPodEnv(t, pod, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 
 	// Check labels.
 	actualResult := pod.Labels[RayClusterLabelKey]
