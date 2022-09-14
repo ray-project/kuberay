@@ -61,7 +61,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Update CRD YAML files
-        run: cp ray-operator/config/crd/bases/* helm-chart/kuberay-operator/crds/
+        run: |
+          rm -r helm-chart/kuberay-operator/crds/
+          cp -r ray-operator/config/crd/bases/ helm-chart/kuberay-operator/crds/
       - name: Verify Changed files
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v11.1

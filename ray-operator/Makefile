@@ -47,7 +47,8 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 helm: manifests kustomize ## Sync the CRDs into the Helm chart
-	cp config/crd/bases/* ../helm-chart/kuberay-operator/crds/
+	rm -r ../helm-chart/kuberay-operator/crds/
+	cp -r config/crd/bases/ ../helm-chart/kuberay-operator/crds/
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
