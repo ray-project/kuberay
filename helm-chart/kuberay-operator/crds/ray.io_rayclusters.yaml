@@ -6,7 +6,7 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.6.0
   creationTimestamp: null
-  name: rayclusters.ray.io
+  name: rayclusters.ray.io 1
 spec:
   group: ray.io
   names:
