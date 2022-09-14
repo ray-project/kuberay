@@ -68,3 +68,12 @@ IMG=kuberay/operator:nightly make deploy
 ```
 
 > Note: remember to replace with your own image
+
+## CI/CD
+
+### Helm chart linter
+
+We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. 
+
+* Step1: Install `ct` (chart-testing) and related dependencies. See https://github.com/helm/chart-testing for more details.
+* Step2: `./helm-chart/script/chart-test.sh`
