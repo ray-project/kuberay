@@ -19,7 +19,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: RayCluster is the Schema for the RayClusters API
+        description: RayCluster is the Schema for the RayClusters API 1
         properties:
           apiVersion:
             description: APIVersion defines the versioned schema of this representation
