@@ -78,4 +78,29 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+
+	actualResult = svc.Spec.Selector[KubernetesApplicationNameLabelKey]
+	expectedResult = ApplicationName
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+func TestBuildServiceForHeadPodWithDefaultLabel(t *testing.T) {
+	labels := make(map[string]string)
+	labels[KubernetesApplicationNameLabelKey] = "testname"
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector[KubernetesApplicationNameLabelKey]
+	expectedResult := "testname"
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLength := len(svc.Spec.Selector)
+	expectedLength := 5
+	if actualLength != expectedLength {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
+	}
 }
