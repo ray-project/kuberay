@@ -75,4 +75,4 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            core.setFailed('Please run \"make sync\" to synchronize CRD!')
+            core.setFailed('Please run \"make sync\" to synchronize CRDs!')
