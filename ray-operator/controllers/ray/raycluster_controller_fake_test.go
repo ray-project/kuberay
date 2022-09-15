@@ -300,7 +300,7 @@ func setupTest(t *testing.T) {
 		},
 	}
 
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster)
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}

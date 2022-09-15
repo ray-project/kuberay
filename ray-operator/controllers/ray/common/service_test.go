@@ -64,7 +64,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 }
 
 func TestBuildServiceForHeadPod(t *testing.T) {
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc)
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[RayClusterLabelKey]
