@@ -107,7 +107,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 }
 
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;delete
 func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Event) (ctrl.Result, error) {
 	var unhealthyPod *corev1.Pod
 	pods := corev1.PodList{}
