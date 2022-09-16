@@ -7,7 +7,7 @@ image:
   tag: 2.0.0
   pullPolicy: IfNotPresent
 
-nameOverride: "kuberay"
+nameOverride: "aaaaaaaaaa"
 fullnameOverride: ""
 
 imagePullSecrets: []
