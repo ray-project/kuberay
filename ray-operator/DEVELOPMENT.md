@@ -7,7 +7,7 @@ This section walks through how to build and test the operator in a running Kuber
 software  | version | link
 :-------------  | :---------------:| -------------:
 kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.16,17|[download](https://golang.org/dl/)
+go  | v1.17|[download](https://golang.org/dl/)
 docker   | 19.03+|[download](https://docs.docker.com/install/)
 
 The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
@@ -15,6 +15,18 @@ The instructions assume you have access to a running Kubernetes cluster via ``ku
 ### Setup on Kind
 
 For a local [kind](https://kind.sigs.k8s.io/) environment setup, you can follow the Jupyter Notebook example: [KubeRay-on-kind](../docs/notebook/kuberay-on-kind.ipynb).
+
+### Use go v1.17
+
+Currently, Kuberay does not support go v1.16 ([#568](https://github.com/ray-project/kuberay/issues/568)) or go v1.18 ([#518](https://github.com/ray-project/kuberay/issues/518)).
+Hence, we strongly recommend you to use go v1.17. The following commands can help you switch to go v1.17.6.
+
+```bash
+go install golang.org/dl/go1.17.6@latest
+go1.17.6 download
+export GOROOT=$(go1.17.6 env GOROOT)
+export PATH="$GOROOT/bin:$PATH"
+```
 
 ## Development
 
