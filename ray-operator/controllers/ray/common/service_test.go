@@ -64,7 +64,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 }
 
 func TestBuildServiceForHeadPod(t *testing.T) {
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc)
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[RayClusterLabelKey]
@@ -77,5 +77,32 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	expectedResult = string(rayiov1alpha1.HeadNode)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualResult = svc.Spec.Selector[KubernetesApplicationNameLabelKey]
+	expectedResult = ApplicationName
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+
+func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
+	labels := make(map[string]string)
+	labels[KubernetesApplicationNameLabelKey] = "testname"
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector[KubernetesApplicationNameLabelKey]
+	expectedResult := "testname"
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLength := len(svc.Spec.Selector)
+	// We have 5 default labels in `BuildServiceForHeadPod`, and `KubernetesApplicationNameLabelKey`
+	// is one of the default labels. Hence, `expectedLength` should also be 5.
+	expectedLength := 5
+	if actualLength != expectedLength {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
 	}
 }

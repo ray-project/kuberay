@@ -294,7 +294,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		var raySvc *v1.Service
 		var err error
 		if serviceType == common.HeadService {
-			raySvc, err = common.BuildServiceForHeadPod(*instance)
+			labels := make(map[string]string)
+			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
+				labels[common.KubernetesApplicationNameLabelKey] = val
+			}
+			raySvc, err = common.BuildServiceForHeadPod(*instance, labels)
 		} else if serviceType == common.AgentService {
 			raySvc, err = common.BuildDashboardService(*instance)
 		}
@@ -690,6 +694,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName, headPort)
+	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
 	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
 	// Set raycluster instance as the owner and controller

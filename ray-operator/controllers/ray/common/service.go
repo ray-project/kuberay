@@ -10,13 +10,23 @@ import (
 
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
-	labels := map[string]string{
+func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]string) (*corev1.Service, error) {
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	default_labels := map[string]string{
 		RayClusterLabelKey:                cluster.Name,
 		RayNodeTypeLabelKey:               string(rayiov1alpha1.HeadNode),
 		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayiov1alpha1.HeadNode)),
 		KubernetesApplicationNameLabelKey: ApplicationName,
 		KubernetesCreatedByLabelKey:       ComponentName,
+	}
+
+	for k, v := range default_labels {
+		if _, ok := labels[k]; !ok {
+			labels[k] = v
+		}
 	}
 
 	service := &corev1.Service{
@@ -45,7 +55,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster) (*corev1.Service, 
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
 func BuildHeadServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
-	service, err := BuildServiceForHeadPod(rayCluster)
+	service, err := BuildServiceForHeadPod(rayCluster, nil)
 	if err != nil {
 		return nil, err
 	}
