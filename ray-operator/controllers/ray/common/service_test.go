@@ -86,7 +86,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	}
 }
 
-func TestBuildServiceForHeadPodWithDefaultLabel(t *testing.T) {
+func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	labels := make(map[string]string)
 	labels[KubernetesApplicationNameLabelKey] = "testname"
 	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels)
@@ -99,6 +99,8 @@ func TestBuildServiceForHeadPodWithDefaultLabel(t *testing.T) {
 	}
 
 	actualLength := len(svc.Spec.Selector)
+	// We have 5 default labels in `BuildServiceForHeadPod`, and `KubernetesApplicationNameLabelKey`
+	// is one of the default labels. Hence, `expectedLength` should also be 5.
 	expectedLength := 5
 	if actualLength != expectedLength {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
