@@ -10,7 +10,7 @@ kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/insta
 go  | v1.17|[download](https://golang.org/dl/)
 docker   | 19.03+|[download](https://docs.docker.com/install/)
 
-The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/). 
+The instructions assume you have access to a running Kubernetes cluster via ``kubectl``. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
 
 ### Setup on Kind
 
@@ -18,7 +18,7 @@ For a local [kind](https://kind.sigs.k8s.io/) environment setup, you can follow 
 
 ### Use go v1.17
 
-Currently, Kuberay does not support go v1.16 ([#568](https://github.com/ray-project/kuberay/issues/568)) and go v1.18 ([#518](https://github.com/ray-project/kuberay/issues/518)).
+Currently, Kuberay does not support go v1.16 ([#568](https://github.com/ray-project/kuberay/issues/568)) or go v1.18 ([#518](https://github.com/ray-project/kuberay/issues/518)).
 Hence, we strongly recommend you to use go v1.17. The following commands can help you switch to go v1.17.6.
 
 ```bash
