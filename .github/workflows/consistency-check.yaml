@@ -27,15 +27,16 @@ jobs:
       - name: Verify Codegen
         working-directory: ./ray-operator
         run: ./hack/verify-codegen.sh
-  # Check consistency between types.go and CRD YAML files (manifest)
-  ray-operator-verify-crd:
+  # 1. Check consistency between types.go and CRD YAML files.
+  # 2. Check consistency between kubebuilder markers and RBAC.
+  ray-operator-verify-crd-rbac:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Update CRD YAML files
+      - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
         run: make manifests
       - name: Verify Changed files
@@ -44,16 +45,17 @@ jobs:
         with:
           files: |
             ./config/bases/*.yaml
+            ./config/rbac/*.yaml
       - name: Check changed files
         if: steps.verify-changed-files.outputs.files_changed == 'true'
         uses: actions/github-script@v3
         with:
           script: |
-            core.setFailed('Please run \"make manifests\" to synchronize CRD!')
+            core.setFailed('Please run \"make manifests\" to synchronize CRD and RBAC!')
   # Check consistency between CRD YAML files in ray-operator/config/crd/bases
   # and in helm-chart/kuberay-operator/crds
   helm-chart-verify-crd:
-    needs: ray-operator-verify-crd
+    needs: ray-operator-verify-crd-rbac
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
