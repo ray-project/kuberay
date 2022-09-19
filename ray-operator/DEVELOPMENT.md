@@ -101,7 +101,7 @@ We have several [consistency checks](https://github.com/ray-project/kuberay/blob
 5. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized.
 
 ```bash
-# Synchronize consistency 1, 4, 5:
+# Synchronize consistency 1 and 4:
 make manifests
 
 # Synchronize consistency 2:
@@ -110,7 +110,8 @@ make manifests
 # Synchronize consistency 3:
 make helm
 
-# Synchronize 1, 2, 3, 4, 5 in one command
+# Synchronize 1, 2, 3, and 4 in one command
+# [Note]: Currently, we need to synchronize consistency 5 manually.
 make sync
 
 # Reproduce CI error for job "helm-chart-verify-rbac" (consistency 5)
