@@ -5,6 +5,8 @@ from deepdiff import DeepDiff
 
 def compare_two_yaml(yaml1, yaml2):
 	diff = DeepDiff(yaml1['rules'], yaml2['rules'])
+	if diff:
+		print(diff)
 	return not diff
 
 if __name__ == "__main__":
