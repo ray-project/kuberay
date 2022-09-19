@@ -7,6 +7,17 @@ metadata:
   name: kuberay-operator
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
