@@ -97,17 +97,23 @@ We have several [consistency checks](https://github.com/ray-project/kuberay/blob
 1. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with the CRD YAML files (`ray-operator/config/crd/bases/`)
 2. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with generated API (`ray-operator/pkg/client`)
 3. CRD YAML files in `ray-operator/config/crd/bases/` and `helm-chart/kuberay-operator/crds/` should be the same.
+4. Kubebuilder markers in `ray-operator/controllers/ray/*_controller.go` should be synchronized with RBAC YAML files in `ray-operator/config/rbac`. 
+5. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized.
 
 ```bash
-# Consistency 1:
+# Synchronize consistency 1 and 4:
 make manifests
 
-# Consistency 2:
+# Synchronize consistency 2:
 ./hack/update-codegen.sh
 
-# Consistency 3:
+# Synchronize consistency 3:
 make helm
 
-# Synchronize 1, 2, 3 in one command
+# Synchronize 1, 2, 3, and 4 in one command
+# [Note]: Currently, we need to synchronize consistency 5 manually.
 make sync
+
+# Reproduce CI error for job "helm-chart-verify-rbac" (consistency 5)
+python3 ../scripts/rbac-check.py
 ```
