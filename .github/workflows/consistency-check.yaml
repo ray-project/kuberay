@@ -107,6 +107,10 @@ jobs:
         with:
           python-version: 3.7
 
+      - name: Install dependencies
+        run: |
+          pip3 install -r scripts/requirements.txt
+
       - name: Check rbac consistency
         run: |
           python3 scripts/yaml-diff.py
