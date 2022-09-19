@@ -113,4 +113,4 @@ jobs:
 
       - name: Check rbac consistency
         run: |
-          python3 scripts/yaml-diff.py
+          python3 scripts/rbac-check.py
