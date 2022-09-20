@@ -80,6 +80,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
+// [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error

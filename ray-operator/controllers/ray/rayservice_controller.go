@@ -81,6 +81,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
+// [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 //

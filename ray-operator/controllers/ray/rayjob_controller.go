@@ -60,6 +60,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
+// [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile reads that state of a RayJob object and makes changes based on it
 // and what is in the RayJob.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
