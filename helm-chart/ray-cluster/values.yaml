@@ -132,7 +132,7 @@ worker:
 # For example, key:small-group in the map below
 # will be used as the groupName
 additionalWorkerGroups:
-  small-group:
+  smallGroup:
     # Disabled by default
     disabled: true
     replicas: 1

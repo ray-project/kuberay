@@ -133,11 +133,11 @@ spec:
           {{- end }}
         volumes:
         {{- toYaml $values.volumes | nindent 10 }}
-        {{- if ($values.fluentBitConfigMap.enabled | default false) }}
-        - name: {{ $values.fluentBitConfigMap.name }}
-          configMap:
-            name: {{ $values.fluentBitConfigMap.name }}
-        {{- end }}
+          {{- if ($values.fluentBitConfigMap.enabled | default false) }}
+          - name: {{ $values.fluentBitConfigMap.name }}
+            configMap:
+              name: {{ $values.fluentBitConfigMap.name }}
+          {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
@@ -184,7 +184,31 @@ spec:
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}
             {{- end }}
-        volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
+          {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
+          - name: fluentbit
+            image: fluent/fluent-bit:1.9.6
+            # These resource requests for Fluent Bit should be sufficient in production.
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: log-volume
+              - mountPath: /fluent-bit/etc/fluent-bit.conf
+                subPath: fluent-bit.conf
+                name: {{ .Values.worker.fluentBitConfigMap.name }}
+          {{- end }}
+        volumes:
+        {{- toYaml .Values.worker.volumes | nindent 10 }}
+          {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
+          - name: {{ .Values.worker.fluentBitConfigMap.name }}
+            configMap:
+              name: {{ .Values.worker.fluentBitConfigMap.name }}
+          {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
@@ -199,7 +223,7 @@ spec:
 
 ---
 # Fluent Bit ConfigMaps
-{{- range tuple .Values.head.fluentBitConfigMap .Values.worker.fluentBitConfigMap }}
+{{- range tuple .Values.head.fluentBitConfigMap .Values.worker.fluentBitConfigMap .Values.additionalWorkerGroups.smallGroup.fluentBitConfigMap }}
 {{- if (.enabled | default false) }}
 apiVersion: v1
 kind: ConfigMap
