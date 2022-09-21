@@ -113,7 +113,7 @@ spec:
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
             {{- end }}
-          {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
+          {{- if ($values.fluentBitConfigMap.enabled | default false) }}
           - name: fluentbit
             image: fluent/fluent-bit:1.9.6
             # These resource requests for Fluent Bit should be sufficient in production.
@@ -129,14 +129,14 @@ spec:
                 name: log-volume
               - mountPath: /fluent-bit/etc/fluent-bit.conf
                 subPath: fluent-bit.conf
-                name: {{ .Values.worker.fluentBitConfigMap.name }}
+                name: {{ $values.fluentBitConfigMap.name }}
           {{- end }}
         volumes:
         {{- toYaml $values.volumes | nindent 10 }}
-        {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
-        - name: {{ .Values.worker.fluentBitConfigMap.name }}
+        {{- if ($values.fluentBitConfigMap.enabled | default false) }}
+        - name: {{ $values.fluentBitConfigMap.name }}
           configMap:
-            name: {{ .Values.worker.fluentBitConfigMap.name }}
+            name: {{ $values.fluentBitConfigMap.name }}
         {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}

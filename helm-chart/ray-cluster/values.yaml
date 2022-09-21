@@ -182,6 +182,19 @@ additionalWorkerGroups:
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
+    fluentBitConfigMap:
+      enabled: true
+      name: fluentbit-config-worker-group
+      fluentBitConf: |
+        [INPUT]
+            Name tail
+            Path /tmp/ray/session_latest/logs/*
+            Tag ray
+            Path_Key true
+            Refresh_Interval 5
+        [OUTPUT]
+            Name stdout
+            Match *
 
 headServiceSuffix: "ray-operator.svc"
 
