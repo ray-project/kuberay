@@ -41,7 +41,31 @@ spec:
             lifecycle:
             {{- toYaml .Values.head.lifecycle | nindent 14 }}
             {{- end }}
-        volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
+          {{- if (.Values.head.fluentBitConfigMap.enabled | default false) }}
+          - name: fluentbit
+            image: fluent/fluent-bit:1.9.6
+            # These resource requests for Fluent Bit should be sufficient in production.
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: log-volume
+              - mountPath: /fluent-bit/etc/fluent-bit.conf
+                subPath: fluent-bit.conf
+                name: {{ .Values.head.fluentBitConfigMap.name }}
+          {{- end }}
+        volumes:
+        {{- toYaml .Values.head.volumes | nindent 10 }}
+        {{- if (.Values.head.fluentBitConfigMap.enabled | default false) }}
+          - name: {{ .Values.head.fluentBitConfigMap.name }}
+            configMap:
+              name: {{ .Values.head.fluentBitConfigMap.name }}
+        {{- end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
@@ -89,7 +113,31 @@ spec:
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
             {{- end }}
-        volumes: {{- toYaml $values.volumes | nindent 10 }}
+          {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
+          - name: fluentbit
+            image: fluent/fluent-bit:1.9.6
+            # These resource requests for Fluent Bit should be sufficient in production.
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: log-volume
+              - mountPath: /fluent-bit/etc/fluent-bit.conf
+                subPath: fluent-bit.conf
+                name: {{ .Values.worker.fluentBitConfigMap.name }}
+          {{- end }}
+        volumes:
+        {{- toYaml $values.volumes | nindent 10 }}
+        {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
+        - name: {{ .Values.worker.fluentBitConfigMap.name }}
+          configMap:
+            name: {{ .Values.worker.fluentBitConfigMap.name }}
+        {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
@@ -149,3 +197,20 @@ spec:
 {{ include "ray-cluster.labels" . | indent 10 }}
   {{- end }}
 
+---
+# Fluent Bit ConfigMaps
+{{- range tuple .Values.head.fluentBitConfigMap .Values.worker.fluentBitConfigMap }}
+{{- if (.enabled | default false) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  {{- if .name }}
+  name: {{ .name }}
+  {{- end }}
+data:
+  {{- if .fluentBitConf }}
+  fluent-bit.conf: | {{ .fluentBitConf | nindent 4 }}
+  {{- end }}
+{{- end }}
+---
+{{- end }}

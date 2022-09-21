@@ -49,7 +49,19 @@ head:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
-
+  fluentBitConfigMap:
+    enabled: true
+    name: fluentbit-config
+    fluentBitConf: |
+          [INPUT]
+              Name tail
+              Path /tmp/ray/session_latest/logs/*
+              Tag ray
+              Path_Key true
+              Refresh_Interval 5
+          [OUTPUT]
+              Name stdout
+              Match *
 
 worker:
   # If you want to disable the default workergroup
@@ -102,6 +114,19 @@ worker:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+  fluentBitConfigMap:
+    enabled: true
+    name: fluentbit-config-worker
+    fluentBitConf: |
+      [INPUT]
+          Name tail
+          Path /tmp/ray/session_latest/logs/*
+          Tag ray
+          Path_Key true
+          Refresh_Interval 5
+      [OUTPUT]
+          Name stdout
+          Match *
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
