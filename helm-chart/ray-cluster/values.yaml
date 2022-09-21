@@ -181,7 +181,7 @@ service:
   type: ClusterIP
   port: 8080
 
-#fluentBitConfigMaps:
+# fluentBitConfigMaps:
 #  - name: fluentbit-config
 #    fluentBitConf: |
 #      [INPUT]
