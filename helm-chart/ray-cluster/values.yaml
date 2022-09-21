@@ -52,6 +52,9 @@ head:
   fluentBitConfigMap:
     enabled: true
     name: fluentbit-config
+    logVolumeMount:
+      mountPath: /tmp/ray
+      name: log-volume
     fluentBitConf: |
           [INPUT]
               Name tail
@@ -117,6 +120,9 @@ worker:
   fluentBitConfigMap:
     enabled: true
     name: fluentbit-config-worker
+    logVolumeMount:
+      mountPath: /tmp/ray
+      name: log-volume
     fluentBitConf: |
       [INPUT]
           Name tail
@@ -185,6 +191,9 @@ additionalWorkerGroups:
     fluentBitConfigMap:
       enabled: true
       name: fluentbit-config-worker-group
+      logVolumeMount:
+        mountPath: /tmp/ray
+        name: log-volume
       fluentBitConf: |
         [INPUT]
             Name tail
