@@ -50,7 +50,7 @@ head:
     - mountPath: /tmp/ray
       name: log-volume
   fluentBitConfigMap:
-    enabled: true
+    enabled: false
     logVolumeMount:
       mountPath: /tmp/ray
       name: log-volume
@@ -108,7 +108,7 @@ worker:
     - mountPath: /tmp/ray
       name: log-volume
   fluentBitConfigMap:
-    enabled: true
+    enabled: false
     logVolumeMount:
       mountPath: /tmp/ray
       name: log-volume
@@ -169,7 +169,7 @@ additionalWorkerGroups:
       - mountPath: /tmp/ray
         name: log-volume
     fluentBitConfigMap:
-      enabled: true
+      enabled: false
       logVolumeMount:
         mountPath: /tmp/ray
         name: log-volume
@@ -181,15 +181,15 @@ service:
   type: ClusterIP
   port: 8080
 
-fluentBitConfigMaps:
-  - name: fluentbit-config
-    fluentBitConf: |
-      [INPUT]
-          Name tail
-          Path /tmp/ray/session_latest/logs/*
-          Tag ray
-          Path_Key true
-          Refresh_Interval 5
-      [OUTPUT]
-          Name stdout
-          Match *
+#fluentBitConfigMaps:
+#  - name: fluentbit-config
+#    fluentBitConf: |
+#      [INPUT]
+#          Name tail
+#          Path /tmp/ray/session_latest/logs/*
+#          Tag ray
+#          Path_Key true
+#          Refresh_Interval 5
+#      [OUTPUT]
+#          Name stdout
+#          Match *
