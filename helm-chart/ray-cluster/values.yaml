@@ -54,18 +54,7 @@ head:
     logVolumeMount:
       mountPath: /tmp/ray
       name: log-volume
-    configMap:
-      name: fluentbit-config
-      fluentBitConf: |
-            [INPUT]
-                Name tail
-                Path /tmp/ray/session_latest/logs/*
-                Tag ray
-                Path_Key true
-                Refresh_Interval 5
-            [OUTPUT]
-                Name stdout
-                Match *
+    configMapName: fluentbit-config
 
 worker:
   # If you want to disable the default workergroup
@@ -123,18 +112,7 @@ worker:
     logVolumeMount:
       mountPath: /tmp/ray
       name: log-volume
-    configMap:
-      name: fluentbit-config-worker
-      fluentBitConf: |
-        [INPUT]
-            Name tail
-            Path /tmp/ray/session_latest/logs/*
-            Tag ray
-            Path_Key true
-            Refresh_Interval 5
-        [OUTPUT]
-            Name stdout
-            Match *
+    configMapName: fluentbit-config
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
@@ -195,21 +173,23 @@ additionalWorkerGroups:
       logVolumeMount:
         mountPath: /tmp/ray
         name: log-volume
-      configMap:
-        name: fluentbit-config-worker-group
-        fluentBitConf: |
-          [INPUT]
-              Name tail
-              Path /tmp/ray/session_latest/logs/*
-              Tag ray
-              Path_Key true
-              Refresh_Interval 5
-          [OUTPUT]
-              Name stdout
-              Match *
+      configMapName: fluentbit-config
 
 headServiceSuffix: "ray-operator.svc"
 
 service:
   type: ClusterIP
   port: 8080
+
+fluentBitConfigMaps:
+  - name: fluentbit-config
+    fluentBitConf: |
+      [INPUT]
+          Name tail
+          Path /tmp/ray/session_latest/logs/*
+          Tag ray
+          Path_Key true
+          Refresh_Interval 5
+      [OUTPUT]
+          Name stdout
+          Match *

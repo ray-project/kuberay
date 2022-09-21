@@ -58,16 +58,16 @@ spec:
                 name: {{ .Values.head.fluentBitConfigMap.logVolumeMount.name }}
               - mountPath: /fluent-bit/etc/fluent-bit.conf
                 subPath: fluent-bit.conf
-                name: {{ .Values.head.fluentBitConfigMap.configMap.name }}
+                name: {{ .Values.head.fluentBitConfigMap.configMapName }}
           {{- end }}
           {{- end }}
         volumes:
         {{- toYaml .Values.head.volumes | nindent 10 }}
         {{- if (.Values.head.fluentBitConfigMap | default false) }}
         {{- if (.Values.head.fluentBitConfigMap.enabled | default false) }}
-          - name: {{ .Values.head.fluentBitConfigMap.configMap.name }}
+          - name: {{ .Values.head.fluentBitConfigMap.configMapName }}
             configMap:
-              name: {{ .Values.head.fluentBitConfigMap.configMap.name }}
+              name: {{ .Values.head.fluentBitConfigMap.configMapName }}
         {{- end }}
         {{- end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
@@ -130,22 +130,20 @@ spec:
                 cpu: 100m
                 memory: 128Mi
             volumeMounts:
-              - mountPath: /tmp/ray
-                name: log-volume
               - mountPath: {{ $values.fluentBitConfigMap.logVolumeMount.mountPath }}
                 name: {{ $values.fluentBitConfigMap.logVolumeMount.name }}
               - mountPath: /fluent-bit/etc/fluent-bit.conf
                 subPath: fluent-bit.conf
-                name: {{ $values.fluentBitConfigMap.configMap.name }}
+                name: {{ $values.fluentBitConfigMap.configMapName }}
           {{- end }}
           {{- end }}
         volumes:
         {{- toYaml $values.volumes | nindent 10 }}
         {{- if ($values.fluentBitConfigMap | default false) }}
         {{- if ($values.fluentBitConfigMap.enabled | default false) }}
-          - name: {{ $values.fluentBitConfigMap.configMap.name }}
+          - name: {{ $values.fluentBitConfigMap.configMapName }}
             configMap:
-              name: {{ $values.fluentBitConfigMap.configMap.name }}
+              name: {{ $values.fluentBitConfigMap.configMapName }}
         {{- end }}
         {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
@@ -211,16 +209,16 @@ spec:
                 name: {{ .Values.worker.fluentBitConfigMap.logVolumeMount.name }}
               - mountPath: /fluent-bit/etc/fluent-bit.conf
                 subPath: fluent-bit.conf
-                name: {{ .Values.worker.fluentBitConfigMap.configMap.name }}
+                name: {{ .Values.worker.fluentBitConfigMap.configMapName }}
           {{- end }}
           {{- end }}
         volumes:
         {{- toYaml .Values.worker.volumes | nindent 10 }}
         {{- if (.Values.worker.fluentBitConfigMap | default false) }}
         {{- if (.Values.worker.fluentBitConfigMap.enabled | default false) }}
-          - name: {{ .Values.worker.fluentBitConfigMap.configMap.name }}
+          - name: {{ .Values.worker.fluentBitConfigMap.configMapName }}
             configMap:
-              name: {{ .Values.worker.fluentBitConfigMap.configMap.name }}
+              name: {{ .Values.worker.fluentBitConfigMap.configMapName }}
         {{- end }}
         {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
@@ -237,18 +235,12 @@ spec:
 
 ---
 # Fluent Bit ConfigMaps
-{{- range tuple .Values.head.fluentBitConfigMap .Values.worker.fluentBitConfigMap .Values.additionalWorkerGroups.smallGroup.fluentBitConfigMap }}
-{{- if (. | default false) }}
-{{- if (.enabled | default false) }}
-{{- if (.configMap.fluentBitConf | default false) }}
+{{- range .Values.fluentBitConfigMaps }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .configMap.name }}
+  name: {{ .name }}
 data:
-  fluent-bit.conf: | {{ .configMap.fluentBitConf | nindent 4 }}
-{{- end }}
-{{- end }}
-{{- end }}
+  fluent-bit.conf: | {{ .fluentBitConf | nindent 4 }}
 ---
 {{- end }}
