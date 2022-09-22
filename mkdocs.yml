@@ -23,6 +23,7 @@ nav:
     - Installation(Yaml): deploy/installation.md
     - Installation(Helm): deploy/helm.md
     - Installation(Helm-cluster): deploy/helm-cluster.md
+    - Docker Images: deploy/docker.md
   - Components:
     - KubeRay Operator: components/operator.md
     - KubeRay ApiServer: components/apiserver.md
