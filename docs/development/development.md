@@ -50,7 +50,7 @@ go build -o kuberay -a main.go
 
 ### Deploy Docs locally
 
-We don't need to configure `mkdocs` environment, to check the static website locally, run the command
+We don't need to configure `mkdocs` environment. To check the static website locally, run the command
 
 ```
 docker run --rm -it -p 8000:8000 -v ${PWD}:/docs squidfunk/mkdocs-material
