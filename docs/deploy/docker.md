@@ -10,4 +10,4 @@ The first seven characters of the git SHA specify images built from specific com
 (e.g. `kuberay/operator:944a042`).
 
 #### Nightly images
-Nightly tags specify images built from the most recent master (e.g. `kuberay/operator:nightly`).
+The nightl tag specifies images built from the most recent master (e.g. `kuberay/operator:nightly`).
