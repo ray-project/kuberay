@@ -24,8 +24,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
       port: '6379'
-      #  object-manager-port: '12345'
-      # node-manager-port: '12346'
       object-store-memory: '100000000'
       redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
