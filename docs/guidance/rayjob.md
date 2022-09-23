@@ -12,6 +12,7 @@
 The RayJob is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayJob manages 2 things:
+
 * RayCluster: Manages resources in kubernetes cluster.
 * Job: Manages users' job in ray cluster.
 
