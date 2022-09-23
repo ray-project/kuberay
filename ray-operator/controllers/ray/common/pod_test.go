@@ -642,3 +642,13 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[0], &pod)
 	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 1)
 }
+
+func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
+	cluster := instance.DeepCopy()
+	svcName := utils.GenerateServiceName(cluster.Name)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	worker.Template.ObjectMeta.Name = "ray-worker-test"
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, svcName, "6379")
+	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
+}

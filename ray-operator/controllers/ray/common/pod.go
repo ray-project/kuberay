@@ -190,6 +190,9 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
+	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
+	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
+	podTemplate.ObjectMeta.Name = ""
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
