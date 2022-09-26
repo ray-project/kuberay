@@ -1,150 +1,19 @@
 #!/usr/bin/env python
 import logging
-import os
-import tempfile
 import unittest
-import subprocess
-from string import Template
-
 import docker
-import time
 
-ray_version = '1.9.0'
-ray_image = "rayproject/ray:1.9.0"
+from kuberay_utils.utils import *
 
-kindcluster_config_file = 'tests/config/cluster-config.yaml'
-raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# kuberay_sha, ray_version & ray_image are default values that
+# will be changed by parse_environment()
 kuberay_sha = 'nightly'
-
-
-def parse_ray_version(version_str):
-    tmp = version_str.split('.')
-    assert len(tmp) == 3
-    major = int(tmp[0])
-    minor = int(tmp[1])
-    patch = int(tmp[2])
-    return major, minor, patch
-
-
-def shell_run(cmd):
-    logger.info('executing cmd: {}'.format(cmd))
-    return os.system(cmd)
-
-
-def shell_assert_success(cmd):
-    assert shell_run(cmd) == 0
-
-
-def shell_assert_failure(cmd):
-    assert shell_run(cmd) != 0
-
-
-def create_cluster():
-    shell_assert_success(
-        'kind create cluster --config {}'.format(kindcluster_config_file))
-    time.sleep(60)
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-
-
-def apply_kuberay_resources():
-    shell_assert_success('kind load docker-image kuberay/operator:{}'.format(kuberay_sha))
-    shell_assert_success('kind load docker-image kuberay/apiserver:{}'.format(kuberay_sha))
-    shell_assert_success(
-        'kubectl create -k manifests/cluster-scope-resources')
-    # use kustomize to build the yaml, then change the image to the one we want to testing.
-    shell_assert_success(
-        ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
-         'kustomize edit set image ' +
-         'kuberay/operator:nightly=kuberay/operator:{0} kuberay/apiserver:nightly=kuberay/apiserver:{0} && ' +
-         'kubectl apply -k .').format(kuberay_sha))
-
-
-def create_kuberay_cluster(template_name):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
-
-    raycluster_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
-
-    raycluster_spec_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(raycluster_spec_buf)
-        raycluster_spec_file = f.name
-
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-    assert raycluster_spec_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
-
-    time.sleep(180)
-
-    shell_run('kubectl get pods -A')
-
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-        shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-    assert rtn == 0
-
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
-
-def create_kuberay_service(template_name):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
-
-    rayservice_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
-
-    service_config_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(rayservice_spec_buf)
-        service_config_file = f.name
-
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-    assert service_config_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
-
-    shell_run('kubectl get pods -A')
-
-    time.sleep(20)
-
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
-    wait_for_condition(
-        lambda: shell_run('kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
-        timeout=900,
-        retry_interval_ms=5000,
-    )
-
-
-def delete_cluster():
-    shell_run('kind delete cluster')
-
-
-def download_images():
-    client = docker.from_env()
-    client.images.pull(ray_image)
-    # not enabled for now
-    # shell_assert_success('kind load docker-image \"{}\"'.format(ray_image))
-    client.close()
+ray_version = '1.9.0'
+ray_image = "rayproject/ray:1.9.0"
 
 
 class BasicRayTestCase(unittest.TestCase):
@@ -159,12 +28,13 @@ class BasicRayTestCase(unittest.TestCase):
         # ray cluster running inside Kind environment.
         delete_cluster()
         create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_cluster(BasicRayTestCase.cluster_template_file)
+        apply_kuberay_resources(kuberay_sha)
+        download_images(ray_image)
+        create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
+                               ray_version, ray_image)
 
     def test_simple_code(self):
-        # connect from a ray containter client to ray cluster
+        # connect from a ray container client to ray cluster
         # inside a local Kind environment and run a simple test
         client = docker.from_env()
         container = client.containers.run(ray_image,
@@ -218,7 +88,7 @@ assert rtn == 0
         client.close()
 
     def test_cluster_info(self):
-        # connect from a ray containter client to ray cluster
+        # connect from a ray container client to ray cluster
         # inside a local Kind environment and run a test that
         # gets the amount of nodes in the ray cluster.
         client = docker.from_env()
@@ -252,7 +122,7 @@ print(len(ray.nodes()))
         client.close()
 
 
-def ray_ft_supported():
+def ray_ft_supported(ray_version):
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
@@ -260,7 +130,8 @@ def ray_ft_supported():
         return False
     return True
 
-def ray_service_supported():
+
+def ray_service_supported(ray_version):
     if ray_version == "nightly":
         return True
     major, minor, patch = parse_ray_version(ray_version)
@@ -278,9 +149,10 @@ class RayFTTestCase(unittest.TestCase):
             return
         delete_cluster()
         create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_cluster(RayFTTestCase.cluster_template_file)
+        apply_kuberay_resources(kuberay_sha)
+        download_images(ray_image)
+        create_kuberay_cluster(RayFTTestCase.cluster_template_file,
+                               ray_version, ray_image)
 
     def setUp(self):
         if not ray_ft_supported():
@@ -289,7 +161,8 @@ class RayFTTestCase(unittest.TestCase):
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
         # come up.
-        shell_assert_success('kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
+        shell_assert_success(
+            'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
 
         # wait for new head node to start
         time.sleep(80)
@@ -298,19 +171,24 @@ class RayFTTestCase(unittest.TestCase):
         # make sure the new head is ready
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
-        rtn = shell_run('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
+        rtn = shell_run(
+            'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
             shell_run('kubectl get pods -A')
-            shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+            shell_run(
+                'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            shell_run(
+                'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            shell_run(
+                'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
         assert rtn == 0
 
     def test_ray_serve(self):
         client = docker.from_env()
         container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                           network_mode='host', command=["/bin/sh", "-c", "python"])
-        s = container.attach_socket(params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
+        s = container.attach_socket(
+            params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
         s._sock.setblocking(0)
         s._sock.sendall(b'''
 import ray
@@ -360,11 +238,13 @@ print('ready')
 
         # kill the gcs on head node. If fate sharing is enabled
         # the whole head node pod will terminate.
-        shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
+        shell_assert_success(
+            'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
+        shell_assert_success(
+            'kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
 def get_new_value():
@@ -405,7 +285,8 @@ else:
         client = docker.from_env()
         container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                           network_mode='host', command=["/bin/sh", "-c", "python"])
-        s = container.attach_socket(params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
+        s = container.attach_socket(
+            params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
         s._sock.setblocking(0)
         s._sock.sendall(b'''
 import ray
@@ -453,11 +334,13 @@ print('ready')
 
         # kill the gcs on head node. If fate sharing is enabled
         # the whole head node pod will terminate.
-        shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
+        shell_assert_success(
+            'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
+        shell_assert_success(
+            'kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
 def get_detached_actor():
@@ -503,7 +386,7 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not ray_service_supported():
+        if not ray_service_supported(ray_version):
             return
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
@@ -511,12 +394,13 @@ class RayServiceTestCase(unittest.TestCase):
         # The test will check the successful response from serve service.
         delete_cluster()
         create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_service(RayServiceTestCase.service_template_file)
+        apply_kuberay_resources(kuberay_sha)
+        download_images(ray_image)
+        create_kuberay_service(
+            RayServiceTestCase.service_template_file, ray_version, ray_image)
 
     def setUp(self):
-        if not ray_service_supported():
+        if not ray_service_supported(ray_version):
             raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
@@ -526,20 +410,25 @@ class RayServiceTestCase(unittest.TestCase):
             lambda: shell_run(curl_cmd) == 0,
             timeout=15,
         )
-        create_kuberay_service(RayServiceTestCase.service_serve_update_template_file)
+        create_kuberay_service(
+            RayServiceTestCase.service_serve_update_template_file,
+            ray_version, ray_image)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
         wait_for_condition(
             lambda: shell_run(curl_cmd) == 0,
             timeout=60,
         )
-        create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
+        create_kuberay_service(
+            RayServiceTestCase.service_cluster_update_template_file,
+            ray_version, ray_image)
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         wait_for_condition(
             lambda: shell_run(curl_cmd) == 0,
             timeout=180,
         )
+
 
 def parse_environment():
     global ray_version, ray_image, kuberay_sha
@@ -551,34 +440,6 @@ def parse_environment():
         if k == 'KUBERAY_IMG_SHA':
             logger.info('Using KubeRay docker build SHA: {}'.format(v))
             kuberay_sha = v
-
-
-def wait_for_condition(
-    condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
-):
-    """Wait until a condition is met or time out with an exception.
-
-    Args:
-        condition_predictor: A function that predicts the condition.
-        timeout: Maximum timeout in seconds.
-        retry_interval_ms: Retry interval in milliseconds.
-
-    Raises:
-        RuntimeError: If the condition is not met before the timeout expires.
-    """
-    start = time.time()
-    last_ex = None
-    while time.time() - start <= timeout:
-        try:
-            if condition_predictor(**kwargs):
-                return
-        except Exception as ex:
-            last_ex = ex
-        time.sleep(retry_interval_ms / 1000.0)
-    message = "The condition wasn't met before the timeout expired."
-    if last_ex is not None:
-        message += f" Last exception: {last_ex}"
-    raise RuntimeError(message)
 
 
 if __name__ == '__main__':
