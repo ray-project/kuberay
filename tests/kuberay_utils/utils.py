@@ -24,6 +24,24 @@ def parse_ray_version(version_str):
     return major, minor, patch
 
 
+def ray_ft_supported(ray_version):
+    if ray_version == "nightly":
+        return True
+    major, minor, patch = parse_ray_version(ray_version)
+    if major * 100 + minor <= 113:
+        return False
+    return True
+
+
+def ray_service_supported(ray_version):
+    if ray_version == "nightly":
+        return True
+    major, minor, patch = parse_ray_version(ray_version)
+    if major * 100 + minor <= 113:
+        return False
+    return True
+
+
 def shell_run(cmd):
     logger.info('executing cmd: {}'.format(cmd))
     return os.system(cmd)

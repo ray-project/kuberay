@@ -122,30 +122,12 @@ print(len(ray.nodes()))
         client.close()
 
 
-def ray_ft_supported(ray_version):
-    if ray_version == "nightly":
-        return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
-
-
-def ray_service_supported(ray_version):
-    if ray_version == "nightly":
-        return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
-
-
 class RayFTTestCase(unittest.TestCase):
     cluster_template_file = 'tests/config/ray-cluster.ray-ft.yaml.template'
 
     @classmethod
     def setUpClass(cls):
-        if not ray_ft_supported():
+        if not ray_ft_supported(ray_version):
             return
         delete_cluster()
         create_cluster()
@@ -155,7 +137,7 @@ class RayFTTestCase(unittest.TestCase):
                                ray_version, ray_image)
 
     def setUp(self):
-        if not ray_ft_supported():
+        if not ray_ft_supported(ray_version):
             raise unittest.SkipTest("ray ft is not supported")
 
     def test_kill_head(self):
