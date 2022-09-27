@@ -2,8 +2,10 @@
 import logging
 import unittest
 import docker
+import time
+import os
 
-from kuberay_utils.utils import *
+import kuberay_utils.utils as utils
 
 
 logger = logging.getLogger(__name__)
@@ -26,12 +28,12 @@ class BasicRayTestCase(unittest.TestCase):
         # from another local ray container. The local ray container
         # outside Kind environment has the same ray version as the
         # ray cluster running inside Kind environment.
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources(kuberay_sha)
-        download_images(ray_image)
-        create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
-                               ray_version, ray_image)
+        utils.delete_cluster()
+        utils.create_cluster()
+        utils.apply_kuberay_resources(kuberay_sha)
+        utils.download_images(ray_image)
+        utils.create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
+                                     ray_version, ray_image)
 
     def test_simple_code(self):
         # connect from a ray container client to ray cluster
@@ -127,41 +129,41 @@ class RayFTTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not ray_ft_supported(ray_version):
+        if not utils.ray_ft_supported(ray_version):
             return
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources(kuberay_sha)
-        download_images(ray_image)
-        create_kuberay_cluster(RayFTTestCase.cluster_template_file,
-                               ray_version, ray_image)
+        utils.delete_cluster()
+        utils.create_cluster()
+        utils.apply_kuberay_resources(kuberay_sha)
+        utils.download_images(ray_image)
+        utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
+                                     ray_version, ray_image)
 
     def setUp(self):
-        if not ray_ft_supported(ray_version):
+        if not utils.ray_ft_supported(ray_version):
             raise unittest.SkipTest("ray ft is not supported")
 
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
         # come up.
-        shell_assert_success(
+        utils.shell_assert_success(
             'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
 
         # wait for new head node to start
         time.sleep(80)
-        shell_assert_success('kubectl get pods -A')
+        utils.shell_assert_success('kubectl get pods -A')
 
         # make sure the new head is ready
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
-        rtn = shell_run(
+        rtn = utils.shell_run(
             'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
-            shell_run('kubectl get pods -A')
-            shell_run(
+            utils.shell_run('kubectl get pods -A')
+            utils.shell_run(
                 'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run(
+            utils.shell_run(
                 'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run(
+            utils.shell_run(
                 'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
         assert rtn == 0
 
@@ -220,12 +222,12 @@ print('ready')
 
         # kill the gcs on head node. If fate sharing is enabled
         # the whole head node pod will terminate.
-        shell_assert_success(
+        utils.shell_assert_success(
             'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success(
+        utils.shell_assert_success(
             'kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
@@ -316,12 +318,12 @@ print('ready')
 
         # kill the gcs on head node. If fate sharing is enabled
         # the whole head node pod will terminate.
-        shell_assert_success(
+        utils.shell_assert_success(
             'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
         time.sleep(10)
         # make sure the new head is ready
-        shell_assert_success(
+        utils.shell_assert_success(
             'kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
 
         s._sock.sendall(b'''
@@ -368,46 +370,46 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not ray_service_supported(ray_version):
+        if not utils.ray_service_supported(ray_version):
             return
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
         # We wait for the serve service ready.
         # The test will check the successful response from serve service.
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources(kuberay_sha)
-        download_images(ray_image)
-        create_kuberay_service(
+        utils.delete_cluster()
+        utils.create_cluster()
+        utils.apply_kuberay_resources(kuberay_sha)
+        utils.download_images(ray_image)
+        utils.create_kuberay_service(
             RayServiceTestCase.service_template_file, ray_version, ray_image)
 
     def setUp(self):
-        if not ray_service_supported(ray_version):
+        if not utils.ray_service_supported(ray_version):
             raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=15,
         )
-        create_kuberay_service(
+        utils.create_kuberay_service(
             RayServiceTestCase.service_serve_update_template_file,
             ray_version, ray_image)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=60,
         )
-        create_kuberay_service(
+        utils.create_kuberay_service(
             RayServiceTestCase.service_cluster_update_template_file,
             ray_version, ray_image)
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=180,
         )
 
