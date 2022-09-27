@@ -48,3 +48,5 @@ service:
 
 ingress:
   enabled: false
+
+rbacEnable: true
