@@ -28,6 +28,7 @@ nav:
     - KubeRay Operator: components/operator.md
     - KubeRay ApiServer: components/apiserver.md
     - KubeRay CLI: components/cli.md
+    - Kuberay with MCAD: deploy/kuberay-with-MCAD.md
   - Features:
     - RayService: guidance/rayservice.md
     - RayJob: guidance/rayjob.md
