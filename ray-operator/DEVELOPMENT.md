@@ -125,4 +125,11 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
 
 * Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), and [kustomize](https://kustomize.io/).
 
-* Step2: `python3 tests/compatibility-test.py` (You must be in `/path/to/your/kuberay/`.)
+* Step2: You must be in `/path/to/your/kuberay/`.
+  ```bash
+  # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE APISERVER_IMAGE=$APISERVER_IMAGE python3 tests/compatibility-test.py
+  #          These 3 environment variables are optional.
+  # [Example]:
+  RAY_IMAGE=rayproject/ray:2.0.0 OPERATOR_IMAGE=kuberay/operator:nightly APISERVER_IMAGE=kuberay/apiserver:nightly python3 tests/compatibility-test.py
+  ```
+  
