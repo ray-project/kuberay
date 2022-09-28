@@ -117,3 +117,19 @@ make sync
 # Reproduce CI error for job "helm-chart-verify-rbac" (consistency 5)
 python3 ../scripts/rbac-check.py
 ```
+
+### Run end-to-end tests locally
+
+We have some [end-to-end tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/actions/compatibility/action.yaml) on GitHub Actions.
+These tests operate small Ray clusters running within a [kind](https://kind.sigs.k8s.io/) (Kubernetes-in-docker) environment. To run the tests yourself, follow these steps:
+
+* Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), and [kustomize](https://kustomize.io/).
+
+* Step2: You must be in `/path/to/your/kuberay/`.
+  ```bash
+  # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE APISERVER_IMAGE=$APISERVER_IMAGE python3 tests/compatibility-test.py
+  #          These 3 environment variables are optional.
+  # [Example]:
+  RAY_IMAGE=rayproject/ray:2.0.0 OPERATOR_IMAGE=kuberay/operator:nightly APISERVER_IMAGE=kuberay/apiserver:nightly python3 tests/compatibility-test.py
+  ```
+  
