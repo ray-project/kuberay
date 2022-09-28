@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/ray-project/kuberay/workflows/Go-build-and-test/badge.svg)](https://github.com/ray-project/kuberay/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ray-project/kuberay)](https://goreportcard.com/report/github.com/ray-project/kuberay)
 
-KubeRay is an open source toolkit to run Ray applications on Kubernetes. It provides several tools to improve running and managing Ray on Kubernetes.
+KubeRay is an open source toolkit to run Ray applications on Kubernetes. It provides several tools to improve running and managing Ray's experience on Kubernetes.
 
 - Ray Operator
 - Backend services to create/delete cluster resources
@@ -19,9 +19,9 @@ You can view detailed documentation and guides at [https://ray-project.github.io
 
 ## Quick Start
 
-### Use Yaml
+### Use YAML
 
-Please choose the version you like to install. We will use nightly version `master` as an example
+Please choose the version you would like to install. The example below uses the latest stable version `v0.3.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
@@ -34,12 +34,9 @@ kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resour
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
-> If you like to try nightly version, use `export KUBERAY_VERSION=master` instead.
-> In 1.19+ Ingress API is now `networking.k8s.io/v1`, it's being used to expose RayCluster Head dashboard(optional) and RayService. For Kubernetes version < 1.19, you can still use KubeRay but without Ingress support.
-> Observe that we must use `kubectl create` to install cluster-scoped resources.
-> The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
+> Observe that we must use `kubectl create` to install cluster-scoped resources. The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
-### Use helm chart
+### Use Helm
 
 A helm chart is a collection of files that describe a related set of Kubernetes resources. It can help users to deploy ray-operator and ray clusters conveniently.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy an operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a custom cluster.
