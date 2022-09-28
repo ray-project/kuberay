@@ -4,14 +4,14 @@ The multi-cluster-app-dispatcher is a Kubernetes controller providing mechanisms
 
 ## Use case
 
-MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources are available in the cluster prior to actual pod creation in the kubernetes cluster. It supports features such as:
+MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources are available in the cluster prior to actual pod creation in the Kubernetes cluster. It supports features such as:
    
 - Integrates with upstream Kubernetes scheduling stack for features such co-scheduling, Packing on GPU dimension etc.
 - Ability to wrap any Kubernetes objects.
-- Increases control plane stability by JIT (Just-in Time) object  creation.
+- Increases control plane stability by JIT (Just-in Time) object creation.
 - Queuing with policies.
 - Quota management that goes across namespaces.
-- Dispatching jobs to any one of the clusters.
+- Dispatching jobs to any one of the Kubernetes clusters.
 
 
 In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) with configuration files [here](https://github.com/IBM/multi-cluster-app-dispatcher/tree/quota-management/doc/usage/examples/kuberay/config).
@@ -56,7 +56,7 @@ raycluster-autoscaler-1-worker-small-group-4s6jv   1/1     Running   0          
 ```
 - As seen the cluster is dispatched and pods are running.
 
-- Let's submit another kuberay cluster and see it queued without creating pending pods using command `kubectl create -f aw-raycluster.yaml`, note please change cluster name from `name: raycluster-autoscaler` to `name: raycluster-autoscaler-1` and re-submit
+- Let's submit another Ray cluster and see it queued without creating pending pods using command `kubectl create -f aw-raycluster.yaml`, note please change cluster name from `name: raycluster-autoscaler` to `name: raycluster-autoscaler-1` and re-submit
 
 ```
 Conditions:
@@ -89,7 +89,7 @@ Events:                          <none>
 ```
 
 
-- As seen the second ray cluster is queued with no pending pods created. 
+- As seen the second Ray cluster is queued with no pending pods created. 
 
-- Dispatching policy out of the box is FIFO which can be augmented as per user needs. The second cluster will be dispatched when additional aggregated resources are available in the cluster or the first appwrapper kuberay cluster is deleted.
+- Dispatching policy out of the box is FIFO which can be augmented as per user needs. The second cluster will be dispatched when additional aggregated resources are available in the cluster or the first AppWrapper Ray cluster is deleted.
 
