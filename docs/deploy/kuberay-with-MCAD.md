@@ -1,14 +1,26 @@
-### Kuberay integration with MCAD (Multi-Cluster-App-Dispatcher)
+# Kuberay integration with MCAD (Multi-Cluster-App-Dispatcher)
 
-The multi-cluster-app-dispatcher is a Kubernetes controller providing mechanisms for applications to manage batch jobs in a single or mult-cluster environment. For more details please refer [here](https://github.com/IBM/multi-cluster-app-dispatcher).
+The multi-cluster-app-dispatcher is a Kubernetes controller providing mechanisms for applications to manage batch jobs in a single or multi-cluster environment. For more details please refer [here](https://github.com/IBM/multi-cluster-app-dispatcher).
 
-In order to queue kuberay cluster and `gang dispatch` them when aggregated resources are available please refer to the setup [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) with configuration files [here](https://github.com/IBM/multi-cluster-app-dispatcher/tree/quota-management/doc/usage/examples/kuberay/config).
+## Use case
 
-#### Submitting kuberay cluster to MCAD
+MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources are available in the cluster prior to actual pod creation in the kubernetes cluster. It supports features such as:
+   
+- Integrates with upstream Kubernetes scheduling stack for features such co-scheduling, Packing on GPU dimension etc.
+- Ability to wrap any Kubernetes objects.
+- Increases control plane stability by JIT (Just-in Time) object  creation.
+- Queuing with policies.
+- Quota management that goes across namespaces.
+- Dispatching jobs to any one of the clusters.
 
-Let's submit two kuberay clusters on the same kubernetes cluster.
 
-- Assuming you have installed all the pre-requisites mentioned in the [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first cluster using command `kubectl create -f aw-raycluster.yaml` this config file is [here](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml).
+In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) with configuration files [here](https://github.com/IBM/multi-cluster-app-dispatcher/tree/quota-management/doc/usage/examples/kuberay/config).
+
+## Submitting kuberay cluster to MCAD
+
+Let's submit two Ray clusters on the same Kubernetes cluster.
+
+- Assuming you have installed all the pre-requisites mentioned in the [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first Ray cluster using command `kubectl create -f aw-raycluster.yaml` using config file [here](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml).
 
 ```
   Conditions:
