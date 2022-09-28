@@ -11,7 +11,7 @@ MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources
 - Increases control plane stability by JIT (Just-in Time) object creation.
 - Queuing with policies.
 - Quota management that goes across namespaces.
-- Dispatching jobs to any one of the Kubernetes clusters.
+- Support for multiple Kubernetes clusters; dispatching jobs to any one of a number of Kubernetes clusters.
 
 
 In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [Kuberay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) with configuration files [here](https://github.com/IBM/multi-cluster-app-dispatcher/tree/quota-management/doc/usage/examples/kuberay/config).
@@ -56,7 +56,7 @@ raycluster-autoscaler-1-worker-small-group-4s6jv   1/1     Running   0          
 ```
 - As seen the cluster is dispatched and pods are running.
 
-- Let's submit another Ray cluster and see it queued without creating pending pods using command `kubectl create -f aw-raycluster.yaml`, note please change cluster name from `name: raycluster-autoscaler` to `name: raycluster-autoscaler-1` and re-submit
+- Let's submit another Ray cluster and see it queued without creating pending pods using the command `kubectl create -f aw-raycluster.yaml`. To do this, change cluster name from `name: raycluster-autoscaler` to `name: raycluster-autoscaler-1` and re-submit
 
 ```
 Conditions:
