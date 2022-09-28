@@ -11,11 +11,13 @@ import kuberay_utils.utils as utils
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# kuberay_sha, ray_version & ray_image are default values that
-# will be changed by parse_environment()
-kuberay_sha = 'nightly'
+# Image version
 ray_version = '1.9.0'
-ray_image = "rayproject/ray:1.9.0"
+
+# Docker images
+ray_image = 'rayproject/ray:1.9.0'
+kuberay_operator_image = 'kuberay/operator:nightly'
+kuberay_apiserver_image = 'kuberay/apiserver:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
@@ -30,8 +32,9 @@ class BasicRayTestCase(unittest.TestCase):
         # ray cluster running inside Kind environment.
         utils.delete_cluster()
         utils.create_cluster()
-        utils.apply_kuberay_resources(kuberay_sha)
-        utils.download_images(ray_image)
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
         utils.create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
@@ -130,17 +133,14 @@ class RayFTTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not utils.ray_ft_supported(ray_version):
-            return
+            raise unittest.SkipTest("ray ft is not supported")
         utils.delete_cluster()
         utils.create_cluster()
-        utils.apply_kuberay_resources(kuberay_sha)
-        utils.download_images(ray_image)
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
         utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
                                      ray_version, ray_image)
-
-    def setUp(self):
-        if not utils.ray_ft_supported(ray_version):
-            raise unittest.SkipTest("ray ft is not supported")
 
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
@@ -371,21 +371,18 @@ class RayServiceTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not utils.ray_service_supported(ray_version):
-            return
+            raise unittest.SkipTest("ray service is not supported")
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
         # We wait for the serve service ready.
         # The test will check the successful response from serve service.
         utils.delete_cluster()
         utils.create_cluster()
-        utils.apply_kuberay_resources(kuberay_sha)
-        utils.download_images(ray_image)
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
         utils.create_kuberay_service(
             RayServiceTestCase.service_template_file, ray_version, ray_image)
-
-    def setUp(self):
-        if not utils.ray_service_supported(ray_version):
-            raise unittest.SkipTest("ray service is not supported")
 
     def test_ray_serve_work(self):
         time.sleep(5)
@@ -415,17 +412,21 @@ class RayServiceTestCase(unittest.TestCase):
 
 
 def parse_environment():
-    global ray_version, ray_image, kuberay_sha
+    global ray_version, ray_image, kuberay_operator_image, kuberay_apiserver_image
     for k, v in os.environ.items():
-        if k == 'RAY_VERSION':
-            logger.info('Setting Ray image to: {}'.format(v))
-            ray_version = v
-            ray_image = 'rayproject/ray:{}'.format(ray_version)
-        if k == 'KUBERAY_IMG_SHA':
-            logger.info('Using KubeRay docker build SHA: {}'.format(v))
-            kuberay_sha = v
+        if k == 'RAY_IMAGE':
+            ray_image = v
+            ray_version = ray_image.split(':')[-1]
+        elif k == 'OPERATOR_IMAGE':
+            kuberay_operator_image = v
+        elif k == 'APISERVER_IMAGE':
+            kuberay_apiserver_image = v
 
 
 if __name__ == '__main__':
     parse_environment()
-    unittest.main(verbosity=2)
+    logger.info('Setting Ray image to: {}'.format(ray_image))
+    logger.info('Setting Ray version to: {}'.format(ray_version))
+    logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
+    logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
+    unittest.main(verbosity=2)  

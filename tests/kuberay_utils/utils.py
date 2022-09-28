@@ -27,19 +27,15 @@ def parse_ray_version(version_str):
 def ray_ft_supported(ray_version):
     if ray_version == "nightly":
         return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
+    major, minor, _ = parse_ray_version(ray_version)
+    return major * 100 + minor > 113
 
 
 def ray_service_supported(ray_version):
     if ray_version == "nightly":
         return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
+    major, minor, _ = parse_ray_version(ray_version)
+    return major * 100 + minor > 113
 
 
 def shell_run(cmd):
@@ -66,19 +62,16 @@ def create_cluster():
     assert rtn == 0
 
 
-def apply_kuberay_resources(img_sha='nightly'):
-    shell_assert_success(
-        'kind load docker-image kuberay/operator:{}'.format(img_sha))
-    shell_assert_success(
-        'kind load docker-image kuberay/apiserver:{}'.format(img_sha))
-    shell_assert_success(
-        'kubectl create -k manifests/cluster-scope-resources')
+def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image):
+    for image in images:
+        shell_assert_success('kind load docker-image {}'.format(image))
+    shell_assert_success('kubectl create -k manifests/cluster-scope-resources')
     # use kustomize to build the yaml, then change the image to the one we want to testing.
     shell_assert_success(
         ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
          'kustomize edit set image ' +
-         'kuberay/operator:nightly=kuberay/operator:{0} kuberay/apiserver:nightly=kuberay/apiserver:{0} && ' +
-         'kubectl apply -k .').format(img_sha))
+         'kuberay/operator:nightly={0} kuberay/apiserver:nightly={1} && ' +
+         'kubectl apply -k .').format(kuberay_operator_image, kuberay_apiserver_image))
 
 
 def create_kuberay_cluster(template_name, ray_version, ray_image):
@@ -160,11 +153,13 @@ def delete_cluster():
     shell_run('kind delete cluster')
 
 
-def download_images(ray_image):
+def download_images(images):
     client = docker.from_env()
-    client.images.pull(ray_image)
-    # not enabled for now
-    # shell_assert_success('kind load docker-image \"{}\"'.format(ray_image))
+    for image in images:
+        if shell_run('docker image inspect {}'.format(image)) != 0:
+            # Only pull the image from DockerHub when the image does not
+            # exist in the local docker registry.
+            client.images.pull(image)
     client.close()
 
 
