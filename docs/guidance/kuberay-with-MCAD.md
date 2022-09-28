@@ -54,6 +54,7 @@ NAME                                               READY   STATUS    RESTARTS   
 raycluster-autoscaler-1-head-9s4x5                 2/2     Running   0          47s
 raycluster-autoscaler-1-worker-small-group-4s6jv   1/1     Running   0          47s
 ```
+
 - As seen the cluster is dispatched and pods are running.
 
 - Let's submit another Ray cluster and see it queued without creating pending pods using the command `kubectl create -f aw-raycluster.yaml`. To do this, change cluster name from `name: raycluster-autoscaler` to `name: raycluster-autoscaler-1` and re-submit
