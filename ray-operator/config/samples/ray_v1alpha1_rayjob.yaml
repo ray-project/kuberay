@@ -29,7 +29,6 @@ spec:
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
         port: '6379' # should match container port named gcs-server
-        object-store-memory: '100000000'
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
         node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
