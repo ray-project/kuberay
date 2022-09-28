@@ -35,7 +35,7 @@ nav:
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
     - Observability: guidance/observability.md
-    - Kuberay with MCAD: guidance/kuberay-with-MCAD.md
+    - KubeRay with MCAD: guidance/KubeRay-with-MCAD.md
   - Best Practice:
     - Worker reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting:
