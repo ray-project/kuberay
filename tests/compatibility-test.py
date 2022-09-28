@@ -429,4 +429,4 @@ if __name__ == '__main__':
     logger.info('Setting Ray version to: {}'.format(ray_version))
     logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
     logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
-    unittest.main(verbosity=2)  
+    unittest.main(verbosity=2)
