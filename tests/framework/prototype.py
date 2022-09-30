@@ -5,8 +5,13 @@ from kubernetes import client, config, utils
 import os
 import time
 import docker
+import logging
+import unittest
 
 # Utility functions
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 def search_path(cr, steps):
     curr = cr
     for step in steps:
@@ -175,6 +180,50 @@ class EasyJobRule(Rule):
         rtn = os.system("kubectl exec {} -- python -c \"import ray; ray.init(); print(ray.cluster_resources())\"".format(headpodName))
         assert(rtn == 0)
 
+class AddCREvent(CREvent):
+    def wait(self):
+        def check_pod_running(pods) -> bool:
+            for pod in pods:
+                if pod.status.phase != 'Running':
+                    return False
+            return True
+        start_time = time.time()
+        expected_head_pods = search_path(self.cr, "spec.headGroupSpec.replicas".split('.'))
+        expected_worker_pods = search_path(self.cr, "spec.workerGroupSpecs.0.replicas".split('.'))
+        # Wait until:
+        #   (1) The number of head pods and worker pods are as expected.
+        #   (2) All head pods and worker pods are "Running".
+        for _ in range(self.timeout):
+            headpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace, label_selector='rayNodeType={}'.format('head'))
+            workerpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace, label_selector='rayNodeType={}'.format('worker'))
+            if len(headpods.items) == expected_head_pods and len(workerpods.items) == expected_worker_pods and check_pod_running(headpods.items) and check_pod_running(workerpods.items):
+                logger.info("--- %s seconds ---" % (time.time() - start_time))
+                return
+            time.sleep(1)
+        raise Exception("wait() timeout")
+
+# TestSuite
+class GeneralTestCase(unittest.TestCase):
+    def __init__(self, methodName, images, crEvent):
+        super(GeneralTestCase, self).__init__(methodName)
+        self.crEvent = crEvent
+        self.images = images
+
+    def runTest(self):
+        logging.info("Convert CR object into YAML file")
+        filename = "tmp.yaml"
+        yaml_to_file(self.crEvent.cr, filename)
+
+        logging.info("Prepare KinD cluster")
+        delete_kind_cluster()
+        create_kind_cluster()
+        install_crd()
+        download_images(self.images)
+        kind_load_images(self.images)
+        install_kuberay_operator()
+        config.load_kube_config()
+        self.crEvent.trigger()
+
 if __name__ == '__main__':
     template_name = 'config/ray-cluster.mini.yaml.template'
     namespace = 'default'
@@ -184,24 +233,14 @@ if __name__ == '__main__':
     rs = RuleSet([HeadPodNameRule(), EasyJobRule()])
     mut = SimpleMutator(baseCR, [ds])
     images = ['rayproject/ray:2.0.0', 'kuberay/operator:v0.3.0', 'kuberay/apiserver:v0.3.0']
+    filename = 'tmp.yaml'
 
+    test_cases = unittest.TestSuite()
     for cr in mut.mutate():
-        # Convert CR object into YAML file
-        filename = "tmp.yaml"
-        yaml_to_file(cr, filename)
-        # Prepare for KinD cluster, CRD, images, and Kuberay operator.
-        delete_kind_cluster()
-        create_kind_cluster()
-        install_crd()
-        download_images(images)
-        kind_load_images(images)
-        install_kuberay_operator()
-        # Prepare for Python k8s client
-        config.load_kube_config()
-        # Trigger CREvent
-        addEvent = CREvent(cr, "kubectl apply -f {}".format(filename), [rs], 90, namespace)
-        addEvent.trigger()
-
+        addEvent = AddCREvent(cr, "kubectl apply -f {}".format(filename), [rs], 90, namespace)
+        test_cases.addTest(GeneralTestCase('runTest', images, addEvent))
+    runner=unittest.TextTestRunner()
+    runner.run(test_cases)
 
 
 
