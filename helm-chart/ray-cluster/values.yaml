@@ -49,7 +49,7 @@ head:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
-  sidecarContainers: {}
+  sidecarContainers: []
 
 
 worker:
@@ -103,7 +103,7 @@ worker:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
-  sidecarContainers: {}
+  sidecarContainers: []
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
@@ -159,7 +159,7 @@ additionalWorkerGroups:
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
-    sidecarContainers: {}
+    sidecarContainers: []
 
 headServiceSuffix: "ray-operator.svc"
 
