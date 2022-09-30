@@ -41,6 +41,9 @@ spec:
             lifecycle:
             {{- toYaml .Values.head.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if .Values.head.sidecarContainers }}
+          {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
@@ -89,6 +92,9 @@ spec:
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if $values.sidecarContainers }}
+          {{- toYaml $values.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
@@ -136,6 +142,9 @@ spec:
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if .Values.worker.sidecarContainers }}
+          {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
