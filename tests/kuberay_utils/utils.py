@@ -52,11 +52,9 @@ def shell_assert_failure(cmd):
 
 
 def create_cluster():
-    shell_assert_success(
-        'kind create cluster --config {}'.format(kindcluster_config_file))
-    time.sleep(60)
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
+    # Use `--wait 10m` flag to block until the control plane reaches a ready status.
+    shell_assert_success('kind create cluster --wait 10m --config {}'.format(kindcluster_config_file))
+    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=300s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
     assert rtn == 0
@@ -94,23 +92,16 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
     assert rtn == 0
     assert raycluster_spec_file is not None
     shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
-
-    time.sleep(180)
-
-    shell_run('kubectl get pods -A')
-
     rtn = shell_run(
         'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
+    shell_run('kubectl get pods -A')
     if rtn != 0:
-        shell_run('kubectl get pods -A')
-        shell_run(
-            'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run(
-            'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run(
-            'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+        shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+        shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+        shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
     assert rtn == 0
 
+    # Deploy a NodePort service to expose ports for users.
     shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
 
 
