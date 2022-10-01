@@ -61,7 +61,6 @@ def install_kuberay_operator():
     KUBERAY_VERSION = "v0.3.0"
     os.system("kubectl apply -k \"github.com/ray-project/kuberay/manifests/base?" +
               "ref={}&timeout=90s\"".format(KUBERAY_VERSION))
-    time.sleep(60)
 
 '''
 Configuration Test Framework Abstractions: (1) DeltaSet (2) Mutator (3) Rule (4) RuleSet (5) CREvent
@@ -132,18 +131,17 @@ class RuleSet:
 #   [Step2] wait(): Wait for the system to converge.
 #   [Step3] checkRuleSets(): When the system converges, check all registered RuleSets.
 class CREvent:
-    def __init__(self, cr, cmd, ruleSets: list[RuleSet], timeout, namespace):
+    def __init__(self, cr, ruleSets: list[RuleSet], timeout, namespace):
         self.ruleSets = ruleSets
-        self.cmd = cmd
         self.timeout = timeout
-        self.cr = cr
         self.namespace = namespace
+        self.cr = cr
     def trigger(self):
         self.exec()
         self.wait()
         self.checkRuleSets()
     def exec(self):
-        os.system(self.cmd)
+        raise NotImplementedError
     def wait(self):
         time.sleep(self.timeout)
     def checkRuleSets(self):
@@ -170,17 +168,23 @@ class HeadPodNameRule(Rule):
 
     def assertRule(self, cr, namespace):
         expected_val = search_path(cr, "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
-        headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType={}'.format('head'))
+        headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType=head')
         assert(headpods.items[0].spec.containers[0].name == expected_val)
 
 class EasyJobRule(Rule):
     def assertRule(self, cr=None, namespace='default'):
-        headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType={}'.format('head'))
+        headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType=head')
         headpodName = headpods.items[0].metadata.name
-        rtn = os.system("kubectl exec {} -- python -c \"import ray; ray.init(); print(ray.cluster_resources())\"".format(headpodName))
+        rtn = os.system("kubectl exec {} -- python -c \"import ray; ray.init(); print(ray.cluster_resources())\""
+                        .format(headpodName))
         assert(rtn == 0)
 
 class AddCREvent(CREvent):
+    def exec(self):
+        client.CustomObjectsApi().create_namespaced_custom_object(
+            group = 'ray.io',version = 'v1alpha1', namespace = self.namespace, plural = 'rayclusters', body = self.cr,
+            pretty = 'true')
+
     def wait(self):
         def check_pod_running(pods) -> bool:
             for pod in pods:
@@ -194,9 +198,12 @@ class AddCREvent(CREvent):
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         for _ in range(self.timeout):
-            headpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace, label_selector='rayNodeType={}'.format('head'))
-            workerpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace, label_selector='rayNodeType={}'.format('worker'))
-            if len(headpods.items) == expected_head_pods and len(workerpods.items) == expected_worker_pods and check_pod_running(headpods.items) and check_pod_running(workerpods.items):
+            headpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace,
+                                                              label_selector='rayNodeType={}'.format('head'))
+            workerpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace,
+                                                                label_selector='rayNodeType={}'.format('worker'))
+            if (len(headpods.items) == expected_head_pods and len(workerpods.items) == expected_worker_pods
+                    and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
                 logger.info("--- %s seconds ---" % (time.time() - start_time))
                 return
             time.sleep(1)
@@ -210,10 +217,6 @@ class GeneralTestCase(unittest.TestCase):
         self.images = images
 
     def runTest(self):
-        logging.info("Convert CR object into YAML file")
-        filename = "tmp.yaml"
-        yaml_to_file(self.crEvent.cr, filename)
-
         logging.info("Prepare KinD cluster")
         delete_kind_cluster()
         create_kind_cluster()
@@ -233,11 +236,10 @@ if __name__ == '__main__':
     rs = RuleSet([HeadPodNameRule(), EasyJobRule()])
     mut = SimpleMutator(baseCR, [ds])
     images = ['rayproject/ray:2.0.0', 'kuberay/operator:v0.3.0', 'kuberay/apiserver:v0.3.0']
-    filename = 'tmp.yaml'
 
     test_cases = unittest.TestSuite()
     for cr in mut.mutate():
-        addEvent = AddCREvent(cr, "kubectl apply -f {}".format(filename), [rs], 90, namespace)
+        addEvent = AddCREvent(cr, [rs], 90, namespace)
         test_cases.addTest(GeneralTestCase('runTest', images, addEvent))
     runner=unittest.TextTestRunner()
     runner.run(test_cases)
