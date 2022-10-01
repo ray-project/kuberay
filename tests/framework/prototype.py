@@ -112,7 +112,7 @@ class Rule:
     def trigger_condition(self, cr=None) -> bool:
         return True
     def assertRule(self, cr=None, namespace='default'):
-        pass
+        raise NotImplementedError
 
 # RuleSet: A set of Rule
 class RuleSet:
