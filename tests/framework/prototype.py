@@ -175,7 +175,7 @@ class EasyJobRule(Rule):
                         .format(headpodName))
         assert(rtn == 0)
 
-class AddCREvent(CREvent):
+class RayClusterAddCREvent(CREvent):
     def exec(self):
         client.CustomObjectsApi().create_namespaced_custom_object(
             group = 'ray.io',version = 'v1alpha1', namespace = self.namespace, plural = 'rayclusters', body = self.cr,
@@ -235,7 +235,7 @@ if __name__ == '__main__':
 
     test_cases = unittest.TestSuite()
     for cr in mut.mutate():
-        addEvent = AddCREvent(cr, [rs], 90, namespace)
+        addEvent = RayClusterAddCREvent(cr, [rs], 90, namespace)
         test_cases.addTest(GeneralTestCase('runTest', images, addEvent))
     runner=unittest.TextTestRunner()
     runner.run(test_cases)
