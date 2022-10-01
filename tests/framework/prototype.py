@@ -26,10 +26,6 @@ def search_path(cr, steps):
             return None
     return curr
 
-def yaml_to_file(cr_yaml, fn):
-    f = open(fn, 'w')
-    f.write(yaml.dump(cr_yaml))
-    f.close()
 '''
 Functions for cluster preparation. Typical workflow:
   Delete KinD cluster -> Create KinD cluster -> Install CRD -> Download Images (from DockerHub) ->
