@@ -55,6 +55,13 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+          resources:
+            limits:
+              cpu: 1
+              memory: "1G"
+            requests:
+              cpu: 1
+              memory: "512Mi"
   workerGroupSpecs:
     - replicas: 1
       minReplicas: 1

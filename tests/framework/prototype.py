@@ -88,7 +88,7 @@ class Rule:
     # "HeadPodNameRule" when "spec.headGroupSpec" is defined in CR YAML file.
     def trigger_condition(self, cr=None) -> bool:
         return True
-    def assertRule(self, cr=None, namespace='default'):
+    def assertRule(self, cr=None, cr_namespace='default'):
         raise NotImplementedError
 
 # RuleSet: A set of Rule
@@ -134,10 +134,20 @@ class HeadPodNameRule(Rule):
         steps = "spec.headGroupSpec".split('.')
         return (search_path(cr, steps) != None)
 
-    def assertRule(self, cr, namespace):
+    def assertRule(self, cr=None, cr_namespace='default'):
         expected_val = search_path(cr, "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
-        headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType=head')
+        headpods = client.CoreV1Api().list_namespaced_pod(namespace = cr_namespace, label_selector='rayNodeType=head')
         assert(headpods.items[0].spec.containers[0].name == expected_val)
+
+class HeadSvcRule(Rule):
+    """The labels of the head pod and the selectors of the head service must match."""
+    def assertRule(self, cr=None, cr_namespace='default'):
+        head_services = client.CoreV1Api().list_namespaced_service(namespace= cr_namespace, label_selector="ray.io/node-type=head")
+        assert(len(head_services.items) == 1)
+        selector_dict = head_services.items[0].spec.selector
+        selector = ','.join(map(lambda key: f"{key}={selector_dict[key]}", selector_dict))
+        headpods = client.CoreV1Api().list_namespaced_pod(namespace =cr_namespace, label_selector=selector)
+        assert(len(headpods.items) == 1)
 
 class EasyJobRule(Rule):
     def assertRule(self, cr=None, namespace='default'):
@@ -203,17 +213,29 @@ if __name__ == '__main__':
 
     patch_list = [
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-1'}]),
-        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}]),
-        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-3'}])
+        # Reproduce #587
+        jsonpatch.JsonPatch([
+            {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
+            {'op': 'add', 'path': '/spec/workerGroupSpecs/0/template/metadata/name', 'value': 'haha'}
+            ]),
+        # Reproduce #585
+        jsonpatch.JsonPatch([{'op': 'add', 'path': '/spec/headGroupSpec/rayStartParams/object-manager-port', 'value': '12345'}]),
+        # Reproduce #572 #530
+        jsonpatch.JsonPatch([{'op': 'add', 'path': '/spec/headGroupSpec/template/metadata/labels/app.kubernetes.io~1name', 'value': 'ray'}]),
+        # Reproduce #529
+        jsonpatch.JsonPatch([
+            {'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/resources/requests/memory', 'value': '256Mi'},
+            {'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/resources/limits/memory', 'value': '512Mi'}
+        ])
     ]
     
-    rs = RuleSet([HeadPodNameRule(), EasyJobRule()])
+    rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(baseCR, patch_list)
     images = ['rayproject/ray:2.0.0', 'kuberay/operator:v0.3.0', 'kuberay/apiserver:v0.3.0']
 
     test_cases = unittest.TestSuite()
-    for cr in mut.mutate():
-        addEvent = RayClusterAddCREvent(cr, [rs], 90, namespace)
+    for new_cr in mut.mutate():
+        addEvent = RayClusterAddCREvent(new_cr, [rs], 90, namespace)
         test_cases.addTest(GeneralTestCase('runTest', images, addEvent))
     runner=unittest.TextTestRunner()
     runner.run(test_cases)
