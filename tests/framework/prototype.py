@@ -63,6 +63,9 @@ def install_kuberay_operator():
     os.system("kubectl apply -k \"github.com/ray-project/kuberay/manifests/base?" +
               "ref={}&timeout=90s\"".format(KUBERAY_VERSION))
 
+def check_cluster_exist():
+    return os.system("kubectl cluster-info --context kind-kind") == 0 
+
 '''
 Configuration Test Framework Abstractions: (1) DeltaSet (2) Mutator (3) Rule (4) RuleSet (5) CREvent
 '''
@@ -150,6 +153,7 @@ class HeadSvcRule(Rule):
         assert(len(headpods.items) == 1)
 
 class EasyJobRule(Rule):
+    """Submit a very simple Ray job to test the basic functionality of the Ray cluster."""
     def assertRule(self, cr=None, namespace='default'):
         headpods = client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector='rayNodeType=head')
         headpodName = headpods.items[0].metadata.name
@@ -182,10 +186,28 @@ class RayClusterAddCREvent(CREvent):
                                                                 label_selector='rayNodeType={}'.format('worker'))
             if (len(headpods.items) == expected_head_pods and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
-                logger.info("--- %s seconds ---" % (time.time() - start_time))
+                logger.info("--- RayClusterAddCREvent %s seconds ---" % (time.time() - start_time))
                 return
             time.sleep(1)
-        raise Exception("wait() timeout")
+        raise Exception("RayClusterAddCREvent wait() timeout")
+
+class RayClusterDeleteCREvent(CREvent):
+    def exec(self):
+        client.CustomObjectsApi().delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = self.namespace, plural = 'rayclusters', name = self.cr['metadata']['name'])
+
+    def wait(self):
+        start_time = time.time()
+        for _ in range(self.timeout):
+            headpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace,
+                                                              label_selector='rayNodeType={}'.format('head'))
+            workerpods = client.CoreV1Api().list_namespaced_pod(namespace = self.namespace,
+                                                                label_selector='rayNodeType={}'.format('worker'))
+            if (len(headpods.items) == 0 and len(workerpods.items) == 0):
+                logger.info("--- RayClusterDeleteCREvent %s seconds ---" % (time.time() - start_time))
+                return
+            time.sleep(1)
+        raise Exception("RayClusterDeleteCREvent wait() timeout")
 
 # TestSuite
 class GeneralTestCase(unittest.TestCase):
@@ -194,16 +216,29 @@ class GeneralTestCase(unittest.TestCase):
         self.crEvent = crEvent
         self.images = images
 
-    def runTest(self):
-        logging.info("Prepare KinD cluster")
+    @classmethod
+    def setUpClass(cls):
         delete_kind_cluster()
-        create_kind_cluster()
-        install_crd()
-        download_images(self.images)
-        kind_load_images(self.images)
-        install_kuberay_operator()
-        config.load_kube_config()
+
+    def setUp(self):
+        if not check_cluster_exist():
+            create_kind_cluster()        
+            install_crd()
+            download_images(self.images)
+            kind_load_images(self.images)
+            install_kuberay_operator()
+            config.load_kube_config()
+
+    def runTest(self):
         self.crEvent.trigger()
+
+    def tearDown(self) -> None:
+        try:
+            delete_event = RayClusterDeleteCREvent(self.crEvent.cr, [], self.crEvent.timeout, self.crEvent.namespace)
+            delete_event.trigger()
+        except Exception as e:
+            logger.error(str(e))
+            delete_kind_cluster()
 
 if __name__ == '__main__':
     template_name = 'config/ray-cluster.mini.yaml.template'
@@ -213,6 +248,7 @@ if __name__ == '__main__':
 
     patch_list = [
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-1'}]),
+        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}]),
         # Reproduce #587
         jsonpatch.JsonPatch([
             {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
