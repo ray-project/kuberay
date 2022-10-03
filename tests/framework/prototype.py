@@ -1,5 +1,4 @@
 import yaml
-import copy
 from typing import Optional
 from kubernetes import client, config, utils
 import os
@@ -7,6 +6,7 @@ import time
 import docker
 import logging
 import unittest
+import jsonpatch
 
 # Utility functions
 logger = logging.getLogger(__name__)
@@ -31,27 +31,32 @@ Functions for cluster preparation. Typical workflow:
   Delete KinD cluster -> Create KinD cluster -> Install CRD -> Download Images (from DockerHub) ->
   Load images into KinD cluster -> Install KubeRay operator
 '''
-def delete_kind_cluster():
+def delete_kind_cluster() -> None:
+    """Delete a KinD cluster"""
     os.system("kind delete cluster")
 
 def create_kind_cluster():
+    """Create a KinD cluster"""
     os.system("kind create cluster")
     os.system("kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s")
 
 def install_crd():
+    """Install Custom Resource Definition (CRD)"""
     KUBERAY_VERSION = "v0.3.0"
     os.system("kubectl create -k \"github.com/ray-project/kuberay/manifests/cluster-scope-resources?" +
               "ref={}&timeout=90s\"".format(KUBERAY_VERSION))
 
 def download_images(images):
-    client = docker.from_env()
+    """Download Docker images from DockerHub"""
+    docker_client = docker.from_env()
     for image in images:
-        client.images.pull(image)
-    client.close()
+        docker_client.images.pull(image)
+    docker_client.close()
 
 def kind_load_images(images):
+    """Load downloaded images into KinD cluster"""
     for image in images:
-        os.system('kind load docker-image {}'.format(image))
+        os.system(f'kind load docker-image {image}')
 
 def install_kuberay_operator():
     KUBERAY_VERSION = "v0.3.0"
@@ -62,39 +67,16 @@ def install_kuberay_operator():
 Configuration Test Framework Abstractions: (1) DeltaSet (2) Mutator (3) Rule (4) RuleSet (5) CREvent
 '''
 
-# DeltaSet: Use `path` to specify the field that wants to mutate, and `candidates` is a list of candidate
-#           value for the field.
-# Example:  DeltaSet("spec.headGroupSpec.template.spec.containers.0.name", ['ray-head-1', 'ray-head-2', 'ray-head-3'])
-class DeltaSet:
-    def __init__(self, path, candidates):
-        self.path = path
-        self.candidates = candidates
-
-    def iterate(self):
-        for candidate in self.candidates:
-            yield candidate
-
-    # return value: (1) steps (2) None => this path does not exist
-    def find_path(self, cr) -> Optional[list[str]]:
-        steps = self.path.split('.')
-        return steps
-
 # Mutator: Mutator will start to mutate from `baseCR`. `deltaSets` is a list of DeltaSets, and each DeltaSet
 #          specifies a field that wants to mutate with multiple candidate values.
-# Example: "SimpleMutator"
 class Mutator:
-    def __init__(self, baseCR, deltaSets: list[DeltaSet]):
+    def __init__(self, baseCR, patch_list: list[jsonpatch.JsonPatch]):
         self.baseCR = baseCR
-        self.deltaSets = deltaSets
-    # You need to define your mutate() function by inheriting `Mutator`. It should return a new CR.
+        self.patch_list = patch_list
+    # Generate a new cr by applying the json patch to `cr`. 
     def mutate(self):
-        pass
-    # Apply delta to the base (custom resource).
-    def apply_delta(self, base, delta, steps):
-        root = copy.deepcopy(base)
-        curr = search_path(root, steps[:-1])
-        curr[steps[-1]] = delta
-        return root
+        for patch in self.patch_list:
+            yield patch.apply(self.baseCR)
 
 # Rule: Rule is used to check whether the actual cluster state is the same as our expectation after a CREvent.
 #       We can infer the expected state by CR YAML file, and get the actual cluster state by Kubernetes API.
@@ -147,16 +129,6 @@ class CREvent:
 '''
 My implementations
 '''
-class SimpleMutator(Mutator):
-    def mutate(self):
-        for deltaSet in self.deltaSets:
-            steps = deltaSet.find_path(self.baseCR)
-            if steps:
-                for delta in deltaSet.iterate():
-                    yield self.apply_delta(self.baseCR, delta, steps)
-            else:
-                print("The path does not exist")
-
 class HeadPodNameRule(Rule):
     def trigger_condition(self, cr) -> bool:
         steps = "spec.headGroupSpec".split('.')
@@ -228,9 +200,15 @@ if __name__ == '__main__':
     namespace = 'default'
     with open(template_name) as base_yaml:
         baseCR = yaml.load(base_yaml, Loader=yaml.FullLoader)
-    ds = DeltaSet("spec.headGroupSpec.template.spec.containers.0.name", ['ray-head-1', 'ray-head-2', 'ray-head-3'])
+
+    patch_list = [
+        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-1'}]),
+        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}]),
+        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-3'}])
+    ]
+    
     rs = RuleSet([HeadPodNameRule(), EasyJobRule()])
-    mut = SimpleMutator(baseCR, [ds])
+    mut = Mutator(baseCR, patch_list)
     images = ['rayproject/ray:2.0.0', 'kuberay/operator:v0.3.0', 'kuberay/apiserver:v0.3.0']
 
     test_cases = unittest.TestSuite()
@@ -239,7 +217,3 @@ if __name__ == '__main__':
         test_cases.addTest(GeneralTestCase('runTest', images, addEvent))
     runner=unittest.TextTestRunner()
     runner.run(test_cases)
-
-
-
-
