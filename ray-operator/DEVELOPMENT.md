@@ -32,7 +32,10 @@ export PATH="$GOROOT/bin:$PATH"
 
 ### IDE Setup (VS Code)
 * Step1: Install the [VS Code Go extension](https://marketplace.visualstudio.com/items?itemName=golang.go).
-* Step2: This [document](https://github.com/golang/vscode-go/blob/master/README.md#setting-up-your-workspace) indicates that workspace configuration is needed for multiple Go modules. KubeRay provided a workspace configuration, and you can import it by:
+* Step 2: Import the KubeRay workspace configuration by using the file `kuberay.code-workspace` in the root of the KubeRay git repo:
+    * "File" -> "Open Workspace from File" -> "kuberay.code-workspace"
+
+Setting up workspace configuration is required because KubeRay contains multiple Go modules. See the [VS Code Go documentation](https://github.com/golang/vscode-go/blob/master/README.md#setting-up-your-workspace) for details.
   * "File" -> "Open Workspace from File" -> "kuberay.code-workspace"
 
 ### Build the source code
