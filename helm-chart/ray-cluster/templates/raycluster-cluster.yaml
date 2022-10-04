@@ -12,7 +12,7 @@ spec:
   enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
   {{- end }}
   headGroupSpec:
-    serviceType: ClusterIP
+    serviceType: {{ .Values.service.type }}
     rayStartParams:
     {{- range $key, $val := .Values.head.initArgs }}
       {{ $key }}: {{ $val | quote }}
