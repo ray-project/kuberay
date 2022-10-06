@@ -2,50 +2,49 @@
 
 > Note: This is the alpha version of Ray Job Support in KubeRay. There will be ongoing improvements for Ray Job in the future releases.
 
-### Prerequisite
+### Prerequisites
 
-* Ray 1.10 and above.
-* KubeRay v0.3.0 or master
+* Ray 1.10 or higher
+* KubeRay v0.3.0
 
 ### What is a RayJob?
 
-The RayJob is a new custom resource (CR) supported by KubeRay in v0.3.0.
+RayJob is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayJob manages 2 things:
-
-* RayCluster: Manages resources in kubernetes cluster.
-* Job: Manages users' job in ray cluster.
+* Ray Cluster: Manages resources in a Kubernetes cluster.
+* Job: Manages jobs in a Ray Cluster.
 
 ### What does the RayJob provide?
 
-* Kubernetes-native support for Ray cluster and Ray Job. You can use a kubernetes config to define a ray cluster and jobs in ray cluster. Then you can use `kubectl` to create the cluster and its job. The cluster can be deleted automatically after the job is finished.
+* **Kubernetes-native support for Ray clusters and Ray Jobs.** You can use a Kubernetes config to define a Ray cluster and job, and use `kubectl` to create them. The cluster can be deleted automatically once the job is finished.
 
 
-### Deploy the KubeRay
+### Deploy KubeRay
 
 Make sure KubeRay v0.3.0 version is deployed in your cluster.
-For installation details, please check [guidance](../deploy/installation.md)
+For installation instructions, please follow [the documentation](../deploy/installation.md).
 
 ### Run an example Job
 
-There is one example config file to deploy RayJob included here:
+There is one example config file to deploy a RayJob included here:
 [ray_v1alpha1_rayjob.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayjob.yaml)
 
 ```shell
-# Create a ray job.
+# Create a RayJob.
 $ kubectl apply -f config/samples/ray_v1alpha1_rayjob.yaml
 ```
 
 ```shell
 # List running RayJobs.
 $ kubectl get rayjob
-NAME                AGE
+NAME            AGE
 rayjob-sample   7s
 ```
 
 ```shell
-# RayJob sample underneath will create a raycluster
-# raycluster will create few resources including pods, services, you can type commands to have a check
+# RayJob sample will also create a raycluster.
+# raycluster will create few resources including pods and services. You can use the following commands to check them:
 $ kubectl get rayclusters
 $ kubectl get pod
 ```
@@ -53,16 +52,16 @@ $ kubectl get pod
 ### RayJob Configuration
 
 - `entrypoint` - The shell command to run for this job. job_id.
-- `jobId` - Optional. Job ID to specify for the job. If not provided, one will be generated.
+- `jobId` - _(Optional)_ Job ID to specify for the job. If not provided, one will be generated.
 - `metadata` - Arbitrary user-provided metadata for the job.
 - `runtimeEnv` - base64 string of the runtime json string.
 - `shutdownAfterJobFinishes` - whether to recycle the cluster after job finishes.
-- `ttlSecondsAfterFinished` - TTL to clean up the cluster. This is only working if `shutdownAfterJobFinishes` is set.
+- `ttlSecondsAfterFinished` - TTL to clean up the cluster. This only works if `shutdownAfterJobFinishes` is set.
 
 ### RayJob Observability
 
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
-You can also use `kubectl describe rayjobs rayjob-sample` to check the states and event logs of your RayJob instance.
+You can also use `kubectl describe rayjobs rayjob-sample` to check the states and event logs of your RayJob instance:
 
 ```
 Status:
@@ -91,7 +90,7 @@ Events:
 ```
 
 
-If the job can not successfully run, you can see from the status as well.
+If the job doesn't run successfully, the above `describe` command will provide information about that too:
 ```
 Status:
   Dashboard URL:          rayjob-sample-raycluster-nrdm8-head-svc.ray-system.svc.cluster.local:8265
