@@ -11,5 +11,7 @@ cd $KUBERAY_HOME
 if [ "$#" == 1 ] && [ "$1" == "local" ]; then
   ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 else
-  docker run -it --network host --workdir=/data --volume ~/.kube/config:/root/.kube/config:ro --volume $(pwd):/data quay.io/helmpack/chart-testing:v3.5.0 ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
+  docker run -it --network host --workdir=/data --volume ~/.kube/config:/root/.kube/config:ro \
+  --volume $(pwd):/data quay.io/helmpack/chart-testing:v3.5.0 \
+  ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 fi
