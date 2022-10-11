@@ -67,11 +67,11 @@ def check_cluster_exist():
     return os.system("kubectl cluster-info --context kind-kind") == 0 
 
 '''
-Configuration Test Framework Abstractions: (1) DeltaSet (2) Mutator (3) Rule (4) RuleSet (5) CREvent
+Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
 '''
 
-# Mutator: Mutator will start to mutate from `baseCR`. `deltaSets` is a list of DeltaSets, and each DeltaSet
-#          specifies a field that wants to mutate with multiple candidate values.
+# Mutator: Mutator will start to mutate from `baseCR`. `patch_list` is a list of JsonPatch, and you can
+#          specify multiple fields that want to mutate in a single JsonPatch.
 class Mutator:
     def __init__(self, baseCR, patch_list: list[jsonpatch.JsonPatch]):
         self.baseCR = baseCR
