@@ -385,7 +385,7 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err error) {
 	log.Info("Stop a ray job", "rayJob", jobName)
 
-	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath + jobName + "/stop", nil)
+	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
 	}
@@ -409,7 +409,6 @@ func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err erro
 	}
 	return nil
 }
-
 
 func ConvertRayJobToReq(rayJob *rayv1alpha1.RayJob) (*RayJobRequest, error) {
 	req := &RayJobRequest{

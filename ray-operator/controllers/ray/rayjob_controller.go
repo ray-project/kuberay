@@ -3,9 +3,10 @@ package ray
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"time"
 
 	"k8s.io/client-go/tools/record"
 
