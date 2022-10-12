@@ -249,18 +249,20 @@ if __name__ == '__main__':
     patch_list = [
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-1'}]),
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}]),
-        # Reproduce #612
+        # Reproduce #612: https://github.com/ray-project/kuberay/issues/612
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/replicas', 'value': 2}]),
-        # Reproduce #587
+        # Reproduce #587: https://github.com/ray-project/kuberay/pull/587
         jsonpatch.JsonPatch([
             {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
             {'op': 'add', 'path': '/spec/workerGroupSpecs/0/template/metadata/name', 'value': 'haha'}
             ]),
-        # Reproduce #585
+        # Reproduce #585: https://github.com/ray-project/kuberay/pull/585
         jsonpatch.JsonPatch([{'op': 'add', 'path': '/spec/headGroupSpec/rayStartParams/object-manager-port', 'value': '12345'}]),
-        # Reproduce #572 #530
+        # Reproduce 
+        #   #572: https://github.com/ray-project/kuberay/pull/572
+        #   #530: https://github.com/ray-project/kuberay/pull/530
         jsonpatch.JsonPatch([{'op': 'add', 'path': '/spec/headGroupSpec/template/metadata/labels/app.kubernetes.io~1name', 'value': 'ray'}]),
-        # Reproduce #529
+        # Reproduce #529: https://github.com/ray-project/kuberay/pull/529
         jsonpatch.JsonPatch([
             {'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/resources/requests/memory', 'value': '256Mi'},
             {'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/resources/limits/memory', 'value': '512Mi'}
