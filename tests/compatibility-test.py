@@ -275,7 +275,7 @@ else:
 
         # Register a detached actor
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_1.py')
-        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', 180)
+        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
             raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}.")
@@ -289,10 +289,10 @@ else:
 
         # Try to connect to the detached actor again.
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_2.py')
-        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', 180)
+        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            raise Exception(f"Exception happens during the execution of test_detached_actor_2.py. The exit code is {exit_code}.")
+            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}.")
 
         container.stop()
         client.close()
