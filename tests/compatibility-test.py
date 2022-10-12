@@ -278,7 +278,8 @@ else:
         exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}.")
+            raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
         # Kill the gcs on head node. If fate sharing is enabled, the whole head node pod will terminate.
         utils.shell_assert_success(
@@ -292,7 +293,8 @@ else:
         exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}.")
+            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
         container.stop()
         client.close()

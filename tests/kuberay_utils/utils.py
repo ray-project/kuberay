@@ -174,6 +174,7 @@ def copy_to_container(container, src, dest, filename):
         os.chdir(oldpwd)
 
 def exec_run_container(container, cmd, timeout_sec, silent = False):
+    """Executes the command `cmd` in `container`, and logs the output if `silent` is False."""
     timeout_cmd = 'timeout {}s {}'.format(timeout_sec, cmd)
     # If the exit_code is 124, 125, 126, 127, 137, it is related to the `timeout` command.
     # See https://manpages.courier-mta.org/htmlman1/timeout.1.html for more details.
