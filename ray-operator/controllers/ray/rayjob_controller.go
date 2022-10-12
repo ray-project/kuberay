@@ -49,7 +49,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ray.io,resources=rayjobs/finalizer,verbs=update
+// +kubebuilder:rbac:groups=ray.io,resources=rayjobs/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
