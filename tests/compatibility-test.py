@@ -284,7 +284,7 @@ else:
         utils.shell_assert_success(
             'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # Wait for new head node getting created
-        # TODO (kevin85421): Need a better method to wait for the new head pod.
+        # TODO (kevin85421): Need a better method to wait for the new head pod. (https://github.com/ray-project/kuberay/issues/618)
         time.sleep(180)
 
         # Try to connect to the detached actor again.
