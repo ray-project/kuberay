@@ -1,9 +1,9 @@
 package client
 
 import (
+	"k8s.io/klog/v2"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
@@ -25,7 +25,7 @@ func (cc RayServiceClient) RayServiceClient(namespace string) rayiov1alpha1.RayS
 func NewRayServiceClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) ServiceClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		glog.Fatalf("Failed to create RayService client. Error: %v", err)
+		klog.Fatalf("Failed to create RayService client. Error: %v", err)
 	}
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst

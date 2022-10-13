@@ -2,9 +2,8 @@ package model
 
 import (
 	"fmt"
+	"k8s.io/klog/v2"
 	"strconv"
-
-	"github.com/golang/glog"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -131,7 +130,7 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			glog.Errorf("failed to transfer job crd to job protobuf, err: %v, crd: %+v", err, job)
+			klog.Errorf("failed to transfer job crd to job protobuf, err: %v, crd: %+v", err, job)
 		}
 	}()
 
@@ -178,7 +177,7 @@ func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.R
 	defer func() {
 		err := recover()
 		if err != nil {
-			glog.Errorf("failed to transfer ray service, err: %v, item: %v", err, service)
+			klog.Errorf("failed to transfer ray service, err: %v, item: %v", err, service)
 		}
 	}()
 
