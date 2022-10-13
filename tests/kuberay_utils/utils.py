@@ -2,6 +2,7 @@
 
 import os
 import logging
+import tarfile
 import time
 import tempfile
 import docker
@@ -12,7 +13,9 @@ kindcluster_config_file = 'tests/config/cluster-config.yaml'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
 
 
 def parse_ray_version(version_str):
@@ -38,8 +41,10 @@ def ray_service_supported(ray_version):
     return major * 100 + minor > 113
 
 
-def shell_run(cmd):
+def shell_run(cmd, silent = False):
     logger.info('executing cmd: {}'.format(cmd))
+    if silent:
+        cmd += ' > /dev/null'
     return os.system(cmd)
 
 
@@ -147,12 +152,38 @@ def delete_cluster():
 def download_images(images):
     client = docker.from_env()
     for image in images:
-        if shell_run('docker image inspect {}'.format(image)) != 0:
+        if shell_run('docker image inspect {}'.format(image), silent=True) != 0:
             # Only pull the image from DockerHub when the image does not
             # exist in the local docker registry.
             client.images.pull(image)
     client.close()
 
+def copy_to_container(container, src, dest, filename):
+    oldpwd = os.getcwd()
+    try:
+        os.chdir(src)
+        with tempfile.NamedTemporaryFile(suffix='.tar') as tf:
+            with tarfile.open(fileobj=tf, mode='w') as tar:
+                try:
+                    tar.add(filename)
+                finally:
+                    tar.close()
+                data = open(tf.name, 'rb').read()
+                container.put_archive(dest, data)
+    finally:
+        os.chdir(oldpwd)
+
+def exec_run_container(container, cmd, timeout_sec, silent = False):
+    """Executes the command `cmd` in `container`, and logs the output if `silent` is False."""
+    timeout_cmd = 'timeout {}s {}'.format(timeout_sec, cmd)
+    # If the exit_code is 124, 125, 126, 127, 137, it is related to the `timeout` command.
+    # See https://manpages.courier-mta.org/htmlman1/timeout.1.html for more details.
+    exit_code, output = container.exec_run(cmd = timeout_cmd)
+    if not silent:
+        logger.info(f"cmd: {timeout_cmd}")
+        logger.info(f"exit_code: {exit_code}")
+        logger.info(f"output: {output.decode()}")
+    return exit_code, output.decode()
 
 def wait_for_condition(
         condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
