@@ -47,6 +47,21 @@ func (s *RayServiceServer) CreateRayService(ctx context.Context, request *api.Cr
 	return model.FromCrdToApiService(rayService, events), nil
 }
 
+func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*api.RayService, error) {
+	if err := ValidateUpdateRayServiceRequest(request); err != nil {
+		return nil, err
+	}
+	service, err := s.resourceManager.UpdateRayService(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	events, err := s.resourceManager.GetServiceEvents(ctx, *service)
+	if err != nil {
+		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", service.Namespace, service.Name, err)
+	}
+	return model.FromCrdToApiService(service, events), nil
+}
+
 func (s *RayServiceServer) GetRayService(ctx context.Context, request *api.GetRayServiceRequest) (*api.RayService, error) {
 	if request.Name == "" {
 		return nil, util.NewInvalidInputError("ray service name is empty. Please specify a valid value.")
@@ -162,5 +177,41 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 		}
 	}
 
+	return nil
+}
+
+func ValidateUpdateRayServiceRequest(request *api.UpdateRayServiceRequest) error {
+	if request.Name == "" {
+		return util.NewInvalidInputError("ray service name is empty. Please specify a valid value.")
+	}
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
+	}
+	updateServiceBody := request.GetUpdateService()
+	if updateServiceBody == nil || (updateServiceBody.WorkerGroupUpdateSpec == nil && updateServiceBody.ServeDeploymentGraphSpec == nil) {
+		return util.NewInvalidInputError("update spec is empty. Nothing to update.")
+	}
+	if updateServiceBody.WorkerGroupUpdateSpec != nil {
+		for _, spec := range updateServiceBody.WorkerGroupUpdateSpec {
+			if spec.Replicas <= 0 || spec.MinReplicas <= 0 || spec.MaxReplicas <= 0 {
+				return util.NewInvalidInputError("input invalid, replicas, minReplicas and maxReplicas must be greater than 0.")
+			}
+			if spec.MinReplicas > spec.MaxReplicas {
+				return util.NewInvalidInputError("WorkerNodeSpec %s MinReplica > MaxReplicas. Please specify a valid value.", spec.GroupName)
+			}
+		}
+	}
+	if updateServiceBody.ServeDeploymentGraphSpec != nil {
+		for _, spec := range updateServiceBody.ServeDeploymentGraphSpec.ServeConfigs {
+			if spec.Replicas <= 0 {
+				return util.NewInvalidInputError("input invalid, replicas must be greater than 0.")
+			}
+			if spec.ActorOptions != nil {
+				if spec.ActorOptions.CpusPerActor <= 0 && spec.ActorOptions.GpusPerActor <= 0 && spec.ActorOptions.MemoryPerActor <= 0 {
+					return util.NewInvalidInputError("input invalid, cpusPerActor, gpusPerActor and memoryPerActor must be greater than 0.")
+				}
+			}
+		}
+	}
 	return nil
 }

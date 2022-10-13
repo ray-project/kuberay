@@ -77,3 +77,71 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		RayClusterSpec: *buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap),
 	}
 }
+
+func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, workerGroupSpecs []rayalphaapi.WorkerGroupSpec) []rayalphaapi.WorkerGroupSpec {
+	specMap := map[string]*api.WorkerGroupUpdateSpec{}
+	for _, spec := range updateSpecs {
+		if spec != nil {
+			specMap[spec.GroupName] = spec
+		}
+	}
+	for i, spec := range workerGroupSpecs {
+		if updateSpec, ok := specMap[spec.GroupName]; ok {
+			newSpec := updateWorkerGroupSpec(updateSpec, spec)
+			workerGroupSpecs[i] = newSpec
+		}
+	}
+	return workerGroupSpecs
+}
+
+func updateWorkerGroupSpec(updateSpec *api.WorkerGroupUpdateSpec, workerGroupSpec rayalphaapi.WorkerGroupSpec) rayalphaapi.WorkerGroupSpec {
+	replicas := updateSpec.Replicas
+	minReplicas := updateSpec.MinReplicas
+	maxReplicas := updateSpec.MaxReplicas
+
+	workerGroupSpec.Replicas = &replicas
+	workerGroupSpec.MinReplicas = &minReplicas
+	workerGroupSpec.MaxReplicas = &maxReplicas
+	return workerGroupSpec
+}
+
+func UpdateServeDeploymentGraphSpec(updateSpecs *api.ServeDeploymentGraphSpec, serveDeploymentGraphspec rayalphaapi.ServeDeploymentGraphSpec) rayalphaapi.ServeDeploymentGraphSpec {
+	if updateSpecs.ImportPath != "" {
+		serveDeploymentGraphspec.ImportPath = updateSpecs.ImportPath
+	}
+	if updateSpecs.RuntimeEnv != "" {
+		serveDeploymentGraphspec.RuntimeEnv = base64.StdEncoding.EncodeToString([]byte(updateSpecs.RuntimeEnv))
+	}
+
+	if updateSpecs.ServeConfigs != nil {
+		specMap := map[string]*api.ServeConfig{}
+		for _, spec := range updateSpecs.ServeConfigs {
+			if spec != nil {
+				specMap[spec.DeploymentName] = spec
+			}
+		}
+		for i, spec := range serveDeploymentGraphspec.ServeConfigSpecs {
+			if updateSpec, ok := specMap[spec.Name]; ok {
+				newSpec := updateServeConfigSpec(updateSpec, spec)
+				serveDeploymentGraphspec.ServeConfigSpecs[i] = newSpec
+			}
+		}
+	}
+	return serveDeploymentGraphspec
+}
+
+func updateServeConfigSpec(updateSpec *api.ServeConfig, serveConfigSpec rayalphaapi.ServeConfigSpec) rayalphaapi.ServeConfigSpec {
+	if updateSpec.Replicas != 0 {
+		serveConfigSpec.NumReplicas = &updateSpec.Replicas
+	}
+	if updateSpec.ActorOptions.CpusPerActor != 0 {
+		serveConfigSpec.RayActorOptions.NumCpus = &updateSpec.ActorOptions.CpusPerActor
+	}
+	if updateSpec.ActorOptions.GpusPerActor != 0 {
+		serveConfigSpec.RayActorOptions.NumGpus = &updateSpec.ActorOptions.GpusPerActor
+	}
+	if updateSpec.ActorOptions.MemoryPerActor != 0 {
+		serveConfigSpec.RayActorOptions.Memory = &updateSpec.ActorOptions.MemoryPerActor
+	}
+	return serveConfigSpec
+}

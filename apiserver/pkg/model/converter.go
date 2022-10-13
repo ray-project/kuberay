@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 
@@ -200,9 +201,10 @@ func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.R
 }
 
 func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
+	runtimeEnv, _ := base64.StdEncoding.DecodeString(spec.RuntimeEnv)
 	return &api.ServeDeploymentGraphSpec{
 		ImportPath:   spec.ImportPath,
-		RuntimeEnv:   spec.RuntimeEnv,
+		RuntimeEnv:   string(runtimeEnv),
 		ServeConfigs: PopulateServeConfig(spec.ServeConfigSpecs),
 	}
 }
