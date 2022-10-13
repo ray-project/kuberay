@@ -81,7 +81,7 @@ func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInter
 }
 
 // clusters
-func (r *ResourceManager)  CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error) {
+func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*v1alpha1.RayCluster, error) {
 	// populate cluster map
 	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiCluster.ClusterSpec, apiCluster.Namespace)
 	if err != nil {

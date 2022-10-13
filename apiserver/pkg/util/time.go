@@ -1,8 +1,9 @@
 package util
 
 import (
-	"k8s.io/klog/v2"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 type TimeInterface interface {

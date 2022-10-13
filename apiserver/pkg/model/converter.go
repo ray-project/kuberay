@@ -2,8 +2,9 @@ package model
 
 import (
 	"fmt"
-	"k8s.io/klog/v2"
 	"strconv"
+
+	"k8s.io/klog/v2"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"

@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"os"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 
@@ -81,7 +82,7 @@ func main() {
 			Filename:   logFile,
 			MaxSize:    500, // megabytes
 			MaxBackups: 10,  // files
-			MaxAge:     30, //days
+			MaxAge:     30,  // days
 		}
 
 		pe := zap.NewProductionEncoderConfig()
