@@ -128,7 +128,7 @@ rules:
 - apiGroups:
   - ray.io
   resources:
-  - rayclusters/finalizer
+  - rayclusters/finalizers
   verbs:
   - update
 - apiGroups:
@@ -154,7 +154,7 @@ rules:
 - apiGroups:
   - ray.io
   resources:
-  - rayjobs/finalizer
+  - rayjobs/finalizers
   verbs:
   - update
 - apiGroups:
