@@ -848,6 +848,21 @@ func ValidateHeadRayStartParams(rayHeadGroupSpec rayiov1alpha1.HeadGroupSpec) (i
 			}
 		}
 	}
+	// validation for the environments variables
+	for _, val := range rayStartParams {
+		if strings.HasPrefix(val, "$") {
+			envName := strings.TrimPrefix(val, "$")
+			if strings.HasPrefix(envName, "(") && strings.HasSuffix(envName, ")") {
+				envName = strings.TrimPrefix(envName, "(")
+				envName = strings.TrimSuffix(envName, ")")
+			}
+			if !envVarExists(envName, rayHeadGroupSpec.Template.Spec.Containers[0].Env) {
+				isValid = false
+				err = errors.NewBadRequest(fmt.Sprintf("Environment variable %s is not set in headGroupSpec", envName))
+				return
+			}
+		}
+	}
 	// default return
 	return true, nil
 }

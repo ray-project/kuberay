@@ -40,6 +40,7 @@ var instance = rayiov1alpha1.RayCluster{
 				"num-cpus":            "1",
 				"include-dashboard":   "true",
 				"log-color":           "true",
+				"node-ip-address":     "$MY_POD_IP",
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -600,6 +601,14 @@ func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T
 func TestValidateHeadRayStartParams_InvalidObjectStoreMemory(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
 	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
+	isValid, err := ValidateHeadRayStartParams(*input)
+	assert.Equal(t, false, isValid)
+	assert.True(t, errors.IsBadRequest(err))
+}
+
+func TestValidateHeadRayStartParams_InvalidEnvironment(t *testing.T) {
+	input := instance.Spec.HeadGroupSpec.DeepCopy()
+	input.Template.Spec.Containers[0].Env = make([]v1.EnvVar, 0)
 	isValid, err := ValidateHeadRayStartParams(*input)
 	assert.Equal(t, false, isValid)
 	assert.True(t, errors.IsBadRequest(err))
