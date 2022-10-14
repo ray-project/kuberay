@@ -8,6 +8,8 @@ import tempfile
 import docker
 
 from string import Template
+from kubernetes import client, config
+from kubernetes.stream import stream
 
 kindcluster_config_file = 'tests/config/cluster-config.yaml'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
@@ -211,3 +213,64 @@ def wait_for_condition(
     if last_ex is not None:
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
+
+def get_pod(namespace, label_selector):
+    config.load_kube_config()
+    return client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector = label_selector)
+
+def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
+    config.load_kube_config()
+    exec_command = ['/bin/sh', '-c'] + exec_command
+    resp = stream(client.CoreV1Api().connect_get_namespaced_pod_exec,
+                pod_name,
+                namespace,
+                command=exec_command,
+                stderr=stderr, stdin=stdin,
+                stdout=stdout, tty=tty)
+    if not silent:
+        logger.info(f"cmd: {exec_command}")
+        logger.info(f"response: {resp}")
+    return resp
+
+def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
+    config.load_kube_config()
+    def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
+        all_pods = client.CoreV1Api().list_namespaced_pod(namespace = namespace)
+        headpods = get_pod(namespace=namespace, label_selector='rayNodeType=head')
+        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
+        # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
+        # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`
+        # worker pods in the cluster. 
+        if len(headpods.items) != 1:
+            logger.info('Number of headpods is not equal to 1.')
+            return False
+        new_head_pod = headpods.items[0]
+        new_head_pod_name = new_head_pod.metadata.name
+        new_restart_count = new_head_pod.status.container_statuses[0].restart_count
+        # The default container restartPolicy of a Pod is `Always`. Hence, when GCS server is killed,
+        # the head pod will restart the old one rather than create a new one.
+        if new_head_pod_name != old_head_pod_name:
+            logger.info(f'If GCS server is killed, the head pod will restart the old one rather than create a new one.' +
+                f' new_head_pod_name: {new_head_pod_name}, old_head_pod_name: {old_head_pod_name}')
+            return False
+        # When GCS server is killed, it takes nearly 1 min to kill the head pod. In the minute, the head
+        # pod will still be in 'Running' and 'Ready'. Hence, we need to check `restart_count`.
+        if new_restart_count != old_restart_count + 1:
+            logger.info(f'new_restart_count != old_restart_count + 1 => new_restart_count: {new_restart_count},' +
+                f' old_restart_count: {old_restart_count}')
+            return False
+        # All pods should be "Running" and "Ready". This check is an overkill. We added this check due to
+        # the buggy behaviors of Ray HA. To elaborate, when GCS server is killed, the head pod should restart,
+        # but worker pods should not. However, currently, worker pods will also restart.
+        # See https://github.com/ray-project/kuberay/issues/634 for more details.
+        for pod in all_pods.items:
+            if pod.status.phase != 'Running':
+                logger.info(f'Pod {pod.metadata.name} is not Running.')
+                return False
+            for c in pod.status.container_statuses:
+                if not c.ready:
+                    logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
+                    return False
+        return True
+    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, old_head_pod_name=old_head_pod_name,
+        old_restart_count=old_restart_count, namespace=namespace)
