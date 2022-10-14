@@ -252,7 +252,7 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
         if new_head_pod_name != old_head_pod_name:
             logger.info(f'If GCS server is killed, the head pod will restart the old one rather than create a new one.' +
                 f' new_head_pod_name: {new_head_pod_name}, old_head_pod_name: {old_head_pod_name}')
-            return False
+            # return False
         # When GCS server is killed, it takes nearly 1 min to kill the head pod. In the minute, the head
         # pod will still be in 'Running' and 'Ready'. Hence, we need to check `restart_count`.
         if new_restart_count != old_restart_count + 1:
