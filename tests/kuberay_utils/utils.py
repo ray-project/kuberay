@@ -170,8 +170,8 @@ def copy_to_container(container, src, dest, filename):
                     tar.add(filename)
                 finally:
                     tar.close()
-                data = open(tf.name, 'rb').read()
-                container.put_archive(dest, data)
+                with open(tf.name, 'rb') as data:
+                    container.put_archive(dest, data.read())
     finally:
         os.chdir(oldpwd)
 
@@ -214,14 +214,12 @@ def wait_for_condition(
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
 
-def get_pod(namespace, label_selector):
-    config.load_kube_config()
-    return client.CoreV1Api().list_namespaced_pod(namespace = namespace, label_selector = label_selector)
+def get_pod(k8s_api, namespace, label_selector):
+    return k8s_api.list_namespaced_pod(namespace = namespace, label_selector = label_selector)
 
-def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
-    config.load_kube_config()
+def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
     exec_command = ['/bin/sh', '-c'] + exec_command
-    resp = stream(client.CoreV1Api().connect_get_namespaced_pod_exec,
+    resp = stream(k8s_api.connect_get_namespaced_pod_exec,
                 pod_name,
                 namespace,
                 command=exec_command,
@@ -232,11 +230,10 @@ def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False
         logger.info(f"response: {resp}")
     return resp
 
-def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
-    config.load_kube_config()
-    def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
-        all_pods = client.CoreV1Api().list_namespaced_pod(namespace = namespace)
-        headpods = get_pod(namespace=namespace, label_selector='rayNodeType=head')
+def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms, post_wait_sec = 10):
+    def check_status(k8s_api, old_head_pod_name, old_restart_count, namespace) -> bool:
+        all_pods = k8s_api.list_namespaced_pod(namespace = namespace)
+        headpods = get_pod(k8s_api, namespace=namespace, label_selector='rayNodeType=head')
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
         # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
         # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`
@@ -252,7 +249,9 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
         if new_head_pod_name != old_head_pod_name:
             logger.info(f'If GCS server is killed, the head pod will restart the old one rather than create a new one.' +
                 f' new_head_pod_name: {new_head_pod_name}, old_head_pod_name: {old_head_pod_name}')
-            # return False
+            # TODO (kevin85421): We should `return False` here, but currently ray:nightly will create a new head pod
+            #                    instead of restarting the old one. This is a buggy behavior.
+
         # When GCS server is killed, it takes nearly 1 min to kill the head pod. In the minute, the head
         # pod will still be in 'Running' and 'Ready'. Hence, we need to check `restart_count`.
         if new_restart_count != old_restart_count + 1:
@@ -272,5 +271,7 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
                     logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
                     return False
         return True
-    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, old_head_pod_name=old_head_pod_name,
-        old_restart_count=old_restart_count, namespace=namespace)
+    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, k8s_api=k8s_api,
+        old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count, namespace=namespace)
+    # After the cluster state converges, wait ray processes to become ready.
+    time.sleep(post_wait_sec)
