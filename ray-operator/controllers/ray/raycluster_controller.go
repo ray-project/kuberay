@@ -214,6 +214,9 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
+		if updateErr := r.updateClusterReason(instance, err.Error()); updateErr != nil {
+			r.Log.Error(updateErr, "RayCluster update reason error", "cluster name", request.Name)
+		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
@@ -1047,5 +1050,10 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 
 func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
+	return r.Status().Update(context.Background(), instance)
+}
+
+func (r *RayClusterReconciler) updateClusterReason(instance *rayiov1alpha1.RayCluster, clusterReason string) error {
+	instance.Status.Reason = clusterReason
 	return r.Status().Update(context.Background(), instance)
 }
