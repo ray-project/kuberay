@@ -249,15 +249,19 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
         if new_head_pod_name != old_head_pod_name:
             logger.info(f'If GCS server is killed, the head pod will restart the old one rather than create a new one.' +
                 f' new_head_pod_name: {new_head_pod_name}, old_head_pod_name: {old_head_pod_name}')
-            # TODO (kevin85421): We should `return False` here, but currently ray:nightly will create a new head pod
-            #                    instead of restarting the old one. This is a buggy behavior.
+            # TODO (kevin85421): We should `return False` here, but currently ray:nightly has a high possibility to create
+            #                    a new head pod instead of restarting the old one.
 
         # When GCS server is killed, it takes nearly 1 min to kill the head pod. In the minute, the head
         # pod will still be in 'Running' and 'Ready'. Hence, we need to check `restart_count`.
-        if new_restart_count != old_restart_count + 1:
-            logger.info(f'new_restart_count != old_restart_count + 1 => new_restart_count: {new_restart_count},' +
-                f' old_restart_count: {old_restart_count}')
-            return False
+        else:
+            # TODO (kevin85421): We should remove `else` in the future. Currently, ray:nightly has a high possibility to
+            #                    create a new head pod instead of restarting the old one. The new pod's `restart_count`
+            #                    is 0.
+            if new_restart_count != old_restart_count + 1:
+                logger.info(f'new_restart_count != old_restart_count + 1 => new_restart_count: {new_restart_count},' +
+                    f' old_restart_count: {old_restart_count}')
+                return False
         # All pods should be "Running" and "Ready". This check is an overkill. We added this check due to
         # the buggy behaviors of Ray HA. To elaborate, when GCS server is killed, the head pod should restart,
         # but worker pods should not. However, currently, worker pods will also restart.
