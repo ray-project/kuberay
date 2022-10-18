@@ -82,4 +82,21 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
 		Expect(rayJobInfo.JobStatus).To(Equal(rayv1alpha1.JobStatusRunning))
 	})
+
+	It("Test stop job", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+			func(req *http.Request) (*http.Response, error) {
+				body := &RayJobStopResponse{
+					Stopped: true,
+				}
+				bodyBytes, _ := json.Marshal(body)
+				return httpmock.NewBytesResponse(200, bodyBytes), nil
+			})
+
+		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
+		Expect(err).To(BeNil())
+	})
+
 })

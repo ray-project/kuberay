@@ -87,3 +87,7 @@ func (r *FakeRayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 func (r *FakeRayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
 	return "", nil
 }
+
+func (r *FakeRayDashboardClient) StopJob(jobName string, log *logr.Logger) (err error) {
+	return nil
+}
