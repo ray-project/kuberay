@@ -97,7 +97,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	}
 
 	actualResult = ingress.Annotations[IngressClassAnnotationKey]
-	expectedResult = instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey]
+	expectedResult = ""
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
