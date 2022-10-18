@@ -41,6 +41,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				RuntimeEnv: encodedRuntimeEnv,
 			},
 		}
+		rayDashboardClient = &RayDashboardClient{}
 		rayDashboardClient.InitClient("127.0.0.1:8090")
 	})
 
