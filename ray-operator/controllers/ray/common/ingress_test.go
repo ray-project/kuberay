@@ -96,8 +96,18 @@ func TestBuildIngressForHeadService(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	// `annotations.kubernetes.io/ingress.class` was deprecated in Kubernetes 1.18,
+	// and `spec.ingressClassName` is a replacement for this annotation. See
+	// kubernetes.io/docs/concepts/services-networking/ingress/#deprecated-annotation
+	// for more details.
 	actualResult = ingress.Annotations[IngressClassAnnotationKey]
 	expectedResult = ""
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualResult = *ingress.Spec.IngressClassName
+	expectedResult = instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey]
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
