@@ -98,5 +98,4 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
 		Expect(err).To(BeNil())
 	})
-
 })
