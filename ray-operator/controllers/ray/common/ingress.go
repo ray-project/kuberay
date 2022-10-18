@@ -23,11 +23,18 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
-	// Copy other ingress configuration from cluster annotation
-	// This is to provide a generic way for user to customize their ingress settings.
+	// Copy other ingress configurations from cluster annotations to provide a generic way
+	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
+	// at the same time.
+	exclude_set := map[string]struct{}{
+		IngressClassAnnotationKey: {},
+	}
 	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
-		annotation[key] = value
+		if _, ok := exclude_set[key]; !ok {
+			annotation[key] = value
+		}
 	}
 
 	var paths []networkingv1.HTTPIngressPath
