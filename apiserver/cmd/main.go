@@ -40,9 +40,9 @@ func main() {
 	if *logFile != "" {
 		flagSet := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 		klog.InitFlags(flagSet)
-		flagSet.Set("alsologtostderr", "true")
-		flagSet.Set("logtostderr", "false")
-		flagSet.Set("log_file", *logFile)
+		_ = flagSet.Set("alsologtostderr", "true")
+		_ = flagSet.Set("logtostderr", "false")
+		_ = flagSet.Set("log_file", *logFile)
 	}
 
 	clientManager := manager.NewClientManager()
