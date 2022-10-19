@@ -61,7 +61,7 @@ func main() {
 		"Temporary feature flag - to be deleted after testing")
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
-	flag.StringVar(&logFile, "log_file", "",
+	flag.StringVar(&logFile, "log-file-path", "",
 		"sync log to local file")
 
 	opts := k8szap.Options{

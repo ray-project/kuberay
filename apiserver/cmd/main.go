@@ -31,7 +31,7 @@ var (
 	rpcPortFlag        = flag.String("rpcPortFlag", ":8887", "RPC Port")
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
-	logFile            = flag.String("log_file", "", "sync log to local file")
+	logFile            = flag.String("logFilePath", "", "sync log to local file")
 )
 
 func main() {
