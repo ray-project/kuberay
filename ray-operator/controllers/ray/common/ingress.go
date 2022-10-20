@@ -46,7 +46,7 @@ func BuildIngressForHeadService(cluster rayiov1alpha1.RayCluster) (*networkingv1
 	}
 	paths = []networkingv1.HTTPIngressPath{
 		{
-			Path:     "/" + cluster.Name,
+			Path:     "/" + cluster.Name + "/(.*)",
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
