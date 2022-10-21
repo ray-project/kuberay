@@ -305,6 +305,5 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
         return True
     wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, k8s_api=k8s_api,
         old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count, namespace=namespace)
-    # After the cluster state converges, wait ray processes to become ready.
+    # After the cluster state converges, ray processes still need tens of seconds to become ready.
     # TODO (kevin85421): Make ray processes become ready when pods are "Ready" and "Running".
-    time.sleep(post_wait_sec)
