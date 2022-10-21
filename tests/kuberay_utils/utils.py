@@ -230,7 +230,7 @@ def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, st
         logger.info(f"response: {resp}")
     return resp
 
-def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms, post_wait_sec = 10):
+def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
     """
     `wait_for_new_head` is used to wait for new head is ready and running. For example, `test_detached_actor` kills
     the gcs_server process on the head pod. It takes nearly 1 min to kill the head pod, and the head pod will still

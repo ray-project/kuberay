@@ -300,11 +300,12 @@ else:
         exec_command = ['pkill gcs_server']
         utils.pod_exec_command(k8s_api, pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
 
-        # When all pods are ready and running, it still needs few seconds to relaunch actors. Hence, when
-        # the cluster state converges, it will wait `post_wait_sec` seconds.
-        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000, post_wait_sec=30)
+        # Waiting for all pods become ready and running.
+        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
+        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
+        #        `test_detached_actor_2.py` will retry until a Ray client connection succeeds.
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_2.py')
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
