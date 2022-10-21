@@ -245,7 +245,7 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     Next, we check the status of pods to ensure all pods should be "Running" and "Ready".
 
     After the cluster state converges (all pods are "Running" and "Ready"), ray processes still need tens of seconds to
-    become ready to serve new connections from ray clients. So, sleep `post_wait_sec` seconds in the end.
+    become ready to serve new connections from ray clients. So, users need to retry until a Ray client connection succeeds.
 
     Args:
         k8s_api: Kubernetes client (e.g. client.CoreV1Api())
@@ -254,7 +254,6 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
         namespace: Namespace that the head pod is running in.
         timeout: Same as `wait_for_condition`.
         retry_interval_ms: Same as `wait_for_condition`.
-        post_wait_sec: After the cluster state converges, wait ray processes `post_wait_sec` seconds to become ready.
 
     Raises:
         RuntimeError: If the condition is not met before the timeout expires, raise the RuntimeError.
