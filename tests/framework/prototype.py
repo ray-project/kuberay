@@ -249,8 +249,6 @@ if __name__ == '__main__':
     patch_list = [
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-1'}]),
         jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}]),
-        # Reproduce #612: https://github.com/ray-project/kuberay/issues/612
-        jsonpatch.JsonPatch([{'op': 'replace', 'path': '/spec/headGroupSpec/replicas', 'value': 2}]),
         # Reproduce #587: https://github.com/ray-project/kuberay/pull/587
         jsonpatch.JsonPatch([
             {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
