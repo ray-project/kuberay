@@ -176,94 +176,31 @@ class RayFTTestCase(unittest.TestCase):
     def test_ray_serve(self):
         client = docker.from_env()
         container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                          network_mode='host', command=["/bin/sh", "-c", "python"])
-        s = container.attach_socket(
-            params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
-        s._sock.setblocking(0)
-        s._sock.sendall(b'''
-import ray
-import time
-import ray.serve as serve
-import os
-import requests
-from ray._private.test_utils import wait_for_condition
+                                          network_mode='host', command=["/bin/sh"])
+        # Deploy a model with ray serve
+        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
+        logger.info(f'namespace: {ray_namespace}')
 
-def retry_with_timeout(func, count=90):
-    tmp = 0
-    err = None
-    while tmp < count:
-        try:
-            return func()
-        except Exception as e:
-            err = e
-            tmp += 1
-    assert err is not None
-    raise err
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_1.py')
+        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
 
-ray.init(address='ray://127.0.0.1:10001')
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
-@serve.deployment
-def d(*args):
-    return f"{os.getpid()}"
-
-d.deploy()
-pid1 = ray.get(d.get_handle().remote())
-
-print('ready')
-        ''')
-
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('ready') != -1:
-                    break
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
-
-        # kill the gcs on head node. If fate sharing is enabled
-        # the whole head node pod will terminate.
+        # kill the gcs on head node. If fate sharing is enabled, the whole head node pod will terminate.
         utils.shell_assert_success(
             'kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
         # wait for new head node getting created
-        time.sleep(10)
-        # make sure the new head is ready
-        utils.shell_assert_success(
-            'kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
+        time.sleep(180)
 
-        s._sock.sendall(b'''
-def get_new_value():
-    return ray.get(d.get_handle().remote())
-pid2 = retry_with_timeout(get_new_value)
+        # Try to connect to the deployed model again
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
+        exit_code, output = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
 
-if pid1 == pid2:
-    print('successful: {} {}'.format(pid1, pid2))
-    sys.exit(0)
-else:
-    print('failed: {} {}'.format(pid1, pid2))
-    raise Exception('failed')
-        ''')
-
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('successful') != -1:
-                    break
-                if buf.decode().find('failed') != -1:
-                    raise Exception('test failed {}'.format(buf.decode()))
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
         container.stop()
         client.close()
