@@ -75,7 +75,7 @@ To use SSL/TLS in the connection, the following environment variables are needed
 - `RAY_REDIS_CLIENT_KEY` File name of client private key (optional)
 - `RAY_REDIS_SERVER_NAME` Server name to request (SNI) (optional)
 
-Besides, `rediss://` should be added as the prefix of the redis address.
+Besides, `rediss://` should be added as the prefix of the redis address. Ray 2.2 is needed for this feature.
 
 #### KubeRay Operator Controller
 
