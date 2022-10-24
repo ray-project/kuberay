@@ -1,7 +1,7 @@
 import ray
-import sys
-import ray.serve as serve
 import time
+import sys
+from ray import serve
 
 def retry_with_timeout(func, timeout=90):
     err = None
@@ -15,12 +15,8 @@ def retry_with_timeout(func, timeout=90):
     raise err
 
 retry_with_timeout(lambda: ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1]))
-retry_with_timeout(lambda: serve.start(detached=True))
-
-@serve.deployment
-def d(*args):
-    return "HelloWorld"
-
-val = retry_with_timeout(lambda: ray.get(d.get_handle().remote()))
+retry_with_timeout(lambda:serve.start(detached=True))
+val = retry_with_timeout(lambda: ray.get(serve.get_deployment("MyModelDeployment").get_handle().remote()))
 print(val)
-assert(val == "HelloWorld")
+assert(val == "Hello world!")
+
