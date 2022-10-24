@@ -1,7 +1,7 @@
 import ray
-import sys
-import ray.serve as serve
 import time
+import sys
+from ray import serve
 
 def retry_with_timeout(func, timeout=90):
     err = None
