@@ -67,6 +67,16 @@ Also, you can specify a storage namespace for your Ray cluster by using an annot
 
 An example can be found at [ray-cluster.external-redis.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.external-redis.yaml)
 
+To use SSL/TLS in the connection, the following environment variables are needed:
+
+- `RAY_REDIS_CA_CERT` The location of the CA certificate (optional)
+- `RAY_REDIS_CA_PATH` Path of trusted certificates (optional)
+- `RAY_REDIS_CLIENT_CERT` File name of client certificate file (optional)
+- `RAY_REDIS_CLIENT_KEY` File name of client private key (optional)
+- `RAY_REDIS_SERVER_NAME` Server name to request (SNI) (optional)
+
+Besides, `rediss://` should be added as the prefix of the redis address.
+
 #### KubeRay Operator Controller
 
 KubeRay Operator controller watches for new `Event` reconcile call. If this Event object is to notify the failed readiness probe,
