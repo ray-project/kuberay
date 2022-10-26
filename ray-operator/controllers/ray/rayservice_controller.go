@@ -325,11 +325,20 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1alpha1.RayService, activeRayCluster *rayv1alpha1.RayCluster) bool {
 	shouldPrepareRayCluster := false
 
+	// Prepare new RayCluster if:
+	// 1. No active and pending cluster
+	// 2. No pending cluster, and the active RayCluster has changed.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
-		// Prepare new RayCluster if:
-		// 1. No active and pending cluster
-		// 2. No pending cluster, and the active RayCluster has changed.
-		if activeRayCluster == nil || !utils.CompareJsonStruct(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey]
+		goalClusterHash, err := utils.GenerateJsonHash(rayServiceInstance.Spec.RayClusterSpec)
+		if err != nil {
+			errContext := "Failed to serialize new RayCluster config. " +
+				"Manual config updates will NOT be tracked accurately. " +
+				"Please manually tear down the cluster and apply a new config."
+			r.Log.Error(err, errContext)
+		}
+
+		if activeRayCluster == nil || activeClusterHash != goalClusterHash {
 			shouldPrepareRayCluster = true
 		}
 	}
@@ -423,8 +432,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	rayClusterAnnotations[common.RayServiceClusterHashKey], err = utils.GenerateJsonHash(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		errContext := "Failed to serialize RayCluster config. " +
-			"Manual config updates will NOT be tracked. " +
-			"Please tear down the cluster and try reapplying the config."
+			"Manual config updates will NOT be tracked accurately. " +
+			"Please tear down the cluster and apply a new config."
 		r.Log.Error(err, errContext)
 	}
 
