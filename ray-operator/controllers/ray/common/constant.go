@@ -10,6 +10,7 @@ const (
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 	RayClusterServingServiceLabelKey   = "ray.io/serve"
+	RayServiceClusterHashKey           = "ray.io/cluster-hash"
 
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"

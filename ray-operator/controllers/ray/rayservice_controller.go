@@ -407,6 +407,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 }
 
 func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv1alpha1.RayService, rayClusterName string) (*rayv1alpha1.RayCluster, error) {
+	var err error
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
@@ -419,6 +420,13 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		rayClusterAnnotations[k] = v
 	}
 	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
+	rayClusterAnnotations[common.RayServiceClusterHashKey], err = utils.GenerateJsonHash(rayService.Spec.RayClusterSpec)
+	if err != nil {
+		errContext := "Failed to serialize RayCluster config. " +
+			"Manual config updates will NOT be tracked. " +
+			"Please tear down the cluster and try reapplying the config."
+		r.Log.Error(err, errContext)
+	}
 
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
