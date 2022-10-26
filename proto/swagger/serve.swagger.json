@@ -180,9 +180,57 @@
           "RayServeService"
         ]
       },
-      "patch": {
-        "summary": "Update a ray serve.",
+      "put": {
+        "summary": "Update a ray serve.\nWe may",
         "operationId": "RayServeService_UpdateRayService",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayService"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "The name of the ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The ray service to be updated.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoRayService"
+            }
+          }
+        ],
+        "tags": [
+          "RayServeService"
+        ]
+      }
+    },
+    "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs": {
+      "patch": {
+        "summary": "Update a ray serve configs.\nPatch mode update without possible deletion the existing raycluster under the hood. \nonly support update the service configs and worker.",
+        "operationId": "RayServeService_UpdateRayServiceConfigs",
         "responses": {
           "200": {
             "description": "A successful response.",

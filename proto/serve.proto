@@ -32,13 +32,26 @@ service RayServeService {
       body: "service"
     };
   }
+
   // Update a ray serve.
+  // We may
   rpc UpdateRayService(UpdateRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
-      patch: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      put: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      body: "service"
+    };
+  }
+
+  // Update a ray serve configs.
+  // Patch mode update without possible deletion the existing raycluster under the hood. 
+  // only support update the service configs and worker.
+  rpc UpdateRayServiceConfigs(UpdateRayServiceConfigsRequest) returns (RayService) {
+    option (google.api.http) = {
+      patch: "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs"
       body: "update_service"
     };
   }
+
   // Find a specific ray serve by name and namespace.
   rpc GetRayService(GetRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
@@ -75,6 +88,15 @@ message CreateRayServiceRequest {
 }
 
 message UpdateRayServiceRequest {
+  // The ray service to be updated.
+  RayService service = 1;
+  // The namespace of the ray service to be updated.
+  string namespace = 2;
+  // The name of the ray service to be updated.
+  string name = 3;
+}
+
+message UpdateRayServiceConfigsRequest {
   // The name of ray service to be updated.
   string name = 1;
   // The namespace of the ray service to be updated.

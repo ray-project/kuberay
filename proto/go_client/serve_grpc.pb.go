@@ -26,7 +26,12 @@ type RayServeServiceClient interface {
 	// Create a new ray serve.
 	CreateRayService(ctx context.Context, in *CreateRayServiceRequest, opts ...grpc.CallOption) (*RayService, error)
 	// Update a ray serve.
+	// We may
 	UpdateRayService(ctx context.Context, in *UpdateRayServiceRequest, opts ...grpc.CallOption) (*RayService, error)
+	// Update a ray serve configs.
+	// Patch mode update without possible deletion the existing raycluster under the hood.
+	// only support update the service configs and worker.
+	UpdateRayServiceConfigs(ctx context.Context, in *UpdateRayServiceConfigsRequest, opts ...grpc.CallOption) (*RayService, error)
 	// Find a specific ray serve by name and namespace.
 	GetRayService(ctx context.Context, in *GetRayServiceRequest, opts ...grpc.CallOption) (*RayService, error)
 	// Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
@@ -57,6 +62,15 @@ func (c *rayServeServiceClient) CreateRayService(ctx context.Context, in *Create
 func (c *rayServeServiceClient) UpdateRayService(ctx context.Context, in *UpdateRayServiceRequest, opts ...grpc.CallOption) (*RayService, error) {
 	out := new(RayService)
 	err := c.cc.Invoke(ctx, "/proto.RayServeService/UpdateRayService", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rayServeServiceClient) UpdateRayServiceConfigs(ctx context.Context, in *UpdateRayServiceConfigsRequest, opts ...grpc.CallOption) (*RayService, error) {
+	out := new(RayService)
+	err := c.cc.Invoke(ctx, "/proto.RayServeService/UpdateRayServiceConfigs", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +120,12 @@ type RayServeServiceServer interface {
 	// Create a new ray serve.
 	CreateRayService(context.Context, *CreateRayServiceRequest) (*RayService, error)
 	// Update a ray serve.
+	// We may
 	UpdateRayService(context.Context, *UpdateRayServiceRequest) (*RayService, error)
+	// Update a ray serve configs.
+	// Patch mode update without possible deletion the existing raycluster under the hood.
+	// only support update the service configs and worker.
+	UpdateRayServiceConfigs(context.Context, *UpdateRayServiceConfigsRequest) (*RayService, error)
 	// Find a specific ray serve by name and namespace.
 	GetRayService(context.Context, *GetRayServiceRequest) (*RayService, error)
 	// Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
@@ -127,6 +146,9 @@ func (UnimplementedRayServeServiceServer) CreateRayService(context.Context, *Cre
 }
 func (UnimplementedRayServeServiceServer) UpdateRayService(context.Context, *UpdateRayServiceRequest) (*RayService, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateRayService not implemented")
+}
+func (UnimplementedRayServeServiceServer) UpdateRayServiceConfigs(context.Context, *UpdateRayServiceConfigsRequest) (*RayService, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateRayServiceConfigs not implemented")
 }
 func (UnimplementedRayServeServiceServer) GetRayService(context.Context, *GetRayServiceRequest) (*RayService, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRayService not implemented")
@@ -185,6 +207,24 @@ func _RayServeService_UpdateRayService_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RayServeServiceServer).UpdateRayService(ctx, req.(*UpdateRayServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RayServeService_UpdateRayServiceConfigs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRayServiceConfigsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RayServeServiceServer).UpdateRayServiceConfigs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.RayServeService/UpdateRayServiceConfigs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RayServeServiceServer).UpdateRayServiceConfigs(ctx, req.(*UpdateRayServiceConfigsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -275,6 +315,10 @@ var RayServeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateRayService",
 			Handler:    _RayServeService_UpdateRayService_Handler,
+		},
+		{
+			MethodName: "UpdateRayServiceConfigs",
+			Handler:    _RayServeService_UpdateRayServiceConfigs_Handler,
 		},
 		{
 			MethodName: "GetRayService",

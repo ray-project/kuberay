@@ -48,10 +48,27 @@ func (s *RayServiceServer) CreateRayService(ctx context.Context, request *api.Cr
 }
 
 func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*api.RayService, error) {
-	if err := ValidateUpdateRayServiceRequest(request); err != nil {
+	if err := ValidateUpdateServiceRequest(request); err != nil {
+		return nil, util.Wrap(err, "Validate update service request failed.")
+	}
+	request.Service.Namespace = request.Namespace
+
+	rayService, err := s.resourceManager.UpdateRayService(ctx, request.Service)
+	if err != nil {
+		return nil, util.Wrap(err, "Update ray service failed.")
+	}
+	events, err := s.resourceManager.GetServiceEvents(ctx, *rayService)
+	if err != nil {
+		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", rayService.Namespace, rayService.Name, err)
+	}
+	return model.FromCrdToApiService(rayService, events), nil
+}
+
+func (s *RayServiceServer) UpdateRayServiceConfigs(ctx context.Context, request *api.UpdateRayServiceConfigsRequest) (*api.RayService, error) {
+	if err := ValidateUpdateRayServiceConfigsRequest(request); err != nil {
 		return nil, err
 	}
-	service, err := s.resourceManager.UpdateRayService(ctx, request)
+	service, err := s.resourceManager.UpdateRayServiceConfigs(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +197,53 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 	return nil
 }
 
-func ValidateUpdateRayServiceRequest(request *api.UpdateRayServiceRequest) error {
+func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
+	if request.Name == "" {
+		return util.NewInvalidInputError("Service name is empty. Please specify a valid value.")
+	}
+	if request.Namespace == "" {
+		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
+	}
+
+	if request.Service == nil {
+		return util.NewInvalidInputError("Service is empty, please input a valid payload.")
+	}
+
+	if request.Namespace != request.Service.Namespace {
+		return util.NewInvalidInputError("The namespace in the request is different from the namespace in the service definition.")
+	}
+
+	if request.Service.Name == "" {
+		return util.NewInvalidInputError("Service name is empty. Please specify a valid value.")
+	}
+
+	if request.Service.User == "" {
+		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
+	}
+
+	if len(request.Service.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
+		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
+	}
+
+	for index, spec := range request.Service.ClusterSpec.WorkerGroupSpec {
+		if len(spec.GroupName) == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
+		}
+		if len(spec.ComputeTemplate) == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d compute template is empty. Please specify a valid value.", index)
+		}
+		if spec.MaxReplicas == 0 {
+			return util.NewInvalidInputError("WorkerNodeSpec %d MaxReplicas can not be 0. Please specify a valid value.", index)
+		}
+		if spec.MinReplicas > spec.MaxReplicas {
+			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
+		}
+	}
+
+	return nil
+}
+
+func ValidateUpdateRayServiceConfigsRequest(request *api.UpdateRayServiceConfigsRequest) error {
 	if request.Name == "" {
 		return util.NewInvalidInputError("ray service name is empty. Please specify a valid value.")
 	}
