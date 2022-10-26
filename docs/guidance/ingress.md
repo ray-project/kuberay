@@ -1,10 +1,12 @@
 ## Ingress Usage
 
+
+
 ### Prerequisite
 
-It's user's responsibility to install ingress controller by themselves. Technically, any ingress controller implementation should work well. In order to pass through the customized ingress configuration, you can annotate `RayCluster` object and the controller will pass the annotations to the ingress object.
+It's user's responsibility to install ingress controller by themselves. In order to pass through the customized ingress configuration, you can annotate `RayCluster` object and the controller will pass the annotations to the ingress object.
 
-### Example: Nginx Ingress on KinD
+### Example: Nginx Ingress on KinD (built-in ingress support)
 ```sh
 # Step1: Create a KinD cluster with `extraPortMappings` and `node-labels`
 cat <<EOF | kind create cluster --config=-
@@ -27,7 +29,7 @@ nodes:
     protocol: TCP
 EOF
 
-# Step2: Install NGINX ingress
+# Step2: Install NGINX ingress controller
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
@@ -63,3 +65,71 @@ kubectl describe ingress raycluster-ingress-head-ingress
 #        [Note] The forward slash at the end of the address is necessary. `<ip>/raycluster-ingress`
 #               will report "404 Not Found".
 ```
+
+### Example: AWS Application Load Balancer (ALB) Ingress support on AWS EKS
+#### Prerequisite
+* Follow the document [Getting started with Amazon EKS – AWS Management Console and AWS CLI](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#eks-configure-kubectl) to create an EKS cluster.
+
+* Follow the [installation instructions](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/) to set up the [AWS Load Balancer controller](https://github.com/kubernetes-sigs/aws-load-balancer-controller). Note that the repository maintains a webpage for each release. Please make sure you use the latest installation instructions.
+
+* (Optional) Try [echo server example](https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/examples/echo_server.md) in the [aws-load-balancer-controller](https://github.com/kubernetes-sigs/aws-load-balancer-controller) repository.
+
+* (Optional) Read [how-it-works.md](https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/how-it-works.md) to understand the mechanism of [aws-load-balancer-controller](https://github.com/kubernetes-sigs/aws-load-balancer-controller).
+
+#### Instructions
+```sh
+# Step1: Install KubeRay operator and CRD
+pushd helm-chart/kuberay-operator/
+helm install kuberay-operator .
+popd
+
+# Step2: Install a RayCluster
+pushd helm-chart/ray-cluster
+helm install ray-cluster .
+popd
+
+# Step3: Edit the `ray-operator/config/samples/ray-cluster-alb-ingress.yaml`
+#
+# (1) Annotation `alb.ingress.kubernetes.io/subnets`
+#   1. Please include at least two subnets.
+#   2. One Availability Zone (ex: us-west-2a) can only have at most 1 subnet.
+#   3. In this example, you need to select public subnets (subnets that "Auto-assign public IPv4 address" is Yes on AWS dashboard)
+#
+# (2) Set the name of head pod service to `spec...backend.service.name`
+eksctl get cluster ${YOUR_EKS_CLUSTER} # Check subnets on the EKS cluster
+
+
+# Step4: Create an ALB ingress. When an ingress with proper annotations creates,
+#        AWS Load Balancer controller will reconcile a ALB (not in AWS EKS cluster).
+kubectl apply -f ray-operator/config/samples/ray-cluster-alb-ingress.yaml
+
+# Step5: Check ingress created by Step4.
+kubectl describe ingress ray-cluster-ingress
+
+# [Example]
+# Name:             ray-cluster-ingress
+# Labels:           <none>
+# Namespace:        default
+# Address:          k8s-default-rayclust-....${REGION_CODE}.elb.amazonaws.com
+# Default backend:  default-http-backend:80 (<error: endpoints "default-http-backend" not found>)
+# Rules:
+#  Host        Path  Backends
+#  ----        ----  --------
+#  *
+#              /   ray-cluster-kuberay-head-svc:8265 (192.168.185.157:8265)
+# Annotations: alb.ingress.kubernetes.io/scheme: internet-facing
+#              alb.ingress.kubernetes.io/subnets: ${SUBNET_1},${SUBNET_2}
+#              alb.ingress.kubernetes.io/tags: Environment=dev,Team=test
+#              alb.ingress.kubernetes.io/target-type: ip
+# Events:
+#   Type    Reason                  Age   From     Message
+#   ----    ------                  ----  ----     -------
+#   Normal  SuccessfullyReconciled  39m   ingress  Successfully reconciled
+#
+# Step6: Check ALB on AWS (EC2 -> Load Balancing -> Load Balancers)
+#        The name of the ALB should be like "k8s-default-rayclust-......".
+#
+# Step7: Check Ray Dashboard by ALB DNS Name. The name of the DNS Name should be like
+#        "k8s-default-rayclust-.....us-west-2.elb.amazonaws.com"
+```
+
