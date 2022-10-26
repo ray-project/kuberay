@@ -105,7 +105,7 @@ eksctl get cluster ${YOUR_EKS_CLUSTER} # Check subnets on the EKS cluster
 
 # Step4: Create an ALB ingress. When an ingress with proper annotations creates,
 #        AWS Load Balancer controller will reconcile a ALB (not in AWS EKS cluster).
-kubectl apply -f ray-operator/config/samples/ray-cluster-alb-ingress.yaml
+kubectl apply -f ray-operator/config/samples/alb-ingress.yaml
 
 # Step5: Check ingress created by Step4.
 kubectl describe ingress ray-cluster-ingress
@@ -129,11 +129,15 @@ kubectl describe ingress ray-cluster-ingress
 #   Type    Reason                  Age   From     Message
 #   ----    ------                  ----  ----     -------
 #   Normal  SuccessfullyReconciled  39m   ingress  Successfully reconciled
-#
+
 # Step6: Check ALB on AWS (EC2 -> Load Balancing -> Load Balancers)
 #        The name of the ALB should be like "k8s-default-rayclust-......".
-#
+
 # Step7: Check Ray Dashboard by ALB DNS Name. The name of the DNS Name should be like
 #        "k8s-default-rayclust-.....us-west-2.elb.amazonaws.com"
+
+# Step8: Delete the ingress, and AWS Load Balancer controller will remove ALB.
+#        Check ALB on AWS to make sure it is removed.
+kubectl delete ingress ray-cluster-ingress
 ```
 
