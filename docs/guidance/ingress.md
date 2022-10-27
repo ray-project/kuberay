@@ -1,6 +1,6 @@
 ## Ingress Usage
 
-* KubeRay built-in ingress support: KubeRay will help users create a Kubernetes ingress when `spec.headGroupSpec.enableIngress: true`. Currently, the built-in support only supports simple Nginx setups. Note that users still need to install ingress controller by themselves. **We do not recommend users use built-in ingress support in a production environment with complex routing requirements.**
+* KubeRay built-in ingress support: KubeRay will help users create a Kubernetes ingress when `spec.headGroupSpec.enableIngress: true`. Currently, the built-in support only supports simple Nginx setups. Note that users still need to install ingress controller by themselves. **We do not recommend using built-in ingress support in a production environment with complex routing requirements.**
   * [Example: Nginx Ingress on KinD (built-in ingress support)](#example-nginx-ingress-on-kind-built-in-ingress-support)
 
 * Manually setting up an ingress for KubeRay: **For production use-cases, we recommend taking this route.**
