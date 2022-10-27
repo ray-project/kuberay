@@ -329,15 +329,25 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 	// 2. No pending cluster, and the active RayCluster has changed.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
 		if activeRayCluster == nil {
+			r.Log.Info("No active Ray cluster. RayService operator should prepare a new Ray cluster.")
 			return true
 		}
-		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey] // activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey]
-		goalClusterHash, err := utils.GenerateJsonHash(rayServiceInstance.Spec.RayClusterSpec)        // utils.GenerateJsonHash(rayServiceInstance.Spec.RayClusterSpec)
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey]
+		goalClusterHash, err := utils.GenerateJsonHash(rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
 			errContext := "Failed to serialize new RayCluster config. " +
 				"Manual config updates will NOT be tracked accurately. " +
 				"Please manually tear down the cluster and apply a new config."
 			r.Log.Error(err, errContext)
+		}
+
+		if activeClusterHash != goalClusterHash {
+			r.Log.Info("Active RayCluster config doesn't match goal config. " +
+				"RayService operator should prepare a new Ray cluster.\n" +
+				"* Active RayCluster config hash: " + activeClusterHash + "\n" +
+				"* Goal RayCluster config hash: " + goalClusterHash)
+		} else {
+			r.Log.Info("Active Ray cluster config matches goal config.")
 		}
 
 		return activeClusterHash != goalClusterHash

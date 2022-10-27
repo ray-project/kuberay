@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/sha1"
+	"encoding/base32"
 	"fmt"
 	"math"
 	"reflect"
@@ -352,6 +353,9 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	}
 
 	hashBytes := sha1.Sum(serialObj)
-	hashStr := string(hashBytes[:])
+
+	// Convert to an ASCII string
+	hashStr := string(base32.HexEncoding.EncodeToString(hashBytes[:]))
+
 	return hashStr, nil
 }
