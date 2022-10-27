@@ -104,7 +104,7 @@ eksctl get cluster ${YOUR_EKS_CLUSTER} # Check subnets on the EKS cluster
 
 
 # Step4: Create an ALB ingress. When an ingress with proper annotations is created,
-#        AWS Load Balancer controller will reconcile a ALB (not in AWS EKS cluster).
+#        AWS Load Balancer controller will reconcile a ALB. (The created ALB exists outside of the EKS cluster.)
 kubectl apply -f ray-operator/config/samples/alb-ingress.yaml
 
 # Step5: Check ingress created by Step4.
