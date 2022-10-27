@@ -1,5 +1,5 @@
 import yaml
-from typing import Optional
+from typing import List
 from kubernetes import client, config, utils
 import os
 import time
@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def search_path(cr, steps):
+    """Search the position in CR based on steps. The following example uses search_path
+    to get the name of the first container in the head pod.
+    
+    [Example]
+    name = search_path(cr, "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
+    """
     curr = cr
     for step in steps:
         if step.isnumeric():
@@ -73,7 +79,7 @@ Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) 
 # Mutator: Mutator will start to mutate from `baseCR`. `patch_list` is a list of JsonPatch, and you can
 #          specify multiple fields that want to mutate in a single JsonPatch.
 class Mutator:
-    def __init__(self, baseCR, patch_list: list[jsonpatch.JsonPatch]):
+    def __init__(self, baseCR, patch_list: List[jsonpatch.JsonPatch]):
         self.baseCR = baseCR
         self.patch_list = patch_list
     # Generate a new cr by applying the json patch to `cr`. 
@@ -96,7 +102,7 @@ class Rule:
 
 # RuleSet: A set of Rule
 class RuleSet:
-    def __init__(self, rules: list[Rule]):
+    def __init__(self, rules: List[Rule]):
         self.rules = rules
     def checkRuleSet(self, cr, namespace):
         for rule in self.rules:
@@ -112,7 +118,7 @@ class RuleSet:
 #   [Step2] wait(): Wait for the system to converge.
 #   [Step3] checkRuleSets(): When the system converges, check all registered RuleSets.
 class CREvent:
-    def __init__(self, cr, ruleSets: list[RuleSet], timeout, namespace):
+    def __init__(self, cr, ruleSets: List[RuleSet], timeout, namespace):
         self.ruleSets = ruleSets
         self.timeout = timeout
         self.namespace = namespace
@@ -164,8 +170,7 @@ class EasyJobRule(Rule):
 class RayClusterAddCREvent(CREvent):
     def exec(self):
         client.CustomObjectsApi().create_namespaced_custom_object(
-            group = 'ray.io',version = 'v1alpha1', namespace = self.namespace, plural = 'rayclusters', body = self.cr,
-            pretty = 'true')
+            group = 'ray.io',version = 'v1alpha1', namespace = self.namespace, plural = 'rayclusters', body = self.cr)
 
     def wait(self):
         def check_pod_running(pods) -> bool:
