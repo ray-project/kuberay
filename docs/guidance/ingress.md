@@ -12,7 +12,7 @@ It's user's responsibility to install ingress controller by themselves. In order
 
 ### Example: Nginx Ingress on KinD (built-in ingress support)
 ```sh
-# Step1: Create a KinD cluster with `extraPortMappings` and `node-labels`
+# Step 1: Create a KinD cluster with `extraPortMappings` and `node-labels`
 cat <<EOF | kind create cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -33,18 +33,18 @@ nodes:
     protocol: TCP
 EOF
 
-# Step2: Install NGINX ingress controller
+# Step 2: Install NGINX ingress controller
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
   --timeout=90s
 
-# Step3: Install KubeRay operator
+# Step 3: Install KubeRay operator
 pushd helm-chart/kuberay-operator
 helm install kuberay-operator .
 
-# Step4: Install RayCluster with Nginx ingress. See https://github.com/ray-project/kuberay/pull/646
+# Step 4: Install RayCluster with Nginx ingress. See https://github.com/ray-project/kuberay/pull/646
 #        for the explanations of `ray-cluster.ingress.yaml`. Some fields are worth to discuss further:
 #
 #        (1) metadata.annotations.kubernetes.io/ingress.class: nginx => required
@@ -53,7 +53,7 @@ helm install kuberay-operator .
 popd
 kubectl apply -f ray-operator/config/samples/ray-cluster.ingress.yaml
 
-# Step5: Check ingress created by Step4.
+# Step 5: Check ingress created by Step 4.
 kubectl describe ingress raycluster-ingress-head-ingress
 
 # [Example]
@@ -65,7 +65,7 @@ kubectl describe ingress raycluster-ingress-head-ingress
 #             /raycluster-ingress/(.*)   raycluster-ingress-head-svc:8265 (10.244.0.11:8265)
 # Annotations:  nginx.ingress.kubernetes.io/rewrite-target: /$1
 
-# Step6: Check `<ip>/raycluster-ingress/` on your browser. You will see the Ray Dashboard.
+# Step 6: Check `<ip>/raycluster-ingress/` on your browser. You will see the Ray Dashboard.
 #        [Note] The forward slash at the end of the address is necessary. `<ip>/raycluster-ingress`
 #               will report "404 Not Found".
 ```
@@ -82,17 +82,17 @@ kubectl describe ingress raycluster-ingress-head-ingress
 
 #### Instructions
 ```sh
-# Step1: Install KubeRay operator and CRD
+# Step 1: Install KubeRay operator and CRD
 pushd helm-chart/kuberay-operator/
 helm install kuberay-operator .
 popd
 
-# Step2: Install a RayCluster
+# Step 2: Install a RayCluster
 pushd helm-chart/ray-cluster
 helm install ray-cluster .
 popd
 
-# Step3: Edit the `ray-operator/config/samples/ray-cluster-alb-ingress.yaml`
+# Step 3: Edit the `ray-operator/config/samples/ray-cluster-alb-ingress.yaml`
 #
 # (1) Annotation `alb.ingress.kubernetes.io/subnets`
 #   1. Please include at least two subnets.
@@ -102,12 +102,11 @@ popd
 # (2) Set the name of head pod service to `spec...backend.service.name`
 eksctl get cluster ${YOUR_EKS_CLUSTER} # Check subnets on the EKS cluster
 
-
-# Step4: Create an ALB ingress. When an ingress with proper annotations is created,
-#        AWS Load Balancer controller will reconcile a ALB. (The created ALB exists outside of the EKS cluster.)
+# Step 4: Create an ALB ingress. When an ingress with proper annotations creates,
+#        AWS Load Balancer controller will reconcile a ALB (not in AWS EKS cluster).
 kubectl apply -f ray-operator/config/samples/alb-ingress.yaml
 
-# Step5: Check ingress created by Step4.
+# Step 5: Check ingress created by Step 4.
 kubectl describe ingress ray-cluster-ingress
 
 # [Example]
@@ -130,13 +129,13 @@ kubectl describe ingress ray-cluster-ingress
 #   ----    ------                  ----  ----     -------
 #   Normal  SuccessfullyReconciled  39m   ingress  Successfully reconciled
 
-# Step6: Check ALB on AWS (EC2 -> Load Balancing -> Load Balancers)
+# Step 6: Check ALB on AWS (EC2 -> Load Balancing -> Load Balancers)
 #        The name of the ALB should be like "k8s-default-rayclust-......".
 
-# Step7: Check Ray Dashboard by ALB DNS Name. The name of the DNS Name should be like
+# Step 7: Check Ray Dashboard by ALB DNS Name. The name of the DNS Name should be like
 #        "k8s-default-rayclust-.....us-west-2.elb.amazonaws.com"
 
-# Step8: Delete the ingress, and AWS Load Balancer controller will remove ALB.
+# Step 8: Delete the ingress, and AWS Load Balancer controller will remove ALB.
 #        Check ALB on AWS to make sure it is removed.
 kubectl delete ingress ray-cluster-ingress
 ```
