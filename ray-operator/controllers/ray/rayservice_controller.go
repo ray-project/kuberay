@@ -323,7 +323,6 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 
 // shouldPrepareNewRayCluster checks if we need to generate a new pending cluster.
 func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1alpha1.RayService, activeRayCluster *rayv1alpha1.RayCluster) bool {
-
 	// Prepare new RayCluster if:
 	// 1. No active cluster and no pending cluster
 	// 2. No pending cluster, and the active RayCluster has changed.
