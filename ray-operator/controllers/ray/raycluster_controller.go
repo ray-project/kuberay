@@ -33,12 +33,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	vcbetav1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 )
 
 var (
 	DefaultRequeueDuration    = 2 * time.Second
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
+	EnableBatchScheduler      bool
 )
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -335,6 +337,20 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
+	}
+	if EnableBatchScheduler {
+		var minMember int32
+		var totalResource corev1.ResourceList
+		if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+			minMember = utils.CalculateDesiredReplicas(instance) + *instance.Spec.HeadGroupSpec.Replicas
+			totalResource = utils.CalculateDesiredResources(instance)
+		} else {
+			minMember = utils.CalculateMinReplicas(instance) + *instance.Spec.HeadGroupSpec.Replicas
+			totalResource = utils.CalculateMinResources(instance)
+		}
+		if err := r.syncPodGroup(instance, minMember, totalResource); err != nil {
+			return err
+		}
 	}
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
@@ -654,6 +670,9 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
+	if EnableBatchScheduler {
+		pod.Annotations[vcbetav1.KubeGroupNameAnnotationKey] = instance.Name
+	}
 
 	r.Log.Info("createHeadPod", "head pod with name", pod.GenerateName)
 	if err := r.Create(context.TODO(), &pod); err != nil {
@@ -681,6 +700,9 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
+	}
+	if EnableBatchScheduler {
+		pod.Annotations[vcbetav1.KubeGroupNameAnnotationKey] = instance.Name
 	}
 	replica := pod
 	if err := r.Create(context.TODO(), &replica); err != nil {
@@ -768,6 +790,10 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			OwnerType:    &rayiov1alpha1.RayCluster{},
 		}).
 		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &rayiov1alpha1.RayCluster{},
+		}).
+		Watches(&source.Kind{Type: &vcbetav1.PodGroup{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},
 		}).
@@ -1048,4 +1074,54 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
 	return r.Status().Update(context.Background(), instance)
+}
+
+func (r *RayClusterReconciler) syncPodGroup(instance *rayiov1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+	// use cluster name as pod group name
+	podGroupName := instance.Name
+	podGroupIdentifier := types.NamespacedName{
+		Name:      podGroupName,
+		Namespace: instance.Namespace,
+	}
+	podGroup := &vcbetav1.PodGroup{}
+	if err := r.Get(context.TODO(), podGroupIdentifier, podGroup); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// use the same name as ray cluster
+		podGroup.Name = instance.Name
+		podGroup.Namespace = instance.Namespace
+		podGroup.OwnerReferences = []metav1.OwnerReference{
+			*metav1.NewControllerRef(instance, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
+		}
+		podGroup.Spec.MinMember = size
+		podGroup.Spec.MinResources = &totalResource
+		if queue, ok := instance.Spec.HeadGroupSpec.Template.Labels["volcano.sh/queue-name"]; ok {
+			podGroup.Spec.Queue = queue
+		}
+		podGroup.Spec.PriorityClassName = instance.Spec.HeadGroupSpec.Template.Spec.PriorityClassName
+		podGroup.Status = vcbetav1.PodGroupStatus{
+			Phase: vcbetav1.PodGroupPending,
+		}
+
+		if err := r.Create(context.TODO(), podGroup); err != nil {
+			if errors.IsAlreadyExists(err) {
+				r.Log.Info("pod group already exist, no need to create")
+				return nil
+			}
+			r.Log.Error(err, "Pod group create error!", "PodGroup.Error", err)
+			return err
+		}
+	} else {
+		if podGroup.Spec.MinMember != size || !utils.Equals(*podGroup.Spec.MinResources, totalResource) {
+			podGroup.Spec.MinMember = size
+			podGroup.Spec.MinResources = &totalResource
+			if err := r.Update(context.TODO(), podGroup); err != nil {
+				r.Log.Error(err, "Fail to update pod group!", "podGroup", podGroupIdentifier)
+				return err
+			}
+		}
+	}
+	return nil
 }

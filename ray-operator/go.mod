@@ -21,6 +21,7 @@ require (
 	k8s.io/code-generator v0.23.0
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
 	sigs.k8s.io/controller-runtime v0.11.1
+	volcano.sh/apis v1.6.0-alpha.0.0.20221012070524-685db38b4fae
 )
 
 require (

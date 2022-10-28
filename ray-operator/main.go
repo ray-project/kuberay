@@ -21,6 +21,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	vcbetav1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -35,6 +36,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(vcbetav1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -63,6 +65,8 @@ func main() {
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
+	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
+		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
 
 	opts := k8szap.Options{
 		Development: true,
