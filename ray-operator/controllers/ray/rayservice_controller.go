@@ -338,6 +338,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 				"Manual config updates will NOT be tracked accurately. " +
 				"Please manually tear down the cluster and apply a new config."
 			r.Log.Error(err, errContext)
+			return true
 		}
 
 		if activeClusterHash != goalClusterHash {
@@ -444,6 +445,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 			"Manual config updates will NOT be tracked accurately. " +
 			"Please tear down the cluster and apply a new config."
 		r.Log.Error(err, errContext)
+		return nil, err
 	}
 
 	rayCluster := &rayv1alpha1.RayCluster{
