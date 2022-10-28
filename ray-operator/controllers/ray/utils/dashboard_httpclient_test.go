@@ -63,7 +63,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder("Get", rayDashboardClient.dashboardURL+JobPath+expectJobId,
+		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+expectJobId,
 			func(req *http.Request) (*http.Response, error) {
 				body := &RayJobInfo{
 					JobStatus:  rayv1alpha1.JobStatusRunning,
