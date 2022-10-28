@@ -440,7 +440,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			workerReplicas = *worker.MaxReplicas
 			r.Log.Info(
 				fmt.Sprintf(
-					"Replicas for group %s (%d) is greater than MaxReplicas (%d). Using MaxReplicas (%d) as the target replica count.",
+					"Replicas for worker group %s (%d) is greater than maxReplicas (%d). Using maxReplicas (%d) as the target replica count.",
 					worker.GroupName, *worker.Replicas, *worker.MaxReplicas, *worker.MaxReplicas,
 				),
 			)
