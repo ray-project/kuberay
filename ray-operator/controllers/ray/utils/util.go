@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha1"
+	"encoding/base32"
 	"fmt"
 	"math"
 	"reflect"
@@ -341,4 +343,19 @@ func ConvertUnixTimeToMetav1Time(unixTime int64) *metav1.Time {
 	t := time.Unix(unixTime/1000, unixTime%1000*1000000)
 	kt := metav1.NewTime(t)
 	return &kt
+}
+
+// Json-serializes obj and returns its hash string
+func GenerateJsonHash(obj interface{}) (string, error) {
+	serialObj, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+
+	hashBytes := sha1.Sum(serialObj)
+
+	// Convert to an ASCII string
+	hashStr := string(base32.HexEncoding.EncodeToString(hashBytes[:]))
+
+	return hashStr, nil
 }

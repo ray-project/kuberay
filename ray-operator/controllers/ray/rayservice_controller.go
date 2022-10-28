@@ -323,18 +323,37 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 
 // shouldPrepareNewRayCluster checks if we need to generate a new pending cluster.
 func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1alpha1.RayService, activeRayCluster *rayv1alpha1.RayCluster) bool {
-	shouldPrepareRayCluster := false
-
+	// Prepare new RayCluster if:
+	// 1. No active cluster and no pending cluster
+	// 2. No pending cluster, and the active RayCluster has changed.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
-		// Prepare new RayCluster if:
-		// 1. No active and pending cluster
-		// 2. No pending cluster, and the active RayCluster has changed.
-		if activeRayCluster == nil || !utils.CompareJsonStruct(activeRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
-			shouldPrepareRayCluster = true
+		if activeRayCluster == nil {
+			r.Log.Info("No active Ray cluster. RayService operator should prepare a new Ray cluster.")
+			return true
 		}
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey]
+		goalClusterHash, err := utils.GenerateJsonHash(rayServiceInstance.Spec.RayClusterSpec)
+		if err != nil {
+			errContext := "Failed to serialize new RayCluster config. " +
+				"Manual config updates will NOT be tracked accurately. " +
+				"Please manually tear down the cluster and apply a new config."
+			r.Log.Error(err, errContext)
+			return true
+		}
+
+		if activeClusterHash != goalClusterHash {
+			r.Log.Info("Active RayCluster config doesn't match goal config. " +
+				"RayService operator should prepare a new Ray cluster.\n" +
+				"* Active RayCluster config hash: " + activeClusterHash + "\n" +
+				"* Goal RayCluster config hash: " + goalClusterHash)
+		} else {
+			r.Log.Info("Active Ray cluster config matches goal config.")
+		}
+
+		return activeClusterHash != goalClusterHash
 	}
 
-	return shouldPrepareRayCluster
+	return false
 }
 
 // createRayClusterInstanceIfNeeded checks if we need to create a new RayCluster instance. If so, create one.
@@ -407,6 +426,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 }
 
 func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv1alpha1.RayService, rayClusterName string) (*rayv1alpha1.RayCluster, error) {
+	var err error
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
@@ -419,6 +439,14 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		rayClusterAnnotations[k] = v
 	}
 	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
+	rayClusterAnnotations[common.RayServiceClusterHashKey], err = utils.GenerateJsonHash(rayService.Spec.RayClusterSpec)
+	if err != nil {
+		errContext := "Failed to serialize RayCluster config. " +
+			"Manual config updates will NOT be tracked accurately. " +
+			"Please tear down the cluster and apply a new config."
+		r.Log.Error(err, errContext)
+		return nil, err
+	}
 
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
