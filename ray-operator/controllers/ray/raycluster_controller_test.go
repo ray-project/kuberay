@@ -94,7 +94,7 @@ var _ = Context("Inside the default namespace", func() {
 				{
 					Replicas:    pointer.Int32Ptr(3),
 					MinReplicas: pointer.Int32Ptr(0),
-					MaxReplicas: pointer.Int32Ptr(10000),
+					MaxReplicas: pointer.Int32Ptr(4),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":           "6379",
@@ -150,7 +150,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
 		})
 
-		It("should create more than 1 worker", func() {
+		It("should create 3 workers", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -254,6 +254,38 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("should increase replicas past maxReplicas", func() {
+			// increasing replicas to 5, which is greater than maxReplicas (4)
+			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				rep := new(int32)
+				*rep = 5
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
+
+				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
+				// We need to handle conflict error and retry the update.
+				return k8sClient.Update(ctx, myRayCluster)
+			})
+
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
+		})
+
+		It("should scale to maxReplicas (4) workers", func() {
+			// retry listing pods, given that last update may not immediately happen.
+			Eventually(
+				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*15, time.Millisecond*500).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("should countinue to have only maxReplicas (4) workers", func() {
+			// check that pod count stays at 4 for two seconds.
+			Consistently(
+				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*2, time.Millisecond*200).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
 })
