@@ -113,8 +113,8 @@ additionalWorkerGroups:
     # Disabled by default
     disabled: true
     replicas: 1
-    miniReplicas: 1
-    maxiReplicas: 3
+    minReplicas: 1
+    maxReplicas: 3
     type: worker
     labels: {}
     initArgs:
