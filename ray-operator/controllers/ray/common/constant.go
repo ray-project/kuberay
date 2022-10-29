@@ -50,6 +50,9 @@ const (
 	DefaultDashboardAgentListenPortName = "dashboard-agent"
 	DefaultServingPortName              = "serve"
 
+	// The default AppProtocol for Kubernetes service
+	DefaultServiceAppProtocol = "tcp"
+
 	// The default application name
 	ApplicationName = "kuberay"
 
