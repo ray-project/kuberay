@@ -62,7 +62,7 @@ func main() {
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
-		"sync log to local file")
+		"Synchronize logs to local file")
 
 	opts := k8szap.Options{
 		Development: true,
