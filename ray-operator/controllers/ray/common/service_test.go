@@ -84,6 +84,14 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+
+	ports := svc.Spec.Ports
+	expectedResult = DefaultServiceAppProtocol
+	for _, port := range ports {
+		if *port.AppProtocol != DefaultServiceAppProtocol {
+			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
+		}
+	}
 }
 
 func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {

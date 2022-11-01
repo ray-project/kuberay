@@ -43,8 +43,9 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 	}
 
 	ports := getServicePorts(cluster)
+	defaultAppProtocol := DefaultServiceAppProtocol
 	for name, port := range ports {
-		svcPort := corev1.ServicePort{Name: name, Port: port}
+		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
 		service.Spec.Ports = append(service.Spec.Ports, svcPort)
 	}
 
