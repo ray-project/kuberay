@@ -3,8 +3,9 @@ package util
 import (
 	"fmt"
 
+	"k8s.io/klog/v2"
+
 	"github.com/go-openapi/runtime"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -243,9 +244,9 @@ func (e *UserError) wrap(message string) *UserError {
 func (e *UserError) Log() {
 	switch e.externalStatusCode {
 	case codes.Aborted, codes.InvalidArgument, codes.NotFound, codes.Internal:
-		glog.Infof("%+v", e.internalError)
+		klog.Infof("%+v", e.internalError)
 	default:
-		glog.Errorf("%+v", e.internalError)
+		klog.Errorf("%+v", e.internalError)
 	}
 }
 
@@ -281,14 +282,14 @@ func LogError(err error) {
 		e.Log()
 	default:
 		// We log all the details.
-		glog.Errorf("InternalError: %+v", err)
+		klog.Errorf("InternalError: %+v", err)
 	}
 }
 
 // TerminateIfError Check if error is nil. Terminate if not.
 func TerminateIfError(err error) {
 	if err != nil {
-		glog.Fatalf("%v", err)
+		klog.Fatalf("%v", err)
 	}
 }
 

@@ -3,7 +3,7 @@ package util
 import (
 	"time"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type TimeInterface interface {
@@ -44,7 +44,7 @@ func (f *FakeTime) Now() time.Time {
 func ParseTimeOrFatal(value string) time.Time {
 	result, err := time.Parse(time.RFC3339, value)
 	if err != nil {
-		glog.Fatalf("Could not parse time: %+v", err)
+		klog.Fatalf("Could not parse time: %+v", err)
 	}
 	return result.UTC()
 }

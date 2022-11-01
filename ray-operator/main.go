@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/zapr"
+	"go.uber.org/zap"
+	"gopkg.in/natefinch/lumberjack.v2"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 
 	"go.uber.org/zap/zapcore"
@@ -14,7 +18,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -41,6 +45,7 @@ func main() {
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
+	var logFile string
 	flag.BoolVar(&version, "version", false, "Show the version information.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
@@ -56,7 +61,10 @@ func main() {
 		"Temporary feature flag - to be deleted after testing")
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
-	opts := zap.Options{
+	flag.StringVar(&logFile, "log-file-path", "",
+		"Synchronize logs to local file")
+
+	opts := k8szap.Options{
 		Development: true,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
@@ -69,7 +77,30 @@ func main() {
 		os.Exit(0)
 	}
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if logFile != "" {
+		fileWriter := &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    500, // megabytes
+			MaxBackups: 10,  // files
+			MaxAge:     30,  // days
+		}
+
+		pe := zap.NewProductionEncoderConfig()
+		pe.EncodeTime = zapcore.ISO8601TimeEncoder
+		consoleEncoder := zapcore.NewConsoleEncoder(pe)
+
+		k8sLogger := k8szap.NewRaw(k8szap.UseFlagOptions(&opts))
+		zapOpts := append(opts.ZapOpts, zap.AddCallerSkip(1))
+		combineLogger := zap.New(zapcore.NewTee(
+			k8sLogger.Core(),
+			zapcore.NewCore(consoleEncoder, zapcore.AddSync(fileWriter), zap.InfoLevel),
+		)).WithOptions(zapOpts...)
+		combineLoggerR := zapr.NewLogger(combineLogger)
+
+		ctrl.SetLogger(combineLoggerR)
+	} else {
+		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
+	}
 
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
 	if ray.PrioritizeWorkersToDelete {
