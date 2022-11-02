@@ -65,7 +65,7 @@ worker:
     node-ip-address: $MY_POD_IP
     redis-password: LetMeInRay
     block: 'true'
-  initContainerImage: 'busybox:1.28' # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
+  initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
   containerEnv:
     - name: MY_POD_IP
       valueFrom:
@@ -122,7 +122,7 @@ additionalWorkerGroups:
       node-ip-address: $MY_POD_IP
       redis-password: LetMeInRay
       block: 'true'
-    initContainerImage: 'busybox:1.28' # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
+    initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
     containerEnv:
       - name: MY_POD_IP
         valueFrom:
