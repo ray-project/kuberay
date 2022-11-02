@@ -180,10 +180,9 @@ class EasyJobRule(Rule):
         headpods = client.CoreV1Api().list_namespaced_pod(
             namespace = cr_namespace, label_selector='rayNodeType=head')
         headpod_name = headpods.items[0].metadata.name
-        os.system("kubectl get all")
         rtn = os.system(
             f"kubectl exec {headpod_name} --" +
-            "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
+            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
         assert rtn == 0
 
 class RayClusterAddCREvent(CREvent):
@@ -279,9 +278,11 @@ if __name__ == '__main__':
     with open(TEMPLATE_NAME, encoding="utf-8") as base_yaml:
         base_cr = yaml.load(base_yaml, Loader=yaml.FullLoader)
     patch_list = [
+        # Pass
         jsonpatch.JsonPatch([{'op': 'replace',
             'path': '/spec/headGroupSpec/template/spec/containers/0/name','value': 'ray-head-1'}
         ]),
+        # Pass
         jsonpatch.JsonPatch([{'op': 'replace',
             'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}
         ]),
@@ -294,7 +295,7 @@ if __name__ == '__main__':
         jsonpatch.JsonPatch([{'op': 'add',
             'path': '/spec/headGroupSpec/rayStartParams/object-manager-port', 'value': '12345'}
         ]),
-        # Reproduce:
+        # Reproduce: (Fixed by pull request #572. Use v0.3.0 to reproduce.)
         #   #572: https://github.com/ray-project/kuberay/pull/572
         #   #530: https://github.com/ray-project/kuberay/pull/530
         jsonpatch.JsonPatch([{'op': 'add',
@@ -314,7 +315,7 @@ if __name__ == '__main__':
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(base_cr, patch_list)
-    images = ['rayproject/ray:2.0.0', 'kuberay/operator:v0.3.0', 'kuberay/apiserver:v0.3.0']
+    images = ['rayproject/ray:2.0.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
 
     test_cases = unittest.TestSuite()
     for new_cr in mut.mutate():
