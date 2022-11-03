@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -255,7 +258,37 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rayv1alpha1.RayJob{}).
 		Owns(&rayv1alpha1.RayCluster{}).
 		Owns(&corev1.Service{}).
+		WithEventFilter(predicate.Funcs{
+			DeleteFunc: r.DeleteEventFilter,
+		}).
 		Complete(r)
+}
+
+func (r *RayJobReconciler) DeleteEventFilter(e event.DeleteEvent) bool {
+	r.Log.Info("event to delete", "event", e)
+
+	job, ok := e.Object.(*rayv1alpha1.RayJob)
+	if !ok {
+		r.Log.Info("failed to get job object from event", "event", e)
+		return false
+	}
+
+	if job.Status.JobStatus == rayv1alpha1.JobStatusRunning || job.Status.JobStatus == rayv1alpha1.JobStatusPending {
+		if job.Status.DashboardURL == "" || job.Status.JobId == "" {
+			r.Log.Info("dashboardURL or job_id is empty", "job", job)
+			return false
+		}
+		rayDashboardClient := utils.GetRayDashboardClientFunc()
+		rayDashboardClient.InitClient(job.Status.DashboardURL)
+		err := rayDashboardClient.StopJob(job.Status.JobId, &r.Log)
+		if err != nil {
+			r.Log.Info("failed to stop job", "error", err)
+		}
+	}
+	// The reconciler adds a finalizer so we perform clean-up
+	// when the delete timestamp is added
+	// Suppress Delete events to avoid filtering them out in the Reconcile function
+	return false
 }
 
 func (r *RayJobReconciler) getRayJobInstance(ctx context.Context, request ctrl.Request) (*rayv1alpha1.RayJob, error) {
