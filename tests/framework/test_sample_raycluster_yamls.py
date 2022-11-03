@@ -33,7 +33,9 @@ if __name__ == '__main__':
     skip_tests = {
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
         'ray-cluster.external-redis.yaml':
-            'It installs multiple Kubernetes resources and cannot clean up by DeleteCREvent.'
+            'It installs multiple Kubernetes resources and cannot clean up by DeleteCREvent.',
+        'ray-cluster.autoscaler.large.yaml':
+            'Skip this test because it requires a lot of resources.'
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
@@ -42,7 +44,7 @@ if __name__ == '__main__':
     # Build a test plan
     logger.info("Build a test plan ...")
     test_cases = unittest.TestSuite()
-    for index, new_cr in enumerate(sample_yaml_files[6:7]):
+    for index, new_cr in enumerate(sample_yaml_files):
         if new_cr['name'] in skip_tests:
             logger.info('[SKIP TEST %d] %s: %s', index, new_cr['name'], skip_tests[new_cr['name']])
             continue
