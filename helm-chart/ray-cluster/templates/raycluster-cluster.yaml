@@ -14,6 +14,9 @@ spec:
   {{- if .Values.head.enableInTreeAutoscaling }}
   enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
   {{- end }}
+  {{- if .Values.head.autoscalerOptions }}
+  autoscalerOptions: {{- toYaml .Values.head.autoscalerOptions | nindent 4 }}
+  {{- end }}
   headGroupSpec:
     serviceType: {{ .Values.service.type }}
     rayStartParams:
