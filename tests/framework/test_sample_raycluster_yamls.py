@@ -1,0 +1,55 @@
+''' Test sample RayCluster YAML files to catch invalid and outdated ones. '''
+import unittest
+import os
+import logging
+import yaml
+
+from prototype import (
+    RuleSet,
+    GeneralTestCase,
+    RayClusterAddCREvent,
+    HeadPodNameRule,
+    EasyJobRule,
+    HeadSvcRule,
+)
+
+logger = logging.getLogger(__name__)
+
+if __name__ == '__main__':
+    NAMESPACE = 'default'
+    SAMPLE_PATH = '../../ray-operator/config/samples/'
+
+    sample_yaml_files = []
+    for filename in os.scandir(SAMPLE_PATH):
+        if filename.is_file():
+            with open(filename, encoding="utf-8") as cr_yaml:
+                for k8s_object in yaml.safe_load_all(cr_yaml):
+                    if k8s_object['kind'] == 'RayCluster':
+                        sample_yaml_files.append(
+                            {'path': filename.path, 'name': filename.name, 'cr': k8s_object}
+                        )
+                        break
+
+    skip_tests = {
+        'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
+        'ray-cluster.external-redis.yaml':
+            'It installs multiple Kubernetes resources and cannot clean up by DeleteCREvent.'
+    }
+
+    rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
+    images = ['rayproject/ray:2.0.0', 'kuberay/operator:nightly']
+
+    # Build a test plan
+    logger.info("Build a test plan ...")
+    test_cases = unittest.TestSuite()
+    for index, new_cr in enumerate(sample_yaml_files[6:7]):
+        if new_cr['name'] in skip_tests:
+            logger.info('[SKIP TEST %d] %s: %s', index, new_cr['name'], skip_tests[new_cr['name']])
+            continue
+        logger.info('[TEST %d]: %s', index, new_cr['name'])
+        addEvent = RayClusterAddCREvent(new_cr['cr'], [rs], 90, NAMESPACE, new_cr['path'])
+        test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
+
+    # Execute all tests
+    runner=unittest.TextTestRunner()
+    runner.run(test_cases)

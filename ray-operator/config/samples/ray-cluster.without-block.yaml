@@ -10,7 +10,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-non-block
 spec:
-  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -24,8 +24,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
       port: '6379' # should match headService targetPort
-      object-manager-port: '12345'
-      node-manager-port: '12346'
       object-store-memory: '100000000'
       redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
@@ -46,12 +44,10 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.8.0
-          # Without the `--block` flag, you can have any command and args here to run your code.
-          # the below command/args will be appended after the Ray start command and it args, and executed after Ray start.
-          command: [ "python" ]
-          args:
-            - '/opt/sample_code.py'
+          image: rayproject/ray:2.0.0
+          # Without the `--block` flag in the `ray start` command, the following commands will be executed after `ray start`.
+          # You can use `kubectl logs` command to check the head pod's log to make sure `sample.yaml` is executed.
+          command: ["/bin/sh", "-c", "ulimit -n 65536; ray start --head  --num-cpus=1  --object-store-memory=100000000  --port=6379  --redis-password=LetMeInRay  --dashboard-host=0.0.0.0  --node-ip-address=$MY_POD_IP  --metrics-export-port=8080; python -c \"import ray; ray.init(); print(ray.cluster_resources())\"; sleep infinity"]
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -59,44 +55,3 @@ spec:
                 fieldPath: status.podIP
           ports:
           - containerPort: 6379
-          volumeMounts:
-          - mountPath: /opt
-            name: config
-        volumes:
-        # You set volumes at the Pod level, then mount them into containers inside that Pod
-        - name: config
-          configMap:
-            # Provide the name of the ConfigMap you want to mount.
-            name: ray-code-single
-            # An array of keys from the ConfigMap to create as files
-            items:
-            - key: sample_code.py
-              path: sample_code.py
-######################Ray code sample#################################
-# this is only an example code that is mounted into the container and executed to show the Ray cluster at work
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ray-code-single
-data: 
-  sample_code.py: |
-    import ray
-    from os import environ
-    redis_pass = environ.get("REDIS_PASSWORD") 
-    print("trying to connect to Ray!")
-    ray.init(address="auto", _redis_password=redis_pass)
-    print("now executing some code with Ray!")
-    import time
-    start = time.time()
-    @ray.remote
-    def f():
-      time.sleep(0.01)
-      return ray._private.services.get_node_ip_address()
-    values=set(ray.get([f.remote() for _ in range(1000)]))
-    print("Ray Nodes: ",str(values))
-    file = open("/tmp/ray_nodes.txt","a")
-    file.write("available nodes: %s\n" % str(values))
-    file.close()
-    end = time.time()
-    print("Execution time = ",end - start)
