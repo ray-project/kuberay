@@ -12,6 +12,8 @@ spec:
       app.kubernetes.io/name: kuberay
       app.kubernetes.io/component: kuberay-operator
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
