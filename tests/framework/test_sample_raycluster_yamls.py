@@ -39,15 +39,11 @@ if __name__ == '__main__':
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
-
-    images = ['rayproject/ray:2.0.0', 'kuberay/operator:nightly',  'kuberay/apiserver:nightly']
-    for k, v in os.environ.items():
-        if k == 'RAY_IMAGE':
-            images[0] = v
-        elif k == 'OPERATOR_IMAGE':
-            images[1] = v
-        elif k == 'APISERVER_IMAGE':
-            images[2] = v
+    images = [
+        os.getenv('RAY_IMAGE', default='rayproject/ray:2.0.0'),
+        os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
+        os.getenv('APISERVER_IMAGE', default='kuberay/apiserver:nightly')
+    ]
     logger.info(images)
     # Build a test plan
     logger.info("Build a test plan ...")

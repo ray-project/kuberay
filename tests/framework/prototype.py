@@ -56,7 +56,10 @@ def download_images(docker_images):
     """Download Docker images from DockerHub"""
     docker_client = docker.from_env()
     for image in docker_images:
-        docker_client.images.pull(image)
+        # Only pull the image from DockerHub when the image does not
+        # exist in the local docker registry.
+        if os.system(f'docker image inspect {image}', silent=True) != 0:
+            docker_client.images.pull(image)
     docker_client.close()
 
 def kind_load_images(docker_images):
