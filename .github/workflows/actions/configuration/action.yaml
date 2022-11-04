@@ -30,7 +30,7 @@ runs:
       python-version: '3.x'
 
   - name: Install Python dependencies
-    run: pip install -r ./tests/config/requirements.txt
+    run: pip install -r ./tests/framework/config/requirements.txt
     shell: bash
 
   - name: Set up Docker
