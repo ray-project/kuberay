@@ -109,7 +109,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
-		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
+		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
+		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
 
 		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image

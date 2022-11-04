@@ -1,36 +1,16 @@
 package common
 
 import (
-	"bytes"
 	"reflect"
 	"testing"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-func longString(t *testing.T) string {
-	var b bytes.Buffer
-	for i := 0; i < 200; i++ {
-		b.WriteString("a")
-	}
-	result := b.String()
-	// Confirm length.
-	assert.Equal(t, len(result), 200)
-	return result
-}
-
-func shortString(t *testing.T) string {
-	result := utils.CheckName(longString(t))
-	// Confirm length.
-	assert.Equal(t, len(result), 50)
-	return result
-}
 
 // Test subject and role ref names in the function BuildRoleBinding.
 func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {

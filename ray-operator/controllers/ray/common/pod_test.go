@@ -523,6 +523,17 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+
+	// Repeat ServiceAccountName check with long cluster name.
+	cluster.Name = longString(t)
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	actualResult = podTemplateSpec.Spec.ServiceAccountName
+	expectedResult = shortString(t)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+}
+func TestBuildPodLongName(t *testing.T) {
 }
 
 // If no service account is specified in the RayCluster,
