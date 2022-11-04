@@ -79,7 +79,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			assert.Nil(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("got %s, want %s", got, tc.want)
+				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
 	}
