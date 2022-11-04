@@ -14,6 +14,9 @@ spec:
   {{- if .Values.head.enableInTreeAutoscaling }}
   enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
   {{- end }}
+  {{- if .Values.head.autoscalerOptions }}
+  autoscalerOptions: {{- toYaml .Values.head.autoscalerOptions | nindent 4 }}
+  {{- end }}
   headGroupSpec:
     serviceType: {{ .Values.service.type }}
     rayStartParams:
@@ -75,7 +78,7 @@ spec:
         imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
         initContainers:
           - name: init-myservice
-            image: busybox:1.28
+            image: {{ $values.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
@@ -125,7 +128,7 @@ spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         initContainers:
           - name: init-myservice
-            image: busybox:1.28
+            image: {{ .Values.worker.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}

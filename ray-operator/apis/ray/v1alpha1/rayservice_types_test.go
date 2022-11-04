@@ -378,7 +378,7 @@ var expected = `{
             
          },
          "rayClusterStatus":{
-            
+            "head":{}
          }
       },
       "pendingServiceStatus":{
@@ -389,7 +389,7 @@ var expected = `{
             
          },
          "rayClusterStatus":{
-            
+            "head":{}
          }
       }
    }

@@ -224,6 +224,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 			r.Log.Error(err, "Update status error", "cluster name", request.Name)
 		}
 	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -819,6 +820,10 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		return err
 	}
 
+	if err := r.updateHeadInfo(instance); err != nil {
+		return err
+	}
+
 	timeNow := metav1.Now()
 	instance.Status.LastUpdateTime = &timeNow
 	if err := r.Status().Update(context.Background(), instance); err != nil {
@@ -826,6 +831,40 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	}
 
 	return nil
+}
+
+func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) (string, error) {
+	runtimePods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
+	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return "", err
+	}
+	if len(runtimePods.Items) < 1 {
+		return "", fmt.Errorf("unable to find head pod. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if len(runtimePods.Items) > 1 {
+		return "", fmt.Errorf("found multiple head pods. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if runtimePods.Items[0].Status.PodIP == "" {
+		return "", fmt.Errorf("head pod IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	}
+
+	return runtimePods.Items[0].Status.PodIP, nil
+}
+
+func (r *RayClusterReconciler) getHeadServiceIP(instance *rayiov1alpha1.RayCluster) (string, error) {
+	runtimeServices := corev1.ServiceList{}
+	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
+	if err := r.List(context.TODO(), &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return "", err
+	}
+	if len(runtimeServices.Items) < 1 {
+		return "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if len(runtimeServices.Items) > 1 {
+		return "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
+		return "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	}
+
+	return runtimeServices.Items[0].Spec.ClusterIP, nil
 }
 
 func (r *RayClusterReconciler) updateEndpoints(instance *rayiov1alpha1.RayCluster) error {
@@ -863,6 +902,22 @@ func (r *RayClusterReconciler) updateEndpoints(instance *rayiov1alpha1.RayCluste
 		}
 	} else {
 		r.Log.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", filterLabels)
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) updateHeadInfo(instance *rayiov1alpha1.RayCluster) error {
+	if ip, err := r.getHeadPodIP(instance); err != nil {
+		return err
+	} else {
+		instance.Status.Head.PodIP = ip
+	}
+
+	if ip, err := r.getHeadServiceIP(instance); err != nil {
+		return err
+	} else {
+		instance.Status.Head.ServiceIP = ip
 	}
 
 	return nil

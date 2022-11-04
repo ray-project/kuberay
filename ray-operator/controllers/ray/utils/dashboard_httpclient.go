@@ -81,6 +81,7 @@ type RayDashboardClientInterface interface {
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 	GetJobInfo(jobId string) (*RayJobInfo, error)
 	SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
+	StopJob(jobName string, log *logr.Logger) (err error)
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -315,6 +316,10 @@ type RayJobResponse struct {
 	JobId string `json:"job_id"`
 }
 
+type RayJobStopResponse struct {
+	Stopped bool `json:"stopped"`
+}
+
 func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	req, err := http.NewRequest("GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
@@ -375,6 +380,34 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 	}
 
 	return jobResp.JobId, nil
+}
+
+func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err error) {
+	log.Info("Stop a ray job", "rayJob", jobName)
+
+	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var jobStopResp RayJobStopResponse
+	if err = json.Unmarshal(body, &jobStopResp); err != nil {
+		return err
+	}
+
+	if !jobStopResp.Stopped {
+		return fmt.Errorf("failed to stopped job: %v", jobName)
+	}
+	return nil
 }
 
 func ConvertRayJobToReq(rayJob *rayv1alpha1.RayJob) (*RayJobRequest, error) {
