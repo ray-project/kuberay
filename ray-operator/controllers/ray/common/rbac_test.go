@@ -55,7 +55,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 		"Ray cluster with a very long name and without head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      longString(t),
+					Name:      longString(t), // 200 chars long
 					Namespace: "default",
 				},
 				Spec: rayiov1alpha1.RayClusterSpec{
@@ -66,7 +66,10 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 					},
 				},
 			},
-			want: []string{shortString(t), shortString(t)},
+			want: []string{
+				shortString(t), // 50 chars long
+				shortString(t),
+			},
 		},
 	}
 
