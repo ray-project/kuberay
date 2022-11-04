@@ -52,7 +52,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			},
 			want: []string{"raycluster-sample", "raycluster-sample"},
 		},
-		"Ray cluster with a very long name and without head group service account": {
+		"Ray cluster with a long name and without head group service account": {
 			input: &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      longString(t), // 200 chars long
