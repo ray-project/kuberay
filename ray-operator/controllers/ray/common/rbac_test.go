@@ -67,7 +67,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 				},
 			},
 			want: []string{
-				shortString(t), // 50 chars long
+				shortString(t), // 50 chars long, truncated by utils.CheckName
 				shortString(t),
 			},
 		},
