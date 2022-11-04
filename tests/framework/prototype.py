@@ -58,7 +58,7 @@ def download_images(docker_images):
     for image in docker_images:
         # Only pull the image from DockerHub when the image does not
         # exist in the local docker registry.
-        if os.system(f'docker image inspect {image}', silent=True) != 0:
+        if os.system(f'docker image inspect {image} > /dev/null') != 0:
             docker_client.images.pull(image)
     docker_client.close()
 
