@@ -533,8 +533,6 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 }
-func TestBuildPodLongName(t *testing.T) {
-}
 
 // If no service account is specified in the RayCluster,
 // the head pod's service account should be an empty string.
