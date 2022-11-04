@@ -235,6 +235,7 @@ class RayClusterAddCREvent(CREvent):
         logger.info("expected_head_pods: %d, expected_worker_pods: %d",
             expected_head_pods, expected_worker_pods)
         os.system(f'kubectl get all -n={self.namespace}')
+        os.system(f'kubectl describe pods -n={self.namespace}')
 
         # Raise an exception
         raise Exception("RayClusterAddCREvent wait() timeout")
@@ -341,5 +342,5 @@ if __name__ == '__main__':
     for new_cr in mut.mutate():
         addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
         test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
-    runner=unittest.TextTestRunner()
+    runner = unittest.TextTestRunner()
     runner.run(test_cases)
