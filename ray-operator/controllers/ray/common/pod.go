@@ -712,6 +712,14 @@ func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volume
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		return
 	}
+
+	// 0) Skip adding the volume if it is already in the list of volumes
+	for _, volume := range container.VolumeMounts {
+		if volume.Name == volumeName && volume.MountPath == volumeMountPath {
+			return
+		}
+	}
+
 	// 1) If needed, create a Volume of type emptyDir and add it to Volumes.
 	if !checkIfVolumeExists(pod, volumeName) {
 		emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
