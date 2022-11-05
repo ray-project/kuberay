@@ -103,7 +103,7 @@ spec:
           emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
-  - replicas: 3
+  - replicas: 1
     minReplicas: 1
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
@@ -259,7 +259,7 @@ spec:
             limits:
               cpu: "2"
             requests:
-              cpu: "1000m"
+              cpu: "500m"
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:

@@ -58,7 +58,7 @@ spec:
               cpu: "1"
               memory: "2G"
             requests:
-              cpu: "500m"
+              cpu: "300m"
               memory: "1G"
         volumes:
           - name: ray-logs
