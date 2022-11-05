@@ -36,6 +36,8 @@ type ResourceManagerInterface interface {
 	ListAllJobs(ctx context.Context) ([]*v1alpha1.RayJob, error)
 	DeleteJob(ctx context.Context, jobName string, namespace string) error
 	CreateService(ctx context.Context, apiService *api.RayService) (*v1alpha1.RayService, error)
+	UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*v1alpha1.RayService, error)
+	UpdateRayServiceConfigs(ctx context.Context, request *api.UpdateRayServiceConfigsRequest) (*v1alpha1.RayService, error)
 	GetService(ctx context.Context, serviceName, namespace string) error
 	ListServices(ctx context.Context, namespace string) ([]*v1alpha1.RayService, error)
 	ListAllServices(ctx context.Context) ([]*v1alpha1.RayService, error)
@@ -310,6 +312,58 @@ func (r *ResourceManager) CreateService(ctx context.Context, apiService *api.Ray
 	}
 
 	return newRayService, nil
+}
+
+func (r *ResourceManager) UpdateRayService(ctx context.Context, apiService *api.RayService) (*v1alpha1.RayService, error) {
+	name := apiService.Name
+	namespace := apiService.Namespace
+	client := r.getRayServiceClient(namespace)
+	oldService, err := getServiceByName(ctx, client, name)
+	if err != nil {
+		return nil, util.Wrap(err, fmt.Sprintf("Update service fail, no service named: %s ", name))
+	}
+	// populate cluster map
+	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
+	}
+	rayService := util.NewRayService(apiService, computeTemplateDict)
+	rayService.Annotations["ray.io/update-timestamp"] = r.clientManager.Time().Now().String()
+	rayService.ResourceVersion = oldService.DeepCopy().ResourceVersion
+	newRayService, err := client.Update(ctx, rayService.Get(), metav1.UpdateOptions{})
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to update service for (%s/%s)", rayService.Namespace, rayService.Name)
+	}
+	return newRayService, nil
+}
+
+func (r *ResourceManager) UpdateRayServiceConfigs(ctx context.Context, request *api.UpdateRayServiceConfigsRequest) (*v1alpha1.RayService, error) {
+	serviceName := request.Name
+	namespace := request.Namespace
+
+	client := r.getRayServiceClient(namespace)
+	service, err := getServiceByName(ctx, client, serviceName)
+	if err != nil {
+		return nil, util.Wrap(err, fmt.Sprintf("Update service fail, no service named: %s ", serviceName))
+	}
+	updateService := request.GetUpdateService()
+	// if workerGroupSpec is not nil, update worker group
+	if updateService.WorkerGroupUpdateSpec != nil {
+		oldWorkerGroups := service.Spec.RayClusterSpec.WorkerGroupSpecs
+		newWorkerGroups := util.UpdateRayServiceWorkerGroupSpecs(updateService.WorkerGroupUpdateSpec, oldWorkerGroups)
+		service.Spec.RayClusterSpec.WorkerGroupSpecs = newWorkerGroups
+	}
+	if updateService.ServeDeploymentGraphSpec != nil {
+		oldServeDeploymentGraphSpec := service.Spec.ServeDeploymentGraphSpec
+		newServeDeploymentGraphSpec := util.UpdateServeDeploymentGraphSpec(updateService.ServeDeploymentGraphSpec, oldServeDeploymentGraphSpec)
+		service.Spec.ServeDeploymentGraphSpec = newServeDeploymentGraphSpec
+	}
+	service.Annotations["ray.io/update-timestamp"] = r.clientManager.Time().Now().String()
+	newService, err := client.Update(ctx, service, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to update service for (%s/%s)", service.Namespace, service.Name)
+	}
+	return newService, nil
 }
 
 func (r *ResourceManager) GetService(ctx context.Context, serviceName, namespace string) (*v1alpha1.RayService, error) {

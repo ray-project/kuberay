@@ -179,6 +179,100 @@
         "tags": [
           "RayServeService"
         ]
+      },
+      "put": {
+        "summary": "Update a ray serve.\nWe may",
+        "operationId": "RayServeService_UpdateRayService",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayService"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "The name of the ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The ray service to be updated.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoRayService"
+            }
+          }
+        ],
+        "tags": [
+          "RayServeService"
+        ]
+      }
+    },
+    "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs": {
+      "patch": {
+        "summary": "Update a ray serve configs.\nPatch mode update without possible deletion the existing raycluster under the hood. \nonly support update the service configs and worker.",
+        "operationId": "RayServeService_UpdateRayServiceConfigs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayService"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "The name of ray service to be updated.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The ray service to be updated.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoUpdateRayServiceBody"
+            }
+          }
+        ],
+        "tags": [
+          "RayServeService"
+        ]
       }
     },
     "/apis/v1alpha2/services": {
@@ -590,6 +684,22 @@
         }
       }
     },
+    "protoUpdateRayServiceBody": {
+      "type": "object",
+      "properties": {
+        "workerGroupUpdateSpec": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoWorkerGroupUpdateSpec"
+          },
+          "title": "specify the worker group to be update"
+        },
+        "serveDeploymentGraphSpec": {
+          "$ref": "#/definitions/protoServeDeploymentGraphSpec",
+          "description": "deployments config of the ray serve."
+        }
+      }
+    },
     "protoVolume": {
       "type": "object",
       "properties": {
@@ -659,6 +769,30 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        }
+      }
+    },
+    "protoWorkerGroupUpdateSpec": {
+      "type": "object",
+      "properties": {
+        "groupName": {
+          "type": "string",
+          "description": "The name of the worker group to be updated."
+        },
+        "replicas": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The replicas of the worker group to be updated."
+        },
+        "minReplicas": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The min replicas of the worker group to be updated."
+        },
+        "maxReplicas": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The max replicas of the worker group to be updated."
         }
       }
     },

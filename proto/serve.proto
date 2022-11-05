@@ -32,6 +32,26 @@ service RayServeService {
       body: "service"
     };
   }
+
+  // Update a ray serve.
+  // We may
+  rpc UpdateRayService(UpdateRayServiceRequest) returns (RayService) {
+    option (google.api.http) = {
+      put: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      body: "service"
+    };
+  }
+
+  // Update a ray serve configs.
+  // Patch mode update without possible deletion the existing raycluster under the hood. 
+  // only support update the service configs and worker.
+  rpc UpdateRayServiceConfigs(UpdateRayServiceConfigsRequest) returns (RayService) {
+    option (google.api.http) = {
+      patch: "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs"
+      body: "update_service"
+    };
+  }
+
   // Find a specific ray serve by name and namespace.
   rpc GetRayService(GetRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
@@ -65,6 +85,31 @@ message CreateRayServiceRequest {
   RayService service = 1;
   // The namespace of the ray service to be created.
   string namespace = 2;
+}
+
+message UpdateRayServiceRequest {
+  // The ray service to be updated.
+  RayService service = 1;
+  // The namespace of the ray service to be updated.
+  string namespace = 2;
+  // The name of the ray service to be updated.
+  string name = 3;
+}
+
+message UpdateRayServiceConfigsRequest {
+  // The name of ray service to be updated.
+  string name = 1;
+  // The namespace of the ray service to be updated.
+  string namespace = 2;
+  // The ray service to be updated.
+  UpdateRayServiceBody update_service = 3;
+}
+
+message UpdateRayServiceBody {
+  // specify the worker group to be update
+  repeated WorkerGroupUpdateSpec worker_group_update_spec = 1;
+  // deployments config of the ray serve.
+  ServeDeploymentGraphSpec serve_deployment_graph_spec = 2; 
 }
 
 message GetRayServiceRequest {
@@ -229,4 +274,15 @@ message RayServiceEvent {
   string type = 8;
   // Output. The number of times this event has occurred.
   int32 count = 9;
+}
+
+message WorkerGroupUpdateSpec {
+  // The name of the worker group to be updated.
+  string group_name = 1;
+  // The replicas of the worker group to be updated.
+  int32 replicas = 2;
+  // The min replicas of the worker group to be updated.
+  int32 min_replicas = 3;
+  // The max replicas of the worker group to be updated.
+  int32 max_replicas = 4;
 }
