@@ -37,10 +37,10 @@ spec:
     # For large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     resources:
       limits:
-        cpu: "200m"
+        cpu: "500m"
         memory: "512Mi"
       requests:
-        cpu: "200m"
+        cpu: "500m"
         memory: "512Mi"
   ######################headGroupSpec#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
@@ -84,7 +84,7 @@ spec:
               cpu: "1"
               memory: "2G"
             requests:
-              cpu: "200m"
+              cpu: "500m"
               memory: "1G"
   workerGroupSpecs:
   # the pod replicas in this group typed worker

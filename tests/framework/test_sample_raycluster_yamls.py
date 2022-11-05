@@ -20,9 +20,23 @@ if __name__ == '__main__':
     SAMPLE_PATH = '../../ray-operator/config/samples/'
 
     sample_yaml_files = []
+
+    # The free plan of GitHub Actions (i.e. KubeRay CI) only support 2-core CPU runners. Most
+    # sample YAMLs cannot schedule all pods on Kubernetes nodes due to insufficient CPUs. We
+    # decided to just run some tests on KubeRay CI and run all tests in the Ray CI.
+    GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
+    github_action_tests = set([
+        "ray-cluster.getting-started.yaml",
+        "ray-cluster.ingress.yaml",
+        "ray-cluster.mini.yaml"
+        ]
+    )
+
     for filename in os.scandir(SAMPLE_PATH):
         if filename.is_file():
             with open(filename, encoding="utf-8") as cr_yaml:
+                if GITHUB_ACTIONS and filename.name not in github_action_tests:
+                    continue
                 for k8s_object in yaml.safe_load_all(cr_yaml):
                     if k8s_object['kind'] == 'RayCluster':
                         sample_yaml_files.append(
