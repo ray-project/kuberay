@@ -84,15 +84,9 @@ Sample  | Description
     experimentation in local kind or minikube environments.
 
 ```shell
-# Create a configmap with a hello world Ray code.
-kubectl create -f config/samples/config-map-ray-code.yaml
-configmap/ray-code created
-```
-
-
-```shell
-# Create a cluster.
+# Create a RayCluster and a ConfigMap with hello world Ray code.
 $ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
+configmap/ray-code created
 raycluster.ray.io/raycluster-heterogeneous created
 
 # List running clusters.

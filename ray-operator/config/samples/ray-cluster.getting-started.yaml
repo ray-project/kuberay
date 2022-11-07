@@ -10,7 +10,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-getting-started
 spec:
-  rayVersion: '1.8.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -45,7 +45,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.8.0
+          image: rayproject/ray:2.0.0
           env:
           - name: MY_POD_IP
             valueFrom:
