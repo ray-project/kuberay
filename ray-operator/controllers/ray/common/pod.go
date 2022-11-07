@@ -225,48 +225,60 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 }
 
 func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// Only create the probe if the user didn't specify any
 	if probe.Exec == nil {
-		// we only create the probe if user did not specify any.
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			// head node liveness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardPort, RayDashboardGCSHealthPath),
-			}
+			cmd := rayClusterHeadLivenessProbeCmd()
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
-			// worker node liveness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-			}
+			cmd := rayClusterWorkerLivenessProbeCmd()
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		}
 	}
 }
 
+func rayClusterHeadLivenessProbeCmd() []string {
+	return []string{
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardPort, RayDashboardGCSHealthPath),
+	}
+}
+
+func rayClusterWorkerLivenessProbeCmd() []string {
+	return []string{
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+	}
+}
+
 func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// Only create the probe if the user didn't specify any
 	if probe.Exec == nil {
-		// we only create the probe if user did not specify any.
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			// head node readiness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardPort, RayDashboardGCSHealthPath),
-			}
+			cmd := rayClusterHeadReadinessProbeCmd()
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
-			// worker node readiness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-			}
+			cmd := rayClusterWorkerReadinessProbeCmd()
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		}
+	}
+}
+
+func rayClusterHeadReadinessProbeCmd() []string {
+	return []string{
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
+		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardPort, RayDashboardGCSHealthPath),
+	}
+}
+
+func rayClusterWorkerReadinessProbeCmd() []string {
+	return []string{
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 	}
 }
 
