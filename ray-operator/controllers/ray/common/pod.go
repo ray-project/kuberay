@@ -710,14 +710,8 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 // Used for a /dev/shm memory mount for object store and for a /tmp/ray disk mount for autoscaler logs.
 func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string, storageMedium v1.StorageMedium) {
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
+		log.Info("volume already mounted", "volume", volumeName, "path", volumeMountPath)
 		return
-	}
-
-	// 0) Skip adding the volume if it is already in the list of volumes
-	for _, volume := range container.VolumeMounts {
-		if volume.Name == volumeName && volume.MountPath == volumeMountPath {
-			return
-		}
 	}
 
 	// 1) If needed, create a Volume of type emptyDir and add it to Volumes.
@@ -763,12 +757,7 @@ func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMediu
 func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
 		if mountedVol.MountPath == volumeMountPath {
-			for _, podVolume := range pod.Spec.Volumes {
-				if mountedVol.Name == podVolume.Name {
-					// already mounted, nothing to do
-					return true
-				}
-			}
+			return true
 		}
 	}
 	return false
