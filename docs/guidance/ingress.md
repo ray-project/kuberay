@@ -4,7 +4,7 @@
   * [Example: NGINX Ingress on KinD (built-in ingress support)](#example-nginx-ingress-on-kind-built-in-ingress-support)
 
 * Manually setting up an ingress with NGINX:
-  * [Example: Manually setting NGINX Ingress on KinD](#example-manually-setting-nginx-ingress-on-kind)
+  * [Example: Manually setting up NGINX Ingress on KinD](#example-manually-setting-up-nginx-ingress-on-kind)
 
 * Manually setting up an ingress for KubeRay: **For production use-cases, we recommend taking this route.**
   * [Example: AWS Application Load Balancer (ALB) Ingress support on AWS EKS](#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
@@ -73,7 +73,7 @@ kubectl describe ingress raycluster-ingress-head-ingress
 #               will report "404 Not Found".
 ```
 
-### Example: Manually setting NGINX Ingress on KinD
+### Example: Manually setting up NGINX Ingress on KinD
 ```sh
 # Step 1: Create a KinD cluster with `extraPortMappings` and `node-labels`
 cat <<EOF | kind create cluster --config=-
