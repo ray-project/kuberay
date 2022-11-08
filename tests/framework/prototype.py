@@ -56,7 +56,10 @@ def download_images(docker_images):
     """Download Docker images from DockerHub"""
     docker_client = docker.from_env()
     for image in docker_images:
-        docker_client.images.pull(image)
+        # Only pull the image from DockerHub when the image does not
+        # exist in the local docker registry.
+        if os.system(f'docker image inspect {image} > /dev/null') != 0:
+            docker_client.images.pull(image)
     docker_client.close()
 
 def kind_load_images(docker_images):
@@ -119,11 +122,14 @@ class CREvent:
     CREvent: Custom Resource Event can be mainly divided into 3 categories.
     (1) Add (create) CR (2) Update CR (3) Delete CR
     """
-    def __init__(self, custom_resource, rulesets: List[RuleSet], timeout, namespace):
+    def __init__(self, custom_resource_object,
+        rulesets: List[RuleSet], timeout, namespace, filepath = None):
         self.rulesets = rulesets
         self.timeout = timeout
         self.namespace = namespace
-        self.custom_resource = custom_resource
+        self.custom_resource_object = custom_resource_object
+        # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
+        self.filepath = filepath
     def trigger(self):
         """
         The member functions integrate together in `trigger()`.
@@ -146,7 +152,7 @@ class CREvent:
     def check_rule_sets(self):
         """When the system converges, check all registered RuleSets."""
         for ruleset in self.rulesets:
-            ruleset.check_rule_set(self.custom_resource, self.namespace)
+            ruleset.check_rule_set(self.custom_resource_object, self.namespace)
 
 # My implementations
 class HeadPodNameRule(Rule):
@@ -159,7 +165,7 @@ class HeadPodNameRule(Rule):
         expected_val = search_path(custom_resource,
             "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
         headpods = client.CoreV1Api().list_namespaced_pod(
-            namespace = cr_namespace, label_selector='rayNodeType=head')
+            namespace = cr_namespace, label_selector='ray.io/node-type=head')
         assert headpods.items[0].spec.containers[0].name == expected_val
 
 class HeadSvcRule(Rule):
@@ -178,7 +184,7 @@ class EasyJobRule(Rule):
     """Submit a very simple Ray job to test the basic functionality of the Ray cluster."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         headpods = client.CoreV1Api().list_namespaced_pod(
-            namespace = cr_namespace, label_selector='rayNodeType=head')
+            namespace = cr_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
         rtn = os.system(
             f"kubectl exec {headpod_name} --" +
@@ -188,9 +194,12 @@ class EasyJobRule(Rule):
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
     def exec(self):
-        client.CustomObjectsApi().create_namespaced_custom_object(
-            group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
-            plural = 'rayclusters', body = self.custom_resource)
+        if not self.filepath:
+            client.CustomObjectsApi().create_namespaced_custom_object(
+                group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
+                plural = 'rayclusters', body = self.custom_resource_object)
+        else:
+            os.system(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
     def wait(self):
         def check_pod_running(pods) -> bool:
@@ -199,24 +208,36 @@ class RayClusterAddCREvent(CREvent):
                     return False
             return True
         start_time = time.time()
-        expected_head_pods = search_path(self.custom_resource,
-            "spec.headGroupSpec.replicas".split('.'), default_value=0)
-        expected_worker_pods = search_path(self.custom_resource,
-            "spec.workerGroupSpecs.0.replicas".split('.'), default_value=0)
+        expected_head_pods = search_path(self.custom_resource_object,
+            "spec.headGroupSpec.replicas".split('.'), default_value=1)
+        worker_group_specs = search_path(self.custom_resource_object,
+            "spec.workerGroupSpecs".split('.'), default_value=[])
+        expected_worker_pods = 0
+        for spec in worker_group_specs:
+            expected_worker_pods += spec['replicas']
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         for _ in range(self.timeout):
             headpods = client.CoreV1Api().list_namespaced_pod(
-                namespace = self.namespace, label_selector='rayNodeType=head')
+                namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = client.CoreV1Api().list_namespaced_pod(
-                namespace = self.namespace, label_selector='rayNodeType=worker')
+                namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
                 logger.info("--- RayClusterAddCREvent %s seconds ---", time.time() - start_time)
                 return
             time.sleep(1)
+
+        # Fail to converge. Print some information to debug.
+        logger.info("RayClusterAddCREvent failed to converge in %d seconds.", self.timeout)
+        logger.info("expected_head_pods: %d, expected_worker_pods: %d",
+            expected_head_pods, expected_worker_pods)
+        os.system(f'kubectl get all -n={self.namespace}')
+        os.system(f'kubectl describe pods -n={self.namespace}')
+
+        # Raise an exception
         raise Exception("RayClusterAddCREvent wait() timeout")
 
 class RayClusterDeleteCREvent(CREvent):
@@ -224,15 +245,15 @@ class RayClusterDeleteCREvent(CREvent):
     def exec(self):
         client.CustomObjectsApi().delete_namespaced_custom_object(
             group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
-            plural = 'rayclusters', name = self.custom_resource['metadata']['name'])
+            plural = 'rayclusters', name = self.custom_resource_object['metadata']['name'])
 
     def wait(self):
         start_time = time.time()
         for _ in range(self.timeout):
             headpods = client.CoreV1Api().list_namespaced_pod(
-                namespace = self.namespace, label_selector='rayNodeType=head')
+                namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = client.CoreV1Api().list_namespaced_pod(
-                namespace = self.namespace, label_selector='rayNodeType=worker')
+                namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == 0 and len(workerpods.items) == 0):
                 logger.info("--- RayClusterDeleteCREvent %s seconds ---", time.time() - start_time)
                 return
@@ -265,8 +286,8 @@ class GeneralTestCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         try:
-            delete_event = RayClusterDeleteCREvent(
-                self.cr_event.custom_resource, [], self.cr_event.timeout, self.cr_event.namespace)
+            delete_event = RayClusterDeleteCREvent(self.cr_event.custom_resource_object,
+                [], self.cr_event.timeout, self.cr_event.namespace)
             delete_event.trigger()
         except Exception as ex:
             logger.error(str(ex))
@@ -321,5 +342,5 @@ if __name__ == '__main__':
     for new_cr in mut.mutate():
         addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
         test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
-    runner=unittest.TextTestRunner()
+    runner = unittest.TextTestRunner()
     runner.run(test_cases)

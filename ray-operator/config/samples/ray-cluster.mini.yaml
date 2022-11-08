@@ -10,7 +10,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '1.12.1' # should match the Ray version in the image of the containers
+  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -46,9 +46,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.12.1
-          #image: rayproject/ray:nightly
-          #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
+          image: rayproject/ray:2.0.0
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -59,7 +57,7 @@ spec:
               cpu: 1
               memory: 2Gi
             requests:
-              cpu: 1
+              cpu: 500m
               memory: 2Gi
           ports:
           - containerPort: 6379
