@@ -23,9 +23,6 @@ spec:
       serviceType: ClusterIP
       # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
       replicas: 1
-      # logical group name, for this called head-group, also can be functional
-      # pod type head or worker
-      # rayNodeType: head # Not needed since it is under the headgroup
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
         port: '6379' # should match container port named gcs-server
@@ -40,7 +37,6 @@ spec:
             # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
             # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
             rayCluster: raycluster-sample # will be injected if missing
-            rayNodeType: head # will be injected if missing, must be head or wroker
             groupName: headgroup # will be injected if missing
           # annotations for pod
           annotations:
