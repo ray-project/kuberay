@@ -85,7 +85,6 @@ spec:
       metadata:
         labels:
           rayCluster: raycluster-compatibility-test
-          rayNodeType: head
           groupName: headgroup # will be injected if missing
       spec:
         containers:
@@ -131,7 +130,6 @@ spec:
         metadata:
           labels:
             rayCluster: raycluster-compatibility-test
-            rayNodeType: worker # will be injected if missing
             groupName: small-group # will be injected if missing
           # annotations for pod
           annotations:
