@@ -145,6 +145,7 @@ kubectl delete ingress ray-cluster-ingress
 ### Example: Manually setting up NGINX Ingress on KinD
 ```sh
 # Step 1: Create a KinD cluster with `extraPortMappings` and `node-labels`
+# Reference for the setting up of kind cluster: https://kind.sigs.k8s.io/docs/user/ingress/
 cat <<EOF | kind create cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -177,6 +178,10 @@ pushd helm-chart/kuberay-operator
 helm install kuberay-operator .
 
 # Step 4: Install RayCluster and create an ingress separately. 
+# If you want to change the setting of ingress, you can edit the ingress portion in 
+# `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`.
+# More information about change of setting was documented in https://github.com/ray-project/kuberay/pull/699 
+# and `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`
 popd
 kubectl apply -f ray-operator/config/samples/ray-cluster.separate-ingress.yaml
 
