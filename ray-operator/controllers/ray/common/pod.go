@@ -224,15 +224,23 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	// Only create the probe if the user didn't specify any
-	if probe.Exec == nil {
+func createDefaultLivenessProbe() *v1.Probe {
+	return &v1.Probe{
+		InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+		TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+		PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+		SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+		FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+	}
+}
+
+func configureRayClusterLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// add probe handler if there's no handler already
+	if probe.ProbeHandler == (v1.ProbeHandler{}) {
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			cmd := rayClusterHeadLivenessProbeCmd()
-			probe.Exec = &v1.ExecAction{Command: cmd}
+			probe.Exec = &v1.ExecAction{Command: rayClusterHeadLivenessProbeCmd()}
 		} else {
-			cmd := rayClusterWorkerLivenessProbeCmd()
-			probe.Exec = &v1.ExecAction{Command: cmd}
+			probe.Exec = &v1.ExecAction{Command: rayClusterWorkerLivenessProbeCmd()}
 		}
 	}
 }
@@ -253,15 +261,23 @@ func rayClusterWorkerLivenessProbeCmd() []string {
 	}
 }
 
-func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
-	// Only create the probe if the user didn't specify any
-	if probe.Exec == nil {
+func createDefaultReadinessProbe() *v1.Probe {
+	return &v1.Probe{
+		InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+		TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+		PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+		SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+		FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+	}
+}
+
+func configureRayClusterReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+	// add probe handler if there's no handler already
+	if probe.ProbeHandler == (v1.ProbeHandler{}) {
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			cmd := rayClusterHeadReadinessProbeCmd()
-			probe.Exec = &v1.ExecAction{Command: cmd}
+			probe.Exec = &v1.ExecAction{Command: rayClusterHeadReadinessProbeCmd()}
 		} else {
-			cmd := rayClusterWorkerReadinessProbeCmd()
-			probe.Exec = &v1.ExecAction{Command: cmd}
+			probe.Exec = &v1.ExecAction{Command: rayClusterWorkerReadinessProbeCmd()}
 		}
 	}
 }
@@ -343,40 +359,21 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
 
-	// health check only if FT enabled
+	// add probes if FT enabled
 	if podTemplateSpec.Annotations != nil {
 		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
 			if strings.ToLower(enabledString) == "true" {
-				// Ray FT is enabled and we need to add health checks
+				// users may provide probe parameters to override defaults
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-					// it is possible that some user have the probe parameters to override the default,
-					// in this case, this if condition is skipped
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = createDefaultReadinessProbe()
 				}
-				// add readiness probe exec command in case missing.
-				initReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
+				configureRayClusterReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
 
+				// users may provide probe parameters to override defaults
 				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-					// it is possible that some user have the probe parameters to override the default,
-					// in this case, this if condition is skipped
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+					pod.Spec.Containers[rayContainerIndex].LivenessProbe = createDefaultLivenessProbe()
 				}
-				// add liveness probe exec command in case missing
-				initLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
+				configureRayClusterLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
 			}
 		}
 	}
