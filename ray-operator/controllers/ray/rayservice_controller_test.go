@@ -102,9 +102,8 @@ var _ = Context("Inside the default namespace", func() {
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"rayCluster":  "raycluster-sample",
-								"rayNodeType": "head",
-								"groupName":   "headgroup",
+								"rayCluster": "raycluster-sample",
+								"groupName":  "headgroup",
 							},
 							Annotations: map[string]string{
 								"key": "value",
