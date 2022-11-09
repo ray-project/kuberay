@@ -833,6 +833,7 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	return nil
 }
 
+// Best effort to record the ip of the head node.
 func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) (string, error) {
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
@@ -840,11 +841,11 @@ func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) 
 		return "", err
 	}
 	if len(runtimePods.Items) < 1 {
-		return "", fmt.Errorf("unable to find head pod. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		r.Log.Info(fmt.Sprintf("unable to find head pod. cluster name %s, filter labels %v", instance.Name, filterLabels))
+		return "", nil
 	} else if len(runtimePods.Items) > 1 {
-		return "", fmt.Errorf("found multiple head pods. cluster name %s, filter labels %v", instance.Name, filterLabels)
-	} else if runtimePods.Items[0].Status.PodIP == "" {
-		return "", fmt.Errorf("head pod IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		r.Log.Info(fmt.Sprintf("found multiple head pods. cluster name %s, filter labels %v", instance.Name, filterLabels))
+		return "", nil
 	}
 
 	return runtimePods.Items[0].Status.PodIP, nil
