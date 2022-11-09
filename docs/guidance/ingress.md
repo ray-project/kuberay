@@ -185,7 +185,7 @@ popd
 # and `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`
 kubectl apply -f ray-operator/config/samples/ray-cluster.separate-ingress.yaml
 
-# Step 5: Check ingress created by Step 4.
+# Step 5: Check the ingress created in Step 4.
 kubectl describe ingress raycluster-ingress-head-ingress
 
 # [Example]
