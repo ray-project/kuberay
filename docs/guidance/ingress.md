@@ -179,7 +179,7 @@ helm install kuberay-operator .
 popd
 
 # Step 4: Install RayCluster and create an ingress separately. 
-# If you want to change the setting of ingress, you can edit the ingress portion in 
+# If you want to change ingress settings, you can edit the ingress portion in 
 # `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`.
 # More information about change of setting was documented in https://github.com/ray-project/kuberay/pull/699 
 # and `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`
