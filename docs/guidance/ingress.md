@@ -176,13 +176,13 @@ kubectl wait --namespace ingress-nginx \
 # Step 3: Install KubeRay operator
 pushd helm-chart/kuberay-operator
 helm install kuberay-operator .
+popd
 
 # Step 4: Install RayCluster and create an ingress separately. 
 # If you want to change the setting of ingress, you can edit the ingress portion in 
 # `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`.
 # More information about change of setting was documented in https://github.com/ray-project/kuberay/pull/699 
 # and `ray-operator/config/samples/ray-cluster.separate-ingress.yaml`
-popd
 kubectl apply -f ray-operator/config/samples/ray-cluster.separate-ingress.yaml
 
 # Step 5: Check ingress created by Step 4.
