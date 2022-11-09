@@ -12,7 +12,7 @@ spec:
   serveConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |
-      working_dir: "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip"
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
     deployments:
       - name: MangoStand
         numReplicas: 1
@@ -82,8 +82,6 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: status.podIP
-                - name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC
-                  value: "1"
               resources:
                 limits:
                   cpu: 2
@@ -173,8 +171,6 @@ spec:
                     valueFrom:
                       fieldRef:
                         fieldPath: status.podIP
-                  - name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC
-                    value: "1"
                 ports:
                   - containerPort: 80
                     name: client
