@@ -833,7 +833,7 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	return nil
 }
 
-// Best effort to record the ip of the head node.
+// Best effort to obtain the ip of the head node.
 func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) (string, error) {
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
