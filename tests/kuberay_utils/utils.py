@@ -260,7 +260,7 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     """
     def check_status(k8s_api, old_head_pod_name, old_restart_count, namespace) -> bool:
         all_pods = k8s_api.list_namespaced_pod(namespace = namespace)
-        headpods = get_pod(k8s_api, namespace=namespace, label_selector='rayNodeType=head')
+        headpods = get_pod(k8s_api, namespace=namespace, label_selector='ray.io/node-type=head')
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
         # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
         # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`

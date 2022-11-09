@@ -194,7 +194,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='rayNodeType=head')
+        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
@@ -240,7 +240,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='rayNodeType=head')
+        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name

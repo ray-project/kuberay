@@ -58,7 +58,6 @@ spec:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         labels:
           groupName: {{ .Values.head.groupName }}
-          rayNodeType: {{ .Values.head.type }}
           rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
 
@@ -108,7 +107,6 @@ spec:
       metadata:
         annotations: {{- toYaml $values.annotations | nindent 10 }}
         labels:
-          rayNodeType: {{ $values.type }}
           groupName: {{ $groupName }}
           rayCluster: {{ include "ray-cluster.fullname" $ }}
 {{ include "ray-cluster.labels" $ | indent 10 }}
@@ -158,7 +156,6 @@ spec:
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         labels:
-          rayNodeType: {{ .Values.worker.type }}
           groupName: {{ .Values.worker.groupName }}
           rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}

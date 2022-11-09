@@ -38,9 +38,8 @@ var expectedRayJob = RayJob{
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							"rayCluster":  "raycluster-sample",
-							"rayNodeType": "head",
-							"groupName":   "headgroup",
+							"rayCluster": "raycluster-sample",
+							"groupName":  "headgroup",
 						},
 						Annotations: map[string]string{
 							"key": "value",
@@ -166,8 +165,7 @@ var testRayJobJSON = `{
                         "creationTimestamp": null,
                         "labels": {
                             "groupName": "headgroup",
-                            "rayCluster": "raycluster-sample",
-                            "rayNodeType": "head"
+                            "rayCluster": "raycluster-sample"
                         },
                         "annotations": {
                             "key": "value"
