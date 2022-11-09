@@ -838,6 +838,7 @@ func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) 
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		r.Log.Error(err, "Failed to list pods while getting head pod ip.")
 		return "", err
 	}
 	if len(runtimePods.Items) < 1 {
