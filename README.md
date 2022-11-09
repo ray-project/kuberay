@@ -28,6 +28,8 @@ Please choose the version you would like to install. The example below uses the 
 |  master  |    N    | v1.19 - v1.24 |
 |  v0.3.0  |    Y    | v1.19 - v1.24 |
 
+Make sure your Kubernetes and Kubectl versions are both within the suggested range.
+
 ```
 export KUBERAY_VERSION=v0.3.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"

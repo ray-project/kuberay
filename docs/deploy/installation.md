@@ -1,5 +1,7 @@
 ## Installation
 
+Make sure your Kubernetes cluster and Kubectl are both at version at least 1.19.
+
 #### Nightly version
 
 ```
