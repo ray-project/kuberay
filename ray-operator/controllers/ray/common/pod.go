@@ -247,18 +247,34 @@ func configureRayClusterLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov
 
 func rayClusterHeadLivenessProbeCmd() []string {
 	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardPort, RayDashboardGCSHealthPath),
 	}
 }
 
 func rayClusterWorkerLivenessProbeCmd() []string {
 	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 	}
+}
+
+func rayServiceHeadLivenessProbeCmd() []string {
+	clusterCmd := rayClusterHeadLivenessProbeCmd()
+	serviceCmd := []string{
+		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
+	}
+	return append(append(clusterCmd, "&&"), serviceCmd...)
+}
+
+func rayServiceWorkerLivenessProbeCmd() []string {
+	clusterCmd := rayClusterWorkerLivenessProbeCmd()
+	serviceCmd := []string{
+		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
+	}
+	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
 
 func createDefaultReadinessProbe() *v1.Probe {
@@ -284,18 +300,46 @@ func configureRayClusterReadinessProbeHandler(probe *v1.Probe, rayNodeType rayio
 
 func rayClusterHeadReadinessProbeCmd() []string {
 	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardPort, RayDashboardGCSHealthPath),
 	}
 }
 
 func rayClusterWorkerReadinessProbeCmd() []string {
 	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
+		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
 			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
 	}
+}
+
+func rayServiceHeadReadinessProbeCmd(port int) []string {
+	clusterCmd := rayClusterHeadReadinessProbeCmd()
+	serviceCmd := []string{
+		"bash", "-c",
+		fmt.Sprintf(
+			"wget -T 2 -q -O - http://localhost:%d/-/healthz | grep success",
+			port,
+		),
+		"&&",
+		fmt.Sprintf("serve status | grep 'status: RUNNING'"),
+	}
+	return append(append(clusterCmd, "&&"), serviceCmd...)
+}
+
+func rayServiceWorkerReadinessProbeCmd(port int) []string {
+	clusterCmd := rayClusterHeadReadinessProbeCmd()
+	serviceCmd := []string{
+		"bash", "-c",
+		fmt.Sprintf(
+			"wget -T 2 -q -O - http://localhost:%d/-/healthz | grep success",
+			port,
+		),
+		"&&",
+		fmt.Sprintf("serve status | grep 'status: RUNNING'"),
+	}
+	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
 
 // BuildPod a pod config
