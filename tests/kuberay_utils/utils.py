@@ -10,6 +10,7 @@ import yaml
 import docker
 
 from kubernetes.stream import stream
+from kubernetes import config
 from framework.prototype import RayClusterAddCREvent
 
 kindcluster_config_file = 'tests/config/cluster-config.yaml'
@@ -68,6 +69,8 @@ def create_cluster():
     rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=300s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
+    # Initialize Kubernetes config
+    config.load_kube_config()
     assert rtn == 0
 
 

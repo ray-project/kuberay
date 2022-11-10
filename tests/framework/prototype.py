@@ -128,8 +128,6 @@ class CREvent:
         self.timeout = timeout
         self.namespace = namespace
         self.custom_resource_object = custom_resource_object
-        # Initialize Kubernetes API client
-        config.load_kube_config()
         # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
         self.filepath = filepath
 
