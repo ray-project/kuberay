@@ -264,7 +264,7 @@ func rayClusterWorkerLivenessProbeCmd() []string {
 func RayServiceHeadLivenessProbeCmd() []string {
 	clusterCmd := rayClusterHeadLivenessProbeCmd()
 	serviceCmd := []string{
-		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
+		"bash", "-c", "! serve status | grep 'status: DEPLOYMENT_FAILED'",
 	}
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
@@ -272,7 +272,7 @@ func RayServiceHeadLivenessProbeCmd() []string {
 func RayServiceWorkerLivenessProbeCmd() []string {
 	clusterCmd := rayClusterWorkerLivenessProbeCmd()
 	serviceCmd := []string{
-		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
+		"bash", "-c", "! serve status | grep 'status: DEPLOYMENT_FAILED'",
 	}
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
@@ -323,7 +323,7 @@ func RayServiceHeadReadinessProbeCmd(port int) []string {
 			port,
 		),
 		"&&",
-		fmt.Sprintf("serve status | grep 'status: RUNNING'"),
+		"serve status | grep 'status: RUNNING'",
 	}
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
@@ -337,7 +337,7 @@ func RayServiceWorkerReadinessProbeCmd(port int) []string {
 			port,
 		),
 		"&&",
-		fmt.Sprintf("serve status | grep 'status: RUNNING'"),
+		"serve status | grep 'status: RUNNING'",
 	}
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
