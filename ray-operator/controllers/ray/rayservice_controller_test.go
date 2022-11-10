@@ -249,20 +249,6 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 		})
 
-		It("should have default rayservice probes in the head pod", func() {
-			k8sClient.Get(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster)
-			container := myRayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0]
-			Expect(container.LivenessProbe.ProbeHandler).Should(Equal(common.RayServiceHeadLivenessProbeCmd()))
-			Expect(container.ReadinessProbe.ProbeHandler).Should(Equal(common.RayServiceHeadReadinessProbeCmd(8000)))
-		})
-
-		It("should have default rayservice probes in the worker pod", func() {
-			k8sClient.Get(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster)
-			container := myRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0]
-			Expect(container.LivenessProbe.ProbeHandler).Should(Equal(common.RayServiceWorkerLivenessProbeCmd()))
-			Expect(container.ReadinessProbe.ProbeHandler).Should(Equal(common.RayServiceWorkerReadinessProbeCmd(8000)))
-		})
-
 		It("should create more than 1 worker", func() {
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.ActiveServiceStatus.RayClusterName, common.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
