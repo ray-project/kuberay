@@ -46,3 +46,7 @@ Please do **not** create a public GitHub issue.
 ## License
 
 This project is licensed under the [Apache-2.0 License](LICENSE).
+
+## The Ray docs
+
+You can find even more information on deployments of Ray on Kubernetes at the [official Ray docs](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).

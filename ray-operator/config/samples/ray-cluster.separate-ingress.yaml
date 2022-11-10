@@ -1,0 +1,62 @@
+# This example config does not specify resource requests or limits.
+# For examples with more realistic resource configuration, see
+# ray-cluster.complete.large.yaml and
+# ray-cluster.autoscaler.large.yaml.
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: raycluster-ingress
+spec:
+  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
+  headGroupSpec:
+    serviceType: NodePort
+    replicas: 1
+    rayStartParams:
+      port: '6379'
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1' # can be auto-completed from the limits
+      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.0.0
+          env:
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265 # Ray dashboard
+            name: dashboard
+          - containerPort: 10001
+            name: client
+---
+# Ingress for raycluster
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    # Any characters captured by (.*) will be assigned to the placeholder $1, which is then used as a parameter in the rewrite-target annotation
+    # For example, the ingress definition above will result in the following rewrites:
+    # $IP/$CLUSTER_NAME/ rewrites to $IP/ ($1 maps to nothing)
+    # $IP/$CLUSTER_NAME/#/actors rewrites to $IP/#/actors ($1 maps to #/actors)
+    # $IP/$CLUSTER_NAME/#/node rewrites to $IP/#/node ($1 maps to #/node)
+  name: raycluster-ingress-head-ingress
+  namespace: default
+spec:
+  ingressClassName: nginx # This should be algined with the ingress-class of the ingress controller
+  rules:
+  - http:
+      paths:
+      - backend:
+          service: 
+            name: raycluster-ingress-head-svc # service name should be the same as head service
+            port: # port number should match the port specified for dashboard in the RayCluster setting above
+              number: 8265
+        path: /raycluster-ingress/(.*) # (.*) is regex
+        pathType: Exact # Matches the URL path exactly and with case sensitivity.

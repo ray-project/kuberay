@@ -265,7 +265,6 @@ spec:
     matchLabels:
       ray.io/is-ray-node: "yes"
       ray.io/node-type: worker
-      rayNodeType: worker
 ```
 
 Since we are not selecting a Kubernetes service but pods, our `matchLabels` now define a set of labels that is common on all Ray workers.

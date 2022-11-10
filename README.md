@@ -15,7 +15,9 @@ KubeRay is an open source toolkit to run Ray applications on Kubernetes. It prov
 
 ## Documentation
 
-You can view detailed documentation and guides at [https://ray-project.github.io/kuberay/](https://ray-project.github.io/kuberay/)
+You can view detailed documentation and guides at [https://ray-project.github.io/kuberay/](https://ray-project.github.io/kuberay/).
+
+We also recommend checking out the official Ray guides for deploying on Kubernetes at [https://docs.ray.io/en/latest/cluster/kubernetes/index.html](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
 
 ## Quick Start
 
@@ -27,6 +29,8 @@ Please choose the version you would like to install. The example below uses the 
 |----------|:-------:|------------------------------:|
 |  master  |    N    | v1.19 - v1.24 |
 |  v0.3.0  |    Y    | v1.19 - v1.24 |
+
+Make sure your Kubernetes and Kubectl versions are both within the suggested range.
 
 ```
 export KUBERAY_VERSION=v0.3.0

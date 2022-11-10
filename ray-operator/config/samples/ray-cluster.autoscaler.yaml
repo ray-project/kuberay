@@ -47,9 +47,6 @@ spec:
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
-    # logical group name, for this called head-group, also can be functional
-    # pod type head or worker
-    # rayNodeType: head # Not needed since it is under the headgroup
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       # Flag "no-monitor" will be automatically set when autoscaling is enabled.

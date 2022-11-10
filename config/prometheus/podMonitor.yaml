@@ -11,7 +11,6 @@ spec:
       - ray-system
   selector:
     matchLabels:
-      rayNodeType: worker
       ray.io/node-type: worker
       ray.io/is-ray-node: "yes"
   podMetricsEndpoints:

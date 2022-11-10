@@ -55,6 +55,7 @@ var (
 	groupNameStr            string
 	expectReplicaNum        int32
 	testPods                []runtime.Object
+	testPodsNoHeadIP        []runtime.Object
 	testRayCluster          *rayiov1alpha1.RayCluster
 	headSelector            labels.Selector
 	headNodeIP              string
@@ -216,6 +217,23 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+			},
+		},
+	}
+	testPodsNoHeadIP = []runtime.Object{
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "headNode",
+				Namespace: namespaceStr,
+				Labels: map[string]string{
+					common.RayClusterLabelKey:   instanceName,
+					common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+					common.RayNodeGroupLabelKey: headGroupNameStr,
+				},
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				PodIP: "",
 			},
 		},
 	}
@@ -809,15 +827,20 @@ func TestGetHeadPodIP(t *testing.T) {
 			expectedIP:   headNodeIP,
 			returnsError: false,
 		},
-		"get error if there's no head node": {
+		"no error if there's no head node": {
 			pods:         []runtime.Object{},
 			expectedIP:   "",
-			returnsError: true,
+			returnsError: false,
 		},
-		"get error if there's more than one head node": {
+		"no error if there's more than one head node": {
 			pods:         append(testPods, extraHeadPod),
 			expectedIP:   "",
-			returnsError: true,
+			returnsError: false,
+		},
+		"no error if head pod ip is not yet set": {
+			pods:         testPodsNoHeadIP,
+			expectedIP:   "",
+			returnsError: false,
 		},
 	}
 
