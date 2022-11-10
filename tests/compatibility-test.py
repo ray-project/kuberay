@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 import logging
 import unittest
-import docker
 import time
 import os
 import random
 import string
+import docker
 
-import kuberay_utils.utils as utils
+from kuberay_utils import utils
 from kubernetes import client, config
-from kubernetes.stream import stream
-
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+logging.basicConfig(
+    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+    level=logging.INFO
+)
 
 # Image version
 ray_version = '1.9.0'
@@ -336,3 +336,17 @@ if __name__ == '__main__':
     logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
     logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
     unittest.main(verbosity=2)
+    # from string import Template
+    # import yaml
+    # from framework.prototype import RayClusterAddCREvent
+
+    # template_name = 'tests/config/ray-cluster.mini.yaml.template'
+    # with open(template_name, encoding="utf-8") as ray_cluster_template:
+    #     template = Template(ray_cluster_template.read())
+    # ray_cluster_cr = yaml.load(
+    #     template.substitute({'ray_image': ray_image, 'ray_version': ray_version}), 
+    #     Loader=yaml.FullLoader
+    # )
+    
+    # ray_cluster_add_event = RayClusterAddCREvent(ray_cluster_cr, [], 90, namespace='default')
+    # ray_cluster_add_event.trigger()

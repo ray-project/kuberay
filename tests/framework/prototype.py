@@ -128,8 +128,19 @@ class CREvent:
         self.timeout = timeout
         self.namespace = namespace
         self.custom_resource_object = custom_resource_object
+        # Initialize Kubernetes API client
+        config.load_kube_config()
+        self.k8s_cr_api = client.CustomObjectsApi()
+        self.k8s_v1_api = client.CoreV1Api()
         # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
         self.filepath = filepath
+
+    def __del__(self):
+        self.k8s_cr_api.api_client.rest_client.pool_manager.clear()
+        self.k8s_cr_api.api_client.close()
+        self.k8s_v1_api.api_client.rest_client.pool_manager.clear()
+        self.k8s_v1_api.api_client.close()
+
     def trigger(self):
         """
         The member functions integrate together in `trigger()`.
@@ -195,7 +206,7 @@ class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
     def exec(self):
         if not self.filepath:
-            client.CustomObjectsApi().create_namespaced_custom_object(
+            self.k8s_cr_api.create_namespaced_custom_object(
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayclusters', body = self.custom_resource_object)
         else:
@@ -219,9 +230,9 @@ class RayClusterAddCREvent(CREvent):
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         for _ in range(self.timeout):
-            headpods = client.CoreV1Api().list_namespaced_pod(
+            headpods = self.k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
-            workerpods = client.CoreV1Api().list_namespaced_pod(
+            workerpods = self.k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
