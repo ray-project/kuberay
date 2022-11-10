@@ -336,17 +336,3 @@ if __name__ == '__main__':
     logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
     logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
     unittest.main(verbosity=2)
-    # from string import Template
-    # import yaml
-    # from framework.prototype import RayClusterAddCREvent
-
-    # template_name = 'tests/config/ray-cluster.mini.yaml.template'
-    # with open(template_name, encoding="utf-8") as ray_cluster_template:
-    #     template = Template(ray_cluster_template.read())
-    # ray_cluster_cr = yaml.load(
-    #     template.substitute({'ray_image': ray_image, 'ray_version': ray_version}), 
-    #     Loader=yaml.FullLoader
-    # )
-    
-    # ray_cluster_add_event = RayClusterAddCREvent(ray_cluster_cr, [], 90, namespace='default')
-    # ray_cluster_add_event.trigger()
