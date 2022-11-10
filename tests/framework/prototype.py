@@ -131,15 +131,12 @@ class CREvent:
         # Initialize Kubernetes API client
         config.load_kube_config()
         self.k8s_cr_api = client.CustomObjectsApi()
-        self.k8s_v1_api = client.CoreV1Api()
         # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
         self.filepath = filepath
 
     def __del__(self):
         self.k8s_cr_api.api_client.rest_client.pool_manager.clear()
         self.k8s_cr_api.api_client.close()
-        self.k8s_v1_api.api_client.rest_client.pool_manager.clear()
-        self.k8s_v1_api.api_client.close()
 
     def trigger(self):
         """
@@ -229,36 +226,45 @@ class RayClusterAddCREvent(CREvent):
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
+        converge = False
+        k8s_v1_api = client.CoreV1Api()
         for _ in range(self.timeout):
-            headpods = self.k8s_v1_api.list_namespaced_pod(
+            headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
-            workerpods = self.k8s_v1_api.list_namespaced_pod(
+            workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
+                converge = True
                 logger.info("--- RayClusterAddCREvent %s seconds ---", time.time() - start_time)
-                return
+                break
             time.sleep(1)
+        # I hope to move k8s_v1_api to constructor and close it in the destructor,
+        # but test_sample_raycluster_yamls.py will fail with unknown reasons.
+        k8s_v1_api.api_client.rest_client.pool_manager.clear()
+        k8s_v1_api.api_client.close()
 
-        # Fail to converge. Print some information to debug.
-        logger.info("RayClusterAddCREvent failed to converge in %d seconds.", self.timeout)
-        logger.info("expected_head_pods: %d, expected_worker_pods: %d",
-            expected_head_pods, expected_worker_pods)
-        os.system(f'kubectl get all -n={self.namespace}')
-        os.system(f'kubectl describe pods -n={self.namespace}')
-
-        # Raise an exception
-        raise Exception("RayClusterAddCREvent wait() timeout")
+        if not converge:
+            # Fail to converge. Print some information to debug.
+            logger.info("RayClusterAddCREvent failed to converge in %d seconds.", self.timeout)
+            logger.info("expected_head_pods: %d, expected_worker_pods: %d",
+                expected_head_pods, expected_worker_pods)
+            os.system(f'kubectl get all -n={self.namespace}')
+            os.system(f'kubectl describe pods -n={self.namespace}')
+            # Raise an exception
+            raise Exception("RayClusterAddCREvent wait() timeout")
 
 class RayClusterDeleteCREvent(CREvent):
     """CREvent for RayCluster deletion"""
     def exec(self):
-        client.CustomObjectsApi().delete_namespaced_custom_object(
+        self.k8s_cr_api.delete_namespaced_custom_object(
             group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
             plural = 'rayclusters', name = self.custom_resource_object['metadata']['name'])
 
     def wait(self):
+        converge = False
+        k8s_v1_api = client.CoreV1Api()
         start_time = time.time()
         for _ in range(self.timeout):
             headpods = client.CoreV1Api().list_namespaced_pod(
@@ -266,10 +272,14 @@ class RayClusterDeleteCREvent(CREvent):
             workerpods = client.CoreV1Api().list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == 0 and len(workerpods.items) == 0):
+                converge = True
                 logger.info("--- RayClusterDeleteCREvent %s seconds ---", time.time() - start_time)
-                return
+                break
             time.sleep(1)
-        raise Exception("RayClusterDeleteCREvent wait() timeout")
+        k8s_v1_api.api_client.rest_client.pool_manager.clear()
+        k8s_v1_api.api_client.close()
+        if not converge:
+            raise Exception("RayClusterDeleteCREvent wait() timeout")
 
 class GeneralTestCase(unittest.TestCase):
     """TestSuite"""
