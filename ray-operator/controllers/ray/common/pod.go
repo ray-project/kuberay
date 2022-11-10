@@ -112,7 +112,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
 		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
 
-		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+		rayContainerIndex := GetRayContainerIndex(podTemplate.Spec)
 		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
 		// Determine the default image to use for the Ray container.
 		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
@@ -224,7 +224,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-func createDefaultLivenessProbe() *v1.Probe {
+func CreateDefaultLivenessProbe() *v1.Probe {
 	return &v1.Probe{
 		InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
 		TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
@@ -261,7 +261,7 @@ func rayClusterWorkerLivenessProbeCmd() []string {
 	}
 }
 
-func rayServiceHeadLivenessProbeCmd() []string {
+func RayServiceHeadLivenessProbeCmd() []string {
 	clusterCmd := rayClusterHeadLivenessProbeCmd()
 	serviceCmd := []string{
 		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
@@ -269,7 +269,7 @@ func rayServiceHeadLivenessProbeCmd() []string {
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
 
-func rayServiceWorkerLivenessProbeCmd() []string {
+func RayServiceWorkerLivenessProbeCmd() []string {
 	clusterCmd := rayClusterWorkerLivenessProbeCmd()
 	serviceCmd := []string{
 		"bash", "-c", fmt.Sprintf("! serve status | grep 'status: DEPLOYMENT_FAILED'"),
@@ -277,7 +277,7 @@ func rayServiceWorkerLivenessProbeCmd() []string {
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
 
-func createDefaultReadinessProbe() *v1.Probe {
+func CreateDefaultReadinessProbe() *v1.Probe {
 	return &v1.Probe{
 		InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
 		TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
@@ -314,7 +314,7 @@ func rayClusterWorkerReadinessProbeCmd() []string {
 	}
 }
 
-func rayServiceHeadReadinessProbeCmd(port int) []string {
+func RayServiceHeadReadinessProbeCmd(port int) []string {
 	clusterCmd := rayClusterHeadReadinessProbeCmd()
 	serviceCmd := []string{
 		"bash", "-c",
@@ -328,7 +328,7 @@ func rayServiceHeadReadinessProbeCmd(port int) []string {
 	return append(append(clusterCmd, "&&"), serviceCmd...)
 }
 
-func rayServiceWorkerReadinessProbeCmd(port int) []string {
+func RayServiceWorkerReadinessProbeCmd(port int) []string {
 	clusterCmd := rayClusterHeadReadinessProbeCmd()
 	serviceCmd := []string{
 		"bash", "-c",
@@ -352,7 +352,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := getRayContainerIndex(pod.Spec)
+	rayContainerIndex := GetRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
@@ -409,13 +409,13 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			if strings.ToLower(enabledString) == "true" {
 				// users may provide probe parameters to override defaults
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = createDefaultReadinessProbe()
+					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = CreateDefaultReadinessProbe()
 				}
 				configureRayClusterReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
 
 				// users may provide probe parameters to override defaults
 				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-					pod.Spec.Containers[rayContainerIndex].LivenessProbe = createDefaultLivenessProbe()
+					pod.Spec.Containers[rayContainerIndex].LivenessProbe = CreateDefaultLivenessProbe()
 				}
 				configureRayClusterLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
 			}
@@ -509,7 +509,7 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
+func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
 	// a ray pod can have multiple containers.
 	// we identify the ray container based on env var: RAY=true
 	// if the env var is missing, we choose containers[0].
