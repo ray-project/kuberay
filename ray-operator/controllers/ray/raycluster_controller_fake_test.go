@@ -231,16 +231,6 @@ func setupTest(t *testing.T) {
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Name:    "ray-head",
-						Image:   "rayproject/autoscaler",
-						Command: []string{"python"},
-						Args:    []string{"/opt/code.py"},
-					},
-				},
-			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				PodIP: "",
