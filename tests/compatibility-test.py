@@ -291,8 +291,8 @@ class RayServiceTestCase(unittest.TestCase):
             RayServiceTestCase.service_template_file, ray_version, ray_image)
 
     def test_ray_serve_work(self):
-        time.sleep(5)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(20)
+        curl_cmd = 'curl -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         utils.wait_for_condition(
             lambda: utils.shell_run(curl_cmd) == 0,
             timeout=15,
@@ -300,8 +300,8 @@ class RayServiceTestCase(unittest.TestCase):
         utils.create_kuberay_service(
             RayServiceTestCase.service_serve_update_template_file,
             ray_version, ray_image)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        time.sleep(5)
+        curl_cmd = 'curl -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(20)
         utils.wait_for_condition(
             lambda: utils.shell_run(curl_cmd) == 0,
             timeout=60,
@@ -309,8 +309,8 @@ class RayServiceTestCase(unittest.TestCase):
         utils.create_kuberay_service(
             RayServiceTestCase.service_cluster_update_template_file,
             ray_version, ray_image)
-        time.sleep(5)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
+        time.sleep(20)
+        curl_cmd = 'curl -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         utils.wait_for_condition(
             lambda: utils.shell_run(curl_cmd) == 0,
             timeout=180,
