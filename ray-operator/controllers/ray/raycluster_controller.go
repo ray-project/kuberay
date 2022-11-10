@@ -841,14 +841,10 @@ func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) 
 		r.Log.Error(err, "Failed to list pods while getting head pod ip.")
 		return "", err
 	}
-	if len(runtimePods.Items) < 1 {
-		r.Log.Info(fmt.Sprintf("unable to find head pod. cluster name %s, filter labels %v", instance.Name, filterLabels))
-		return "", nil
-	} else if len(runtimePods.Items) > 1 {
-		r.Log.Info(fmt.Sprintf("found multiple head pods. cluster name %s, filter labels %v", instance.Name, filterLabels))
+	if len(runtimePods.Items) != 1 {
+		r.Log.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
 		return "", nil
 	}
-
 	return runtimePods.Items[0].Status.PodIP, nil
 }
 
