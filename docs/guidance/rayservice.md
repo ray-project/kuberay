@@ -11,8 +11,9 @@
 RayService is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayService manages 2 things:
-* Ray Cluster: Manages resources in a Kubernetes cluster.
-* Ray Serve Deployment Graph: Manages users' deployment graphs.
+
+* **Ray Cluster**: Manages resources in a Kubernetes cluster.
+* **Ray Serve Deployment Graph**: Manages users' deployment graphs.
 
 ### What does the RayService provide?
 
