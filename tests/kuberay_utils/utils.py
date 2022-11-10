@@ -85,17 +85,27 @@ def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_im
 
 def create_kuberay_cluster(template_name, ray_version, ray_image):
     """Create a RayCluster and a NodePort service."""
+    context = {}
     with open(template_name, encoding="utf-8") as ray_cluster_template:
         template = Template(ray_cluster_template.read())
-    ray_cluster_cr = yaml.load(
-        template.substitute({'ray_image': ray_image, 'ray_version': ray_version}),
-        Loader=yaml.FullLoader
-    )
+        yamlfile = template.substitute(
+            {'ray_image': ray_image, 'ray_version': ray_version}
+        )
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_cluster_yaml:
+            ray_cluster_yaml.write(yamlfile)
+            context['filepath'] = ray_cluster_yaml.name
+
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayCluster':
+            context['cr'] = k8s_object
+            break
+
     try:
         # Deploy a NodePort service to expose ports for users.
         shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
-        ray_cluster_add_event = RayClusterAddCREvent(ray_cluster_cr, [], 90, namespace='default')
+        ray_cluster_add_event = RayClusterAddCREvent(
+            context['cr'], [], 90, namespace='default', filepath = context['filepath'])
         ray_cluster_add_event.trigger()
         return
     except Exception as ex:

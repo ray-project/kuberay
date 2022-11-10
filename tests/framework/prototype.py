@@ -130,13 +130,8 @@ class CREvent:
         self.custom_resource_object = custom_resource_object
         # Initialize Kubernetes API client
         config.load_kube_config()
-        self.k8s_cr_api = client.CustomObjectsApi()
         # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
         self.filepath = filepath
-
-    def __del__(self):
-        self.k8s_cr_api.api_client.rest_client.pool_manager.clear()
-        self.k8s_cr_api.api_client.close()
 
     def trigger(self):
         """
@@ -203,9 +198,12 @@ class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
     def exec(self):
         if not self.filepath:
-            self.k8s_cr_api.create_namespaced_custom_object(
+            k8s_cr_api = client.CustomObjectsApi()
+            k8s_cr_api.create_namespaced_custom_object(
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayclusters', body = self.custom_resource_object)
+            k8s_cr_api.api_client.rest_client.pool_manager.clear()
+            k8s_cr_api.api_client.close()
         else:
             os.system(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -258,9 +256,12 @@ class RayClusterAddCREvent(CREvent):
 class RayClusterDeleteCREvent(CREvent):
     """CREvent for RayCluster deletion"""
     def exec(self):
-        self.k8s_cr_api.delete_namespaced_custom_object(
+        k8s_cr_api = client.CustomObjectsApi()
+        k8s_cr_api.delete_namespaced_custom_object(
             group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
             plural = 'rayclusters', name = self.custom_resource_object['metadata']['name'])
+        k8s_cr_api.api_client.rest_client.pool_manager.clear()
+        k8s_cr_api.api_client.close()
 
     def wait(self):
         converge = False
