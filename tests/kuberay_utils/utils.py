@@ -108,7 +108,12 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
         shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
-            context['cr'], [], 90, namespace='default', filepath = context['filepath'])
+            custom_resource_object = context['cr'], 
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
         ray_cluster_add_event.trigger()
         return
     except Exception as ex:
@@ -159,7 +164,7 @@ def delete_cluster():
 
 
 def download_images(images):
-    """Pull images from DokcerHub if do not exist."""
+    """Pull images from DockerHub if do not exist."""
     client = docker.from_env()
     for image in images:
         if shell_run(f'docker image inspect {image}', silent=True) != 0:
