@@ -1,23 +1,27 @@
 #!/usr/bin/env python
+from string import Template
 
 import os
 import logging
 import tarfile
 import time
 import tempfile
+import yaml
 import docker
 
-from string import Template
-from kubernetes import client, config
 from kubernetes.stream import stream
+from kubernetes import config
+from framework.prototype import RayClusterAddCREvent
 
 kindcluster_config_file = 'tests/config/cluster-config.yaml'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+logging.basicConfig(
+    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+    level=logging.INFO
+)
 
 
 def parse_ray_version(version_str):
@@ -59,11 +63,14 @@ def shell_assert_failure(cmd):
 
 
 def create_cluster():
+    """Create a KinD cluster"""
     # Use `--wait 10m` flag to block until the control plane reaches a ready status.
     shell_assert_success('kind create cluster --wait 10m --config {}'.format(kindcluster_config_file))
     rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=300s')
     if rtn != 0:
         shell_run('kubectl get pods -A')
+    # Initialize Kubernetes config
+    config.load_kube_config()
     assert rtn == 0
 
 
@@ -80,37 +87,42 @@ def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_im
 
 
 def create_kuberay_cluster(template_name, ray_version, ray_image):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
+    """Create a RayCluster and a NodePort service."""
+    context = {}
+    with open(template_name, encoding="utf-8") as ray_cluster_template:
+        template = Template(ray_cluster_template.read())
+        yamlfile = template.substitute(
+            {'ray_image': ray_image, 'ray_version': ray_version}
+        )
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_cluster_yaml:
+            ray_cluster_yaml.write(yamlfile)
+            context['filepath'] = ray_cluster_yaml.name
 
-    raycluster_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayCluster':
+            context['cr'] = k8s_object
+            break
 
-    raycluster_spec_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(raycluster_spec_buf)
-        raycluster_spec_file = f.name
-
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    # assert rtn == 0 # we probably don't need to verify this
-    assert raycluster_spec_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
-    shell_run('kubectl get pods -A')
-    if rtn != 0:
+    try:
+        # Deploy a NodePort service to expose ports for users.
+        shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
+        # Create a RayCluster
+        ray_cluster_add_event = RayClusterAddCREvent(
+            custom_resource_object = context['cr'], 
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_cluster_add_event.trigger()
+        return
+    except Exception as ex:
+        # RayClusterAddCREvent fails to converge.
+        logger.error(str(ex))
         shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
         shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
         shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-    assert rtn == 0
-
-    # Deploy a NodePort service to expose ports for users.
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
+    raise Exception("create_kuberay_cluster fails")
 
 def create_kuberay_service(template_name, ray_version, ray_image):
     template = None
@@ -152,12 +164,16 @@ def delete_cluster():
 
 
 def download_images(images):
+    """Pull images from DockerHub if do not exist."""
     client = docker.from_env()
     for image in images:
-        if shell_run('docker image inspect {}'.format(image), silent=True) != 0:
+        if shell_run(f'docker image inspect {image}', silent=True) != 0:
             # Only pull the image from DockerHub when the image does not
             # exist in the local docker registry.
+            logger.info("Download docker image %s", image)
             client.images.pull(image)
+        else:
+            logger.info("Image %s exists", image)
     client.close()
 
 def copy_to_container(container, src, dest, filename):

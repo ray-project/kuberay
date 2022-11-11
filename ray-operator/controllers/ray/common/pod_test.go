@@ -243,6 +243,42 @@ var autoscalerContainer = v1.Container{
 
 var trueFlag = true
 
+func TestAddEmptyDirVolumes(t *testing.T) {
+	testPod := &v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "ray-worker",
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "shared-mem",
+							MountPath: "/dev/shm",
+						},
+					},
+				},
+			},
+			Volumes: []v1.Volume{
+				{
+					Name: "shared-mem",
+					VolumeSource: v1.VolumeSource{
+						EmptyDir: &v1.EmptyDirVolumeSource{
+							Medium: v1.StorageMediumMemory,
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 1)
+	assert.Equal(t, len(testPod.Spec.Volumes), 1)
+	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", v1.StorageMediumDefault)
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
+	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", v1.StorageMediumDefault)
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
+	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+}
+
 func TestGetAutoscalerImage(t *testing.T) {
 	// rayVersion strings for which we judge autoscaler support is stable and thus
 	// use the same image for the autoscaler as for the Ray container.

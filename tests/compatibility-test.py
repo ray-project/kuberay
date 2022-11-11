@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 import logging
 import unittest
-import docker
 import time
 import os
 import random
 import string
+import docker
 
-import kuberay_utils.utils as utils
+from kuberay_utils import utils
 from kubernetes import client, config
-from kubernetes.stream import stream
-
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+logging.basicConfig(
+    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+    level=logging.INFO
+)
 
 # Image version
 ray_version = '1.9.0'
