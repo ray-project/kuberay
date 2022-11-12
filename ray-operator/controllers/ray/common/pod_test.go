@@ -658,6 +658,10 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	worker.Template.ObjectMeta.Name = "ray-worker-test"
 	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, svcName, "6379")
+	expectedWorker := *worker.DeepCopy()
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, svcName, "6379")
 	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
+	assert.Equal(t, worker, expectedWorker)
 }
