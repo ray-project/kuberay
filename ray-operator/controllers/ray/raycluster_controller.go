@@ -510,12 +510,9 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			var i int32
 			for i = 0; i < diff; i++ {
 				r.Log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				r.Log.Info("reconcilePods", "qqqq worker before createWorkerPod", worker, fmt.Sprintf("index %d", diff), fmt.Sprintf("in total %d", diff))
 				if err := r.createWorkerPod(*instance, *worker.DeepCopy()); err != nil {
-					r.Log.Info("reconcilePods", "qqqq err worker after createWorkerPod", worker, fmt.Sprintf("index %d", diff), fmt.Sprintf("in total %d", diff))
 					return err
 				}
-				r.Log.Info("reconcilePods", "qqqq worker after createWorkerPod", worker, fmt.Sprintf("index %d", diff), fmt.Sprintf("in total %d", diff))
 			}
 		} else if diff == 0 {
 			r.Log.Info("reconcilePods", "all workers already exist for group", worker.GroupName)
@@ -681,7 +678,6 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster, worker rayiov1alpha1.WorkerGroupSpec) error {
 	// build the pod then create it
 	pod := r.buildWorkerPod(instance, worker)
-	r.Log.Info("reconcilePods", "qqqq worker after buildWorkerPod", worker)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -752,7 +748,6 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, svcName, headPort)
-	r.Log.Info("reconcilePods", "qqqq worker after DefaultWorkerPodTemplate", worker)
 	creatorName := getCreator(instance)
 	pod := common.BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
 	// Set raycluster instance as the owner and controller
