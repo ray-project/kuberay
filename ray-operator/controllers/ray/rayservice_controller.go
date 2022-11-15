@@ -138,7 +138,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
 		if err = r.updateStatusForActiveCluster(ctx, rayServiceInstance, activeRayClusterInstance, logger); err != nil {
-			logger.Error(err, "The updating of the status for active ray cluster while we have pending cluster failed")
+			logger.Error(err, "Active Ray cluster's status update failed.")
 		}
 
 		if ctrlResult, isHealthy, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false, logger); err != nil {
@@ -508,8 +508,11 @@ func (r *RayServiceReconciler) updateServeDeployment(rayServiceInstance *rayv1al
 	return nil
 }
 
-// getAndCheckServeStatus get app and serve deployments statuses, update the health timestamp and check if RayCluster is overall healthy.
-func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, error) {
+// getAndCheckServeStatus gets app and Serve deployments' statuses,
+// updates health timestamps, and checks if the RayCluster is overall healthy.
+// It's return values should be interpreted as
+// (Serve app healthy?, Serve app ready?, error if any)
+func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, bool, error) {
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
@@ -519,7 +522,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(); err != nil {
 		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
-		return false, err
+		return false, false, err
 	}
 
 	statusMap := make(map[string]rayv1alpha1.ServeDeploymentStatus)
@@ -529,6 +532,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	}
 
 	isHealthy := true
+	isReady := false
 	timeNow := metav1.Now()
 	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
 		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
@@ -560,6 +564,8 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 					isHealthy = false
 				}
 			}
+		} else {
+			isReady = true
 		}
 	}
 
@@ -568,7 +574,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 
 	r.Log.V(1).Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
 
-	return isHealthy, nil
+	return isHealthy, isReady, nil
 }
 
 func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *rayv1alpha1.RayService, rayServiceStatus *rayv1alpha1.RayServiceStatus) bool {
@@ -738,15 +744,15 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
-	var isHealthy bool
-	if isHealthy, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	var isHealthy, isReady bool
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
 
 	r.updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 
-	logger.Info("Check serve health", "isHealthy", isHealthy)
+	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady)
 
 	return err
 }
@@ -792,8 +798,8 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			"Controller sent API request to update Serve deployments on cluster %s", rayClusterInstance.Name)
 	}
 
-	var isHealthy bool
-	if isHealthy, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
+	var isHealthy, isReady bool
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
@@ -806,14 +812,14 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isActive", isActive)
 
-	if isHealthy {
+	if isHealthy && isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
 		if r.allServeDeploymentsHealthy(rayServiceInstance, rayServiceStatus) {
 			// Preparing RayCluster is ready.
 			r.updateRayClusterInfo(rayServiceInstance, rayClusterInstance.Name)
 			r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
 		}
-	} else {
+	} else if !isHealthy {
 		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
