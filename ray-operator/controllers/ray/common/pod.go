@@ -238,43 +238,46 @@ func configureRayClusterLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov
 	// add probe handler if there's no handler already
 	if probe.ProbeHandler == (v1.ProbeHandler{}) {
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			probe.Exec = &v1.ExecAction{Command: rayClusterHeadLivenessProbeCmd()}
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", rayClusterHeadLivenessProbeCmd()}}
 		} else {
-			probe.Exec = &v1.ExecAction{Command: rayClusterWorkerLivenessProbeCmd()}
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", rayClusterWorkerLivenessProbeCmd()}}
 		}
 	}
 }
 
-func rayClusterHeadLivenessProbeCmd() []string {
-	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardPort, RayDashboardGCSHealthPath),
-	}
+// Returns command that k8s can exec in Bash to check if head node is live.
+func rayClusterHeadLivenessProbeCmd() string {
+	return fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/%s | "+
+			"grep success && "+
+			"wget -T 2 -q -O - http://localhost:%d/%s | "+
+			"grep success",
+		DefaultDashboardAgentListenPort,
+		RayAgentRayletHealthPath,
+		DefaultDashboardPort,
+		RayDashboardGCSHealthPath,
+	)
 }
 
-func rayClusterWorkerLivenessProbeCmd() []string {
-	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-	}
+// Returns command that k8s can exec in Bash to check if worker node is live.
+func rayClusterWorkerLivenessProbeCmd() string {
+	return fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/%s | grep success",
+		DefaultDashboardAgentListenPort,
+		RayAgentRayletHealthPath,
+	)
 }
 
-func RayServiceHeadLivenessProbeCmd() []string {
+func RayServiceHeadLivenessProbeCmd() string {
 	clusterCmd := rayClusterHeadLivenessProbeCmd()
-	serviceCmd := []string{
-		"bash", "-c", "! serve status | grep 'status: DEPLOYMENT_FAILED'",
-	}
-	return append(append(clusterCmd, "&&"), serviceCmd...)
+	serviceCmd := "! serve status | grep 'status: DEPLOYMENT_FAILED'"
+	return clusterCmd + " && " + serviceCmd
 }
 
-func RayServiceWorkerLivenessProbeCmd() []string {
+func RayServiceWorkerLivenessProbeCmd() string {
 	clusterCmd := rayClusterWorkerLivenessProbeCmd()
-	serviceCmd := []string{
-		"bash", "-c", "! serve status | grep 'status: DEPLOYMENT_FAILED'",
-	}
-	return append(append(clusterCmd, "&&"), serviceCmd...)
+	serviceCmd := "! serve status | grep 'status: DEPLOYMENT_FAILED'"
+	return clusterCmd + " && " + serviceCmd
 }
 
 func CreateDefaultReadinessProbe() *v1.Probe {
@@ -291,55 +294,56 @@ func configureRayClusterReadinessProbeHandler(probe *v1.Probe, rayNodeType rayio
 	// add probe handler if there's no handler already
 	if probe.ProbeHandler == (v1.ProbeHandler{}) {
 		if rayNodeType == rayiov1alpha1.HeadNode {
-			probe.Exec = &v1.ExecAction{Command: rayClusterHeadReadinessProbeCmd()}
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", rayClusterHeadReadinessProbeCmd()}}
 		} else {
-			probe.Exec = &v1.ExecAction{Command: rayClusterWorkerReadinessProbeCmd()}
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", rayClusterWorkerReadinessProbeCmd()}}
 		}
 	}
 }
 
-func rayClusterHeadReadinessProbeCmd() []string {
-	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-		"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardPort, RayDashboardGCSHealthPath),
-	}
+// Returns command that k8s can exec in Bash to check if head node is ready.
+func rayClusterHeadReadinessProbeCmd() string {
+	return fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/%s | "+
+			"grep success && "+
+			"wget -T 2 -q -O - http://localhost:%d/%s | "+
+			"grep success",
+		DefaultDashboardAgentListenPort,
+		RayAgentRayletHealthPath,
+		DefaultDashboardPort,
+		RayDashboardGCSHealthPath,
+	)
 }
 
-func rayClusterWorkerReadinessProbeCmd() []string {
-	return []string{
-		"bash", "-c", fmt.Sprintf("wget -T 2 -q -O - http://localhost:%d/%s | grep success",
-			DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-	}
+// Returns command that k8s can exec in Bash to check if worker node is ready.
+func rayClusterWorkerReadinessProbeCmd() string {
+	return fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/%s | grep success",
+		DefaultDashboardAgentListenPort,
+		RayAgentRayletHealthPath,
+	)
 }
 
-func RayServiceHeadReadinessProbeCmd(port int) []string {
+func RayServiceHeadReadinessProbeCmd(port int) string {
 	clusterCmd := rayClusterHeadReadinessProbeCmd()
-	serviceCmd := []string{
-		"bash", "-c",
-		fmt.Sprintf(
-			"wget -T 2 -q -O - http://localhost:%d/-/healthz | grep success",
-			port,
-		),
-		"&&",
-		"serve status | grep 'status: RUNNING'",
-	}
-	return append(append(clusterCmd, "&&"), serviceCmd...)
+	serviceCmd := fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/-/healthz | "+
+			"grep success &&"+
+			"serve status | grep 'status: RUNNING'",
+		port,
+	)
+	return clusterCmd + " && " + serviceCmd
 }
 
-func RayServiceWorkerReadinessProbeCmd(port int) []string {
+func RayServiceWorkerReadinessProbeCmd(port int) string {
 	clusterCmd := rayClusterHeadReadinessProbeCmd()
-	serviceCmd := []string{
-		"bash", "-c",
-		fmt.Sprintf(
-			"wget -T 2 -q -O - http://localhost:%d/-/healthz | grep success",
-			port,
-		),
-		"&&",
-		"serve status | grep 'status: RUNNING'",
-	}
-	return append(append(clusterCmd, "&&"), serviceCmd...)
+	serviceCmd := fmt.Sprintf(
+		"wget -T 2 -q -O - http://localhost:%d/-/healthz | "+
+			"grep success &&"+
+			"serve status | grep 'status: RUNNING'",
+		port,
+	)
+	return clusterCmd + " && " + serviceCmd
 }
 
 // BuildPod a pod config
@@ -516,13 +520,13 @@ func GetRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
 	for i, container := range podSpec.Containers {
 		for _, env := range container.Env {
 			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
+				log.Info("Pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
 				return i
 			}
 		}
 	}
 	// not found, use first container
-	log.Info("Head pod container with index 0 identified as Ray container.")
+	log.Info("Pod container with index 0 identified as Ray container.")
 	return 0
 }
 

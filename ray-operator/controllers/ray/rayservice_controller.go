@@ -102,6 +102,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	r.addDefaultsRayServiceCR(rayServiceInstance)
+
 	r.cleanUpServeConfigCache(rayServiceInstance)
 
 	logger.Info("Reconciling the cluster component.")
@@ -196,6 +198,27 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func (r *RayServiceReconciler) addDefaultsRayServiceCR(rayService *rayv1alpha1.RayService) {
+	// add default rayservice probes if FT enabled
+	if rayService.Annotations != nil {
+		if enabledString, ok := rayService.Annotations[common.RayFTEnabledAnnotationKey]; ok {
+			if strings.ToLower(enabledString) == "true" {
+				// configure head pod probes
+				headTemplateSpec := rayService.Spec.RayClusterSpec.HeadGroupSpec.Template
+				rayContainerIndex := common.GetRayContainerIndex(headTemplateSpec.Spec)
+				configureProbes(&headTemplateSpec, rayContainerIndex, rayv1alpha1.HeadNode)
+
+				// configure worker pod probes
+				for _, workerGroupSpec := range rayService.Spec.RayClusterSpec.WorkerGroupSpecs {
+					workerTemplateSpec := workerGroupSpec.Template
+					rayContainerIndex = common.GetRayContainerIndex(workerTemplateSpec.Spec)
+					configureProbes(&workerTemplateSpec, rayContainerIndex, rayv1alpha1.WorkerNode)
+				}
+			}
+		}
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -428,6 +451,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv1alpha1.RayService, rayClusterName string) (*rayv1alpha1.RayCluster, error) {
 	var err error
+
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
@@ -449,18 +473,6 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		return nil, err
 	}
 
-	// configure head pod probes
-	headTemplateSpec := rayService.Spec.RayClusterSpec.HeadGroupSpec.Template
-	rayContainerIndex := common.GetRayContainerIndex(headTemplateSpec.Spec)
-	configureProbes(&headTemplateSpec, rayContainerIndex, rayv1alpha1.HeadNode)
-
-	// configure worker pod probes
-	for _, workerGroupSpec := range rayService.Spec.RayClusterSpec.WorkerGroupSpecs {
-		workerTemplateSpec := workerGroupSpec.Template
-		rayContainerIndex = common.GetRayContainerIndex(workerTemplateSpec.Spec)
-		configureProbes(&workerTemplateSpec, rayContainerIndex, rayv1alpha1.WorkerNode)
-	}
-
 	rayCluster := &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayClusterLabel,
@@ -480,38 +492,31 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 }
 
 func configureProbes(template *v1.PodTemplateSpec, rayContainerIndex int, rayNodeType rayv1alpha1.RayNodeType) {
-	// configure probes only if FT enabled
-	if template.Annotations != nil {
-		if enabledString, ok := template.Annotations[common.RayFTEnabledAnnotationKey]; ok {
-			if strings.ToLower(enabledString) == "true" {
-				// users may provide probe parameters to override defaults
-				if template.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-					template.Spec.Containers[rayContainerIndex].ReadinessProbe = common.CreateDefaultReadinessProbe()
-				}
-				probe := template.Spec.Containers[rayContainerIndex].ReadinessProbe
-				if probe.ProbeHandler == (v1.ProbeHandler{}) {
-					// TODO (shrekris-anyscale): set port dynamically here once
-					// it's enabled in the ServeDeploymentGraphSpec
-					if rayNodeType == rayv1alpha1.HeadNode {
-						probe.Exec = &v1.ExecAction{Command: common.RayServiceHeadReadinessProbeCmd(8000)}
-					} else {
-						probe.Exec = &v1.ExecAction{Command: common.RayServiceWorkerReadinessProbeCmd(8000)}
-					}
-				}
+	// users may provide probe parameters to override defaults
+	if template.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+		template.Spec.Containers[rayContainerIndex].ReadinessProbe = common.CreateDefaultReadinessProbe()
+	}
+	probe := template.Spec.Containers[rayContainerIndex].ReadinessProbe
+	if probe.ProbeHandler == (v1.ProbeHandler{}) {
+		// TODO (shrekris-anyscale): set port dynamically here once
+		// it's enabled in the ServeDeploymentGraphSpec
+		if rayNodeType == rayv1alpha1.HeadNode {
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", common.RayServiceHeadReadinessProbeCmd(8000)}}
+		} else {
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", common.RayServiceWorkerReadinessProbeCmd(8000)}}
+		}
+	}
 
-				// users may provide probe parameters to override defaults
-				if template.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-					template.Spec.Containers[rayContainerIndex].LivenessProbe = common.CreateDefaultLivenessProbe()
-				}
-				probe = template.Spec.Containers[rayContainerIndex].LivenessProbe
-				if probe.ProbeHandler == (v1.ProbeHandler{}) {
-					if rayNodeType == rayv1alpha1.HeadNode {
-						probe.Exec = &v1.ExecAction{Command: common.RayServiceHeadLivenessProbeCmd()}
-					} else {
-						probe.Exec = &v1.ExecAction{Command: common.RayServiceWorkerLivenessProbeCmd()}
-					}
-				}
-			}
+	// users may provide probe parameters to override defaults
+	if template.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+		template.Spec.Containers[rayContainerIndex].LivenessProbe = common.CreateDefaultLivenessProbe()
+	}
+	probe = template.Spec.Containers[rayContainerIndex].LivenessProbe
+	if probe.ProbeHandler == (v1.ProbeHandler{}) {
+		if rayNodeType == rayv1alpha1.HeadNode {
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", common.RayServiceHeadLivenessProbeCmd()}}
+		} else {
+			probe.Exec = &v1.ExecAction{Command: []string{"bash", "-c", common.RayServiceWorkerLivenessProbeCmd()}}
 		}
 	}
 }

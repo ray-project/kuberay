@@ -84,17 +84,17 @@ const (
 
 	LOCAL_HOST = "127.0.0.1"
 	// Ray FT default readiness probe values
-	DefaultReadinessProbeInitialDelaySeconds = 10
+	DefaultReadinessProbeInitialDelaySeconds = 20
 	DefaultReadinessProbeTimeoutSeconds      = 1
 	DefaultReadinessProbePeriodSeconds       = 3
-	DefaultReadinessProbeSuccessThreshold    = 0
+	DefaultReadinessProbeSuccessThreshold    = 1
 	DefaultReadinessProbeFailureThreshold    = 20
 
 	// Ray FT default liveness probe values
-	DefaultLivenessProbeInitialDelaySeconds = 10
+	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
 	DefaultLivenessProbePeriodSeconds       = 3
-	DefaultLivenessProbeSuccessThreshold    = 0
+	DefaultLivenessProbeSuccessThreshold    = 1
 	DefaultLivenessProbeFailureThreshold    = 40
 
 	// Ray health check related configurations
