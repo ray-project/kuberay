@@ -533,10 +533,10 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
 		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
 		serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = &timeNow
-		if serveStatuses.DeploymentStatuses[i].Status != "HEALTHY" {
+		if serveStatuses.DeploymentStatuses[i].Status != rayv1alpha1.DeploymentStatus.HEALTHY {
 			prevStatus, exist := statusMap[serveStatuses.DeploymentStatuses[i].Name]
 			if exist {
-				if prevStatus.Status != "HEALTHY" {
+				if prevStatus.Status != rayv1alpha1.DeploymentStatus.HEALTHY {
 					serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
 					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
@@ -547,16 +547,18 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 		}
 	}
 
-	// Check app status.
+	// Check app status
 	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
 	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
-	if serveStatuses.ApplicationStatus.Status != "HEALTHY" {
-		// Check previously app status.
-		if rayServiceServeStatus.ApplicationStatus.Status != "HEALTHY" {
-			serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
+	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatus.RUNNING {
+		// Check previous app status
+		if rayServiceServeStatus.ApplicationStatus.Status != rayv1alpha1.ApplicationStatus.RUNNING {
+			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil {
+				serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
 
-			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil && time.Since(rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-				isHealthy = false
+				if time.Since(rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+					isHealthy = false
+				}
 			}
 		}
 	}
