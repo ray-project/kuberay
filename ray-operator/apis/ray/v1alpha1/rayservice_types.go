@@ -21,6 +21,34 @@ const (
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
+type ApplicationStatusType string
+
+// These statuses should match Ray Serve's application statuses
+var ApplicationStatus = struct {
+	NOT_STARTED   ApplicationStatusType
+	DEPLOYING     ApplicationStatusType
+	RUNNING       ApplicationStatusType
+	DEPLOY_FAILED ApplicationStatusType
+}{
+	NOT_STARTED:   "NOT_STARTED",
+	DEPLOYING:     "DEPLOYING",
+	RUNNING:       "RUNNING",
+	DEPLOY_FAILED: "DEPLOY_FAILED",
+}
+
+type DeploymentStatusType string
+
+// These statuses should match Ray Serve's deployment statuses
+var DeploymentStatus = struct {
+	UPDATING  DeploymentStatusType
+	HEALTHY   DeploymentStatusType
+	UNHEALTHY DeploymentStatusType
+}{
+	UPDATING:  "UPDATING",
+	HEALTHY:   "HEALTHY",
+	UNHEALTHY: "UNHEALTHY",
+}
+
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
