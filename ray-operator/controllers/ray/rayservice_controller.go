@@ -580,7 +580,7 @@ func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *ra
 
 	// Check if all the service deployments are healthy.
 	for _, status := range rayServiceStatus.ServeStatuses {
-		if status.Status != "HEALTHY" {
+		if status.Status != rayv1alpha1.DeploymentStatus.HEALTHY {
 			return false
 		}
 	}
