@@ -38,7 +38,7 @@ resources:
     cpu: 100m
     # One user said that a cluster with ~50 worker Pods (16 cores and
     # 64 GB memory each) requires 500 MB memory.
-    memory: 512Mi 
+    memory: 512Mi
   # requests:
   #   cpu: 100m
   #   memory: 512Mi
