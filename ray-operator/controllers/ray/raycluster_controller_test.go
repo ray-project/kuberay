@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -256,6 +257,13 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
+		It("should not modify workers to delete", func() {
+			// workersToDelete persists until removed
+			Consistently(
+				getNumWorkersToDeleteFunc(ctx, myRayCluster),
+				time.Second*1, time.Millisecond*200).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
 		It("should increase replicas past maxReplicas", func() {
 			// increasing replicas to 5, which is greater than maxReplicas (4)
 			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
@@ -293,6 +301,20 @@ var _ = Context("Inside the default namespace", func() {
 func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
 	return func() error {
 		return k8sClient.Get(ctx, key, obj)
+	}
+}
+
+func getNumWorkersToDeleteFunc(ctx context.Context, raycluster *v1alpha1.RayCluster) func() (int, error) {
+	return func() (int, error) {
+		key := client.ObjectKey{Name: raycluster.Name, Namespace: "default"}
+		if err := k8sClient.Get(ctx, key, raycluster); err != nil {
+			return -1, err
+		}
+		numWorkersToDelete := 0
+		for _, workerSpec := range raycluster.Spec.WorkerGroupSpecs {
+			numWorkersToDelete += len(workerSpec.ScaleStrategy.WorkersToDelete)
+		}
+		return numWorkersToDelete, nil
 	}
 }
 
