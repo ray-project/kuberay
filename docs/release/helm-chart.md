@@ -3,7 +3,7 @@
 We host all Helm charts on [kuberay-helm](https://github.com/ray-project/kuberay-helm). This document describes the process for release managers to release Helm charts.
 
 ## The end-to-end workflow
-### Step1: Update version in Chart.yaml
+### Step 1: Update version in Chart.yaml
 Please update the value of `version` in [ray-cluster/Chart.yaml](https://github.com/ray-project/kuberay/blob/master/helm-chart/ray-cluster/Chart.yaml), [kuberay-operator/Chart.yaml](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/Chart.yaml), and [kuberay-apiserver/Chart.yaml](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-apiserver/Chart.yaml) to the new release version (e.g. 0.4.0).
 
 ### Step2: Copy the helm-chart directory from kuberay to kuberay-helm
