@@ -518,7 +518,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	var serveStatuses *utils.ServeDeploymentStatuses
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(); err != nil {
-		r.Log.Error(err, "fail to get deployment status")
+		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
 		return false, err
 	}
 
