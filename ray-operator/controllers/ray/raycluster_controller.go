@@ -431,6 +431,8 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
+		// Avoid modifying the worker spec
+		worker = *worker.DeepCopy()
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32
 		// Always honor MaxReplicas if it is set:
@@ -475,6 +477,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 				runningPods.Items = append(runningPods.Items, aPod)
 			}
 		}
+		// This only modifies the local copy of the worker spec.
 		r.updateLocalWorkersToDelete(&worker, runningPods.Items)
 		diff := workerReplicas - int32(len(runningPods.Items))
 
@@ -497,6 +500,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 				}
 			}
+			// This only modifies the local copy of the worker spec.
 			worker.ScaleStrategy.WorkersToDelete = []string{}
 		}
 
@@ -519,16 +523,16 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			continue
 		} else if -diff == int32(len(worker.ScaleStrategy.WorkersToDelete)) {
 			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
+			for _, podToDelete := range worker.ScaleStrategy.WorkersToDelete {
 				pod := corev1.Pod{}
-				pod.Name = podsToDelete
+				pod.Name = podToDelete
 				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
 				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
 				if err := r.Delete(context.TODO(), &pod); err != nil {
 					if !errors.IsNotFound(err) {
 						return err
 					}
-					r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
+					r.Log.Info("reconcilePods", "worker specified to delete was already deleted ", pod.Name)
 				}
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 			}
