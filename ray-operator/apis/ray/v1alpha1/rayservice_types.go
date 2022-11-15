@@ -21,14 +21,12 @@ const (
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
-type ApplicationStatusType string
-
 // These statuses should match Ray Serve's application statuses
 var ApplicationStatus = struct {
-	NOT_STARTED   ApplicationStatusType
-	DEPLOYING     ApplicationStatusType
-	RUNNING       ApplicationStatusType
-	DEPLOY_FAILED ApplicationStatusType
+	NOT_STARTED   string
+	DEPLOYING     string
+	RUNNING       string
+	DEPLOY_FAILED string
 }{
 	NOT_STARTED:   "NOT_STARTED",
 	DEPLOYING:     "DEPLOYING",
@@ -36,13 +34,11 @@ var ApplicationStatus = struct {
 	DEPLOY_FAILED: "DEPLOY_FAILED",
 }
 
-type DeploymentStatusType string
-
 // These statuses should match Ray Serve's deployment statuses
 var DeploymentStatus = struct {
-	UPDATING  DeploymentStatusType
-	HEALTHY   DeploymentStatusType
-	UNHEALTHY DeploymentStatusType
+	UPDATING  string
+	HEALTHY   string
+	UNHEALTHY string
 }{
 	UPDATING:  "UPDATING",
 	HEALTHY:   "HEALTHY",
