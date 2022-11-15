@@ -9,7 +9,7 @@ Please update the value of `version` in [ray-cluster/Chart.yaml](https://github.
 ### Step 2: Copy the helm-chart directory from kuberay to kuberay-helm
 In [kuberay-helm CI](https://github.com/ray-project/kuberay-helm/blob/main/.github/workflows/chart-release.yaml), `helm/chart-releaser-action` will create releases for all charts in the directory `helm-chart` and update `index.yaml` in the [gh-pages](https://github.com/ray-project/kuberay-helm/tree/gh-pages) branch when the PR is merged into `main`. Note that `index.yaml` is necessary when you run the command `helm repo add`. I recommend removing the `helm-chart` directory in the kuberay-helm repository and creating a new one by copying from the kuberay repository.
 
-### Step3: Check the correctness
+### Step 3: Check the correctness
 When the PR is merged into `main`, the releases and `index.yaml` will be generated. You can check the correctness by:
 
 * Check whether the [releases](https://github.com/ray-project/kuberay-helm/releases) are created as expectation.
