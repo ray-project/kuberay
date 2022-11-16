@@ -76,6 +76,13 @@ def check_cluster_exist():
     """Check whether KinD cluster exists or not"""
     return os.system("kubectl cluster-info --context kind-kind") == 0
 
+def check_pod_running(pods) -> bool:
+    """"Check whether all of the pods are in running state"""
+    for pod in pods:
+        if pod.status.phase != 'Running':
+            return False
+    return True
+
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
 class Mutator:
@@ -243,11 +250,6 @@ class RayClusterAddCREvent(CREvent):
             os.system(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
     def wait(self):
-        def check_pod_running(pods) -> bool:
-            for pod in pods:
-                if pod.status.phase != 'Running':
-                    return False
-            return True
         start_time = time.time()
         expected_head_pods = search_path(self.custom_resource_object,
             "spec.headGroupSpec.replicas".split('.'), default_value=1)
@@ -325,11 +327,6 @@ class RayServiceAddCREvent(CREvent):
 
     def wait(self):
         """Wait for RayService to converge"""""
-        def check_pod_running(pods) -> bool:
-            for pod in pods:
-                if pod.status.phase != 'Running':
-                    return False
-            return True
         start_time = time.time()
         expected_head_pods = search_path(self.custom_resource_object,
             "spec.rayClusterConfig.headGroupSpec.replicas".split('.'), default_value=1)
