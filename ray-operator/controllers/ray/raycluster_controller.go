@@ -329,14 +329,14 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 	return nil
 }
 
+// Sync pods. Return the set of pods which have been deleted.
 func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster) error {
-	// check if all the pods exist
+	// Reconcile head Pod
 	headPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
-	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		r.Log.Info("reconcilePods ", "head pod found", headPod.Name)
