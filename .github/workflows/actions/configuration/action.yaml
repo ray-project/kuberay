@@ -73,7 +73,4 @@ runs:
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
       OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
       APISERVER_IMAGE="kuberay/apiserver:${{ steps.vars.outputs.sha_short }}" python test_sample_raycluster_yamls.py
-      RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
-      OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
-      APISERVER_IMAGE="kuberay/apiserver:${{ steps.vars.outputs.sha_short }}" python test_sample_rayservice_yamls.py
     shell: bash
