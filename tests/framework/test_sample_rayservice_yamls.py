@@ -29,8 +29,6 @@ if __name__ == '__main__':
                             {'path': filename.path, 'name': filename.name, 'cr': k8s_object}
                         )
                         break
-    for val in sample_yaml_files:
-        print(val['path'], val['name'], val['cr']['kind'])
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
     images = [

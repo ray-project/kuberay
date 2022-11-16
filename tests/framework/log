@@ -1,0 +1,196 @@
+2022-11-16:03:32:09,904 INFO     [test_sample_rayservice_yamls.py:41] ['rayproject/ray:2.0.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
+2022-11-16:03:32:09,904 INFO     [test_sample_rayservice_yamls.py:43] Build a test plan ...
+2022-11-16:03:32:09,904 INFO     [test_sample_rayservice_yamls.py:46] [TEST 0]: ray_v1alpha1_rayservice.yaml
+Deleting cluster "kind" ...
+error: context "kind-kind" does not exist
+Creating cluster "kind" ...
+ • Ensuring node image (kindest/node:v1.25.0) 🖼  ...
+ ✓ Ensuring node image (kindest/node:v1.25.0) 🖼
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+Set kubectl context to "kind-kind"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-kind
+
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+pod/etcd-kind-control-plane condition met
+pod/kube-apiserver-kind-control-plane condition met
+pod/kube-controller-manager-kind-control-plane condition met
+pod/kube-scheduler-kind-control-plane condition met
+namespace/ray-system created
+customresourcedefinition.apiextensions.k8s.io/rayclusters.ray.io created
+customresourcedefinition.apiextensions.k8s.io/rayjobs.ray.io created
+customresourcedefinition.apiextensions.k8s.io/rayservices.ray.io created
+Image: "rayproject/ray:2.0.0" with ID "sha256:6e31eb7dad3c3f82c5ad771b2aa8ba3f1791b3a4cb790df2cbd81a2c9945aeeb" not yet present on node "kind-control-plane", loading...
+Image: "kuberay/operator:nightly" with ID "sha256:fdf5d5127140c10edd6cf267f3a4b48a80c59ec8636eb86819ac97c2cf3c6694" not yet present on node "kind-control-plane", loading...
+Image: "kuberay/apiserver:nightly" with ID "sha256:0c7d9f0cca7dd99f21c757b2debfd36908e79ec0d89c90a9866412e068ae24ea" not yet present on node "kind-control-plane", loading...
+serviceaccount/kuberay-apiserver created
+serviceaccount/kuberay-operator created
+role.rbac.authorization.k8s.io/kuberay-operator-leader-election created
+clusterrole.rbac.authorization.k8s.io/kuberay-apiserver created
+clusterrole.rbac.authorization.k8s.io/kuberay-operator created
+rolebinding.rbac.authorization.k8s.io/kuberay-operator-leader-election created
+clusterrolebinding.rbac.authorization.k8s.io/kuberay-apiserver created
+clusterrolebinding.rbac.authorization.k8s.io/kuberay-operator created
+service/kuberay-apiserver created
+service/kuberay-operator created
+deployment.apps/kuberay-apiserver created
+deployment.apps/kuberay-operator created
+rayservice.ray.io/rayservice-sample created
+2022-11-16:03:35:42,504 INFO     [prototype.py:350] --- RayServiceAddCREvent 16.622658491134644 seconds ---
+2022-11-15 19:35:44,348	INFO worker.py:1224 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
+2022-11-15 19:35:44,349	INFO worker.py:1333 -- Connecting to existing Ray cluster at address: 10.244.0.7:6379...
+2022-11-15 19:35:44,358	INFO worker.py:1515 -- Connected to Ray cluster. View the dashboard at [1m[32mhttp://10.244.0.7:8265 [39m[22m
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,368	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,370	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m --- Logging error ---
+[2m[33m(raylet)[0m Traceback (most recent call last):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 69, in emit
+[2m[33m(raylet)[0m     if self.shouldRollover(record):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 185, in shouldRollover
+[2m[33m(raylet)[0m     msg = "%s\n" % self.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 869, in format
+[2m[33m(raylet)[0m     return fmt.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 608, in format
+[2m[33m(raylet)[0m     record.message = record.getMessage()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 369, in getMessage
+[2m[33m(raylet)[0m     msg = msg % self.args
+[2m[33m(raylet)[0m TypeError: not all arguments converted during string formatting
+[2m[33m(raylet)[0m Call stack:
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/agent.py", line 471, in <module>
+[2m[33m(raylet)[0m     loop.run_until_complete(agent.run())
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 574, in run_until_complete
+[2m[33m(raylet)[0m     self.run_forever()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 541, in run_forever
+[2m[33m(raylet)[0m     self._run_once()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 1786, in _run_once
+[2m[33m(raylet)[0m     handle._run()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/events.py", line 88, in _run
+[2m[33m(raylet)[0m     self._context.run(self._callback, *self._args)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_protocol.py", line 435, in _handle_request
+[2m[33m(raylet)[0m     resp = await request_handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_app.py", line 504, in _handle
+[2m[33m(raylet)[0m     resp = await handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 95, in _handler_route
+[2m[33m(raylet)[0m     return await handler(bind_info.instance, req)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 279, in decorator
+[2m[33m(raylet)[0m     return await f(self, *args, **kwargs)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/modules/serve/serve_agent.py", line 123, in put_all_deployments
+[2m[33m(raylet)[0m     http_options={"host": "0.0.0.0", "location": "EveryNode"},
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/serve/_private/api.py", line 175, in serve_start
+[2m[33m(raylet)[0m     " New http options will not be applied.",
+[2m[33m(raylet)[0m Message: 'Connecting to existing Serve app in namespace "serve".'
+[2m[33m(raylet)[0m Arguments: (' New http options will not be applied.',)
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,469	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,470	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,470	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,471	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,537	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,538	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m --- Logging error ---
+[2m[33m(raylet)[0m Traceback (most recent call last):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 69, in emit
+[2m[33m(raylet)[0m     if self.shouldRollover(record):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 185, in shouldRollover
+[2m[33m(raylet)[0m     msg = "%s\n" % self.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 869, in format
+[2m[33m(raylet)[0m     return fmt.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 608, in format
+[2m[33m(raylet)[0m     record.message = record.getMessage()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 369, in getMessage
+[2m[33m(raylet)[0m     msg = msg % self.args
+[2m[33m(raylet)[0m TypeError: not all arguments converted during string formatting
+[2m[33m(raylet)[0m Call stack:
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/agent.py", line 471, in <module>
+[2m[33m(raylet)[0m     loop.run_until_complete(agent.run())
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 574, in run_until_complete
+[2m[33m(raylet)[0m     self.run_forever()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 541, in run_forever
+[2m[33m(raylet)[0m     self._run_once()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 1786, in _run_once
+[2m[33m(raylet)[0m     handle._run()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/events.py", line 88, in _run
+[2m[33m(raylet)[0m     self._context.run(self._callback, *self._args)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_protocol.py", line 435, in _handle_request
+[2m[33m(raylet)[0m     resp = await request_handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_app.py", line 504, in _handle
+[2m[33m(raylet)[0m     resp = await handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 95, in _handler_route
+[2m[33m(raylet)[0m     return await handler(bind_info.instance, req)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 279, in decorator
+[2m[33m(raylet)[0m     return await f(self, *args, **kwargs)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/modules/serve/serve_agent.py", line 123, in put_all_deployments
+[2m[33m(raylet)[0m     http_options={"host": "0.0.0.0", "location": "EveryNode"},
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/serve/_private/api.py", line 175, in serve_start
+[2m[33m(raylet)[0m     " New http options will not be applied.",
+[2m[33m(raylet)[0m Message: 'Connecting to existing Serve app in namespace "serve".'
+[2m[33m(raylet)[0m Arguments: (' New http options will not be applied.',)
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,681	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,682	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,684	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,685	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,735	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,736	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m --- Logging error ---
+[2m[33m(raylet)[0m Traceback (most recent call last):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 69, in emit
+[2m[33m(raylet)[0m     if self.shouldRollover(record):
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/handlers.py", line 185, in shouldRollover
+[2m[33m(raylet)[0m     msg = "%s\n" % self.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 869, in format
+[2m[33m(raylet)[0m     return fmt.format(record)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 608, in format
+[2m[33m(raylet)[0m     record.message = record.getMessage()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/logging/__init__.py", line 369, in getMessage
+[2m[33m(raylet)[0m     msg = msg % self.args
+[2m[33m(raylet)[0m TypeError: not all arguments converted during string formatting
+[2m[33m(raylet)[0m Call stack:
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/agent.py", line 471, in <module>
+[2m[33m(raylet)[0m     loop.run_until_complete(agent.run())
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 574, in run_until_complete
+[2m[33m(raylet)[0m     self.run_forever()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 541, in run_forever
+[2m[33m(raylet)[0m     self._run_once()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/base_events.py", line 1786, in _run_once
+[2m[33m(raylet)[0m     handle._run()
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/asyncio/events.py", line 88, in _run
+[2m[33m(raylet)[0m     self._context.run(self._callback, *self._args)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_protocol.py", line 435, in _handle_request
+[2m[33m(raylet)[0m     resp = await request_handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/aiohttp/web_app.py", line 504, in _handle
+[2m[33m(raylet)[0m     resp = await handler(request)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 95, in _handler_route
+[2m[33m(raylet)[0m     return await handler(bind_info.instance, req)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/optional_utils.py", line 279, in decorator
+[2m[33m(raylet)[0m     return await f(self, *args, **kwargs)
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/dashboard/modules/serve/serve_agent.py", line 123, in put_all_deployments
+[2m[33m(raylet)[0m     http_options={"host": "0.0.0.0", "location": "EveryNode"},
+[2m[33m(raylet)[0m   File "/home/ray/anaconda3/lib/python3.7/site-packages/ray/serve/_private/api.py", line 175, in serve_start
+[2m[33m(raylet)[0m     " New http options will not be applied.",
+[2m[33m(raylet)[0m Message: 'Connecting to existing Serve app in namespace "serve".'
+[2m[33m(raylet)[0m Arguments: (' New http options will not be applied.',)
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,796	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,801	INFO runtime_env_agent.py:482 -- Got request from raylet to decrease reference for runtime env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}.
+[2m[33m(raylet)[0m 2022-11-15 19:35:44,829	INFO runtime_env_agent.py:411 -- Runtime env already created successfully. Env: {"working_dir": "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"}, context: {"command_prefix": ["cd /tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"], "env_vars": {"PYTHONPATH": "/tmp/ray/session_2022-11-15_19-35-33_838138_14/runtime_resources/working_dir_files/https_github_com_ray-project_test_dag_archive_41d09119cbdf8450599f993f51318e9e27c59098"}, "py_executable": "/home/ray/anaconda3/bin/python", "resources_dir": null, "container": {}, "java_jars": []}
+{'memory': 4294967296.0, 'object_store_memory': 710877030.0, 'CPU': 3.0, 'node:10.244.0.8': 1.0, 'node:10.244.0.7': 1.0}
+pod/curl created
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    12    0     0  100    12      0      9  0:00:01  0:00:01 --:--:--     9 92    13    0     0  100    12      0      8  0:00:01  0:00:01 --:--:--     8100    13    0     1  100    12      0      8  0:00:01  0:00:01 --:--:--     8
+pod "curl" deleted
+2022-11-16:03:36:58,732 INFO     [prototype.py:388] --- Cleanup RayService 33.08751440048218 seconds ---
+.
+----------------------------------------------------------------------
+Ran 1 test in 288.829s
+
+OK
+../../ray-operator/config/samples/ray_v1alpha1_rayservice.yaml ray_v1alpha1_rayservice.yaml RayService
