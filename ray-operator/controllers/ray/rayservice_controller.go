@@ -567,9 +567,9 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 					isHealthy = false
 				}
 			}
-		} else {
-			isReady = true
 		}
+	} else {
+		isReady = true
 	}
 
 	rayServiceServeStatus.ServeStatuses = serveStatuses.DeploymentStatuses
