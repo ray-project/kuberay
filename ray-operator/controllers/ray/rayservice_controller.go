@@ -165,11 +165,19 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceRestartRequeueDuration}, nil
 	}
 
-	logger.Info("Reconciling the ingress and service resources.")
 	// Get the healthy ray cluster instance for service and ingress update.
-	rayClusterInstance := activeRayClusterInstance
+	var rayClusterInstance *rayv1alpha1.RayCluster
 	if pendingRayClusterInstance != nil {
 		rayClusterInstance = pendingRayClusterInstance
+		logger.Info("Reconciling the ingress and service resources " +
+			"on the pending Ray cluster.")
+	} else if activeRayClusterInstance != nil {
+		rayClusterInstance = activeRayClusterInstance
+		logger.Info("Reconciling the ingress and service resources " +
+			"on the active Ray cluster. No pending Ray cluster found.")
+	} else {
+		rayClusterInstance = nil
+		logger.Info("No Ray cluster found. Skipping ingress and service reconciliation.")
 	}
 
 	if rayClusterInstance != nil {
