@@ -295,7 +295,7 @@ class RayClusterAddCREvent(CREvent):
                 expected_head_pods, expected_worker_pods)
             show_cr_info(self.namespace)
             # Raise an exception
-            raise Exception("RayServiceAddCREvent wait() timeout")
+            raise Exception("RayClusterAddCREvent wait() timeout")
 
     def clean_up(self):
         """Delete added RayCluster"""
@@ -324,7 +324,7 @@ class RayClusterAddCREvent(CREvent):
         if not converge:
             logger.info("RayClusterAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
-            logger.info("expected_head_pods: %d, expected_worker_pods: %d", 0, 0)
+            logger.info("expected_head_pods: 0, expected_worker_pods: 0")
             show_cr_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
 
@@ -415,7 +415,7 @@ class RayServiceAddCREvent(CREvent):
         if not converge:
             logger.info("RayServiceAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
-            logger.info("expected_head_pods: %d, expected_worker_pods: %d", 0, 0)
+            logger.info("expected_head_pods: 0, expected_worker_pods: 0")
             show_cr_info(self.namespace)
             # Raise an exception
             raise Exception("RayServiceAddCREvent clean_up() timeout")
