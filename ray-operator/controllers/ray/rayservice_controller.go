@@ -813,7 +813,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	r.updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 
-	logger.Info("Check serve health", "isHealthy", isHealthy, "isActive", isActive)
+	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady, "isActive", isActive)
 
 	if isHealthy && isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
