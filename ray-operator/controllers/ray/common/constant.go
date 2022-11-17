@@ -103,6 +103,9 @@ const (
 
 	// Default autoscaler image when running Ray at versions older than 2.0.0
 	FallbackDefaultAutoscalerImage = "rayproject/ray:2.0.0"
+
+	// Finalizers for RayJob
+	RayJobStopJobFinalizer = "ray.io/rayjob-stopjob-finalizer"
 )
 
 type ServiceType string

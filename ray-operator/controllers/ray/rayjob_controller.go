@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
@@ -16,8 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,6 +75,33 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	var rayJobInstance *rayv1alpha1.RayJob
 	if rayJobInstance, err = r.getRayJobInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object.
+		if !controllerutil.ContainsFinalizer(rayJobInstance, common.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+			if err := r.Update(ctx, rayJobInstance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
+		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+			rayDashboardClient := utils.GetRayDashboardClientFunc()
+			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+			err := rayDashboardClient.StopJob(rayJobInstance.Status.JobId, &r.Log)
+			if err != nil {
+				r.Log.Info("Failed to stop job", "error", err)
+			}
+		}
+
+		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
+		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		err := r.Update(context.TODO(), rayJobInstance)
+		return ctrl.Result{}, err
 	}
 
 	// Do not reconcile the RayJob if the deployment status is marked as Complete
@@ -238,18 +264,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 // isJobSucceedOrFailed indicates whether the job comes into end status.
 func isJobSucceedOrFailed(status rayv1alpha1.JobStatus) bool {
-	if status == rayv1alpha1.JobStatusSucceeded || status == rayv1alpha1.JobStatusFailed {
-		return true
-	}
-	return false
+	return (status == rayv1alpha1.JobStatusSucceeded) || (status == rayv1alpha1.JobStatusFailed)
 }
 
 // isJobPendingOrRunning indicates whether the job is running.
 func isJobPendingOrRunning(status rayv1alpha1.JobStatus) bool {
-	if status == rayv1alpha1.JobStatusPending || status == rayv1alpha1.JobStatusRunning {
-		return true
-	}
-	return false
+	return (status == rayv1alpha1.JobStatusPending) || (status == rayv1alpha1.JobStatusRunning)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -258,37 +278,7 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rayv1alpha1.RayJob{}).
 		Owns(&rayv1alpha1.RayCluster{}).
 		Owns(&corev1.Service{}).
-		WithEventFilter(predicate.Funcs{
-			DeleteFunc: r.DeleteEventFilter,
-		}).
 		Complete(r)
-}
-
-func (r *RayJobReconciler) DeleteEventFilter(e event.DeleteEvent) bool {
-	r.Log.Info("event to delete", "event", e)
-
-	job, ok := e.Object.(*rayv1alpha1.RayJob)
-	if !ok {
-		r.Log.Info("failed to get job object from event", "event", e)
-		return false
-	}
-
-	if job.Status.JobStatus == rayv1alpha1.JobStatusRunning || job.Status.JobStatus == rayv1alpha1.JobStatusPending {
-		if job.Status.DashboardURL == "" || job.Status.JobId == "" {
-			r.Log.Info("dashboardURL or job_id is empty", "job", job)
-			return false
-		}
-		rayDashboardClient := utils.GetRayDashboardClientFunc()
-		rayDashboardClient.InitClient(job.Status.DashboardURL)
-		err := rayDashboardClient.StopJob(job.Status.JobId, &r.Log)
-		if err != nil {
-			r.Log.Info("failed to stop job", "error", err)
-		}
-	}
-	// The reconciler adds a finalizer so we perform clean-up
-	// when the delete timestamp is added
-	// Suppress Delete events to avoid filtering them out in the Reconcile function
-	return false
 }
 
 func (r *RayJobReconciler) getRayJobInstance(ctx context.Context, request ctrl.Request) (*rayv1alpha1.RayJob, error) {

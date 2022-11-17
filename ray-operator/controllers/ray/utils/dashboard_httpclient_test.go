@@ -99,4 +99,31 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
 		Expect(err).To(BeNil())
 	})
+
+	It("Test stop succeeded job", func() {
+		// StopJob only returns an error when JobStatus is not in terminated states (STOPPED / SUCCEEDED / FAILED)
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+			func(req *http.Request) (*http.Response, error) {
+				body := &RayJobStopResponse{
+					Stopped: false,
+				}
+				bodyBytes, _ := json.Marshal(body)
+				return httpmock.NewBytesResponse(200, bodyBytes), nil
+			})
+		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
+			func(req *http.Request) (*http.Response, error) {
+				body := &RayJobInfo{
+					JobStatus:  rayv1alpha1.JobStatusSucceeded,
+					Entrypoint: rayJob.Spec.Entrypoint,
+					Metadata:   rayJob.Spec.Metadata,
+				}
+				bodyBytes, _ := json.Marshal(body)
+				return httpmock.NewBytesResponse(200, bodyBytes), nil
+			})
+
+		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
+		Expect(err).To(BeNil())
+	})
 })
