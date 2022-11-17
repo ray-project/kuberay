@@ -123,7 +123,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
-	logger.Info("Reconciling the Serve component.")
 	/*
 		Update ray cluster for 4 possible situations.
 		If a ray cluster does not exist, clear its status.
@@ -131,12 +130,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
 	*/
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
+		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
 		rayServiceInstance.Status.PendingServiceStatus = rayv1alpha1.RayServiceStatus{}
 		if ctrlResult, isHealthy, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true, logger); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrlResult, nil
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
+		logger.Info("Reconciling the Serve component. Active and pending Ray clusters exist.")
 		if err = r.updateStatusForActiveCluster(ctx, rayServiceInstance, activeRayClusterInstance, logger); err != nil {
 			logger.Error(err, "Active Ray cluster's status update failed.")
 		}
@@ -146,12 +147,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrlResult, nil
 		}
 	} else if activeRayClusterInstance == nil && pendingRayClusterInstance != nil {
+		logger.Info("Reconciling the Serve component. Only the pending Ray cluster exists.")
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1alpha1.RayServiceStatus{}
 		if ctrlResult, isHealthy, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false, logger); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrlResult, nil
 		}
 	} else {
+		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1alpha1.RayServiceStatus{}
 		rayServiceInstance.Status.PendingServiceStatus = rayv1alpha1.RayServiceStatus{}
 	}
