@@ -53,7 +53,7 @@ spec:
         resources:
           limits:
             cpu: 100m
-            # Anecdotally, managing 50 Ray pods requires roughly 500MB memory.
+            # Anecdotally, managing 500 Ray pods requires roughly 500MB memory.
             # Monitor memory usage and adjust as needed.
             memory: 512Mi
           requests:

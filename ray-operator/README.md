@@ -80,8 +80,9 @@ Sample  | Description
     For production use-cases, make sure to allocate sufficient resources for your Ray pods; it usually makes
     sense to run one large Ray pod per Kubernetes node.
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
-    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for guidance. The rest of the sample configs above are geared towards
-    experimentation in local kind or minikube environments.
+    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for guidance. The rest of the sample configs above are geared towards experimentation in local kind or minikube environments.
+
+    For KubeRay operator, anecdotally, managing 500 Ray pods requires roughly 500MB memory. Monitor memory usage and adjust as needed.
 
 ```shell
 # Create a RayCluster and a ConfigMap with hello world Ray code.
