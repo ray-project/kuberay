@@ -5,10 +5,16 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const rayServiceDefaultVersion = "2.0.0"
+const (
+	rayServiceDefaultVersion = "2.0.0"
+	defaultServePortName     = "serve"
+	defaultServePort         = 8000
+)
 
 type RayService struct {
 	*rayalphaapi.RayService
@@ -68,13 +74,18 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		}
 		serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
 	}
+	newRayClusterSpec := *buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+	newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports, v1.ContainerPort{
+		Name:          defaultServePortName,
+		ContainerPort: defaultServePort,
+	})
 	return &rayalphaapi.RayServiceSpec{
 		ServeDeploymentGraphSpec: rayalphaapi.ServeDeploymentGraphSpec{
 			ImportPath:       apiService.ServeDeploymentGraphSpec.ImportPath,
 			RuntimeEnv:       base64.StdEncoding.EncodeToString([]byte(apiService.ServeDeploymentGraphSpec.RuntimeEnv)),
 			ServeConfigSpecs: serveConfigSpecs,
 		},
-		RayClusterSpec: *buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap),
+		RayClusterSpec: newRayClusterSpec,
 	}
 }
 

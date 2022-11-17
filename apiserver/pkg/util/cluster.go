@@ -135,6 +135,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 						},
 					},
 					// Customization is not allowed here. We should consider whether to make this part smart.
+					// For now we use serve 8000 port for rayservice and added at util/service.go, do not use the 8000 port here for other propose.
 					Ports: []v1.ContainerPort{
 						{
 							Name:          "redis",
