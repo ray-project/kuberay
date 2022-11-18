@@ -84,7 +84,8 @@ def check_pod_running(pods) -> bool:
     return True
 
 def shell_subprocess_run(command, check = True):
-    """Run the command using subprocess.run() with shell=True"""
+    """Command will be executed through the shell.
+       If check=True, it will raise an error when the returncode of the execution is not 0"""
     return subprocess.run(command, shell = True, check = check).returncode
 
 def get_expected_head_pods(custom_resource):
@@ -330,9 +331,9 @@ class RayClusterAddCREvent(CREvent):
         k8s_v1_api = client.CoreV1Api()
         start_time = time.time()
         for _ in range(self.timeout):
-            headpods = client.CoreV1Api().list_namespaced_pod(
+            headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
-            workerpods = client.CoreV1Api().list_namespaced_pod(
+            workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             if (len(headpods.items) == 0 and len(workerpods.items) == 0):
                 converge = True
@@ -378,7 +379,7 @@ class RayServiceAddCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
-            head_services = client.CoreV1Api().list_namespaced_service(
+            head_services = k8s_v1_api.list_namespaced_service(
                 namespace = self.namespace, label_selector =
                 f"ray.io/serve={self.custom_resource_object['metadata']['name']}-serve")
             if (len(head_services.items) == 1 and len(headpods.items) == expected_head_pods
@@ -414,9 +415,9 @@ class RayServiceAddCREvent(CREvent):
         k8s_v1_api = client.CoreV1Api()
         start_time = time.time()
         for _ in range(self.timeout):
-            headpods = client.CoreV1Api().list_namespaced_pod(
+            headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector = 'ray.io/node-type=head')
-            workerpods = client.CoreV1Api().list_namespaced_pod(
+            workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector = 'ray.io/node-type=worker')
             if (len(headpods.items) == 0 and len(workerpods.items) == 0):
                 converge = True
