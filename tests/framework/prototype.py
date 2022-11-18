@@ -90,36 +90,32 @@ def shell_subprocess_run(command, check = True):
 def get_expected_head_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
     resource_kind = custom_resource["kind"]
-    if resource_kind == "RayCluster":
-        return search_path(custom_resource,
-            "spec.headGroupSpec.replicas".split('.'), default_value=1)
-    if resource_kind == "RayService":
-        return search_path(custom_resource,
-            "spec.rayClusterConfig.headGroupSpec.replicas".split('.'), default_value=1)
-    if resource_kind == "RayJob":
-        return search_path(custom_resource,
-            "spec.rayClusterSpec.headGroupSpec.replicas".split('.'), default_value=1)
+    head_replica_paths = {
+       "RayCluster": "spec.headGroupSpec.replicas",
+       "RayService": "spec.rayClusterConfig.headGroupSpec.replicas",
+       "RayJob": "spec.rayClusterSpec.headGroupSpec.replicas"
+    }
+    if resource_kind in head_replica_paths:
+        path = head_replica_paths[resource_kind]
+        return search_path(custom_resource, path.split('.'), default_value=1)
     raise Exception(f"Unknown resource kind: {resource_kind} in get_expected_head_pods()")
 
 def get_expected_worker_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
-    worker_group_specs = None
     resource_kind = custom_resource["kind"]
-    if resource_kind == "RayCluster":
-        worker_group_specs = search_path(custom_resource,
-            "spec.workerGroupSpecs".split('.'), default_value=[])
-    if resource_kind == "RayService":
-        worker_group_specs = search_path(custom_resource,
-            "spec.rayClusterConfig.workerGroupSpecs".split('.'), default_value=[])
-    if resource_kind == "RayJob":
-        worker_group_specs = search_path(custom_resource,
-            "spec.rayClusterSpec.workerGroupSpecs".split('.'), default_value=[])
-    if worker_group_specs is None:
-        raise Exception(f"Unknown resource kind: {resource_kind} in get_expected_worker_pods()")
-    expected_worker_pods = 0
-    for spec in worker_group_specs:
-        expected_worker_pods += spec['replicas']
-    return expected_worker_pods
+    worker_specs_paths = {
+       "RayCluster": "spec.workerGroupSpecs",
+       "RayService": "spec.rayClusterConfig.workerGroupSpecs",
+       "RayJob": "spec.rayClusterSpec.workerGroupSpecs"
+    }
+    if resource_kind in worker_specs_paths:
+        path = worker_specs_paths[resource_kind]
+        worker_group_specs = search_path(custom_resource, path.split('.'), default_value=[])
+        expected_worker_pods = 0
+        for spec in worker_group_specs:
+            expected_worker_pods += spec['replicas']
+        return expected_worker_pods
+    raise Exception(f"Unknown resource kind: {resource_kind} in get_expected_worker_pods()")
 
 def show_cluster_info(cr_namespace):
     """Show system information"""
