@@ -548,10 +548,10 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
 		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
 		serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = &timeNow
-		if serveStatuses.DeploymentStatuses[i].Status != rayv1alpha1.DeploymentStatus.HEALTHY {
+		if serveStatuses.DeploymentStatuses[i].Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
 			prevStatus, exist := statusMap[serveStatuses.DeploymentStatuses[i].Name]
 			if exist {
-				if prevStatus.Status != rayv1alpha1.DeploymentStatus.HEALTHY {
+				if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
 					serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
 					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
@@ -565,9 +565,9 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	// Check app status
 	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
 	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
-	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatus.RUNNING {
+	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 		// Check previous app status
-		if rayServiceServeStatus.ApplicationStatus.Status != rayv1alpha1.ApplicationStatus.RUNNING {
+		if rayServiceServeStatus.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil {
 				serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
 
@@ -597,7 +597,7 @@ func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *ra
 
 	// Check if all the service deployments are healthy.
 	for _, status := range rayServiceStatus.ServeStatuses {
-		if status.Status != rayv1alpha1.DeploymentStatus.HEALTHY {
+		if status.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
 			return false
 		}
 	}

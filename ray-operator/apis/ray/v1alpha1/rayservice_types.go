@@ -22,7 +22,7 @@ const (
 )
 
 // These statuses should match Ray Serve's application statuses
-var ApplicationStatus = struct {
+var ApplicationStatusEnum = struct {
 	NOT_STARTED   string
 	DEPLOYING     string
 	RUNNING       string
@@ -35,7 +35,7 @@ var ApplicationStatus = struct {
 }
 
 // These statuses should match Ray Serve's deployment statuses
-var DeploymentStatus = struct {
+var DeploymentStatusEnum = struct {
 	UPDATING  string
 	HEALTHY   string
 	UNHEALTHY string
