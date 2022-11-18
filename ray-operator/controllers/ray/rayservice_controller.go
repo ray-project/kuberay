@@ -649,6 +649,8 @@ func (r *RayServiceReconciler) updateRayClusterInfo(rayServiceInstance *rayv1alp
 // TODO: When start Ingress in RayService, we can disable the Ingress from RayCluster.
 func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster) error {
 	if rayClusterInstance.Spec.HeadGroupSpec.EnableIngress == nil || !*rayClusterInstance.Spec.HeadGroupSpec.EnableIngress {
+		r.Log.Info("Ingress is disabled. Skipping ingress reconcilation. " +
+			"You can enable Ingress by setting enableIngress to true in HeadGroupSpec.")
 		return nil
 	}
 
