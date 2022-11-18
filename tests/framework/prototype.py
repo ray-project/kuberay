@@ -41,18 +41,17 @@ def search_path(yaml_object, steps, default_value = None):
 # Functions for cluster preparation.
 def delete_kind_cluster() -> None:
     """Delete a KinD cluster"""
-    subprocess.run("kind delete cluster", shell = True, check = True)
+    shell_subprocess_run("kind delete cluster")
 
 def create_kind_cluster():
     """Create a KinD cluster"""
-    subprocess.run("kind create cluster", shell = True, check = True)
-    subprocess.run("kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s",
-        shell = True, check = True)
+    shell_subprocess_run("kind create cluster")
+    shell_subprocess_run(
+        "kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s")
 
 def install_crd():
     """Install Custom Resource Definition (CRD)"""
-    subprocess.run("kubectl create -k ../../manifests/cluster-scope-resources",
-        shell = True, check = True)
+    shell_subprocess_run("kubectl create -k ../../manifests/cluster-scope-resources")
 
 def download_images(docker_images):
     """Download Docker images from DockerHub"""
@@ -60,24 +59,22 @@ def download_images(docker_images):
     for image in docker_images:
         # Only pull the image from DockerHub when the image does not
         # exist in the local docker registry.
-        if subprocess.run(f'docker image inspect {image} > /dev/null',
-            shell = True, check = False).returncode != 0:
+        if shell_subprocess_run(f'docker image inspect {image} > /dev/null', check = False) != 0:
             docker_client.images.pull(image)
     docker_client.close()
 
 def kind_load_images(docker_images):
     """Load downloaded images into KinD cluster"""
     for image in docker_images:
-        subprocess.run(f'kind load docker-image {image}', shell = True, check = True)
+        shell_subprocess_run(f'kind load docker-image {image}')
 
 def install_kuberay_operator():
     """Install kuberay operator with image kuberay/operator:nightly"""
-    subprocess.run('kubectl apply -k ../../manifests/base', shell = True, check = True)
+    shell_subprocess_run('kubectl apply -k ../../manifests/base')
 
 def check_cluster_exist():
     """Check whether KinD cluster exists or not"""
-    return subprocess.run("kubectl cluster-info --context kind-kind",
-        shell = True, check = False).returncode == 0
+    return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
 
 def check_pod_running(pods) -> bool:
     """"Check whether all of the pods are in running state"""
@@ -86,18 +83,56 @@ def check_pod_running(pods) -> bool:
             return False
     return True
 
-def show_cr_info(cr_namespace):
-    """Show system information about the cr"""
-    subprocess.run(f'kubectl get all -n={cr_namespace}', shell = True, check = True)
-    subprocess.run(f'kubectl describe pods -n={cr_namespace}', shell = True, check = True)
-    subprocess.run( f'kubectl logs -n={cr_namespace} -l ray.io/node-type=head --tail=-1',
-        shell = True, check = True)
+def shell_subprocess_run(command, check = True):
+    """Run the command using subprocess.run() with shell=True"""
+    return subprocess.run(command, shell = True, check = check).returncode
+
+def get_expected_head_pods(custom_resource):
+    """Get the number of head pods in custom_resource"""
+    resource_kind = custom_resource["kind"].lower()
+    if resource_kind == "raycluster":
+        return search_path(custom_resource,
+            "spec.headGroupSpec.replicas".split('.'), default_value=1)
+    if resource_kind == "rayservice":
+        return search_path(custom_resource,
+            "spec.rayClusterConfig.headGroupSpec.replicas".split('.'), default_value=1)
+    if resource_kind == "rayjob":
+        return search_path(custom_resource,
+            "spec.rayClusterSpec.headGroupSpec.replicas".split('.'), default_value=1)
+    raise Exception(f"Unknown resource kind: {resource_kind} in get_expected_head_pods()")
+
+def get_expected_worker_pods(custom_resource):
+    """Get the number of head pods in custom_resource"""
+    worker_group_specs = None
+    resource_kind = custom_resource["kind"].lower()
+    if resource_kind == "raycluster":
+        worker_group_specs = search_path(custom_resource,
+            "spec.workerGroupSpecs".split('.'), default_value=[])
+    if resource_kind == "rayservice":
+        worker_group_specs = search_path(custom_resource,
+            "spec.rayClusterConfig.workerGroupSpecs".split('.'), default_value=[])
+    if resource_kind == "rayjob":
+        worker_group_specs = search_path(custom_resource,
+            "spec.rayClusterSpec.workerGroupSpecs".split('.'), default_value=[])
+    if worker_group_specs is None:
+        raise Exception(f"Unknown resource kind: {resource_kind} in get_expected_worker_pods()")
+    expected_worker_pods = 0
+    for spec in worker_group_specs:
+        expected_worker_pods += spec['replicas']
+    return expected_worker_pods
+
+def show_cluster_info(cr_namespace):
+    """Show system information"""
+    shell_subprocess_run(f'kubectl get all -n={cr_namespace}')
+    shell_subprocess_run(f'kubectl describe pods -n={cr_namespace}')
+    shell_subprocess_run(f'kubectl logs -n={cr_namespace} -l ray.io/node-type=head --tail=-1')
+    # --tail=-1 print all the lines in the log.
+    # Added because the default value when using selecter is not -1
     operator_namespace = subprocess.check_output('kubectl get pods '
         '-l app.kubernetes.io/component=kuberay-operator -A '
         '-o jsonpath={".items[0].metadata.namespace"}', shell=True)
-    subprocess.run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
-        f'{operator_namespace.decode("utf-8") } --tail=-1',
-        shell = True, check = True)
+    shell_subprocess_run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
+        f'{operator_namespace.decode("utf-8") } --tail=-1')
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
 class Mutator:
@@ -214,19 +249,15 @@ class EasyJobRule(Rule):
         headpods = client.CoreV1Api().list_namespaced_pod(
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
-        rtn = subprocess.run(
-            f"kubectl exec {headpod_name} -n {cr_namespace} --" +
-            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"",
-            shell = True, check = False).returncode
-        assert rtn == 0
+        shell_subprocess_run(f"kubectl exec {headpod_name} -n {cr_namespace} --" +
+            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
     """"Using curl to access the deployed application on Ray service"""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         # Create a pod for running curl command, because the service is not exposed.
-        subprocess.run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
-            "--command -- /bin/sh -c \"while true; do sleep 10;done\"",
-            shell = True, check = True)
+        shell_subprocess_run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
+            "--command -- /bin/sh -c \"while true; do sleep 10;done\"")
         success_create = False
         for _ in range(30):
             resp = client.CoreV1Api().read_namespaced_pod(name="curl", namespace=cr_namespace)
@@ -241,7 +272,7 @@ class CurlServiceRule(Rule):
             f"{custom_resource['metadata']['name']}-serve-svc.{cr_namespace}.svc.cluster.local:8000"
             " -d '[\"MANGO\", 2]'", shell=True)
         assert output == b'6'
-        subprocess.run(f"kubectl delete pod curl -n {cr_namespace}", shell = True, check = True)
+        shell_subprocess_run(f"kubectl delete pod curl -n {cr_namespace}")
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
@@ -254,18 +285,12 @@ class RayClusterAddCREvent(CREvent):
             k8s_cr_api.api_client.rest_client.pool_manager.clear()
             k8s_cr_api.api_client.close()
         else:
-            subprocess.run(f"kubectl apply -n {self.namespace} -f {self.filepath}",
-                shell = True, check = True)
+            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
     def wait(self):
         start_time = time.time()
-        expected_head_pods = search_path(self.custom_resource_object,
-            "spec.headGroupSpec.replicas".split('.'), default_value=1)
-        worker_group_specs = search_path(self.custom_resource_object,
-            "spec.workerGroupSpecs".split('.'), default_value=[])
-        expected_worker_pods = 0
-        for spec in worker_group_specs:
-            expected_worker_pods += spec['replicas']
+        expected_head_pods = get_expected_head_pods(self.custom_resource_object)
+        expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
@@ -293,8 +318,7 @@ class RayClusterAddCREvent(CREvent):
                 self.timeout)
             logger.info("expected_head_pods: %d, expected_worker_pods: %d",
                 expected_head_pods, expected_worker_pods)
-            show_cr_info(self.namespace)
-            # Raise an exception
+            show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent wait() timeout")
 
     def clean_up(self):
@@ -325,7 +349,7 @@ class RayClusterAddCREvent(CREvent):
             logger.info("RayClusterAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
             logger.info("expected_head_pods: 0, expected_worker_pods: 0")
-            show_cr_info(self.namespace)
+            show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
 
 class RayServiceAddCREvent(CREvent):
@@ -340,19 +364,13 @@ class RayServiceAddCREvent(CREvent):
             k8s_cr_api.api_client.rest_client.pool_manager.clear()
             k8s_cr_api.api_client.close()
         else:
-            subprocess.run(f"kubectl apply -n {self.namespace} -f {self.filepath}",
-                shell = True, check = True)
+            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
     def wait(self):
         """Wait for RayService to converge"""""
         start_time = time.time()
-        expected_head_pods = search_path(self.custom_resource_object,
-            "spec.rayClusterConfig.headGroupSpec.replicas".split('.'), default_value=1)
-        worker_group_specs = search_path(self.custom_resource_object,
-            "spec.rayClusterConfig.workerGroupSpecs".split('.'), default_value=[])
-        expected_worker_pods = 0
-        for spec in worker_group_specs:
-            expected_worker_pods += spec['replicas']
+        expected_head_pods = get_expected_head_pods(self.custom_resource_object)
+        expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
@@ -384,8 +402,7 @@ class RayServiceAddCREvent(CREvent):
                 self.timeout)
             logger.info("expected_head_pods: %d, expected_worker_pods: %d",
                 expected_head_pods, expected_worker_pods)
-            show_cr_info(self.namespace)
-            # Raise an exception
+            show_cluster_info(self.namespace)
             raise Exception("RayServiceAddCREvent wait() timeout")
 
     def clean_up(self):
@@ -416,8 +433,7 @@ class RayServiceAddCREvent(CREvent):
             logger.info("RayServiceAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
             logger.info("expected_head_pods: 0, expected_worker_pods: 0")
-            show_cr_info(self.namespace)
-            # Raise an exception
+            show_cluster_info(self.namespace)
             raise Exception("RayServiceAddCREvent clean_up() timeout")
 
 class GeneralTestCase(unittest.TestCase):
