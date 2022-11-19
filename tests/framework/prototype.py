@@ -86,6 +86,7 @@ def check_pod_running(pods) -> bool:
 def shell_subprocess_run(command, check = True):
     """Command will be executed through the shell.
        If check=True, it will raise an error when the returncode of the execution is not 0"""
+    logger.info("Execute command: %s", command)
     return subprocess.run(command, shell = True, check = check).returncode
 
 def get_expected_head_pods(custom_resource):
