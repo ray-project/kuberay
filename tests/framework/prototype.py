@@ -45,9 +45,7 @@ def delete_kind_cluster() -> None:
 
 def create_kind_cluster():
     """Create a KinD cluster"""
-    shell_subprocess_run("kind create cluster")
-    shell_subprocess_run(
-        "kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s")
+    shell_subprocess_run("kind create cluster --wait 900s")
 
 def install_crd():
     """Install Custom Resource Definition (CRD)"""
