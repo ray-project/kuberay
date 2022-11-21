@@ -36,8 +36,6 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
-  # replicas for the head is deprecated. There is always 1 Ray head pod.
-  replicas: 1
   #labels:
   # key: value
   initArgs:
