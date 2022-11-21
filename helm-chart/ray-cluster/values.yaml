@@ -49,6 +49,8 @@ head:
   envFrom: []
     # - secretRef:
     #     name: my-env-secret
+  # ports optionally allows specifying ports for the Ray container.
+  # ports: []
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production.
@@ -94,7 +96,6 @@ worker:
     # - secretRef:
     #     name: my-env-secret
   # ports optionally allows specifying ports for the Ray container.
-  # ports are used to configure the Ray head service.
   # ports: []
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
@@ -144,7 +145,6 @@ additionalWorkerGroups:
         # - secretRef:
         #     name: my-env-secret
     # ports optionally allows specifying ports for the Ray container.
-    # ports are used to configure the Ray head service.
     # ports: []
     # resource requests and limits for the Ray head container.
     # Modify as needed for your application.
