@@ -38,7 +38,7 @@ head:
     #     memory: "512Mi"
   #labels:
   # key: value
-  initArgs:
+  rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
   # containerEnv specifies environment variables for the Ray container,
@@ -82,7 +82,7 @@ worker:
   type: worker
   #labels:
   # key: value
-  initArgs:
+  rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
   # containerEnv specifies environment variables for the Ray container,
@@ -132,7 +132,7 @@ additionalWorkerGroups:
     maxReplicas: 3
     type: worker
     labels: {}
-    initArgs:
+    rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
   # containerEnv specifies environment variables for the Ray container,
