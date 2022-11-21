@@ -34,8 +34,6 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.head.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: head
             {{- toYaml .Values.head.containerEnv | nindent 14}}
             {{- with .Values.head.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
@@ -57,8 +55,6 @@ spec:
       metadata:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         labels:
-          groupName: {{ .Values.head.groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
@@ -86,8 +82,6 @@ spec:
             imagePullPolicy: {{ $.Values.image.pullPolicy }}
             resources: {{- toYaml $values.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: worker
             {{- toYaml $values.containerEnv | nindent 14}}
             {{- with $values.envFrom }}
             envFrom: {{- toYaml $ | nindent 14}}
@@ -107,8 +101,6 @@ spec:
       metadata:
         annotations: {{- toYaml $values.annotations | nindent 10 }}
         labels:
-          groupName: {{ $groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" $ }}
 {{ include "ray-cluster.labels" $ | indent 10 }}
   {{- end }}
   {{- end }}
@@ -135,8 +127,6 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.worker.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: worker
             {{- toYaml .Values.worker.containerEnv | nindent 14}}
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
@@ -156,8 +146,6 @@ spec:
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         labels:
-          groupName: {{ .Values.worker.groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
   {{- end }}
 

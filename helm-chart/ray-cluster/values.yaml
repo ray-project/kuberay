@@ -2,6 +2,9 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# The KubeRay community welcomes PRs to expose additional configuration
+# in this Helm chart.
+
 image:
   repository: rayproject/ray
   tag: 2.0.0
@@ -33,25 +36,25 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
+  # replicas for the head is deprecated. There is always 1 Ray head pod.
   replicas: 1
-  type: head
-  labels:
-    key: value
+  #labels:
+  # key: value
   initArgs:
-    port: '6379'
-    redis-password: 'LetMeInRay'  # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
     dashboard-host: '0.0.0.0'
-    num-cpus: '1'  # can be auto-completed from the limits
-    node-ip-address: $MY_POD_IP  # auto-completed as the head pod IP
     block: 'true'
-  containerEnv:
-    - name: MY_POD_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.podIP
+  # containerEnv specifies environment variables for the Ray container,
+  # Follows standard K8s container env schema.
+  containerEnv: []
+  #- name: EXAMPLE_ENV
+  #   value: "1"
   envFrom: []
     # - secretRef:
     #     name: my-env-secret
+  # resource requests and limits for the Ray head container.
+  # Modify as needed for your application.
+  # Note that the resources in this example are much too small for production.
+  # Ray pods should be sized to take up entire K8s nodes when possible.
   resources:
     limits:
       cpu: 1
@@ -67,6 +70,8 @@ head:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+  # sidecarContainers specifies additional containers to attach to the Ray pod.
+  # Follows standard K8s container spec.
   sidecarContainers: []
 
 
@@ -77,35 +82,26 @@ worker:
   groupName: workergroup
   replicas: 1
   type: worker
-  labels:
-    key: value
+  #labels:
+  # key: value
   initArgs:
-    node-ip-address: $MY_POD_IP
-    redis-password: LetMeInRay
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
-  containerEnv:
-    - name: MY_POD_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.podIP
-    - name: RAY_DISABLE_DOCKER_CPU_WARNING
-      value: "1"
-    - name: CPU_REQUEST
-      valueFrom:
-        resourceFieldRef:
-          containerName: ray-worker
-          resource: requests.cpu
-    - name: MY_POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
+  # containerEnv specifies environment variables for the Ray container,
+  # Follows standard K8s container env schema.
+  containerEnv: []
+  #- name: EXAMPLE_ENV
+  #   value: "1"
   envFrom: []
     # - secretRef:
     #     name: my-env-secret
-  ports:
-    - containerPort: 80
-      protocol: TCP
+  # ports optionally allows specifying ports for the Ray container.
+  # ports are used to configure the Ray head service.
+  # ports: []
+  # resource requests and limits for the Ray head container.
+  # Modify as needed for your application.
+  # Note that the resources in this example are much too small for production.
+  # Ray pods should be sized to take up entire K8s nodes when possible.
   resources:
     limits:
       cpu: 1
@@ -122,6 +118,8 @@ worker:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+  # sidecarContainers specifies additional containers to attach to the Ray pod.
+  # Follows standard K8s container spec.
   sidecarContainers: []
 
 # The map's key is used as the groupName.
@@ -137,32 +135,23 @@ additionalWorkerGroups:
     type: worker
     labels: {}
     initArgs:
-      node-ip-address: $MY_POD_IP
-      redis-password: LetMeInRay
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
-    containerEnv:
-      - name: MY_POD_IP
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: RAY_DISABLE_DOCKER_CPU_WARNING
-        value: "1"
-      - name: CPU_REQUEST
-        valueFrom:
-          resourceFieldRef:
-            containerName: ray-worker
-            resource: requests.cpu
-      - name: MY_POD_NAME
-        valueFrom:
-          fieldRef:
-            fieldPath: metadata.name
+  # containerEnv specifies environment variables for the Ray container,
+  # Follows standard K8s container env schema.
+    containerEnv: []
+      #- name: EXAMPLE_ENV
+      #   value: "1"
     envFrom: []
-      # - secretRef:
-      #     name: my-env-secret
-    ports:
-      - containerPort: 80
-        protocol: TCP
+        # - secretRef:
+        #     name: my-env-secret
+    # ports optionally allows specifying ports for the Ray container.
+    # ports are used to configure the Ray head service.
+    # ports: []
+    # resource requests and limits for the Ray head container.
+    # Modify as needed for your application.
+    # Note that the resources in this example are much too small for production.
+    # Ray pods should be sized to take up entire K8s nodes when possible.
     resources:
       limits:
         cpu: 1
@@ -181,8 +170,5 @@ additionalWorkerGroups:
         name: log-volume
     sidecarContainers: []
 
-headServiceSuffix: "ray-operator.svc"
-
 service:
   type: ClusterIP
-  port: 8080
