@@ -36,7 +36,7 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
-  #labels:
+  # labels:
   # key: value
   rayStartParams:
     dashboard-host: '0.0.0.0'
@@ -44,7 +44,7 @@ head:
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
-  #- name: EXAMPLE_ENV
+  # - name: EXAMPLE_ENV
   #   value: "1"
   envFrom: []
     # - secretRef:
@@ -82,7 +82,7 @@ worker:
   groupName: workergroup
   replicas: 1
   type: worker
-  #labels:
+  # labels:
   # key: value
   rayStartParams:
     block: 'true'
@@ -90,7 +90,7 @@ worker:
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
-  #- name: EXAMPLE_ENV
+  # - name: EXAMPLE_ENV
   #   value: "1"
   envFrom: []
     # - secretRef:
@@ -139,7 +139,7 @@ additionalWorkerGroups:
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
     containerEnv: []
-      #- name: EXAMPLE_ENV
+      # - name: EXAMPLE_ENV
       #   value: "1"
     envFrom: []
         # - secretRef:
