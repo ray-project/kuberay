@@ -8,7 +8,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
     # A unique identifier for the head node and workers of this cluster.
-  name: raycluster-complete
+  name: raycluster-pod-security
 spec:
   rayVersion: '2.0.0'
   ######################headGroupSpec#################################
@@ -52,6 +52,8 @@ spec:
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
+            - mountPath: /home/ray/samples
+              name: xgboost-example-configmap
           resources:
             limits:
               cpu: "4"
@@ -69,6 +71,13 @@ spec:
         volumes:
           - name: ray-logs
             emptyDir: {}
+          - name: xgboost-example-configmap
+            configMap:
+              name: xgboost-example
+              # An array of keys from the ConfigMap to create as files
+              items:
+                - key: xgboost_example.py
+                  path: xgboost_example.py
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -92,7 +101,7 @@ spec:
     template:
       metadata:
         labels:
-          rayCluster: raycluster-complete # will be injected if missing
+          rayCluster: raycluster-pod-security # will be injected if missing
           groupName: small-group # will be injected if missing
       spec:
         containers:
@@ -147,9 +156,9 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ray-job-code-sample
+  name: xgboost-example
 data:
-  sample_code.py: |
+  xgboost_example.py: |
     import ray
     from ray.train.xgboost import XGBoostTrainer
     from ray.air.config import ScalingConfig
