@@ -480,7 +480,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	return rayCluster, nil
 }
 
-func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, dashboardClient utils.RayDashboardClientInterface) bool {
+func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serveStatus *rayv1alpha1.RayServiceStatus) bool {
 	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
 	cachedConfigObj, exist := r.ServeDeploymentConfigs.Get(cacheKey)
 
@@ -509,14 +509,9 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
 		shouldUpdate = true
 		reason = fmt.Sprintf("Current Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-	} else {
-		if serveStatuses, err := dashboardClient.GetDeploymentsStatus(); err != nil {
-			shouldUpdate = true
-			reason = fmt.Sprintf("Failed to get Serve deployment statuses from dashboard of cluster %s", rayClusterInstance.Name)
-		} else if len(serveStatuses.DeploymentStatuses) == 0 {
-			shouldUpdate = true
-			reason = fmt.Sprintf("No Serve deployments have started deploying for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-		}
+	} else if len(serveStatus.ServeStatuses) == 0 {
+		shouldUpdate = true
+		reason = fmt.Sprintf("No Serve deployments have started deploying for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 	}
 
 	r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
@@ -830,7 +825,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
-	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayDashboardClient)
+	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayServiceStatus)
 
 	if shouldUpdate {
 		if err = r.updateServeDeployment(rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
