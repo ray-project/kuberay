@@ -612,7 +612,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	rayServiceServeStatus.ServeStatuses = serveStatuses.DeploymentStatuses
 	rayServiceServeStatus.ApplicationStatus = serveStatuses.ApplicationStatus
 
-	r.Log.V(1).Info("getAndCheckServeStatus ", "statusMap", statusMap, "serveStatuses", serveStatuses)
+	r.Log.V(1).Info("getAndCheckServeStatus", "statusMap", statusMap, "serveStatuses", serveStatuses)
 
 	return isHealthy, isReady, nil
 }
@@ -864,6 +864,10 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Running
 		r.updateRayClusterInfo(rayServiceInstance, rayClusterInstance.Name)
 		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
+	} else if isHealthy && !isReady {
+		if err := r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForServeDeploymentReady, err); err != nil {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, true, false, err
+		}
 	} else if !isHealthy {
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
 		r.markRestart(rayServiceInstance)
