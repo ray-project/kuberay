@@ -53,7 +53,7 @@ With the `pod-security.kubernetes.io` labels, the built-in Kubernetes Pod securi
 helm install -n pod-security kuberay-operator .
 ```
 
-# Step 5: Create a RayCluster (Choose either Step5.1 or Step5.2)
+# Step 5: Create a RayCluster (Choose either Step 5.1 or Step 5.2)
 * If you choose Step5.1, no Pod will be created in the namespace `pod-security`.
 * If you choose Step5.2, Pods can be created successfully.
 
