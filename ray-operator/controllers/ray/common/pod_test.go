@@ -526,12 +526,12 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	// Define a custom security profile.
 	allowPrivilegeEscalation := false
 	capabilities := v1.Capabilities{
-		Drop: []v1.Capability{"All"},
+		Drop: []v1.Capability{"ALL"},
 	}
 	seccompProfile := v1.SeccompProfile{
 		Type: v1.SeccompProfileTypeRuntimeDefault,
 	}
-	runAsNonRoot := false
+	runAsNonRoot := true
 	customSecurityContext := v1.SecurityContext{
 		AllowPrivilegeEscalation: &allowPrivilegeEscalation,
 		Capabilities:             &capabilities,
