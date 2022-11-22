@@ -8,9 +8,9 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // JobStatus is the Ray Job Status.
-// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
 type JobStatus string
 
+// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
 const (
 	JobStatusPending   JobStatus = "PENDING"
 	JobStatusRunning   JobStatus = "RUNNING"
