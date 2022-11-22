@@ -23,7 +23,7 @@ whether our Pods violate the policies in `restricted` standard or not.
 
 The feature [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/) is firstly 
 introduced in Kubernetes v1.22 (alpha) and becomes stable in Kubernetes v1.25. In addition, KubeRay currently supports 
-Kubernetes from v1.19 to v1.24 (not sure about the status of v1.25). Hence, I use **Kubernetes v1.24** in this step.
+Kubernetes from v1.19 to v1.24. (At the time of writing, we have not tested KubeRay with Kubernetes v1.25). Hence, I use **Kubernetes v1.24** in this step.
 
 # Step 2: Check the audit logs
 ```bash
