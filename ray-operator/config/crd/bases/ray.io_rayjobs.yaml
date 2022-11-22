@@ -194,7 +194,8 @@ spec:
                           type: object
                         type: array
                       idleTimeoutSeconds:
-                        description: Defaults to 60 (one minute).
+                        description: IdleTimeoutSeconds is the number of seconds to
+                          wait before scaling down a worker pod which is not us
                         format: int32
                         type: integer
                       image:
@@ -231,8 +232,8 @@ spec:
                             type: object
                         type: object
                       securityContext:
-                        description: IdleTimeoutSeconds is the number of seconds to
-                          wait before scaling down a worker pod which is not us
+                        description: SecurityContext defines the security options
+                          the container should be run with.
                         properties:
                           allowPrivilegeEscalation:
                             description: AllowPrivilegeEscalation controls whether
