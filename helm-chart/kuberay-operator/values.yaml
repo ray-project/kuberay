@@ -58,3 +58,12 @@ rbacEnable: true
 
 batchScheduler:
   enabled: false
+
+# Respect the "restricted" security policy
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
