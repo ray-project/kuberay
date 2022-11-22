@@ -47,7 +47,7 @@ With the `pod-security.kubernetes.io` labels, the built-in Kubernetes Pod securi
 `pod-security.kubernetes.io/enforce=restricted` means that the Pod will be rejected if it violate the policies defined in 
 `restricted` security standard. See [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/) for more details about the labels.
 
-# Step 4: Install a KubeRay operator
+# Step 4: Install the KubeRay operator
 ```bash
 # Path: helm-chart/kuberay-operator
 helm install -n pod-security kuberay-operator .
