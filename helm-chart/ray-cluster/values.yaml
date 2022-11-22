@@ -37,7 +37,7 @@ head:
     #     cpu: "500m"
     #     memory: "512Mi"
   # labels:
-  # key: value
+  #   key: value
   rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
