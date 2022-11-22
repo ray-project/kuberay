@@ -865,9 +865,11 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		r.updateRayClusterInfo(rayServiceInstance, rayClusterInstance.Name)
 		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
 	} else if isHealthy && !isReady {
-		if err := r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForServeDeploymentReady, err); err != nil {
+		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.WaitForServeDeploymentReady
+		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, true, false, err
 		}
+		logger.Info("Mark cluster as waiting for Serve deployments", "rayCluster", rayClusterInstance)
 	} else if !isHealthy {
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
 		r.markRestart(rayServiceInstance)
