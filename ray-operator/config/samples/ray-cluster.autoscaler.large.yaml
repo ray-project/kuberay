@@ -44,6 +44,8 @@ spec:
     imagePullPolicy: Always
     # Optionally specify the autoscaler container's securityContext.
     securityContext: {}
+    env: []
+    envFrom: []
     # resources specifies optional resource request and limit overrides for the autoscaler container.
     # For large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     resources:
