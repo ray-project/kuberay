@@ -83,7 +83,7 @@ worker:
   replicas: 1
   type: worker
   # labels:
-  # key: value
+  #   key: value
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
