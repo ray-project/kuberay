@@ -409,8 +409,8 @@ func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err erro
 		if err != nil {
 			return err
 		}
-		// StopJob only returns an error when JobStatus is not in terminated states (STOPPED / SUCCEEDED / FAILED)
-		if (jobInfo.JobStatus == rayv1alpha1.JobStatusPending) || (jobInfo.JobStatus == rayv1alpha1.JobStatusRunning) {
+		// StopJob only returns an error when JobStatus is not in terminal states (STOPPED / SUCCEEDED / FAILED)
+		if !rayv1alpha1.IsJobTerminal(jobInfo.JobStatus) {
 			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
 		}
 	}

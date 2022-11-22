@@ -7,7 +7,8 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// JobStatus is the Ray Job Status. https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobstatus
+// JobStatus is the Ray Job Status.
+// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
 type JobStatus string
 
 const (
@@ -17,6 +18,15 @@ const (
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
 )
+
+// This function should be synchronized with the function `is_terminal()` in Ray Job.
+func IsJobTerminal(status JobStatus) bool {
+	terminalStatusSet := map[JobStatus]struct{}{
+		JobStatusStopped: {}, JobStatusSucceeded: {}, JobStatusFailed: {},
+	}
+	_, ok := terminalStatusSet[status]
+	return ok
+}
 
 // JobDeploymentStatus indicates RayJob status including RayCluster lifecycle management and Job submission
 type JobDeploymentStatus string
