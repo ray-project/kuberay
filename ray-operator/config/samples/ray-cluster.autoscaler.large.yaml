@@ -42,10 +42,10 @@ spec:
     ## image: "my-repo/my-custom-autoscaler-image:tag"
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
     imagePullPolicy: Always
-    # resources specifies optional resource request and limit overrides for the autoscaler container.
-    # For large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     # Optionally specify the autoscaler container's securityContext.
     securityContext: {}
+    # resources specifies optional resource request and limit overrides for the autoscaler container.
+    # For large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     resources:
       limits:
         cpu: "500m"
