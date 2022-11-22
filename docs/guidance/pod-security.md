@@ -55,7 +55,7 @@ helm install -n pod-security kuberay-operator .
 
 # Step 5: Create a RayCluster (Choose either Step 5.1 or Step 5.2)
 * If you choose Step 5.1, no Pod will be created in the namespace `pod-security`.
-* If you choose Step5.2, Pods can be created successfully.
+* If you choose Step 5.2, Pods can be created successfully.
 
 ## Step 5.1: Create a RayCluster without proper `securityContext` configurations
 ```bash
