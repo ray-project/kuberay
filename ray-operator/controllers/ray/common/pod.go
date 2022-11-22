@@ -395,6 +395,14 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 					},
 				},
 			},
+			{
+				Name: "RAY_HEAD_POD_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			},
 		},
 		Command: []string{
 			"ray",
