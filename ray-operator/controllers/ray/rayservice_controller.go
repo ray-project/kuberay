@@ -639,23 +639,6 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(dashboardClient utils.RayD
 	return isHealthy, isReady, nil
 }
 
-func (r *RayServiceReconciler) allServeDeploymentsHealthy(rayServiceInstance *rayv1alpha1.RayService, rayServiceStatus *rayv1alpha1.RayServiceStatus) bool {
-	// Check if the serve deployment number is correct.
-	r.Log.V(1).Info("allServeDeploymentsHealthy", "rayServiceInstance.Status.ServeStatuses", rayServiceStatus.ServeStatuses)
-	if len(rayServiceStatus.ServeStatuses) == 0 {
-		return false
-	}
-
-	// Check if all the service deployments are healthy.
-	for _, status := range rayServiceStatus.ServeStatuses {
-		if status.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (r *RayServiceReconciler) generateConfigKey(rayServiceInstance *rayv1alpha1.RayService, clusterName string) string {
 	return r.generateConfigKeyPrefix(rayServiceInstance) + clusterName
 }
