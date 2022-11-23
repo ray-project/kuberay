@@ -123,6 +123,10 @@ var _ = Context("Inside the default namespace", func() {
 												},
 											},
 										},
+										{
+											Name:  "SAMPLE_ENV_VAR",
+											Value: "SAMPLE_VALUE",
+										},
 									},
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
@@ -195,6 +199,10 @@ var _ = Context("Inside the default namespace", func() {
 														FieldPath: "status.podIP",
 													},
 												},
+											},
+											{
+												Name:  "SAMPLE_ENV_VAR",
+												Value: "SAMPLE_VALUE",
 											},
 										},
 										Ports: []corev1.ContainerPort{
@@ -314,7 +322,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should detect unhealthy status and try to switch to new RayCluster.", func() {
-			// Set a wrong serve status with unhealthy.
+			// Set deployment statuses to UNHEALTHY
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UNHEALTHY"))
@@ -333,6 +341,34 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+		})
+
+		It("should perform a zero-downtime update after a code change.", func() {
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+
+			// The cluster shouldn't switch until deployments are finished updating
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UPDATING"))
+			myRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
+			myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
+
+			Expect(k8sClient.Update(ctx, myRayService)).Should(Succeed(), "failed to update test RayService resource")
+
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, myRayService),
+				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
+
+			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
+
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// The cluster should switch once the deployments are finished updating
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "HEALTHY"))
+
+			Eventually(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*60, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
 	})
 })
