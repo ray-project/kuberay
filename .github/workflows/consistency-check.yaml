@@ -1,4 +1,4 @@
-name: operator-consistency-check
+name: Operator Consistency Check
 
 on:
   push:
