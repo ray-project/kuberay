@@ -1,4 +1,4 @@
-name: Basic-build-and-test
+name: Basic Lint, Build And Test
 
 on:
   push:

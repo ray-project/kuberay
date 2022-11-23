@@ -1,4 +1,4 @@
-name: Compatibility-test
+name: Compatibility Tests
 
 on:
   push:
