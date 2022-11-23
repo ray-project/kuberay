@@ -3,7 +3,7 @@ name: Basic Lint, Build And Test
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
     branches: [ master ]
 
@@ -214,7 +214,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
+      uses: docker-practice/actions-setup-docker@master
 
     - name: Build Docker Image - Operator
       run: |
