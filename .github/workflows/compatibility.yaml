@@ -1,8 +1,13 @@
 name: Go-build-and-test
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Daily at midnight
+  push:
+    branches:
+      - master
+    pull_request:
+      branches: [ master ]
+#  schedule:
+#    - cron: '0 0 * * *' # Daily at midnight
 
 jobs:
   build_apiserver:
@@ -73,12 +78,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Push Apiserver to DockerHub
-        run: |
-          docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
-          docker push kuberay/apiserver:nightly
-        working-directory: ${{env.working-directory}}
+#      - name: Push Apiserver to DockerHub
+#        run: |
+#          docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+#          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
+#          docker push kuberay/apiserver:nightly
+#        working-directory: ${{env.working-directory}}
 
       - name: Build CLI
         run: go build -o kuberay -a main.go
@@ -152,12 +157,12 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Push Operator to DockerHub
-      run: |
-        docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
-        docker push kuberay/operator:nightly
-      working-directory: ${{env.working-directory}}
+#    - name: Push Operator to DockerHub
+#      run: |
+#        docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
+#        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
+#        docker push kuberay/operator:nightly
+#      working-directory: ${{env.working-directory}}
 
   test-compatibility-1_12_0:
     needs:
