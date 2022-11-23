@@ -67,6 +67,14 @@ docker exec kind-control-plane cat /var/log/kubernetes/kube-apiserver-audit.log
 
 # Example error messagess
 # "pods \"raycluster-complete-head-fkbf5\" is forbidden: violates PodSecurity \"restricted:latest\": allowPrivilegeEscalation != false (container \"ray-head\" must set securityContext.allowPrivilegeEscalation=false) ...
+
+kubectl get pod -n pod-security
+# NAME                               READY   STATUS    RESTARTS   AGE
+# kuberay-operator-8b6d55dbb-t8msf   1/1     Running   0          62s
+
+# Clean up the RayCluster
+kubectl delete rayclusters.ray.io -n pod-security raycluster-complete
+# raycluster.ray.io "raycluster-complete" deleted
 ```
 No Pod will be created in the namespace `pod-security`, and check audit logs for error messages.
 
@@ -89,6 +97,11 @@ kubectl port-forward --address 0.0.0.0 svc/raycluster-pod-security-head-svc -n p
 
 # Check the job status in the dashboard on your browser.
 # http://127.0.0.1:8265/#/job => The job status should be "SUCCEEDED".
+
+# Clean up the RayCluster
+kubectl delete -n pod-security -f ray-cluster.pod-security.yaml
+# raycluster.ray.io "raycluster-pod-security" deleted
+# configmap "xgboost-example" deleted
 ```
 One head Pod and one worker Pod will be created as specified in `ray-cluster.pod-security.yaml`.
 Next, we log in to the head Pod, and run a XGBoost example script. Finally, check the job

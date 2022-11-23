@@ -56,11 +56,11 @@ spec:
               name: xgboost-example-configmap
           resources:
             limits:
-              cpu: "4"
-              memory: "4G"
+              cpu: 1
+              memory: 2Gi
             requests:
-              cpu: "1"
-              memory: "4G"
+              cpu: 1
+              memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -120,11 +120,11 @@ spec:
               name: ray-logs
           resources:
             limits:
-              cpu: "4"
-              memory: "4Gi"
+              cpu: 4
+              memory: 2Gi
             requests:
-              cpu: "1"
-              memory: "4Gi"
+              cpu: 1
+              memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
