@@ -38,6 +38,7 @@ var ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health ch
 const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
 	ServiceRestartRequeueDuration      = 10 * time.Second
+	RayClusterDeletionDelayDuration    = 60 * time.Second
 	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
 )
 
@@ -47,18 +48,21 @@ type RayServiceReconciler struct {
 	Scheme   *runtime.Scheme
 	Log      logr.Logger
 	Recorder record.EventRecorder
-	// Now Ray dashboard does not cache serve deployment config. To avoid updating the same config repeatedly, cache the Serve Deployment config in this map.
-	ServeDeploymentConfigs cmap.ConcurrentMap
+	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
+	// To avoid reapplying the same config repeatedly, cache the config in this map.
+	ServeDeploymentConfigs       cmap.ConcurrentMap
+	RayClusterDeletionTimestamps cmap.ConcurrentMap
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
 func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 	return &RayServiceReconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		Log:                    ctrl.Log.WithName("controllers").WithName("RayService"),
-		Recorder:               mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeDeploymentConfigs: cmap.New(),
+		Client:                       mgr.GetClient(),
+		Scheme:                       mgr.GetScheme(),
+		Log:                          ctrl.Log.WithName("controllers").WithName("RayService"),
+		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
+		ServeDeploymentConfigs:       cmap.New(),
+		RayClusterDeletionTimestamps: cmap.New(),
 	}
 }
 
@@ -130,7 +134,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
 	*/
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
-		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
+		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
 		rayServiceInstance.Status.PendingServiceStatus = rayv1alpha1.RayServiceStatus{}
 		if ctrlResult, isHealthy, isReady, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true, logger); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
@@ -153,7 +157,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrlResult, nil
 		}
 	} else {
-		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
+		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1alpha1.RayServiceStatus{}
 		rayServiceInstance.Status.PendingServiceStatus = rayv1alpha1.RayServiceStatus{}
 	}
@@ -286,13 +290,36 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 		return err
 	}
 
-	// Clean up RayCluster instances.
+	// Clean up RayCluster instances. Each instance is deleted 60 seconds
+	// after becoming inactive to give the ingress time to update.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
-			r.Log.V(1).Info("reconcileRayCluster", "delete ray cluster", rayClusterInstance.Name)
-			if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-				r.Log.Error(err, "Fail to delete RayCluster "+rayClusterInstance.Name)
-				return err
+			cachedTimestampObj, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
+			if !exists {
+				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
+				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
+				r.Log.V(1).Info(fmt.Sprintf("Scheduled dangling RayCluster "+
+					"%s for deletion at %s", rayClusterInstance.Name, deletionTimestamp))
+			} else {
+				cachedTimestamp, isTimestamp := cachedTimestampObj.(time.Time)
+				reasonForDeletion := ""
+				if !isTimestamp {
+					reasonForDeletion = fmt.Sprintf("Deletion cache contains "+
+						"unexpected, non-timestamp object for RayCluster %s. "+
+						"Deleting cluster immediately.", rayClusterInstance.Name)
+				} else if time.Since(cachedTimestamp) > 0*time.Second {
+					reasonForDeletion = fmt.Sprintf("Deletion timestamp %s "+
+						"for RayCluster %s has passed. Deleting cluster "+
+						"immediately.", cachedTimestamp, rayClusterInstance.Name)
+				}
+
+				if reasonForDeletion != "" {
+					r.Log.V(1).Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
+					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+						r.Log.Error(err, "Fail to delete RayCluster "+rayClusterInstance.Name)
+						return err
+					}
+				}
 			}
 		}
 	}
