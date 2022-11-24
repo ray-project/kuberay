@@ -19,13 +19,22 @@ logging.basicConfig(
 class CONST(object):
     """Constants"""
     __slots__ = ()
+    # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
+
+    # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
     K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
+
+    # Paths
     REPO_ROOT = "/" + "/".join(os.path.abspath(os.path.dirname(__file__)).split('/')[1:-2]) + "/"
     HELM_CHART_ROOT = REPO_ROOT + "helm-chart"
     DEFAULT_KIND_CONFIG = REPO_ROOT + "tests/framework/config/kind-config.yaml"
+
+    # Ray features
+    RAY_FT = "RAY_FT"
+    RAY_SERVICE = "RAY_SERVICE"
 
 CONST = CONST()
 

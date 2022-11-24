@@ -147,8 +147,8 @@ class RayFTTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not utils.ray_ft_supported(ray_version):
-            raise unittest.SkipTest("ray ft is not supported")
+        if not utils.is_feature_supported(ray_version, CONST.RAY_FT):
+            raise unittest.SkipTest(f"{CONST.RAY_FT} is not supported")
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
         image_dict = {
@@ -160,6 +160,7 @@ class RayFTTestCase(unittest.TestCase):
         utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
+    @unittest.skip("Skip test_kill_head due to its flakiness.")
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
         # come up.
@@ -288,8 +289,8 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not utils.ray_service_supported(ray_version):
-            raise unittest.SkipTest("ray service is not supported")
+        if not utils.is_feature_supported(ray_version, CONST.RAY_SERVICE):
+            raise unittest.SkipTest(f"{CONST.RAY_SERVICE} is not supported")
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
         # We wait for the serve service ready.

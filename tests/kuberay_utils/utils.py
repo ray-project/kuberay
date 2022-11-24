@@ -10,6 +10,7 @@ import yaml
 
 from kubernetes.stream import stream
 from framework.prototype import (
+    CONST,
     RayClusterAddCREvent,
     shell_subprocess_run
 )
@@ -25,28 +26,14 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-
-def parse_ray_version(version_str):
-    tmp = version_str.split('.')
-    assert len(tmp) == 3
-    major = int(tmp[0])
-    minor = int(tmp[1])
-    patch = int(tmp[2])
-    return major, minor, patch
-
-
-def ray_ft_supported(ray_version):
+def is_feature_supported(ray_version, feature):
+    """Return True if `feature` is supported in `ray_version`"""
     if ray_version == "nightly":
         return True
-    major, minor, _ = parse_ray_version(ray_version)
-    return major * 100 + minor > 113
-
-
-def ray_service_supported(ray_version):
-    if ray_version == "nightly":
-        return True
-    major, minor, _ = parse_ray_version(ray_version)
-    return major * 100 + minor > 113
+    major, minor, _ = [int(s) for s in ray_version.split('.')]
+    if feature in [CONST.RAY_FT, CONST.RAY_SERVICE]:
+        return major * 100 + minor > 113
+    return False
 
 def create_kuberay_cluster(template_name, ray_version, ray_image):
     """Create a RayCluster and a NodePort service."""
