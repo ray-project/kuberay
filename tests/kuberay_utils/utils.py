@@ -11,6 +11,7 @@ import yaml
 from kubernetes.stream import stream
 from framework.prototype import (
     CONST,
+    K8S_CLUSTER_MANAGER,
     RayClusterAddCREvent,
     shell_subprocess_run
 )
@@ -157,12 +158,15 @@ def wait_for_condition(
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
 
-def get_pod(k8s_api, namespace, label_selector):
-    return k8s_api.list_namespaced_pod(namespace = namespace, label_selector = label_selector)
+def get_pod(namespace, label_selector):
+    return K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
+            namespace = namespace, label_selector = label_selector
+        )
 
-def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
+def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
     exec_command = ['/bin/sh', '-c'] + exec_command
-    resp = stream(k8s_api.connect_get_namespaced_pod_exec,
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    resp = stream(k8s_v1_api.connect_get_namespaced_pod_exec,
                 pod_name,
                 namespace,
                 command=exec_command,
@@ -173,7 +177,7 @@ def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, st
         logger.info(f"response: {resp}")
     return resp
 
-def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
+def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
     """
     `wait_for_new_head` is used to wait for new head is ready and running. For example, `test_detached_actor` kills
     the gcs_server process on the head pod. It takes nearly 1 min to kill the head pod, and the head pod will still
@@ -191,7 +195,6 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     become ready to serve new connections from ray clients. So, users need to retry until a Ray client connection succeeds.
 
     Args:
-        k8s_api: Kubernetes client (e.g. client.CoreV1Api())
         old_head_pod_name: Name of the old head pod.
         old_restart_count: If the Pod is restarted by Kubernetes Pod RestartPolicy, the restart_count will increase by 1.
         namespace: Namespace that the head pod is running in.
@@ -201,13 +204,14 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     Raises:
         RuntimeError: If the condition is not met before the timeout expires, raise the RuntimeError.
     """
-    def check_status(k8s_api, old_head_pod_name, old_restart_count, namespace) -> bool:
-        all_pods = k8s_api.list_namespaced_pod(namespace = namespace)
-        headpods = get_pod(k8s_api, namespace=namespace, label_selector='ray.io/node-type=head')
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
+        all_pods = k8s_v1_api.list_namespaced_pod(namespace = namespace)
+        headpods = get_pod(namespace=namespace, label_selector='ray.io/node-type=head')
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
         # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
         # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`
-        # worker pods in the cluster. 
+        # worker pods in the cluster.
         if len(headpods.items) != 1:
             logger.info('Number of headpods is not equal to 1.')
             return False
@@ -245,7 +249,7 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
                     logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
                     return False
         return True
-    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, k8s_api=k8s_api,
+    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms,
         old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count, namespace=namespace)
     # After the cluster state converges, ray processes still need tens of seconds to become ready.
     # TODO (kevin85421): Make ray processes become ready when pods are "Ready" and "Running".

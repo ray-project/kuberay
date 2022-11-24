@@ -8,7 +8,6 @@ import string
 import docker
 
 from kuberay_utils import utils
-from kubernetes import client, config
 from framework.prototype import (
     CONST,
     K8S_CLUSTER_MANAGER,
@@ -201,13 +200,9 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
-        # Initialize k8s client
-        config.load_kube_config()
-        k8s_api = client.CoreV1Api()
-
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
+        headpods = utils.get_pod(namespace='default', label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
@@ -216,10 +211,10 @@ class RayFTTestCase(unittest.TestCase):
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
         # will terminate.
         exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(k8s_api, pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
+        utils.pod_exec_command(pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
+        utils.wait_for_new_head(old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
@@ -247,13 +242,9 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
-        # Initialize k8s client
-        config.load_kube_config()
-        k8s_api = client.CoreV1Api()
-
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
+        headpods = utils.get_pod(namespace='default', label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
@@ -262,10 +253,10 @@ class RayFTTestCase(unittest.TestCase):
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
         # will terminate.
         exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(k8s_api, pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
+        utils.pod_exec_command(pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
+        utils.wait_for_new_head(old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
         # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
@@ -277,8 +268,6 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
-        k8s_api.api_client.rest_client.pool_manager.clear()
-        k8s_api.api_client.close()
         container.stop()
         docker_client.close()
 
