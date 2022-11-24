@@ -218,6 +218,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		if updateErr := r.updateClusterReason(instance, err.Error()); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update reason error", "cluster name", request.Name)
 		}
+		r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayiov1alpha1.PodReconciliationError), err.Error())
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
@@ -766,7 +767,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,

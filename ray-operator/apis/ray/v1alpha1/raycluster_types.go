@@ -169,5 +169,6 @@ func init() {
 type EventReason string
 
 const (
-	RayConfigError EventReason = "RayConfigError"
+	RayConfigError         EventReason = "RayConfigError"
+	PodReconciliationError EventReason = "PodReconciliationError"
 )
