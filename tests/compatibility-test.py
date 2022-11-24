@@ -10,7 +10,9 @@ import docker
 from kuberay_utils import utils
 from kubernetes import client, config
 from framework.prototype import (
+    CONST,
     K8S_CLUSTER_MANAGER,
+    OperatorManager,
     shell_subprocess_run
 )
 
@@ -42,9 +44,12 @@ class BasicRayTestCase(unittest.TestCase):
         # ray cluster running inside Kind environment.
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
-        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
-        utils.download_images(images)
-        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        image_dict = {
+            CONST.RAY_IMAGE_KEY: ray_image,
+            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
+        }
+        operator_manager = OperatorManager(image_dict)
+        operator_manager.prepare_operator()
         utils.create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
@@ -146,9 +151,12 @@ class RayFTTestCase(unittest.TestCase):
             raise unittest.SkipTest("ray ft is not supported")
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
-        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
-        utils.download_images(images)
-        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        image_dict = {
+            CONST.RAY_IMAGE_KEY: ray_image,
+            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
+        }
+        operator_manager = OperatorManager(image_dict)
+        operator_manager.prepare_operator()
         utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
@@ -288,9 +296,12 @@ class RayServiceTestCase(unittest.TestCase):
         # The test will check the successful response from serve service.
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
-        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
-        utils.download_images(images)
-        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        image_dict = {
+            CONST.RAY_IMAGE_KEY: ray_image,
+            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
+        }
+        operator_manager = OperatorManager(image_dict)
+        operator_manager.prepare_operator()
         utils.create_kuberay_service(
             RayServiceTestCase.service_template_file, ray_version, ray_image)
 

@@ -23,7 +23,10 @@ class CONST(object):
     RAY_IMAGE_KEY = "ray-image"
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
     K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
-    DEFAULT_KIND_CONFIG = os.path.abspath(os.path.dirname(__file__)) + "/config/kind-config.yaml"
+    REPO_ROOT = "/" + "/".join(os.path.abspath(os.path.dirname(__file__)).split('/')[1:-2]) + "/"
+    HELM_CHART_ROOT = REPO_ROOT + "helm-chart"
+    DEFAULT_KIND_CONFIG = REPO_ROOT + "tests/framework/config/kind-config.yaml"
+
 CONST = CONST()
 
 # Utility functions
@@ -108,6 +111,8 @@ class OperatorManager:
                 if shell_subprocess_run(
                         f'docker image inspect {image} > /dev/null', check = False) != 0:
                     shell_subprocess_run(f'docker pull {image}')
+                else:
+                    logger.info("Image %s exists", image)
 
         download_images()
         logger.info("Load images into KinD cluster")
@@ -120,7 +125,7 @@ class OperatorManager:
         logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
         shell_subprocess_run(
-            "helm install kuberay-operator ../../helm-chart/kuberay-operator/ "
+            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
             f"--set image.repository={repo},image.tag={tag}"
         )
 

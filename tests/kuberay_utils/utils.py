@@ -7,7 +7,6 @@ import tarfile
 import time
 import tempfile
 import yaml
-import docker
 
 from kubernetes.stream import stream
 from framework.prototype import (
@@ -49,18 +48,6 @@ def ray_service_supported(ray_version):
     major, minor, _ = parse_ray_version(ray_version)
     return major * 100 + minor > 113
 
-def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image):
-    for image in images:
-        shell_subprocess_run(f'kind load docker-image {image}')
-    shell_subprocess_run('kubectl create -k manifests/cluster-scope-resources')
-    # use kustomize to build the yaml, then change the image to the one we want to testing.
-    shell_subprocess_run(
-        ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
-         'kustomize edit set image ' +
-         'kuberay/operator:nightly={0} kuberay/apiserver:nightly={1} && ' +
-         'kubectl apply -k .').format(kuberay_operator_image, kuberay_apiserver_image))
-
-
 def create_kuberay_cluster(template_name, ray_version, ray_image):
     """Create a RayCluster and a NodePort service."""
     context = {}
@@ -92,11 +79,7 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
         ray_cluster_add_event.trigger()
         return
     except Exception as ex:
-        # RayClusterAddCREvent fails to converge.
-        logger.error(str(ex))
-        shell_subprocess_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_subprocess_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_subprocess_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+        logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
     raise Exception("create_kuberay_cluster fails")
 
 def create_kuberay_service(template_name, ray_version, ray_image):
@@ -132,19 +115,6 @@ def create_kuberay_service(template_name, ray_version, ray_image):
         timeout=900,
         retry_interval_ms=5000,
     )
-
-def download_images(images):
-    """Pull images from DockerHub if do not exist."""
-    client = docker.from_env()
-    for image in images:
-        if shell_subprocess_run(f'docker image inspect {image} > /dev/null', check=False) != 0:
-            # Only pull the image from DockerHub when the image does not
-            # exist in the local docker registry.
-            logger.info("Download docker image %s", image)
-            client.images.pull(image)
-        else:
-            logger.info("Image %s exists", image)
-    client.close()
 
 def copy_to_container(container, src, dest, filename):
     oldpwd = os.getcwd()
