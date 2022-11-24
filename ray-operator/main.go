@@ -113,6 +113,9 @@ func main() {
 	if ray.ForcedClusterUpgrade {
 		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
 	}
+	if ray.EnableBatchScheduler {
+		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,

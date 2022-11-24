@@ -35,6 +35,10 @@ spec:
           volumeMounts: []
           command:
             - /manager
+          args:
+          - --enable-leader-election
+          - --prioritize-workers-to-delete
+          - --enable-batch-scheduler
           ports:
             - name: http
               containerPort: 8080
