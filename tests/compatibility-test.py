@@ -9,7 +9,10 @@ import docker
 
 from kuberay_utils import utils
 from kubernetes import client, config
-from framework.prototype import K8S_CLUSTER_MANAGER
+from framework.prototype import (
+    K8S_CLUSTER_MANAGER,
+    shell_subprocess_run
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -152,25 +155,25 @@ class RayFTTestCase(unittest.TestCase):
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
         # come up.
-        utils.shell_assert_success(
+        shell_subprocess_run(
             'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
 
         # wait for new head node to start
         time.sleep(80)
-        utils.shell_assert_success('kubectl get pods -A')
+        shell_subprocess_run('kubectl get pods -A')
 
         # make sure the new head is ready
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
-        rtn = utils.shell_run(
+        rtn = shell_subprocess_run(
             'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
-            utils.shell_run('kubectl get pods -A')
-            utils.shell_run(
+            shell_subprocess_run('kubectl get pods -A')
+            shell_subprocess_run(
                 'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            utils.shell_run(
+            shell_subprocess_run(
                 'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            utils.shell_run(
+            shell_subprocess_run(
                 'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
         assert rtn == 0
 
@@ -295,7 +298,7 @@ class RayServiceTestCase(unittest.TestCase):
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         utils.wait_for_condition(
-            lambda: utils.shell_run(curl_cmd) == 0,
+            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
             timeout=15,
         )
         utils.create_kuberay_service(
@@ -304,7 +307,7 @@ class RayServiceTestCase(unittest.TestCase):
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
         utils.wait_for_condition(
-            lambda: utils.shell_run(curl_cmd) == 0,
+            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
             timeout=60,
         )
         utils.create_kuberay_service(
@@ -313,7 +316,7 @@ class RayServiceTestCase(unittest.TestCase):
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         utils.wait_for_condition(
-            lambda: utils.shell_run(curl_cmd) == 0,
+            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
             timeout=180,
         )
 

@@ -10,7 +10,12 @@ import yaml
 import docker
 
 from kubernetes.stream import stream
-from framework.prototype import RayClusterAddCREvent
+from framework.prototype import (
+    RayClusterAddCREvent,
+    shell_subprocess_run
+)
+
+
 
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
@@ -44,27 +49,12 @@ def ray_service_supported(ray_version):
     major, minor, _ = parse_ray_version(ray_version)
     return major * 100 + minor > 113
 
-
-def shell_run(cmd, silent = False):
-    logger.info('executing cmd: {}'.format(cmd))
-    if silent:
-        cmd += ' > /dev/null'
-    return os.system(cmd)
-
-
-def shell_assert_success(cmd):
-    assert shell_run(cmd) == 0
-
-
-def shell_assert_failure(cmd):
-    assert shell_run(cmd) != 0
-
 def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image):
     for image in images:
-        shell_assert_success('kind load docker-image {}'.format(image))
-    shell_assert_success('kubectl create -k manifests/cluster-scope-resources')
+        shell_subprocess_run(f'kind load docker-image {image}')
+    shell_subprocess_run('kubectl create -k manifests/cluster-scope-resources')
     # use kustomize to build the yaml, then change the image to the one we want to testing.
-    shell_assert_success(
+    shell_subprocess_run(
         ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
          'kustomize edit set image ' +
          'kuberay/operator:nightly={0} kuberay/apiserver:nightly={1} && ' +
@@ -90,7 +80,7 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
 
     try:
         # Deploy a NodePort service to expose ports for users.
-        shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
+        shell_subprocess_run(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
@@ -104,9 +94,9 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
     except Exception as ex:
         # RayClusterAddCREvent fails to converge.
         logger.error(str(ex))
-        shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+        shell_subprocess_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+        shell_subprocess_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+        shell_subprocess_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
     raise Exception("create_kuberay_cluster fails")
 
 def create_kuberay_service(template_name, ray_version, ray_image):
@@ -122,23 +112,23 @@ def create_kuberay_service(template_name, ray_version, ray_image):
         f.write(rayservice_spec_buf)
         service_config_file = f.name
 
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
+    rtn = shell_subprocess_run(
+        'kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s', check=False)
     if rtn != 0:
-        shell_run('kubectl get pods -A')
+        shell_subprocess_run('kubectl get pods -A')
     assert rtn == 0
     assert service_config_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
+    shell_subprocess_run(f'kubectl apply -f {service_config_file}')
 
-    shell_run('kubectl get pods -A')
+    shell_subprocess_run('kubectl get pods -A')
 
     time.sleep(20)
 
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
+    shell_subprocess_run(f'kubectl apply -f {raycluster_service_file}')
 
     wait_for_condition(
-        lambda: shell_run(
-            'kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
+        lambda: shell_subprocess_run(
+            'kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"', check=False) == 0,
         timeout=900,
         retry_interval_ms=5000,
     )
@@ -147,7 +137,7 @@ def download_images(images):
     """Pull images from DockerHub if do not exist."""
     client = docker.from_env()
     for image in images:
-        if shell_run(f'docker image inspect {image}', silent=True) != 0:
+        if shell_subprocess_run(f'docker image inspect {image} > /dev/null', check=False) != 0:
             # Only pull the image from DockerHub when the image does not
             # exist in the local docker registry.
             logger.info("Download docker image %s", image)
