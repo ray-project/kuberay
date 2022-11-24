@@ -6,16 +6,23 @@ import time
 import subprocess
 import yaml
 from kubernetes import client, config
-import docker
 import jsonpatch
 
-# Utility functions
+# Global variables
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.INFO)
 
+class CONST(object):
+    """Constants"""
+    __slots__ = ()
+    OPERATOR_IMAGE_KEY = "kuberay-operator-image"
+    RAY_IMAGE_KEY = "ray-image"
+CONST = CONST()
+
+# Utility functions
 def search_path(yaml_object, steps, default_value = None):
     """
     Search the position in `yaml_object` based on steps. The following example uses
@@ -39,6 +46,50 @@ def search_path(yaml_object, steps, default_value = None):
     return curr
 
 # Functions for cluster preparation.
+class OperatorManager:
+    """
+    OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
+    load images into an existing KinD cluster, and install CRD and KubeRay operator.
+    """
+    def __init__(self, docker_image_dict) -> None:
+        for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
+            if key not in docker_image_dict:
+                raise Exception(f"Image {key} does not exist!")
+        self.docker_image_dict = docker_image_dict
+
+    def prepare_operator(self):
+        """Prepare KubeRay operator for an existing KinD cluster"""
+        self.__kind_prepare_images()
+        self.__install_crd_and_operator()
+
+    def __kind_prepare_images(self):
+        """Download images and load images into KinD cluster"""
+        def download_images():
+            """Download Docker images from DockerHub"""
+            logger.info("Download Docker images: %s", self.docker_image_dict)
+            for key in self.docker_image_dict:
+                # Only pull the image from DockerHub when the image does not
+                # exist in the local docker registry.
+                image = self.docker_image_dict[key]
+                if shell_subprocess_run(
+                        f'docker image inspect {image} > /dev/null', check = False) != 0:
+                    shell_subprocess_run(f'docker pull {image}')
+
+        download_images()
+        logger.info("Load images into KinD cluster")
+        for key in self.docker_image_dict:
+            image = self.docker_image_dict[key]
+            shell_subprocess_run(f'kind load docker-image {image}')
+
+    def __install_crd_and_operator(self):
+        """Install both CRD and KubeRay operator by kuberay-operator chart"""
+        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
+        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+        shell_subprocess_run(
+            "helm install kuberay-operator ../../helm-chart/kuberay-operator/ "
+            f"--set image.repository={repo},image.tag={tag}"
+        )
+
 def delete_kind_cluster() -> None:
     """Delete a KinD cluster"""
     shell_subprocess_run("kind delete cluster")
@@ -46,29 +97,6 @@ def delete_kind_cluster() -> None:
 def create_kind_cluster():
     """Create a KinD cluster"""
     shell_subprocess_run("kind create cluster --wait 900s")
-
-def install_crd():
-    """Install Custom Resource Definition (CRD)"""
-    shell_subprocess_run("kubectl create -k ../../manifests/cluster-scope-resources")
-
-def download_images(docker_images):
-    """Download Docker images from DockerHub"""
-    docker_client = docker.from_env()
-    for image in docker_images:
-        # Only pull the image from DockerHub when the image does not
-        # exist in the local docker registry.
-        if shell_subprocess_run(f'docker image inspect {image} > /dev/null', check = False) != 0:
-            docker_client.images.pull(image)
-    docker_client.close()
-
-def kind_load_images(docker_images):
-    """Load downloaded images into KinD cluster"""
-    for image in docker_images:
-        shell_subprocess_run(f'kind load docker-image {image}')
-
-def install_kuberay_operator():
-    """Install kuberay operator with image kuberay/operator:nightly"""
-    shell_subprocess_run('kubectl apply -k ../../manifests/base')
 
 def check_cluster_exist():
     """Check whether KinD cluster exists or not"""
@@ -434,10 +462,10 @@ class RayServiceAddCREvent(CREvent):
 
 class GeneralTestCase(unittest.TestCase):
     """TestSuite"""
-    def __init__(self, methodName, docker_images, cr_event):
+    def __init__(self, methodName, docker_image_dict, cr_event):
         super().__init__(methodName)
         self.cr_event = cr_event
-        self.images = docker_images
+        self.operator_manager = OperatorManager(docker_image_dict)
 
     @classmethod
     def setUpClass(cls):
@@ -446,10 +474,7 @@ class GeneralTestCase(unittest.TestCase):
     def setUp(self):
         if not check_cluster_exist():
             create_kind_cluster()
-            install_crd()
-            download_images(self.images)
-            kind_load_images(self.images)
-            install_kuberay_operator()
+            self.operator_manager.prepare_operator()
             config.load_kube_config()
 
     def runtest(self):
@@ -506,11 +531,14 @@ if __name__ == '__main__':
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(base_cr, patch_list)
-    images = ['rayproject/ray:2.0.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
+    image_dict = {
+        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.0.0',
+        CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
+    }
 
     test_cases = unittest.TestSuite()
     for new_cr in mut.mutate():
         addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
-        test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
+        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
     runner = unittest.TextTestRunner()
     runner.run(test_cases)
