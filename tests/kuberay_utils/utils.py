@@ -10,10 +10,8 @@ import yaml
 import docker
 
 from kubernetes.stream import stream
-from kubernetes import config
 from framework.prototype import RayClusterAddCREvent
 
-kindcluster_config_file = 'tests/config/cluster-config.yaml'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)

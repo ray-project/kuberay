@@ -4,6 +4,7 @@ import logging
 import unittest
 import time
 import subprocess
+import os
 import yaml
 from kubernetes import client, config
 import jsonpatch
@@ -22,6 +23,7 @@ class CONST(object):
     RAY_IMAGE_KEY = "ray-image"
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
     K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
+    DEFAULT_KIND_CONFIG = os.path.abspath(os.path.dirname(__file__)) + "/config/kind-config.yaml"
 CONST = CONST()
 
 # Utility functions
@@ -62,9 +64,11 @@ class KubernetesClusterManager:
             k8s_client.api_client.close()
         self.k8s_client_dict = {}
 
-    def create_kind_cluster(self) -> None:
+    def create_kind_cluster(self, kind_config = None) -> None:
         """Create a KinD cluster"""
-        shell_subprocess_run("kind create cluster --wait 900s")
+        # To use NodePort service, `kind_config` needs to set `extraPortMappings` properly.
+        kind_config = CONST.DEFAULT_KIND_CONFIG if not kind_config else kind_config
+        shell_subprocess_run(f"kind create cluster --wait 900s --config {kind_config}")
         config.load_kube_config()
         self.k8s_client_dict.update({
             CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
