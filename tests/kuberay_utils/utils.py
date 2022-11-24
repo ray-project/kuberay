@@ -61,19 +61,6 @@ def shell_assert_success(cmd):
 def shell_assert_failure(cmd):
     assert shell_run(cmd) != 0
 
-
-def create_cluster():
-    """Create a KinD cluster"""
-    # Use `--wait 10m` flag to block until the control plane reaches a ready status.
-    shell_assert_success('kind create cluster --wait 10m --config {}'.format(kindcluster_config_file))
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=300s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    # Initialize Kubernetes config
-    config.load_kube_config()
-    assert rtn == 0
-
-
 def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image):
     for image in images:
         shell_assert_success('kind load docker-image {}'.format(image))
@@ -108,7 +95,7 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
         shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
-            custom_resource_object = context['cr'], 
+            custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
             namespace='default',
@@ -157,11 +144,6 @@ def create_kuberay_service(template_name, ray_version, ray_image):
         timeout=900,
         retry_interval_ms=5000,
     )
-
-
-def delete_cluster():
-    shell_run('kind delete cluster')
-
 
 def download_images(images):
     """Pull images from DockerHub if do not exist."""

@@ -9,6 +9,7 @@ import docker
 
 from kuberay_utils import utils
 from kubernetes import client, config
+from framework.prototype import K8S_CLUSTER_MANAGER
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -36,8 +37,8 @@ class BasicRayTestCase(unittest.TestCase):
         # from another local ray container. The local ray container
         # outside Kind environment has the same ray version as the
         # ray cluster running inside Kind environment.
-        utils.delete_cluster()
-        utils.create_cluster()
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.create_kind_cluster()
         images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
         utils.download_images(images)
         utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
@@ -140,8 +141,8 @@ class RayFTTestCase(unittest.TestCase):
     def setUpClass(cls):
         if not utils.ray_ft_supported(ray_version):
             raise unittest.SkipTest("ray ft is not supported")
-        utils.delete_cluster()
-        utils.create_cluster()
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.create_kind_cluster()
         images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
         utils.download_images(images)
         utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
@@ -282,8 +283,8 @@ class RayServiceTestCase(unittest.TestCase):
         # We use the Ray nightly version now.
         # We wait for the serve service ready.
         # The test will check the successful response from serve service.
-        utils.delete_cluster()
-        utils.create_cluster()
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.create_kind_cluster()
         images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
         utils.download_images(images)
         utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
