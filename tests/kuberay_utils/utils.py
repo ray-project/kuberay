@@ -13,10 +13,9 @@ from framework.prototype import (
     CONST,
     K8S_CLUSTER_MANAGER,
     RayClusterAddCREvent,
+    RayServiceAddCREvent,
     shell_subprocess_run
 )
-
-
 
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
@@ -65,44 +64,42 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
-        return
+        return ray_cluster_add_event
     except Exception as ex:
         logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
     raise Exception("create_kuberay_cluster fails")
 
-def create_kuberay_service(template_name, ray_version, ray_image):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
+def create_ray_service(template_name, ray_version, ray_image):
+    """Create a RayService without a NodePort service."""
+    context = {}
+    with open(template_name, encoding="utf-8") as ray_service_template:
+        template = Template(ray_service_template.read())
+        yamlfile = template.substitute(
+            {'ray_image': ray_image, 'ray_version': ray_version}
+        )
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_service_yaml:
+            ray_service_yaml.write(yamlfile)
+            context['filepath'] = ray_service_yaml.name
 
-    rayservice_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayService':
+            context['cr'] = k8s_object
+            break
 
-    service_config_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(rayservice_spec_buf)
-        service_config_file = f.name
-
-    rtn = shell_subprocess_run(
-        'kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s', check=False)
-    if rtn != 0:
-        shell_subprocess_run('kubectl get pods -A')
-    assert rtn == 0
-    assert service_config_file is not None
-    shell_subprocess_run(f'kubectl apply -f {service_config_file}')
-
-    shell_subprocess_run('kubectl get pods -A')
-
-    time.sleep(20)
-
-    shell_subprocess_run(f'kubectl apply -f {raycluster_service_file}')
-
-    wait_for_condition(
-        lambda: shell_subprocess_run(
-            'kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"', check=False) == 0,
-        timeout=900,
-        retry_interval_ms=5000,
-    )
+    try:
+        # Create a RayService
+        ray_service_add_event = RayServiceAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_service_add_event.trigger()
+        return ray_service_add_event
+    except Exception as ex:
+        logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
+    raise Exception("create_ray_service fails")
 
 def copy_to_container(container, src, dest, filename):
     oldpwd = os.getcwd()

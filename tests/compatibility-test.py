@@ -10,8 +10,10 @@ import docker
 from kuberay_utils import utils
 from framework.prototype import (
     CONST,
+    CurlServiceRule,
     K8S_CLUSTER_MANAGER,
     OperatorManager,
+    RuleSet,
     shell_subprocess_run
 )
 
@@ -174,7 +176,7 @@ class RayFTTestCase(unittest.TestCase):
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
         rtn = shell_subprocess_run(
-            'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
+                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
             shell_subprocess_run('kubectl get pods -A')
             shell_subprocess_run(
@@ -273,17 +275,11 @@ class RayFTTestCase(unittest.TestCase):
 
 class RayServiceTestCase(unittest.TestCase):
     service_template_file = 'tests/config/ray-service.yaml.template'
-    service_serve_update_template_file = 'tests/config/ray-service-serve-update.yaml.template'
-    service_cluster_update_template_file = 'tests/config/ray-service-cluster-update.yaml.template'
 
     @classmethod
     def setUpClass(cls):
         if not utils.is_feature_supported(ray_version, CONST.RAY_SERVICE):
             raise unittest.SkipTest(f"{CONST.RAY_SERVICE} is not supported")
-        # Ray Service is running inside a local Kind environment.
-        # We use the Ray nightly version now.
-        # We wait for the serve service ready.
-        # The test will check the successful response from serve service.
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
         image_dict = {
@@ -292,35 +288,17 @@ class RayServiceTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_kuberay_service(
-            RayServiceTestCase.service_template_file, ray_version, ray_image)
 
     def test_ray_serve_work(self):
-        time.sleep(5)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        utils.wait_for_condition(
-            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
-            timeout=15,
-        )
-        utils.create_kuberay_service(
-            RayServiceTestCase.service_serve_update_template_file,
-            ray_version, ray_image)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        time.sleep(5)
-        utils.wait_for_condition(
-            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
-            timeout=60,
-        )
-        utils.create_kuberay_service(
-            RayServiceTestCase.service_cluster_update_template_file,
-            ray_version, ray_image)
-        time.sleep(5)
-        curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        utils.wait_for_condition(
-            lambda: shell_subprocess_run(curl_cmd, check=False) == 0,
-            timeout=180,
-        )
-
+        """Create a RayService, send a request to RayService via `curl`, and compare the result."""
+        cr_event = utils.create_ray_service(
+            RayServiceTestCase.service_template_file, ray_version, ray_image)
+        # When Pods are READY and RUNNING, RayService still needs tens of seconds to be ready
+        # for serving requests. This `sleep` function is a workaround, and should be removed
+        # when https://github.com/ray-project/kuberay/pull/730 is merged.
+        time.sleep(60)
+        cr_event.rulesets = [RuleSet([CurlServiceRule()])]
+        cr_event.check_rule_sets()
 
 def parse_environment():
     global ray_version, ray_image, kuberay_operator_image, kuberay_apiserver_image
