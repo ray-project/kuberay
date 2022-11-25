@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-ingress
 spec:
-  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.1.0' # should match the Ray version in the image of the containers
   headGroupSpec:
     serviceType: NodePort
     replicas: 1
@@ -21,7 +21,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.0.0
+          image: rayproject/ray:2.1.0
           env:
           - name: MY_POD_IP
             valueFrom:
