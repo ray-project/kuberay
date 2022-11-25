@@ -298,26 +298,28 @@ class HeadPodNameRule(Rule):
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         expected_val = search_path(custom_resource,
             "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        headpods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         assert headpods.items[0].spec.containers[0].name == expected_val
 
 class HeadSvcRule(Rule):
     """The labels of the head pod and the selectors of the head service must match."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        head_services = client.CoreV1Api().list_namespaced_service(
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        head_services = k8s_v1_api.list_namespaced_service(
             namespace= cr_namespace, label_selector="ray.io/node-type=head")
         assert len(head_services.items) == 1
         selector_dict = head_services.items[0].spec.selector
         selector = ','.join(map(lambda key: f"{key}={selector_dict[key]}", selector_dict))
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        headpods = k8s_v1_api.list_namespaced_pod(
             namespace =cr_namespace, label_selector=selector)
         assert len(headpods.items) == 1
 
 class EasyJobRule(Rule):
     """Submit a very simple Ray job to test the basic functionality of the Ray cluster."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        headpods = k8s_v1_api.list_namespaced_pod(
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
         shell_subprocess_run(f"kubectl exec {headpod_name} -n {cr_namespace} --" +
@@ -330,8 +332,9 @@ class CurlServiceRule(Rule):
         shell_subprocess_run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
             "--command -- /bin/sh -c \"while true; do sleep 10;done\"")
         success_create = False
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         for _ in range(30):
-            resp = client.CoreV1Api().read_namespaced_pod(name="curl", namespace=cr_namespace)
+            resp = k8s_v1_api.read_namespaced_pod(name="curl", namespace=cr_namespace)
             if resp.status.phase != 'Pending':
                 success_create = True
                 break
