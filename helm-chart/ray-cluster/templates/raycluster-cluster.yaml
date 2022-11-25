@@ -4,6 +4,9 @@ metadata:
   labels:
 {{ include "ray-cluster.labels" . | indent 4 }}
   name: {{ include "ray-cluster.fullname" . }}
+  {{ if .Values.annotations }}
+  annotations: {{ toYaml .Values.annotations | nindent 4 }}
+  {{ end }}
 spec:
   {{- if .Values.head.rayVersion }}
   rayVersion: {{ .Values.head.rayVersion }}
@@ -11,13 +14,21 @@ spec:
   {{- if .Values.head.enableInTreeAutoscaling }}
   enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
   {{- end }}
+  {{- if .Values.head.autoscalerOptions }}
+  autoscalerOptions: {{- toYaml .Values.head.autoscalerOptions | nindent 4 }}
+  {{- end }}
   headGroupSpec:
-    serviceType: ClusterIP
+    serviceType: {{ .Values.service.type }}
     rayStartParams:
+    {{- range $key, $val := .Values.head.rayStartParams }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    {{- /*
+    initArgs is a deprecated alias for rayStartParams.
+    */}}
     {{- range $key, $val := .Values.head.initArgs }}
       {{ $key }}: {{ $val | quote }}
     {{- end }}
-    replicas: {{ .Values.head.replicas }}
     template:
       spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
@@ -28,8 +39,6 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.head.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: head
             {{- toYaml .Values.head.containerEnv | nindent 14}}
             {{- with .Values.head.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
@@ -41,6 +50,9 @@ spec:
             lifecycle:
             {{- toYaml .Values.head.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if .Values.head.sidecarContainers }}
+          {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
@@ -48,28 +60,31 @@ spec:
       metadata:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         labels:
-          groupName: {{ .Values.head.groupName }}
-          rayNodeType: {{ .Values.head.type }}
-          rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
   {{- range $groupName, $values := .Values.additionalWorkerGroups }}
   {{- if ne $values.disabled true }}
   - rayStartParams:
+    {{- range $key, $val := $values.rayStartParams }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    {{- /*
+    initArgs is a deprecated alias for rayStartParams.
+    */}}
     {{- range $key, $val := $values.initArgs }}
       {{ $key }}: {{ $val | quote }}
     {{- end }}
     replicas: {{ $values.replicas }}
-    minReplicas: {{ $values.miniReplicas | default 1 }}
-    maxReplicas: {{ $values.maxiReplicas | default 2147483647 }}
+    minReplicas: {{ $values.minReplicas | default (default 1 $values.miniReplicas) }}
+    maxReplicas: {{ $values.maxReplicas | default (default 2147483647 $values.maxiReplicas) }}
     groupName: {{ $groupName }}
     template:
       spec:
         imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
         initContainers:
-          - name: init
-            image: busybox:1.28
+          - name: init-myservice
+            image: {{ $values.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
@@ -78,8 +93,6 @@ spec:
             imagePullPolicy: {{ $.Values.image.pullPolicy }}
             resources: {{- toYaml $values.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: worker
             {{- toYaml $values.containerEnv | nindent 14}}
             {{- with $values.envFrom }}
             envFrom: {{- toYaml $ | nindent 14}}
@@ -89,6 +102,9 @@ spec:
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if $values.sidecarContainers }}
+          {{- toYaml $values.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
@@ -96,27 +112,30 @@ spec:
       metadata:
         annotations: {{- toYaml $values.annotations | nindent 10 }}
         labels:
-          rayNodeType: {{ $values.type }}
-          groupName: {{ $groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" $ }}
 {{ include "ray-cluster.labels" $ | indent 10 }}
   {{- end }}
   {{- end }}
-  {{- if ne .Values.worker.disabled true }}
+  {{- if ne (.Values.worker.disabled | default false) true }}
   - rayStartParams:
+    {{- range $key, $val := .Values.worker.rayStartParams }}
+      {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    {{- /*
+    initArgs is a deprecated alias for rayStartParams.
+    */}}
     {{- range $key, $val := .Values.worker.initArgs }}
       {{ $key }}: {{ $val | quote }}
     {{- end }}
     replicas: {{ .Values.worker.replicas }}
-    minReplicas: {{ .Values.worker.miniReplicas | default 1 }}
-    maxReplicas: {{ .Values.worker.maxiReplicas | default 2147483647 }}
+    minReplicas: {{ .Values.worker.minReplicas | default (default 1 .Values.worker.miniReplicas) }}
+    maxReplicas: {{ .Values.worker.maxReplicas | default (default 2147483647 .Values.worker.maxiReplicas) }}
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         initContainers:
-          - name: init
-            image: busybox:1.28
+          - name: init-myservice
+            image: {{ .Values.worker.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
@@ -125,8 +144,6 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.worker.resources | nindent 14 }}
             env:
-              - name: TYPE
-                value: worker
             {{- toYaml .Values.worker.containerEnv | nindent 14}}
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
@@ -136,6 +153,9 @@ spec:
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}
             {{- end }}
+          {{- if .Values.worker.sidecarContainers }}
+          {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
+          {{- end }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
@@ -143,8 +163,5 @@ spec:
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         labels:
-          rayNodeType: {{ .Values.worker.type }}
-          groupName: {{ .Values.worker.groupName }}
-          rayCluster: {{ include "ray-cluster.fullname" . }}
 {{ include "ray-cluster.labels" . | indent 10 }}
   {{- end }}

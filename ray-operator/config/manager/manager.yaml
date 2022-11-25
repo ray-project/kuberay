@@ -12,6 +12,8 @@ spec:
       app.kubernetes.io/name: kuberay
       app.kubernetes.io/component: kuberay-operator
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -51,8 +53,10 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 100Mi
+            # Anecdotally, managing 500 Ray pods requires roughly 500MB memory.
+            # Monitor memory usage and adjust as needed.
+            memory: 512Mi
           requests:
             cpu: 100m
-            memory: 50Mi
+            memory: 512Mi
       terminationGracePeriodSeconds: 10

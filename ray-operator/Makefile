@@ -47,7 +47,8 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 helm: manifests kustomize ## Sync the CRDs into the Helm chart
-	$(KUSTOMIZE) build config/crd > ../helm-chart/kuberay-operator/crds/crd.yaml
+	rm -r ../helm-chart/kuberay-operator/crds/
+	cp -r config/crd/bases/ ../helm-chart/kuberay-operator/crds/
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
@@ -62,8 +63,10 @@ ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 test: manifests generate fmt vet ## Run tests.
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
+	export ENVTEST_K8S_VERSION=1.24.2; source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
 
+sync: helm
+	./hack/update-codegen.sh
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.

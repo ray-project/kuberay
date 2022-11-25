@@ -1,3 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-code
+data: 
+  sample_code.py: |
+    import ray
+    from os import environ
+    redis_pass = environ.get("REDIS_PASSWORD") 
+    print("trying to connect to Ray!")
+    ray.init(address="auto", _redis_password=redis_pass)
+    print("now executing some code with Ray!")
+    import time
+    start = time.time()
+    @ray.remote
+    def f():
+      time.sleep(0.01)
+      return ray._private.services.get_node_ip_address()
+    values=set(ray.get([f.remote() for _ in range(1000)]))
+    print("Ray Nodes: ",str(values))
+    file = open("/tmp/ray_nodes.txt","a")
+    file.write("available nodes: %s\n" % str(values))
+    file.close()
+    end = time.time()
+    print("Execution time = ",end - start)
+---
 # The resource requests and limits in this config are too small for production!
 # For examples with more realistic resource configuration, see
 # ray-cluster.complete.large.yaml and
@@ -10,7 +36,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-heterogeneous
 spec:
-  rayVersion: '1.8.0'
+  rayVersion: '2.0.0'
   ######################headGroupSpecs#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
@@ -18,14 +44,9 @@ spec:
     serviceType: ClusterIP
     # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
     replicas: 1
-    # logical group name, for this called head-group, also can be functional
-    # pod type head or worker
-    # rayNodeType: head # Not needed since it is under the headgroup
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
       port: '6379'
-      object-manager-port: '12345'
-      node-manager-port: '12346'
       object-store-memory: '100000000'
       redis-password: 'LetMeInRay' # Deprecated since Ray 1.11 due to GCS bootstrapping enabled
       dashboard-host: '0.0.0.0'
@@ -39,7 +60,6 @@ spec:
           # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
           rayCluster: raycluster-heterogeneous # will be injected if missing
-          rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod
         annotations:
@@ -47,7 +67,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.8.0
+          image: rayproject/ray:2.0.0
           env:
           - name: MY_POD_IP
             valueFrom:
@@ -63,6 +83,8 @@ spec:
           volumeMounts:
           - mountPath: /opt
             name: config
+          - mountPath: /tmp/ray
+            name: ray-logs
         volumes:
         # You set volumes at the Pod level, then mount them into containers inside that Pod
         - name: config
@@ -73,6 +95,8 @@ spec:
             items:
             - key: sample_code.py
               path: sample_code.py
+        - name: ray-logs
+          emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 3
@@ -97,7 +121,6 @@ spec:
       metadata:
         labels:
           rayCluster: raycluster-heterogeneous # will be injected if missing
-          rayNodeType: worker # will be injected if missing
           groupName: small-group # will be injected if missing
         # annotations for pod
         annotations:
@@ -111,7 +134,7 @@ spec:
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:1.8.0
+          image: rayproject/ray:2.0.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           env:
@@ -137,8 +160,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "1"
@@ -147,7 +170,7 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
   - replicas: 1
     minReplicas: 0
@@ -172,7 +195,6 @@ spec:
       metadata:
         labels:
           rayCluster: raycluster-heterogeneous # will be injected if missing
-          rayNodeType: worker # will be injected if missing
         # annotations for pod
         annotations:
           key: value
@@ -184,7 +206,7 @@ spec:
           command: ['sh', '-c', "until nslookup raycluster-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:1.8.0
+          image: rayproject/ray:2.0.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           env:
@@ -225,8 +247,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "2"
@@ -235,6 +257,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
 ######################status#################################

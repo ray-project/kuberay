@@ -1,150 +1,29 @@
 #!/usr/bin/env python
 import logging
-import os
-import tempfile
 import unittest
-import subprocess
-from string import Template
-
-import docker
 import time
+import os
+import random
+import string
+import docker
 
-ray_version = '1.9.0'
-ray_image = "rayproject/ray:1.9.0"
-
-kindcluster_config_file = 'tests/config/cluster-config.yaml'
-raycluster_service_file = 'tests/config/raycluster-service.yaml'
+from kuberay_utils import utils
+from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.INFO
+)
 
-kuberay_sha = 'nightly'
+# Image version
+ray_version = '1.9.0'
 
-
-def parse_ray_version(version_str):
-    tmp = version_str.split('.')
-    assert len(tmp) == 3
-    major = int(tmp[0])
-    minor = int(tmp[1])
-    patch = int(tmp[2])
-    return major, minor, patch
-
-
-def shell_run(cmd):
-    logger.info('executing cmd: {}'.format(cmd))
-    return os.system(cmd)
-
-
-def shell_assert_success(cmd):
-    assert shell_run(cmd) == 0
-
-
-def shell_assert_failure(cmd):
-    assert shell_run(cmd) != 0
-
-
-def create_cluster():
-    shell_assert_success(
-        'kind create cluster --config {}'.format(kindcluster_config_file))
-    time.sleep(60)
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-
-
-def apply_kuberay_resources():
-    shell_assert_success('kind load docker-image kuberay/operator:{}'.format(kuberay_sha))
-    shell_assert_success('kind load docker-image kuberay/apiserver:{}'.format(kuberay_sha))
-    shell_assert_success(
-        'kubectl create -k manifests/cluster-scope-resources')
-    # use kustomize to build the yaml, then change the image to the one we want to testing.
-    shell_assert_success(
-        ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
-         'kustomize edit set image ' +
-         'kuberay/operator:nightly=kuberay/operator:{0} kuberay/apiserver:nightly=kuberay/apiserver:{0} && ' +
-         'kubectl apply -k .').format(kuberay_sha))
-
-
-def create_kuberay_cluster(template_name):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
-
-    raycluster_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
-
-    raycluster_spec_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(raycluster_spec_buf)
-        raycluster_spec_file = f.name
-
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-    assert raycluster_spec_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_spec_file))
-
-    time.sleep(180)
-
-    shell_run('kubectl get pods -A')
-
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-        shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-    assert rtn == 0
-
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
-
-def create_kuberay_service(template_name):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
-
-    rayservice_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
-
-    service_config_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(rayservice_spec_buf)
-        service_config_file = f.name
-
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-    assert service_config_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
-
-    shell_run('kubectl get pods -A')
-
-    time.sleep(20)
-
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
-    wait_for_condition(
-        lambda: shell_run('kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
-        timeout=900,
-        retry_interval_ms=5000,
-    )
-
-
-def delete_cluster():
-    shell_run('kind delete cluster')
-
-
-def download_images():
-    client = docker.from_env()
-    client.images.pull(ray_image)
-    # not enabled for now
-    # shell_assert_success('kind load docker-image \"{}\"'.format(ray_image))
-    client.close()
+# Docker images
+ray_image = 'rayproject/ray:1.9.0'
+kuberay_operator_image = 'kuberay/operator:nightly'
+kuberay_apiserver_image = 'kuberay/apiserver:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
@@ -157,14 +36,16 @@ class BasicRayTestCase(unittest.TestCase):
         # from another local ray container. The local ray container
         # outside Kind environment has the same ray version as the
         # ray cluster running inside Kind environment.
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_cluster(BasicRayTestCase.cluster_template_file)
+        utils.delete_cluster()
+        utils.create_cluster()
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        utils.create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
+                                     ray_version, ray_image)
 
     def test_simple_code(self):
-        # connect from a ray containter client to ray cluster
+        # connect from a ray container client to ray cluster
         # inside a local Kind environment and run a simple test
         client = docker.from_env()
         container = client.containers.run(ray_image,
@@ -218,7 +99,7 @@ assert rtn == 0
         client.close()
 
     def test_cluster_info(self):
-        # connect from a ray containter client to ray cluster
+        # connect from a ray container client to ray cluster
         # inside a local Kind environment and run a test that
         # gets the amount of nodes in the ray cluster.
         client = docker.from_env()
@@ -252,249 +133,141 @@ print(len(ray.nodes()))
         client.close()
 
 
-def ray_ft_supported():
-    if ray_version == "nightly":
-        return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
-
-def ray_service_supported():
-    if ray_version == "nightly":
-        return True
-    major, minor, patch = parse_ray_version(ray_version)
-    if major * 100 + minor <= 113:
-        return False
-    return True
-
-
 class RayFTTestCase(unittest.TestCase):
     cluster_template_file = 'tests/config/ray-cluster.ray-ft.yaml.template'
 
     @classmethod
     def setUpClass(cls):
-        if not ray_ft_supported():
-            return
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_cluster(RayFTTestCase.cluster_template_file)
-
-    def setUp(self):
-        if not ray_ft_supported():
+        if not utils.ray_ft_supported(ray_version):
             raise unittest.SkipTest("ray ft is not supported")
+        utils.delete_cluster()
+        utils.create_cluster()
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
+                                     ray_version, ray_image)
 
     def test_kill_head(self):
         # This test will delete head node and wait for a new replacement to
         # come up.
-        shell_assert_success('kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
+        utils.shell_assert_success(
+            'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
 
         # wait for new head node to start
         time.sleep(80)
-        shell_assert_success('kubectl get pods -A')
+        utils.shell_assert_success('kubectl get pods -A')
 
         # make sure the new head is ready
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
-        rtn = shell_run('kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
+        rtn = utils.shell_run(
+            'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
         if rtn != 0:
-            shell_run('kubectl get pods -A')
-            shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+            utils.shell_run('kubectl get pods -A')
+            utils.shell_run(
+                'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            utils.shell_run(
+                'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
+            utils.shell_run(
+                'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
         assert rtn == 0
 
     def test_ray_serve(self):
-        client = docker.from_env()
-        container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                          network_mode='host', command=["/bin/sh", "-c", "python"])
-        s = container.attach_socket(params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
-        s._sock.setblocking(0)
-        s._sock.sendall(b'''
-import ray
-import time
-import ray.serve as serve
-import os
-import requests
-from ray._private.test_utils import wait_for_condition
+        docker_client = docker.from_env()
+        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
+                                          network_mode='host', command=["/bin/sh"])
+        # Deploy a model with ray serve
+        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
+        logger.info(f'namespace: {ray_namespace}')
 
-def retry_with_timeout(func, count=90):
-    tmp = 0
-    err = None
-    while tmp < count:
-        try:
-            return func()
-        except Exception as e:
-            err = e
-            tmp += 1
-    assert err is not None
-    raise err
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_1.py')
+        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
 
-ray.init(address='ray://127.0.0.1:10001')
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
-@serve.deployment
-def d(*args):
-    return f"{os.getpid()}"
+        # Initialize k8s client
+        config.load_kube_config()
+        k8s_api = client.CoreV1Api()
 
-d.deploy()
-pid1 = ray.get(d.get_handle().remote())
+        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
+        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
+        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
+        assert(len(headpods.items) == 1)
+        old_head_pod = headpods.items[0]
+        old_head_pod_name = old_head_pod.metadata.name
+        restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-print('ready')
-        ''')
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
+        # will terminate.
+        exec_command = ['pkill gcs_server']
+        utils.pod_exec_command(k8s_api, pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
 
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('ready') != -1:
-                    break
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
+        # Waiting for all pods become ready and running.
+        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
 
-        # kill the gcs on head node. If fate sharing is enabled
-        # the whole head node pod will terminate.
-        shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
-        # wait for new head node getting created
-        time.sleep(10)
-        # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
+        # Try to connect to the deployed model again
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
+        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
 
-        s._sock.sendall(b'''
-def get_new_value():
-    return ray.get(d.get_handle().remote())
-pid2 = retry_with_timeout(get_new_value)
-
-if pid1 == pid2:
-    print('successful: {} {}'.format(pid1, pid2))
-    sys.exit(0)
-else:
-    print('failed: {} {}'.format(pid1, pid2))
-    raise Exception('failed')
-        ''')
-
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('successful') != -1:
-                    break
-                if buf.decode().find('failed') != -1:
-                    raise Exception('test failed {}'.format(buf.decode()))
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
         container.stop()
-        client.close()
+        docker_client.close()
 
     def test_detached_actor(self):
-        # This test will run a ray client and start a detached actor at first.
-        # Then we will kill the head node and kuberay will start a new head node
-        # replacement. Finally, we will try to connect to the detached actor again.
-        client = docker.from_env()
-        container = client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                          network_mode='host', command=["/bin/sh", "-c", "python"])
-        s = container.attach_socket(params={'stdin': 1, 'stream': 1, 'stdout': 1, 'stderr': 1})
-        s._sock.setblocking(0)
-        s._sock.sendall(b'''
-import ray
-import time
+        docker_client = docker.from_env()
+        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
+                                            network_mode='host', command=["/bin/sh"])
+        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
+        logger.info(f'namespace: {ray_namespace}')
 
-def retry_with_timeout(func, count=90):
-    tmp = 0
-    err = None
-    while tmp < count:
-        try:
-            return func()
-        except Exception as e:
-            err = e
-            tmp += 1
-    assert err is not None
-    raise err
+        # Register a detached actor
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_1.py')
+        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
-ray.init(address='ray://127.0.0.1:10001')
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
-@ray.remote
-class A:
-    def ready(self):
-        import os
-        return os.getpid()
+        # Initialize k8s client
+        config.load_kube_config()
+        k8s_api = client.CoreV1Api()
 
-a = A.options(name="a", lifetime="detached", max_restarts=-1).remote()
-res1 = ray.get(a.ready.remote())
-print('ready')
+        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
+        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
+        headpods = utils.get_pod(k8s_api, namespace='default', label_selector='ray.io/node-type=head')
+        assert(len(headpods.items) == 1)
+        old_head_pod = headpods.items[0]
+        old_head_pod_name = old_head_pod.metadata.name
+        restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        ''')
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
+        # will terminate.
+        exec_command = ['pkill gcs_server']
+        utils.pod_exec_command(k8s_api, pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
 
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('ready') != -1:
-                    break
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
+        # Waiting for all pods become ready and running.
+        utils.wait_for_new_head(k8s_api, old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
 
-        # kill the gcs on head node. If fate sharing is enabled
-        # the whole head node pod will terminate.
-        shell_assert_success('kubectl exec -it $(kubectl get pods -A| grep -e "-head" | awk "{print \\$2}") -- /bin/bash -c "ps aux | grep gcs_server | grep -v grep | awk \'{print \$2}\' | xargs kill"')
-        # wait for new head node getting created
-        time.sleep(10)
-        # make sure the new head is ready
-        shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
+        # Try to connect to the detached actor again.
+        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
+        #        `test_detached_actor_2.py` will retry until a Ray client connection succeeds.
+        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_2.py')
+        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
-        s._sock.sendall(b'''
-def get_detached_actor():
-    return ray.get_actor("a")
-a = retry_with_timeout(get_detached_actor)
+        if exit_code != 0:
+            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
+                "See above for command output. The output will be printed by the function exec_run_container.")
 
-def get_new_value():
-    return ray.get(a.ready.remote())
-res2 = retry_with_timeout(get_new_value)
-
-if res1 != res2:
-    print('successful: {} {}'.format(res1, res2))
-    sys.exit(0)
-else:
-    print('failed: {} {}'.format(res1, res2))
-    raise Exception('failed')
-        ''')
-
-        count = 0
-        while count < 90:
-            try:
-                buf = s._sock.recv(4096)
-                logger.info(buf.decode())
-                if buf.decode().find('successful') != -1:
-                    break
-                if buf.decode().find('failed') != -1:
-                    raise Exception('test failed {}'.format(buf.decode()))
-            except Exception as e:
-                pass
-            time.sleep(1)
-            count += 1
-        if count >= 90:
-            raise Exception('failed to run script')
-
+        k8s_api.api_client.rest_client.pool_manager.clear()
+        k8s_api.api_client.close()
         container.stop()
-        client.close()
-
+        docker_client.close()
 
 class RayServiceTestCase(unittest.TestCase):
     service_template_file = 'tests/config/ray-service.yaml.template'
@@ -503,84 +276,63 @@ class RayServiceTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not ray_service_supported():
-            return
+        if not utils.ray_service_supported(ray_version):
+            raise unittest.SkipTest("ray service is not supported")
         # Ray Service is running inside a local Kind environment.
         # We use the Ray nightly version now.
         # We wait for the serve service ready.
         # The test will check the successful response from serve service.
-        delete_cluster()
-        create_cluster()
-        apply_kuberay_resources()
-        download_images()
-        create_kuberay_service(RayServiceTestCase.service_template_file)
-
-    def setUp(self):
-        if not ray_service_supported():
-            raise unittest.SkipTest("ray service is not supported")
+        utils.delete_cluster()
+        utils.create_cluster()
+        images = [ray_image, kuberay_operator_image, kuberay_apiserver_image]
+        utils.download_images(images)
+        utils.apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image)
+        utils.create_kuberay_service(
+            RayServiceTestCase.service_template_file, ray_version, ray_image)
 
     def test_ray_serve_work(self):
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=15,
         )
-        create_kuberay_service(RayServiceTestCase.service_serve_update_template_file)
+        utils.create_kuberay_service(
+            RayServiceTestCase.service_serve_update_template_file,
+            ray_version, ray_image)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
         time.sleep(5)
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=60,
         )
-        create_kuberay_service(RayServiceTestCase.service_cluster_update_template_file)
+        utils.create_kuberay_service(
+            RayServiceTestCase.service_cluster_update_template_file,
+            ray_version, ray_image)
         time.sleep(5)
         curl_cmd = 'curl  -X POST -H \'Content-Type: application/json\' localhost:8000 -d \'["MANGO", 2]\''
-        wait_for_condition(
-            lambda: shell_run(curl_cmd) == 0,
+        utils.wait_for_condition(
+            lambda: utils.shell_run(curl_cmd) == 0,
             timeout=180,
         )
 
+
 def parse_environment():
-    global ray_version, ray_image, kuberay_sha
+    global ray_version, ray_image, kuberay_operator_image, kuberay_apiserver_image
     for k, v in os.environ.items():
-        if k == 'RAY_VERSION':
-            logger.info('Setting Ray image to: {}'.format(v))
-            ray_version = v
-            ray_image = 'rayproject/ray:{}'.format(ray_version)
-        if k == 'KUBERAY_IMG_SHA':
-            logger.info('Using KubeRay docker build SHA: {}'.format(v))
-            kuberay_sha = v
-
-
-def wait_for_condition(
-    condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
-):
-    """Wait until a condition is met or time out with an exception.
-
-    Args:
-        condition_predictor: A function that predicts the condition.
-        timeout: Maximum timeout in seconds.
-        retry_interval_ms: Retry interval in milliseconds.
-
-    Raises:
-        RuntimeError: If the condition is not met before the timeout expires.
-    """
-    start = time.time()
-    last_ex = None
-    while time.time() - start <= timeout:
-        try:
-            if condition_predictor(**kwargs):
-                return
-        except Exception as ex:
-            last_ex = ex
-        time.sleep(retry_interval_ms / 1000.0)
-    message = "The condition wasn't met before the timeout expired."
-    if last_ex is not None:
-        message += f" Last exception: {last_ex}"
-    raise RuntimeError(message)
+        if k == 'RAY_IMAGE':
+            ray_image = v
+            ray_version = ray_image.split(':')[-1]
+        elif k == 'OPERATOR_IMAGE':
+            kuberay_operator_image = v
+        elif k == 'APISERVER_IMAGE':
+            kuberay_apiserver_image = v
 
 
 if __name__ == '__main__':
     parse_environment()
+    logger.info('Setting Ray image to: {}'.format(ray_image))
+    logger.info('Setting Ray version to: {}'.format(ray_version))
+    logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
+    logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
     unittest.main(verbosity=2)

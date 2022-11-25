@@ -25,7 +25,7 @@ import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
@@ -55,8 +55,10 @@ var (
 	groupNameStr            string
 	expectReplicaNum        int32
 	testPods                []runtime.Object
+	testPodsNoHeadIP        []runtime.Object
 	testRayCluster          *rayiov1alpha1.RayCluster
 	headSelector            labels.Selector
+	headNodeIP              string
 	testServices            []runtime.Object
 	workerSelector          labels.Selector
 	workersToDelete         []string
@@ -75,6 +77,7 @@ func setupTest(t *testing.T) {
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
 	workersToDelete = []string{"pod1", "pod2"}
+	headNodeIP = "1.2.3.4"
 	testPods = []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -98,6 +101,7 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				PodIP: headNodeIP,
 			},
 		},
 		&corev1.Pod{
@@ -216,6 +220,23 @@ func setupTest(t *testing.T) {
 			},
 		},
 	}
+	testPodsNoHeadIP = []runtime.Object{
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "headNode",
+				Namespace: namespaceStr,
+				Labels: map[string]string{
+					common.RayClusterLabelKey:   instanceName,
+					common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+					common.RayNodeGroupLabelKey: headGroupNameStr,
+				},
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				PodIP: "",
+			},
+		},
+	}
 	testRayCluster = &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instanceName,
@@ -300,7 +321,7 @@ func setupTest(t *testing.T) {
 		},
 	}
 
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster)
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
@@ -706,7 +727,7 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 	sa := corev1.ServiceAccount{}
 	err := fakeClient.Get(context.Background(), saNamespacedName, &sa)
 
-	assert.True(t, errors.IsNotFound(err), "Head group service account should not exist yet")
+	assert.True(t, k8serrors.IsNotFound(err), "Head group service account should not exist yet")
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -736,7 +757,7 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 	rb := rbacv1.RoleBinding{}
 	err := fakeClient.Get(context.Background(), rbNamespacedName, &rb)
 
-	assert.True(t, errors.IsNotFound(err), "autoscaler RoleBinding should not exist yet")
+	assert.True(t, k8serrors.IsNotFound(err), "autoscaler RoleBinding should not exist yet")
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -778,4 +799,139 @@ func TestUpdateEndpoints(t *testing.T) {
 		"serve":     "8000",
 	}
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
+}
+
+func TestGetHeadPodIP(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	extraHeadPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unexpectedExtraHeadNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:   instanceName,
+				common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+				common.RayNodeGroupLabelKey: headGroupNameStr,
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		pods         []runtime.Object
+		expectedIP   string
+		returnsError bool
+	}{
+		"get expected Pod IP if there's one head node": {
+			pods:         testPods,
+			expectedIP:   headNodeIP,
+			returnsError: false,
+		},
+		"no error if there's no head node": {
+			pods:         []runtime.Object{},
+			expectedIP:   "",
+			returnsError: false,
+		},
+		"no error if there's more than one head node": {
+			pods:         append(testPods, extraHeadPod),
+			expectedIP:   "",
+			returnsError: false,
+		},
+		"no error if head pod ip is not yet set": {
+			pods:         testPodsNoHeadIP,
+			expectedIP:   "",
+			returnsError: false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			ip, err := testRayClusterReconciler.getHeadPodIP(testRayCluster)
+
+			if tc.returnsError {
+				assert.NotNil(t, err, "getHeadPodIP should return error")
+			} else {
+				assert.Nil(t, err, "getHeadPodIP should not return error")
+			}
+
+			assert.Equal(t, tc.expectedIP, ip, "getHeadPodIP returned unexpected IP")
+		})
+	}
+}
+
+func TestGetHeadServiceIP(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	headServiceIP := "1.2.3.4"
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil)
+	if err != nil {
+		t.Errorf("failed to build head service: %v", err)
+	}
+	headService.Spec.ClusterIP = headServiceIP
+	testServices = []runtime.Object{
+		headService,
+	}
+
+	extraHeadService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unexpectedExtraHeadService",
+			Namespace: namespaceStr,
+			Labels:    common.HeadServiceLabels(*testRayCluster),
+		},
+	}
+
+	tests := map[string]struct {
+		services     []runtime.Object
+		expectedIP   string
+		returnsError bool
+	}{
+		"get expected Service IP if there's one head Service": {
+			services:     testServices,
+			expectedIP:   headServiceIP,
+			returnsError: false,
+		},
+		"get error if there's no head Service": {
+			services:     []runtime.Object{},
+			expectedIP:   "",
+			returnsError: true,
+		},
+		"get error if there's more than one head Service": {
+			services:     append(testServices, extraHeadService),
+			expectedIP:   "",
+			returnsError: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.services...).Build()
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			ip, err := testRayClusterReconciler.getHeadServiceIP(testRayCluster)
+
+			if tc.returnsError {
+				assert.NotNil(t, err, "getHeadServiceIP should return error")
+			} else {
+				assert.Nil(t, err, "getHeadServiceIP should not return error")
+			}
+
+			assert.Equal(t, tc.expectedIP, ip, "getHeadServiceIP returned unexpected IP")
+		})
+	}
 }

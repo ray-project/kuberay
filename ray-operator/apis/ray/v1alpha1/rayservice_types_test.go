@@ -86,9 +86,8 @@ var myRayService = &RayService{
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							"rayCluster":  "raycluster-sample",
-							"rayNodeType": "head",
-							"groupName":   "headgroup",
+							"rayCluster": "raycluster-sample",
+							"groupName":  "headgroup",
 						},
 						Annotations: map[string]string{
 							"key": "value",
@@ -258,8 +257,7 @@ var expected = `{
                   "creationTimestamp":null,
                   "labels":{
                      "groupName":"headgroup",
-                     "rayCluster":"raycluster-sample",
-                     "rayNodeType":"head"
+                     "rayCluster":"raycluster-sample"
                   },
                   "annotations":{
                      "key":"value"
@@ -378,7 +376,7 @@ var expected = `{
             
          },
          "rayClusterStatus":{
-            
+            "head":{}
          }
       },
       "pendingServiceStatus":{
@@ -389,7 +387,7 @@ var expected = `{
             
          },
          "rayClusterStatus":{
-            
+            "head":{}
          }
       }
    }

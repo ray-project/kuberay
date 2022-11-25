@@ -212,6 +212,14 @@ var autoscalerContainer = v1.Container{
 				},
 			},
 		},
+		{
+			Name: "RAY_HEAD_POD_NAME",
+			ValueFrom: &v1.EnvVarSource{
+				FieldRef: &v1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
 	},
 	Command: []string{
 		"ray",
@@ -242,6 +250,42 @@ var autoscalerContainer = v1.Container{
 }
 
 var trueFlag = true
+
+func TestAddEmptyDirVolumes(t *testing.T) {
+	testPod := &v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "ray-worker",
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "shared-mem",
+							MountPath: "/dev/shm",
+						},
+					},
+				},
+			},
+			Volumes: []v1.Volume{
+				{
+					Name: "shared-mem",
+					VolumeSource: v1.VolumeSource{
+						EmptyDir: &v1.EmptyDirVolumeSource{
+							Medium: v1.StorageMediumMemory,
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 1)
+	assert.Equal(t, len(testPod.Spec.Volumes), 1)
+	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", v1.StorageMediumDefault)
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
+	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", v1.StorageMediumDefault)
+	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
+	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+}
 
 func TestGetAutoscalerImage(t *testing.T) {
 	// rayVersion strings for which we judge autoscaler support is stable and thus
@@ -311,6 +355,8 @@ func TestBuildPod(t *testing.T) {
 
 	// Check RAY_ADDRESS env.
 	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
+	// Check usage stats env.
+	checkPodEnv(t, pod, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 
 	// Check labels.
 	actualResult := pod.Labels[RayClusterLabelKey]
@@ -521,6 +567,15 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+
+	// Repeat ServiceAccountName check with long cluster name.
+	cluster.Name = longString(t) // 200 chars long
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
+	actualResult = podTemplateSpec.Spec.ServiceAccountName
+	expectedResult = shortString(t) // 50 chars long, truncated by utils.CheckName
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
 }
 
 // If no service account is specified in the RayCluster,
@@ -639,4 +694,18 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 3)
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[0], &pod)
 	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 1)
+}
+
+func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
+	cluster := instance.DeepCopy()
+	svcName := utils.GenerateServiceName(cluster.Name)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	worker.Template.ObjectMeta.Name = "ray-worker-test"
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	expectedWorker := *worker.DeepCopy()
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, svcName, "6379")
+	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
+	assert.Equal(t, worker, expectedWorker)
 }

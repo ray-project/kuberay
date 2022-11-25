@@ -30,7 +30,6 @@ spec:
           # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
           # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
           rayCluster: raycluster-sample # will be injected if missing
-          rayNodeType: head # will be injected if missing, must be head or wroker
           groupName: headgroup # will be injected if missing
         # annotations for pod
         annotations:
@@ -50,13 +49,19 @@ spec:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "1"
-              memory: "1G"
+              memory: "2G"
             requests:
               cpu: "500m"
-              memory: "512Mi"
+              memory: "1G"
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -81,7 +86,6 @@ spec:
       metadata:
         labels:
           rayCluster: raycluster-complete # will be injected if missing
-          rayNodeType: worker # will be injected if missing
           groupName: small-group # will be injected if missing
       spec:
         containers:
@@ -96,8 +100,8 @@ spec:
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /var/log
-              name: log-volume
+            - mountPath: /tmp/ray
+              name: ray-logs
           resources:
             limits:
               cpu: "1"
@@ -114,6 +118,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: log-volume
+          - name: ray-logs
             emptyDir: {}
 ######################status#################################

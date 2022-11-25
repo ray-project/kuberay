@@ -107,6 +107,8 @@ var _ = BeforeSuite(func(done Done) {
 var _ = AfterSuite(func() {
 	utils.GetRayDashboardClientFunc = utils.GetRayDashboardClient
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+
+	// NOTE(simon): the error is ignored because it gets raised in macOS due
+	// to a harmless timeout error.
+	_ = testEnv.Stop()
 })

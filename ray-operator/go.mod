@@ -4,15 +4,17 @@ go 1.17
 
 require (
 	github.com/go-logr/logr v1.2.0
+	github.com/go-logr/zapr v1.2.0
 	github.com/jarcoal/httpmock v1.2.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2
 	go.uber.org/zap v1.19.1
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	k8s.io/api v0.23.0
 	k8s.io/apimachinery v0.23.0
 	k8s.io/client-go v0.23.0
@@ -30,7 +32,6 @@ require (
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect

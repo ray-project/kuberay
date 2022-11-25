@@ -66,7 +66,7 @@ type RayClusterReconciler struct {
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizer,verbs=update
+// +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
@@ -79,6 +79,8 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+
+// [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error
@@ -222,6 +224,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 			r.Log.Error(err, "Update status error", "cluster name", request.Name)
 		}
 	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -294,7 +297,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		var raySvc *v1.Service
 		var err error
 		if serviceType == common.HeadService {
-			raySvc, err = common.BuildServiceForHeadPod(*instance)
+			labels := make(map[string]string)
+			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
+				labels[common.KubernetesApplicationNameLabelKey] = val
+			}
+			raySvc, err = common.BuildServiceForHeadPod(*instance, labels)
 		} else if serviceType == common.AgentService {
 			raySvc, err = common.BuildDashboardService(*instance)
 		}
@@ -424,6 +431,23 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
+		// workerReplicas will store the target number of pods for this worker group.
+		var workerReplicas int32
+		// Always honor MaxReplicas if it is set:
+		// If MaxReplicas is set and Replicas > MaxReplicas, use MaxReplicas as the
+		// effective target replica count and log the discrepancy.
+		// See https://github.com/ray-project/kuberay/issues/560.
+		if worker.MaxReplicas != nil && *worker.MaxReplicas < *worker.Replicas {
+			workerReplicas = *worker.MaxReplicas
+			r.Log.Info(
+				fmt.Sprintf(
+					"Replicas for worker group %s (%d) is greater than maxReplicas (%d). Using maxReplicas (%d) as the target replica count.",
+					worker.GroupName, *worker.Replicas, *worker.MaxReplicas, *worker.MaxReplicas,
+				),
+			)
+		} else {
+			workerReplicas = *worker.Replicas
+		}
 		workerPods := corev1.PodList{}
 		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(context.TODO(), &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -452,7 +476,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 		r.updateLocalWorkersToDelete(&worker, runningPods.Items)
-		diff := *worker.Replicas - int32(len(runningPods.Items))
+		diff := workerReplicas - int32(len(runningPods.Items))
 
 		if PrioritizeWorkersToDelete {
 			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
@@ -486,7 +510,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			var i int32
 			for i = 0; i < diff; i++ {
 				r.Log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				if err := r.createWorkerPod(*instance, worker); err != nil {
+				if err := r.createWorkerPod(*instance, *worker.DeepCopy()); err != nil {
 					return err
 				}
 			}
@@ -512,7 +536,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		} else {
 			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
 			// we need to scale down
-			workersToRemove := int32(len(runningPods.Items)) - *worker.Replicas
+			workersToRemove := int32(len(runningPods.Items)) - workerReplicas
 			randomlyRemovedWorkers := workersToRemove - int32(len(worker.ScaleStrategy.WorkersToDelete))
 			// we only need to scale down the workers in the ScaleStrategy
 			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
@@ -690,6 +714,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) c
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, svcName, headPort)
+	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
 	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, svcName, headPort, autoscalingEnabled, creatorName)
 	// Set raycluster instance as the owner and controller
@@ -795,6 +820,10 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 		return err
 	}
 
+	if err := r.updateHeadInfo(instance); err != nil {
+		return err
+	}
+
 	timeNow := metav1.Now()
 	instance.Status.LastUpdateTime = &timeNow
 	if err := r.Status().Update(context.Background(), instance); err != nil {
@@ -802,6 +831,38 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	}
 
 	return nil
+}
+
+// Best effort to obtain the ip of the head node.
+func (r *RayClusterReconciler) getHeadPodIP(instance *rayiov1alpha1.RayCluster) (string, error) {
+	runtimePods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayiov1alpha1.HeadNode)}
+	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		r.Log.Error(err, "Failed to list pods while getting head pod ip.")
+		return "", err
+	}
+	if len(runtimePods.Items) != 1 {
+		r.Log.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
+		return "", nil
+	}
+	return runtimePods.Items[0].Status.PodIP, nil
+}
+
+func (r *RayClusterReconciler) getHeadServiceIP(instance *rayiov1alpha1.RayCluster) (string, error) {
+	runtimeServices := corev1.ServiceList{}
+	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
+	if err := r.List(context.TODO(), &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return "", err
+	}
+	if len(runtimeServices.Items) < 1 {
+		return "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if len(runtimeServices.Items) > 1 {
+		return "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
+		return "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+	}
+
+	return runtimeServices.Items[0].Spec.ClusterIP, nil
 }
 
 func (r *RayClusterReconciler) updateEndpoints(instance *rayiov1alpha1.RayCluster) error {
@@ -839,6 +900,22 @@ func (r *RayClusterReconciler) updateEndpoints(instance *rayiov1alpha1.RayCluste
 		}
 	} else {
 		r.Log.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", filterLabels)
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) updateHeadInfo(instance *rayiov1alpha1.RayCluster) error {
+	if ip, err := r.getHeadPodIP(instance); err != nil {
+		return err
+	} else {
+		instance.Status.Head.PodIP = ip
+	}
+
+	if ip, err := r.getHeadServiceIP(instance); err != nil {
+		return err
+	} else {
+		instance.Status.Head.ServiceIP = ip
 	}
 
 	return nil

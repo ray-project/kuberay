@@ -1,6 +1,7 @@
 package common
 
 import (
+	"reflect"
 	"testing"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -11,10 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestBuildRoleBindingSubjectName(t *testing.T) {
+// Test subject and role ref names in the function BuildRoleBinding.
+func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 	tests := map[string]struct {
 		input *rayiov1alpha1.RayCluster
-		want  string
+		want  []string
 	}{
 		"Ray cluster with head group service account": {
 			input: &rayiov1alpha1.RayCluster{
@@ -32,7 +34,7 @@ func TestBuildRoleBindingSubjectName(t *testing.T) {
 					},
 				},
 			},
-			want: "my-service-account",
+			want: []string{"my-service-account", "raycluster-sample"},
 		},
 		"Ray cluster without head group service account": {
 			input: &rayiov1alpha1.RayCluster{
@@ -48,7 +50,26 @@ func TestBuildRoleBindingSubjectName(t *testing.T) {
 					},
 				},
 			},
-			want: "raycluster-sample",
+			want: []string{"raycluster-sample", "raycluster-sample"},
+		},
+		"Ray cluster with a long name and without head group service account": {
+			input: &rayiov1alpha1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      longString(t), // 200 chars long
+					Namespace: "default",
+				},
+				Spec: rayiov1alpha1.RayClusterSpec{
+					HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{},
+						},
+					},
+				},
+			},
+			want: []string{
+				shortString(t), // 50 chars long, truncated by utils.CheckName
+				shortString(t),
+			},
 		},
 	}
 
@@ -56,9 +77,9 @@ func TestBuildRoleBindingSubjectName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rb, err := BuildRoleBinding(tc.input)
 			assert.Nil(t, err)
-			got := rb.Subjects[0].Name
-			if got != tc.want {
-				t.Fatalf("got %s, want %s", got, tc.want)
+			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
 	}

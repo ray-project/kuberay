@@ -3,7 +3,6 @@ package client
 import (
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -43,7 +42,7 @@ func (c *KubernetesClient) NamespaceClient() v1.NamespaceInterface {
 func CreateKubernetesCoreOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) KubernetesClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		glog.Fatalf("Failed to create TokenReview client. Error: %v", err)
+		klog.Fatalf("Failed to create TokenReview client. Error: %v", err)
 	}
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst

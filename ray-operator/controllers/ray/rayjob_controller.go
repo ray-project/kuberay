@@ -13,8 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,7 +51,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ray.io,resources=rayjobs/finalizer,verbs=update
+// +kubebuilder:rbac:groups=ray.io,resources=rayjobs/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
@@ -60,6 +62,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
+// [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile reads that state of a RayJob object and makes changes based on it
 // and what is in the RayJob.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
@@ -72,6 +75,33 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	var rayJobInstance *rayv1alpha1.RayJob
 	if rayJobInstance, err = r.getRayJobInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object.
+		if !controllerutil.ContainsFinalizer(rayJobInstance, common.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+			if err := r.Update(ctx, rayJobInstance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
+		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+			rayDashboardClient := utils.GetRayDashboardClientFunc()
+			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+			err := rayDashboardClient.StopJob(rayJobInstance.Status.JobId, &r.Log)
+			if err != nil {
+				r.Log.Info("Failed to stop job", "error", err)
+			}
+		}
+
+		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
+		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		err := r.Update(context.TODO(), rayJobInstance)
+		return ctrl.Result{}, err
 	}
 
 	// Do not reconcile the RayJob if the deployment status is marked as Complete
@@ -234,18 +264,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 // isJobSucceedOrFailed indicates whether the job comes into end status.
 func isJobSucceedOrFailed(status rayv1alpha1.JobStatus) bool {
-	if status == rayv1alpha1.JobStatusSucceeded || status == rayv1alpha1.JobStatusFailed {
-		return true
-	}
-	return false
+	return (status == rayv1alpha1.JobStatusSucceeded) || (status == rayv1alpha1.JobStatusFailed)
 }
 
 // isJobPendingOrRunning indicates whether the job is running.
 func isJobPendingOrRunning(status rayv1alpha1.JobStatus) bool {
-	if status == rayv1alpha1.JobStatusPending || status == rayv1alpha1.JobStatusRunning {
-		return true
-	}
-	return false
+	return (status == rayv1alpha1.JobStatusPending) || (status == rayv1alpha1.JobStatusRunning)
 }
 
 // SetupWithManager sets up the controller with the Manager.

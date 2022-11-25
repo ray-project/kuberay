@@ -23,6 +23,7 @@ nav:
     - Installation(Yaml): deploy/installation.md
     - Installation(Helm): deploy/helm.md
     - Installation(Helm-cluster): deploy/helm-cluster.md
+    - Docker Images: deploy/docker.md
   - Components:
     - KubeRay Operator: components/operator.md
     - KubeRay ApiServer: components/apiserver.md
@@ -34,6 +35,7 @@ nav:
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
     - Observability: guidance/observability.md
+    - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
   - Best Practice:
     - Worker reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting:

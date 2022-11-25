@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 
@@ -30,10 +31,19 @@ var (
 	rpcPortFlag        = flag.String("rpcPortFlag", ":8887", "RPC Port")
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
+	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 )
 
 func main() {
 	flag.Parse()
+
+	if *logFile != "" {
+		flagSet := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		klog.InitFlags(flagSet)
+		_ = flagSet.Set("alsologtostderr", "true")
+		_ = flagSet.Set("logtostderr", "false")
+		_ = flagSet.Set("log_file", *logFile)
+	}
 
 	clientManager := manager.NewClientManager()
 	resourceManager := manager.NewResourceManager(&clientManager)

@@ -102,9 +102,8 @@ var _ = Context("Inside the default namespace", func() {
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"rayCluster":  "raycluster-sample",
-								"rayNodeType": "head",
-								"groupName":   "headgroup",
+								"rayCluster": "raycluster-sample",
+								"groupName":  "headgroup",
 							},
 							Annotations: map[string]string{
 								"key": "value",
@@ -314,7 +313,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 		})
 
-		It("Should detect unhealthy status and try to switch to new RayCluster.", func() {
+		It("should detect unhealthy status and try to switch to new RayCluster.", func() {
 			// Set a wrong serve status with unhealthy.
 			orignialServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5

@@ -11736,6 +11736,14 @@ spec:
                           type: string
                         description: Service Endpoints
                         type: object
+                      head:
+                        description: Head info
+                        properties:
+                          podIP:
+                            type: string
+                          serviceIP:
+                            type: string
+                        type: object
                       lastUpdateTime:
                         description: LastUpdateTime indicates last update timestamp
                           for this cluster status.
@@ -11834,6 +11842,14 @@ spec:
                         additionalProperties:
                           type: string
                         description: Service Endpoints
+                        type: object
+                      head:
+                        description: Head info
+                        properties:
+                          podIP:
+                            type: string
+                          serviceIP:
+                            type: string
                         type: object
                       lastUpdateTime:
                         description: LastUpdateTime indicates last update timestamp

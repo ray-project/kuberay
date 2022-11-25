@@ -109,7 +109,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
-		podTemplate.Spec.ServiceAccountName = utils.GetHeadGroupServiceAccountName(&instance)
+		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
+		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
 
 		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
@@ -190,6 +191,9 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
+	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
+	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
+	podTemplate.ObjectMeta.Name = ""
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
@@ -391,6 +395,14 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 					},
 				},
 			},
+			{
+				Name: "RAY_HEAD_POD_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			},
 		},
 		Command: []string{
 			"ray",
@@ -568,10 +580,6 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
 		}
-		if !envVarExists(SERVE_DEPLOYMENT_HANDLE_IS_SYNC, container.Env) {
-			serveHandleSync := v1.EnvVar{Name: SERVE_DEPLOYMENT_HANDLE_IS_SYNC, Value: "1"}
-			container.Env = append(container.Env, serveHandleSync)
-		}
 		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
@@ -587,6 +595,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		rayAddress := fmt.Sprintf("%s:%s", rayIP, headPort)
 		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
+	}
+	if !envVarExists(RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
+		usageEnv := v1.EnvVar{Name: RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
+		container.Env = append(container.Env, usageEnv)
 	}
 	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
@@ -706,8 +718,10 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 // Used for a /dev/shm memory mount for object store and for a /tmp/ray disk mount for autoscaler logs.
 func addEmptyDir(container *v1.Container, pod *v1.Pod, volumeName string, volumeMountPath string, storageMedium v1.StorageMedium) {
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
+		log.Info("volume already mounted", "volume", volumeName, "path", volumeMountPath)
 		return
 	}
+
 	// 1) If needed, create a Volume of type emptyDir and add it to Volumes.
 	if !checkIfVolumeExists(pod, volumeName) {
 		emptyDirVolume := makeEmptyDirVolume(container, volumeName, storageMedium)
@@ -751,12 +765,7 @@ func makeEmptyDirVolume(container *v1.Container, volumeName string, storageMediu
 func checkIfVolumeMounted(container *v1.Container, pod *v1.Pod, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
 		if mountedVol.MountPath == volumeMountPath {
-			for _, podVolume := range pod.Spec.Volumes {
-				if mountedVol.Name == podVolume.Name {
-					// already mounted, nothing to do
-					return true
-				}
-			}
+			return true
 		}
 	}
 	return false

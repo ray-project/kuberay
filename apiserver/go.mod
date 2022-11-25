@@ -4,10 +4,10 @@ go 1.17
 
 require (
 	github.com/go-openapi/runtime v0.19.31
-	github.com/golang/glog v1.0.0
+	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/ray-project/kuberay/proto v0.0.0-20220703232803-3e7749d17400
 	github.com/ray-project/kuberay/ray-operator v0.0.0-20220703232803-3e7749d17400
 	google.golang.org/grpc v1.40.0

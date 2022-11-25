@@ -7,9 +7,10 @@ kind: RayCluster
 metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
   name: raycluster-ingress
 spec:
-  rayVersion: '1.12.1' # should match the Ray version in the image of the containers
+  rayVersion: '2.0.0' # should match the Ray version in the image of the containers
   headGroupSpec:
     serviceType: NodePort
     enableIngress: true
@@ -24,7 +25,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:1.12.1
+          image: rayproject/ray:2.0.0
           env:
           - name: MY_POD_IP
             valueFrom:

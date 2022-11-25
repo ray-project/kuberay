@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "ray-operator"
+		},
+		{
+			"path": "apiserver"
+		},
+		{
+			"path": "cli"
+		},
+		{
+			"path": "proto"
+		}
+	],
+	"settings": {}
+}

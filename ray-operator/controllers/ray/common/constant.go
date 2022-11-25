@@ -10,6 +10,7 @@ const (
 	RayIDLabelKey                      = "ray.io/identifier"
 	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
 	RayClusterServingServiceLabelKey   = "ray.io/serve"
+	RayServiceClusterHashKey           = "ray.io/cluster-hash"
 
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
@@ -49,6 +50,9 @@ const (
 	DefaultDashboardAgentListenPortName = "dashboard-agent"
 	DefaultServingPortName              = "serve"
 
+	// The default AppProtocol for Kubernetes service
+	DefaultServiceAppProtocol = "tcp"
+
 	// The default application name
 	ApplicationName = "kuberay"
 
@@ -72,8 +76,8 @@ const (
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
-	SERVE_DEPLOYMENT_HANDLE_IS_SYNC         = "SERVE_DEPLOYMENT_HANDLE_IS_SYNC"
 	SERVE_CONTROLLER_PIN_ON_NODE            = "RAY_INTERNAL_SERVE_CONTROLLER_PIN_ON_NODE"
+	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
 
 	// Ray core default configurations
 	DefaultRedisPassword = "5241590000000000"
@@ -99,6 +103,9 @@ const (
 
 	// Default autoscaler image when running Ray at versions older than 2.0.0
 	FallbackDefaultAutoscalerImage = "rayproject/ray:2.0.0"
+
+	// Finalizers for RayJob
+	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 )
 
 type ServiceType string

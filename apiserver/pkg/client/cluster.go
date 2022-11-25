@@ -3,7 +3,8 @@ package client
 import (
 	"time"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
@@ -25,7 +26,7 @@ func (cc RayClusterClient) RayClusterClient(namespace string) rayiov1alpha1.RayC
 func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) ClusterClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		glog.Fatalf("Failed to create RayCluster client. Error: %v", err)
+		klog.Fatalf("Failed to create RayCluster client. Error: %v", err)
 	}
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
