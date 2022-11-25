@@ -11,7 +11,7 @@ metadata:
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.0.0'
+  rayVersion: '2.1.0'
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -34,7 +34,8 @@ spec:
     # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
     imagePullPolicy: Always
     # resources specifies optional resource request and limit overrides for the autoscaler container.
-    # For large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
+    # The default autoscaler resource limits and requests should be sufficient for production use-cases.
+    # However, for large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     resources:
       limits:
         cpu: "500m"
@@ -43,13 +44,12 @@ spec:
         cpu: "500m"
         memory: "512Mi"
   ######################headGroupSpec#################################
-  # head group template and specs, (perhaps 'group' is not needed in the name)
+  # Ray head pod template and specs
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
-      # Flag "no-monitor" will be automatically set when autoscaling is enabled.
       dashboard-host: '0.0.0.0'
       block: 'true'
       # num-cpus: '1' # can be auto-completed from the limits
@@ -63,7 +63,7 @@ spec:
         containers:
         # The Ray head pod
         - name: ray-head
-          image: rayproject/ray:2.0.0
+          image: rayproject/ray:2.1.0
           imagePullPolicy: Always
           ports:
           - containerPort: 6379
@@ -76,24 +76,38 @@ spec:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
+          # The resource requests and limits in this config are too small for production!
+          # For an example with more realistic resource configuration, see
+          # ray-cluster.autoscaler.large.yaml.
+          # It is better to use a few large Ray pod than many small ones.
+          # For production, it is ideal to size each Ray pod to take up the
+          # entire Kubernetes node on which it is scheduled.
           resources:
             limits:
               cpu: "1"
               memory: "2G"
             requests:
+              # For production use-cases, we recommend specifying integer CPU reqests and limits.
+              # We also recommend setting requests equal to limits for both CPU and memory.
+              # For this example, we use a 500m CPU request to accomodate resource-constrained local
+              # Kubernetes testing environments such as KinD and minikube.
               cpu: "500m"
-              memory: "1G"
+              # The rest state memory usage of the Ray head node is around 1Gb. We do not
+              # recommend allocating less than 2Gb memory for the Ray head pod.
+              # For production use-cases, we recommend allocating at least 8Gb memory for each Ray container.
+              memory: "2G"
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
     minReplicas: 1
-    maxReplicas: 300
+    maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
-    # if worker pods need to be added, we can simply increment the replicas
-    # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
-    # the operator will remove pods from the list until the number of replicas is satisfied
-    # when a pod is confirmed to be deleted, its name will be removed from the list below
+    # If worker pods need to be added, we can increment the replicas.
+    # If worker pods need to be removed, we decrement the replicas, and populate the workersToDelete list.
+    # The operator will remove pods from the list until the desired number of replicas is satisfied.
+    # If the difference between the current replica count and the desired replicas is greater than the
+    # number of entries in workersToDelete, random worker pods will be deleted.
     #scaleStrategy:
     #  workersToDelete:
     #  - raycluster-complete-worker-small-group-bdtwh
@@ -104,12 +118,6 @@ spec:
       block: 'true'
     #pod template
     template:
-      metadata:
-        labels:
-          key: value
-        # annotations for pod
-        annotations:
-          key: value
       spec:
         initContainers:
         # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
@@ -117,18 +125,28 @@ spec:
           image: busybox:1.28
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
         containers:
-        - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.0.0
+        - name: ray-worker
+          image: rayproject/ray:2.1.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           lifecycle:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
+          # The resource requests and limits in this config are too small for production!
+          # For an example with more realistic resource configuration, see
+          # ray-cluster.autoscaler.large.yaml.
+          # It is better to use a few large Ray pod than many small ones.
+          # For production, it is ideal to size each Ray pod to take up the
+          # entire Kubernetes node on which it is scheduled.
           resources:
             limits:
               cpu: "1"
               memory: "1G"
+            # For production use-cases, we recommend specifying integer CPU reqests and limits.
+            # We also recommend setting requests equal to limits for both CPU and memory.
+            # For this example, we use a 500m CPU request to accomodate resource-constrained local
+            # Kubernetes testing environments such as KinD and minikube.
             requests:
               cpu: "500m"
-              memory: "512Mi"
+              memory: "1G"
