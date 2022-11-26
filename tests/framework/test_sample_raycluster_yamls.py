@@ -21,9 +21,10 @@ if __name__ == '__main__':
 
     sample_yaml_files = []
 
-    # The free plan of GitHub Actions (i.e. KubeRay CI) only support 2-core CPU runners. Most
+    # The free plan of GitHub Actions (i.e. KubeRay CI) only supports 2-core CPU runners. Most
     # sample YAMLs cannot schedule all pods on Kubernetes nodes due to insufficient CPUs. We
     # decided to just run some tests on KubeRay CI and run all tests in the Ray CI.
+    # See https://github.com/ray-project/kuberay/issues/695.
     GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
     github_action_tests = set([
         "ray-cluster.getting-started.yaml",
