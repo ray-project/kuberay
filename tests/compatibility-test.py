@@ -30,7 +30,6 @@ ray_version = '1.9.0'
 # Docker images
 ray_image = 'rayproject/ray:1.9.0'
 kuberay_operator_image = 'kuberay/operator:nightly'
-kuberay_apiserver_image = 'kuberay/apiserver:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
@@ -301,15 +300,13 @@ class RayServiceTestCase(unittest.TestCase):
         cr_event.check_rule_sets()
 
 def parse_environment():
-    global ray_version, ray_image, kuberay_operator_image, kuberay_apiserver_image
+    global ray_version, ray_image, kuberay_operator_image
     for k, v in os.environ.items():
         if k == 'RAY_IMAGE':
             ray_image = v
             ray_version = ray_image.split(':')[-1]
         elif k == 'OPERATOR_IMAGE':
             kuberay_operator_image = v
-        elif k == 'APISERVER_IMAGE':
-            kuberay_apiserver_image = v
 
 
 if __name__ == '__main__':
@@ -317,5 +314,4 @@ if __name__ == '__main__':
     logger.info('Setting Ray image to: {}'.format(ray_image))
     logger.info('Setting Ray version to: {}'.format(ray_version))
     logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))
-    logger.info('Setting KubeRay apiserver image to: {}'.format(kuberay_apiserver_image))
     unittest.main(verbosity=2)
