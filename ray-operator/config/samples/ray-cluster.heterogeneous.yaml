@@ -55,15 +55,6 @@ spec:
       block: 'true'
     #pod template
     template:
-      metadata:
-        labels:
-          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
-          # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: raycluster-heterogeneous # will be injected if missing
-          groupName: headgroup # will be injected if missing
-        # annotations for pod
-        annotations:
-          key: value
       spec:
         containers:
         - name: ray-head
@@ -73,13 +64,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
-          ports:
-          - containerPort: 6379
-            name: redis
-          - containerPort: 8265
-            name: dashboard
-          - containerPort: 10001
-            name: client
           volumeMounts:
           - mountPath: /opt
             name: config
