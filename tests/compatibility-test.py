@@ -50,7 +50,7 @@ class BasicRayTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_kuberay_cluster(BasicRayTestCase.cluster_template_file,
+        utils.create_ray_cluster(BasicRayTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
     def test_simple_code(self):
@@ -157,7 +157,7 @@ class RayFTTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_kuberay_cluster(RayFTTestCase.cluster_template_file,
+        utils.create_ray_cluster(RayFTTestCase.cluster_template_file,
                                      ray_version, ray_image)
 
     @unittest.skip("Skip test_kill_head due to its flakiness.")

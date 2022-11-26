@@ -35,7 +35,7 @@ def is_feature_supported(ray_version, feature):
         return major * 100 + minor > 113
     return False
 
-def create_kuberay_cluster(template_name, ray_version, ray_image):
+def create_ray_cluster(template_name, ray_version, ray_image):
     """Create a RayCluster and a NodePort service."""
     context = {}
     with open(template_name, encoding="utf-8") as ray_cluster_template:
@@ -67,7 +67,7 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
         return ray_cluster_add_event
     except Exception as ex:
         logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
-    raise Exception("create_kuberay_cluster fails")
+    raise Exception("create_ray_cluster fails")
 
 def create_ray_service(template_name, ray_version, ray_image):
     """Create a RayService without a NodePort service."""
