@@ -113,7 +113,7 @@ var _ = Context("Inside the default namespace", func() {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:1.12.1",
+									Image: "rayproject/ray:2.1.0",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -184,7 +184,7 @@ var _ = Context("Inside the default namespace", func() {
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:1.12.1",
+										Image:   "rayproject/ray:2.1.0",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
