@@ -49,5 +49,5 @@ spec:
             # Change the cluster postfix if you don't have a default setting
             command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
           containers:
-          - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+          - name: ray-worker
             image: $ray_image

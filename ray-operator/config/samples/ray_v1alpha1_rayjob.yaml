@@ -25,31 +25,15 @@ spec:
       replicas: 1
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
-        port: '6379' # should match container port named gcs-server
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
       #pod template
       template:
-        metadata:
-          labels:
-            # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
-            # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-            rayCluster: raycluster-sample # will be injected if missing
-            groupName: headgroup # will be injected if missing
-          # annotations for pod
-          annotations:
-            key: value
         spec:
           containers:
             - name: ray-head
               image: rayproject/ray:2.1.0
-              env:
-                - name: MY_POD_IP
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: status.podIP
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -99,44 +83,6 @@ spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
                 image: rayproject/ray:2.1.0
-                # environment variables to set in the container.Optional.
-                # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
-                env:
-                  - name: RAY_DISABLE_DOCKER_CPU_WARNING
-                    value: "1"
-                  - name: TYPE
-                    value: "worker"
-                  - name: CPU_REQUEST
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: requests.cpu
-                  - name: CPU_LIMITS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: limits.cpu
-                  - name: MEMORY_LIMITS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: limits.memory
-                  - name: MEMORY_REQUESTS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: requests.memory
-                  - name: MY_POD_NAME
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: metadata.name
-                  - name: MY_POD_IP
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: status.podIP
-                ports:
-                  - containerPort: 80
-                    name: client
                 lifecycle:
                   preStop:
                     exec:
