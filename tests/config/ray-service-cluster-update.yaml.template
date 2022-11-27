@@ -99,8 +99,6 @@ spec:
                 name: ray-worker
                 image: $ray_image
                 imagePullPolicy: Always
-                # environment variables to set in the container.Optional.
-                # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
                 lifecycle:
                   preStop:
                     exec:
