@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
     images = [
-        os.getenv('RAY_IMAGE', default='rayproject/ray:2.0.0'),
+        os.getenv('RAY_IMAGE', default='rayproject/ray:2.1.0'),
         os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
         os.getenv('APISERVER_IMAGE', default='kuberay/apiserver:nightly')
     ]
