@@ -3,7 +3,7 @@
 
 ### Prerequisite
 
-Ray Autoscaler integration is beta with KubeRay 0.3.0 and Ray 2.0.0.
+Ray Autoscaler integration is beta since KubeRay 0.3.0 and Ray 2.0.0.
 While autoscaling functionality is stable, the details of autoscaler behavior and configuration may change in future releases.
 
 Start by deploying the latest stable version of the KubeRay operator:

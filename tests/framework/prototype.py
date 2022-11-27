@@ -506,7 +506,7 @@ if __name__ == '__main__':
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(base_cr, patch_list)
-    images = ['rayproject/ray:2.0.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
+    images = ['rayproject/ray:2.1.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
 
     test_cases = unittest.TestSuite()
     for new_cr in mut.mutate():
