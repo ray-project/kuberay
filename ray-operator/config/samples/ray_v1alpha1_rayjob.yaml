@@ -16,8 +16,7 @@ spec:
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
   rayClusterSpec:
     rayVersion: '2.1.0' # should match the Ray version in the image of the containers
-    ######################headGroupSpecs#################################
-    # head group template and specs, (perhaps 'group' is not needed in the name)
+    # Ray head pod template
     headGroupSpec:
       # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
       serviceType: ClusterIP

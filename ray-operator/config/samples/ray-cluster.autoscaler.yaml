@@ -43,8 +43,7 @@ spec:
       requests:
         cpu: "500m"
         memory: "512Mi"
-  ######################headGroupSpec#################################
-  # Ray head pod template and specs
+  # Ray head pod template
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
@@ -61,7 +60,7 @@ spec:
     template:
       spec:
         containers:
-        # The Ray head pod
+        # The Ray head container
         - name: ray-head
           image: rayproject/ray:2.1.0
           imagePullPolicy: Always
