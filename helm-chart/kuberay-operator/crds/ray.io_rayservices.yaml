@@ -11768,7 +11768,7 @@ spec:
                   serveDeploymentStatuses:
                     items:
                       description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
+                        of a Serve deployment
                       properties:
                         healthLastUpdateTime:
                           description: Keep track of how long the service is healthy.
@@ -11781,7 +11781,7 @@ spec:
                           type: string
                         name:
                           description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
+                            and represent a Serve deployment's state.
                           type: string
                         status:
                           description: 'TODO: change status type to enum'
@@ -11875,7 +11875,7 @@ spec:
                   serveDeploymentStatuses:
                     items:
                       description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
+                        of a Serve deployment
                       properties:
                         healthLastUpdateTime:
                           description: Keep track of how long the service is healthy.
@@ -11888,7 +11888,7 @@ spec:
                           type: string
                         name:
                           description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
+                            and represent a Serve deployment's state.
                           type: string
                         status:
                           description: 'TODO: change status type to enum'
