@@ -135,7 +135,7 @@ python3 ../scripts/rbac-check.py
 We have some [end-to-end tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/actions/compatibility/action.yaml) on GitHub Actions.
 These tests operate small Ray clusters running within a [kind](https://kind.sigs.k8s.io/) (Kubernetes-in-docker) environment. To run the tests yourself, follow these steps:
 
-* Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), and [kustomize](https://kustomize.io/).
+* Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/) and [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 
 * Step2: You must be in `/path/to/your/kuberay/`.
   ```bash
