@@ -36,7 +36,6 @@ var instance = rayiov1alpha1.RayCluster{
 				"object-manager-port": "12345",
 				"node-manager-port":   "12346",
 				"object-store-memory": "100000000",
-				"redis-password":      "LetMeInRay",
 				"num-cpus":            "1",
 				"include-dashboard":   "true",
 				"log-color":           "true",
@@ -90,18 +89,13 @@ var instance = rayiov1alpha1.RayCluster{
 				MaxReplicas: pointer.Int32Ptr(10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
-					"port":           "6379",
-					"redis-password": "LetMeInRay",
-					"num-cpus":       "1",
-					"block":          "true",
+					"port":     "6379",
+					"num-cpus": "1",
+					"block":    "true",
 				},
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
-						Labels: map[string]string{
-							"ray.io/cluster": "raycluster-sample",
-							"ray.io/group":   "small-group",
-						},
 					},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{
@@ -406,7 +400,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc:6379 --port=6379 --redis-password=LetMeInRay --metrics-export-port=8080")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
