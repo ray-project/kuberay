@@ -175,7 +175,7 @@ class RayFTTestCase(unittest.TestCase):
         # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
         # make sure both head and worker pods are ready
         rtn = shell_subprocess_run(
-                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s')
+                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
         if rtn != 0:
             shell_subprocess_run('kubectl get pods -A')
             shell_subprocess_run(
