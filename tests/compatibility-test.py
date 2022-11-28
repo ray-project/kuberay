@@ -17,11 +17,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Image version
-ray_version = '1.9.0'
+# Default Ray version
+ray_version = '2.1.0'
 
-# Docker images
-ray_image = 'rayproject/ray:1.9.0'
+# Default docker images
+ray_image = 'rayproject/ray:2.1.0'
 kuberay_operator_image = 'kuberay/operator:nightly'
 kuberay_apiserver_image = 'kuberay/apiserver:nightly'
 
