@@ -212,4 +212,15 @@ rules:
   - list
   - update
   - watch
+- apiGroups:
+  - scheduling.volcano.sh
+  resources:
+  - podgroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
 {{- end }}
