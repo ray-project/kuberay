@@ -44,8 +44,6 @@ spec:
     headGroupSpec:
       # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
       serviceType: ClusterIP
-      # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
-      replicas: 1
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
         dashboard-host: '0.0.0.0'
