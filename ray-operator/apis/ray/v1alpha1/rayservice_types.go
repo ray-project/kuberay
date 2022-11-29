@@ -21,6 +21,30 @@ const (
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
+// These statuses should match Ray Serve's application statuses
+var ApplicationStatusEnum = struct {
+	NOT_STARTED   string
+	DEPLOYING     string
+	RUNNING       string
+	DEPLOY_FAILED string
+}{
+	NOT_STARTED:   "NOT_STARTED",
+	DEPLOYING:     "DEPLOYING",
+	RUNNING:       "RUNNING",
+	DEPLOY_FAILED: "DEPLOY_FAILED",
+}
+
+// These statuses should match Ray Serve's deployment statuses
+var DeploymentStatusEnum = struct {
+	UPDATING  string
+	HEALTHY   string
+	UNHEALTHY string
+}{
+	UPDATING:  "UPDATING",
+	HEALTHY:   "HEALTHY",
+	UNHEALTHY: "UNHEALTHY",
+}
+
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -96,20 +120,20 @@ type AppStatus struct {
 	Message        string       `json:"message,omitempty"`
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
-	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
-// ServeDeploymentStatus defines the current state of Serve Deployment
+// ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatus struct {
-	// Name, Status, Message are from Ray Dashboard to represent the state of a serve deployment.
+	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
 	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
 	Status         string       `json:"status,omitempty"`
 	Message        string       `json:"message,omitempty"`
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
-	// Update when Serve Deployment is healthy or first time convert to unhealthy from healthy.
+	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 

@@ -772,6 +772,39 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 	assert.Nil(t, err, "Fail to get autoscaler RoleBinding after reconciliation")
 }
 
+func TestReconcile_UpdateClusterReason(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+	newScheme := runtime.NewScheme()
+	_ = rayiov1alpha1.AddToScheme(newScheme)
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
+
+	namespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+	cluster := rayiov1alpha1.RayCluster{}
+	err := fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.Empty(t, cluster.Status.Reason, "Cluster reason should be empty")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+	reason := "test reason"
+
+	err = testRayClusterReconciler.updateClusterReason(testRayCluster, reason)
+	assert.Nil(t, err, "Fail to update cluster reason")
+
+	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster after updating reason")
+	assert.Equal(t, cluster.Status.Reason, reason, "Cluster reason should be updated")
+}
+
 func TestUpdateEndpoints(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
