@@ -11760,6 +11760,10 @@ spec:
                           of each node group.
                         format: int32
                         type: integer
+                      reason:
+                        description: Reason provides more information about current
+                          State
+                        type: string
                       state:
                         description: 'INSERT ADDITIONAL STATUS FIELD - define observed
                           state of cluster Important: Run "make" to regenerat'
@@ -11867,6 +11871,10 @@ spec:
                           of each node group.
                         format: int32
                         type: integer
+                      reason:
+                        description: Reason provides more information about current
+                          State
+                        type: string
                       state:
                         description: 'INSERT ADDITIONAL STATUS FIELD - define observed
                           state of cluster Important: Run "make" to regenerat'
