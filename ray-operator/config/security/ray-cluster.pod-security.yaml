@@ -53,7 +53,7 @@ spec:
             - mountPath: /tmp/ray
               name: ray-logs
             - mountPath: /home/ray/samples
-              name: xgboost-example-configmap
+              name: ray-example-configmap
           resources:
             limits:
               cpu: 1
@@ -71,13 +71,15 @@ spec:
         volumes:
           - name: ray-logs
             emptyDir: {}
-          - name: xgboost-example-configmap
+          - name: ray-example-configmap
             configMap:
-              name: xgboost-example
+              name: ray-example
               # An array of keys from the ConfigMap to create as files
               items:
                 - key: xgboost_example.py
                   path: xgboost_example.py
+                - key: runtime_env.py
+                  path: runtime_env.py
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -156,7 +158,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: xgboost-example
+  name: ray-example
 data:
   xgboost_example.py: |
     import ray
@@ -188,3 +190,20 @@ data:
     )
     result = trainer.fit()
     print(result.metrics)
+  runtime_env.py: |
+    import ray
+    import jsonpatch
+    ray.init(runtime_env={"pip": ["jsonpatch"]})
+
+    @ray.remote
+    def apply_patch():
+      dict = {
+        "a": {
+          "b": "c"
+        }
+      }
+      patch = jsonpatch.JsonPatch([{'op': 'replace', 'path': '/a/b','value': 'd'}])
+      return patch.apply(dict)
+    update_dict = ray.get(apply_patch.remote())
+    print(update_dict)
+    assert update_dict["a"]["b"] == "d"
