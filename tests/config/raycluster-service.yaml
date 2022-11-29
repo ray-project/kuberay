@@ -5,7 +5,9 @@ metadata:
 spec:
   type: NodePort
   selector:
-    rayCluster: raycluster-compatibility-test
+    ray.io/cluster: raycluster-mini
+    ray.io/identifier: raycluster-mini-head
+    ray.io/node-type: head
   ports:
     - name: redis
       port: 6379
