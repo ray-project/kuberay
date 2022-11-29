@@ -17,6 +17,7 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
+      num-cpus: '1'
       block: 'true'
     #pod template
     template:
@@ -38,6 +39,7 @@ spec:
       groupName: small-group
       # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
       rayStartParams:
+        num-cpus: '1'
         block: 'true'
       #pod template
       template:
