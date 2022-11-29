@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	vcbetav1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 )
 
@@ -1076,17 +1077,28 @@ func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayClu
 	return r.Status().Update(context.Background(), instance)
 }
 
-func (r *RayClusterReconciler) syncPodGroup(instance *rayiov1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
-	// use cluster name as pod group name
-	podGroupName := instance.Name
-	podGroupIdentifier := types.NamespacedName{
-		Name:      podGroupName,
-		Namespace: instance.Namespace,
-	}
-	podGroup := &vcbetav1.PodGroup{}
-	if err := r.Get(context.TODO(), podGroupIdentifier, podGroup); err != nil {
+func (r *RayClusterReconciler) syncPodGroup(app *rayiov1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+	podGroupName := v.getAppPodGroupName(app)
+	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(context.TODO(), podGroupName, metav1.GetOptions{}); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
+		}
+
+		podGroup := v1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: app.Namespace,
+				Name:      podGroupName,
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(instance, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
+				},
+			},
+			Spec: v1beta1.PodGroupSpec{
+				MinMember:    size,
+				MinResources: &minResource,
+			},
+			Status: v1beta1.PodGroupStatus{
+				Phase: v1beta1.PodGroupPending,
+			},
 		}
 
 		// use the same name as ray cluster
