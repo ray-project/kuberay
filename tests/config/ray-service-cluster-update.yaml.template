@@ -82,12 +82,6 @@ spec:
           num-cpus: "1000"
         #pod template
         template:
-          metadata:
-            labels:
-              key: value
-            # annotations for pod
-            annotations:
-              key: value
           spec:
             initContainers:
               - name: init-myservice

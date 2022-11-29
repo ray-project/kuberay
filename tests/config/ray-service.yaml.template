@@ -57,15 +57,6 @@ spec:
         num-cpus: "1000"
       #pod template
       template:
-        metadata:
-          labels:
-            # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
-            # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-            rayCluster: raycluster-compatibility-test # will be injected if missing
-            groupName: headgroup # will be injected if missing
-          # annotations for pod
-          annotations:
-            key: value
         spec:
           containers:
             - name: ray-head
@@ -108,12 +99,6 @@ spec:
           num-cpus: "1000"
         #pod template
         template:
-          metadata:
-            labels:
-              key: value
-            # annotations for pod
-            annotations:
-              key: value
           spec:
             initContainers:
               - name: init-myservice

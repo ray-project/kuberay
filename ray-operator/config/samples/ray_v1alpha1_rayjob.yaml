@@ -65,12 +65,6 @@ spec:
           block: 'true'
         #pod template
         template:
-          metadata:
-            labels:
-              key: value
-            # annotations for pod
-            annotations:
-              key: value
           spec:
             initContainers:
               # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
