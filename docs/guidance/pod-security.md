@@ -99,13 +99,8 @@ kubectl port-forward --address 0.0.0.0 svc/raycluster-pod-security-head-svc -n p
 # http://127.0.0.1:8265/#/job => The job status should be "SUCCEEDED".
 
 # Make sure Python dependencies can be installed under `restricted` security standard 
-python3 samples/runtime_env.py # => ModuleNotFoundError: No module named 'jsonpatch'
 pip3 install jsonpatch
-python3 samples/runtime_env.py
-# 2022-11-28 16:57:17,033 INFO worker.py:1224 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
-# 2022-11-28 16:57:17,034 INFO worker.py:1333 -- Connecting to existing Ray cluster at address: 10.244.0.17:6379...
-# 2022-11-28 16:57:17,045 INFO worker.py:1515 -- Connected to Ray cluster. View the dashboard at http://10.244.0.17:8265
-# {'a': {'b': 'd'}}
+echo $? # Check the exit code of `pip3 install jsonpatch`. It should be 0.
 
 # Clean up the RayCluster
 kubectl delete -n pod-security -f ray-cluster.pod-security.yaml
@@ -114,5 +109,5 @@ kubectl delete -n pod-security -f ray-cluster.pod-security.yaml
 ```
 One head Pod and one worker Pod will be created as specified in `ray-cluster.pod-security.yaml`.
 First, we log in to the head Pod, run a XGBoost example script, and check the job
-status in the dashboard. Next, we use `pip` to install a Python dependency (i.e. `jsonpatch`), and run a Runtime Environment script to make sure the new dependency works as expected.
+status in the dashboard. Next, we use `pip` to install a Python dependency (i.e. `jsonpatch`), and the exit code of the `pip` command should be 0.
 
