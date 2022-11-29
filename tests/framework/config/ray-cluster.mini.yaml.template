@@ -24,11 +24,6 @@ spec:
         containers:
         - name: ray-head
           image: rayproject/ray:2.1.0
-          env:
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
           resources:
             limits:
               cpu: 1
@@ -46,13 +41,6 @@ spec:
         block: 'true'
       #pod template
       template:
-        metadata:
-          labels:
-            rayCluster: raycluster-compatibility-test
-            groupName: small-group # will be injected if missing
-          # annotations for pod
-          annotations:
-            key: value
         spec:
           initContainers: # to avoid worker crashing before head service is created
           - name: init-myservice
