@@ -12,6 +12,11 @@ const (
 	RayClusterServingServiceLabelKey   = "ray.io/serve"
 	RayServiceClusterHashKey           = "ray.io/cluster-hash"
 
+	// Batch scheduling labels
+	// TODO(tgaddair): consider making these part of the CRD
+	RaySchedulerName     = "ray.io/scheduler-name"
+	RayPriorityClassName = "ray.io/priority-class-name"
+
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"

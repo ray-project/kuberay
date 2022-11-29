@@ -18,14 +18,17 @@ import (
 	"sync"
 
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/volcano"
 )
 
-type schedulerInitializeFunc func(config *rest.Config) (schedulerinterface.BatchScheduler, error)
-
-var schedulerContainers = map[string]schedulerInitializeFunc{
-	volcano.GetPluginName(): volcano.New,
+var schedulerContainers = map[string]schedulerinterface.BatchSchedulerFactory{
+	schedulerinterface.GetDefaultPluginName(): &schedulerinterface.DefaultBatchSchedulerFactory{},
+	volcano.GetPluginName():                   &volcano.VolcanoBatchSchedulerFactory{},
 }
 
 func GetRegisteredNames() []string {
@@ -34,6 +37,13 @@ func GetRegisteredNames() []string {
 		pluginNames = append(pluginNames, key)
 	}
 	return pluginNames
+}
+
+func ConfigureReconciler(b *builder.Builder) *builder.Builder {
+	for _, factory := range schedulerContainers {
+		b = factory.ConfigureReconciler(b)
+	}
+	return b
 }
 
 type SchedulerManager struct {
@@ -50,8 +60,17 @@ func NewSchedulerManager(config *rest.Config) *SchedulerManager {
 	return &manager
 }
 
+func (batch *SchedulerManager) GetSchedulerForCluster(app *rayiov1alpha1.RayCluster) (schedulerinterface.BatchScheduler, error) {
+	if schedulerName, ok := app.ObjectMeta.Labels[common.RaySchedulerName]; ok {
+		return batch.GetScheduler(schedulerName)
+	}
+
+	// no scheduler provided
+	return &schedulerinterface.DefaultBatchScheduler{}, nil
+}
+
 func (batch *SchedulerManager) GetScheduler(schedulerName string) (schedulerinterface.BatchScheduler, error) {
-	iniFunc, registered := schedulerContainers[schedulerName]
+	factory, registered := schedulerContainers[schedulerName]
 	if !registered {
 		return nil, fmt.Errorf("unregistered scheduler plugin %s", schedulerName)
 	}
@@ -65,7 +84,7 @@ func (batch *SchedulerManager) GetScheduler(schedulerName string) (schedulerinte
 		return nil, fmt.Errorf(
 			"failed to get scheduler plugin %s, previous initialization has failed", schedulerName)
 	} else {
-		if plugin, err := iniFunc(batch.config); err != nil {
+		if plugin, err := factory.New(batch.config); err != nil {
 			batch.plugins[schedulerName] = nil
 			return nil, err
 		} else {

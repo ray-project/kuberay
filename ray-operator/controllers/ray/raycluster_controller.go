@@ -10,6 +10,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -33,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
-	vcbetav1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 )
 
 var (
@@ -47,10 +46,11 @@ var (
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 	return &RayClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controllers").WithName("RayCluster"),
+		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
+		BatchSchedulerMgr: batchscheduler.NewSchedulerManager(mgr.GetConfig()),
 	}
 }
 
@@ -59,9 +59,10 @@ var _ reconcile.Reconciler = &RayClusterReconciler{}
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Log               logr.Logger
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	BatchSchedulerMgr *batchscheduler.SchedulerManager
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -340,19 +341,15 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 		return err
 	}
 	if EnableBatchScheduler {
-		var minMember int32
-		var totalResource corev1.ResourceList
-		if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
-			minMember = utils.CalculateDesiredReplicas(instance) + *instance.Spec.HeadGroupSpec.Replicas
-			totalResource = utils.CalculateDesiredResources(instance)
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
+			if err := scheduler.DoBatchSchedulingOnSubmission(instance); err != nil {
+				return err
+			}
 		} else {
-			minMember = utils.CalculateMinReplicas(instance) + *instance.Spec.HeadGroupSpec.Replicas
-			totalResource = utils.CalculateMinResources(instance)
-		}
-		if err := r.syncPodGroup(instance, minMember, totalResource); err != nil {
 			return err
 		}
 	}
+
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
@@ -672,7 +669,11 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 		Namespace: pod.Namespace,
 	}
 	if EnableBatchScheduler {
-		pod.Annotations[vcbetav1.KubeGroupNameAnnotationKey] = instance.Name
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, &pod)
+		} else {
+			return err
+		}
 	}
 
 	r.Log.Info("createHeadPod", "head pod with name", pod.GenerateName)
@@ -703,8 +704,13 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 		Namespace: pod.Namespace,
 	}
 	if EnableBatchScheduler {
-		pod.Annotations[vcbetav1.KubeGroupNameAnnotationKey] = instance.Name
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, &pod)
+		} else {
+			return err
+		}
 	}
+
 	replica := pod
 	if err := r.Create(context.TODO(), &replica); err != nil {
 		if errors.IsAlreadyExists(err) {
@@ -783,7 +789,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 
 // SetupWithManager builds the reconciler.
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
@@ -793,11 +799,13 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},
-		}).
-		Watches(&source.Kind{Type: &vcbetav1.PodGroup{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayiov1alpha1.RayCluster{},
-		}).
+		})
+
+	if EnableBatchScheduler {
+		b = batchscheduler.ConfigureReconciler(b)
+	}
+
+	return b.
 		WithOptions(controller.Options{MaxConcurrentReconciles: reconcileConcurrency}).
 		Complete(r)
 }
@@ -1075,65 +1083,4 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
 	return r.Status().Update(context.Background(), instance)
-}
-
-func (r *RayClusterReconciler) syncPodGroup(app *rayiov1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
-	podGroupName := v.getAppPodGroupName(app)
-	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(context.TODO(), podGroupName, metav1.GetOptions{}); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-
-		podGroup := v1beta1.PodGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: app.Namespace,
-				Name:      podGroupName,
-				OwnerReferences: []metav1.OwnerReference{
-					*metav1.NewControllerRef(instance, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
-				},
-			},
-			Spec: v1beta1.PodGroupSpec{
-				MinMember:    size,
-				MinResources: &minResource,
-			},
-			Status: v1beta1.PodGroupStatus{
-				Phase: v1beta1.PodGroupPending,
-			},
-		}
-
-		// use the same name as ray cluster
-		podGroup.Name = instance.Name
-		podGroup.Namespace = instance.Namespace
-		podGroup.OwnerReferences = []metav1.OwnerReference{
-			*metav1.NewControllerRef(instance, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
-		}
-		podGroup.Spec.MinMember = size
-		podGroup.Spec.MinResources = &totalResource
-		if queue, ok := instance.Spec.HeadGroupSpec.Template.Labels["volcano.sh/queue-name"]; ok {
-			podGroup.Spec.Queue = queue
-		}
-		podGroup.Spec.PriorityClassName = instance.Spec.HeadGroupSpec.Template.Spec.PriorityClassName
-		podGroup.Status = vcbetav1.PodGroupStatus{
-			Phase: vcbetav1.PodGroupPending,
-		}
-
-		if err := r.Create(context.TODO(), podGroup); err != nil {
-			if errors.IsAlreadyExists(err) {
-				r.Log.Info("pod group already exist, no need to create")
-				return nil
-			}
-			r.Log.Error(err, "Pod group create error!", "PodGroup.Error", err)
-			return err
-		}
-	} else {
-		if podGroup.Spec.MinMember != size || !utils.Equals(*podGroup.Spec.MinResources, totalResource) {
-			podGroup.Spec.MinMember = size
-			podGroup.Spec.MinResources = &totalResource
-			if err := r.Update(context.TODO(), podGroup); err != nil {
-				r.Log.Error(err, "Fail to update pod group!", "podGroup", podGroupIdentifier)
-				return err
-			}
-		}
-	}
-	return nil
 }

@@ -1,1 +1,201 @@
+/*
+Copyright 2019 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package volcano
+
+import (
+	"context"
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
+	"github.com/go-logr/logr"
+	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
+	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/interface"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	PodGroupName      = "podgroups.scheduling.volcano.sh"
+	QueueNameLabelKey = "volcano.sh/queue-name"
+)
+
+type VolcanoBatchScheduler struct {
+	extensionClient apiextensionsclient.Interface
+	volcanoClient   volcanoclient.Interface
+	log             logr.Logger
+}
+
+type VolcanoBatchSchedulerFactory struct{}
+
+func GetPluginName() string {
+	return "volcano"
+}
+
+func (v *VolcanoBatchScheduler) Name() string {
+	return GetPluginName()
+}
+
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayiov1alpha1.RayCluster) error {
+	var minMember int32
+	var totalResource corev1.ResourceList
+	if app.Spec.EnableInTreeAutoscaling == nil || !*app.Spec.EnableInTreeAutoscaling {
+		minMember = utils.CalculateDesiredReplicas(app) + *app.Spec.HeadGroupSpec.Replicas
+		totalResource = utils.CalculateDesiredResources(app)
+	} else {
+		minMember = utils.CalculateMinReplicas(app) + *app.Spec.HeadGroupSpec.Replicas
+		totalResource = utils.CalculateMinResources(app)
+	}
+
+	if err := v.syncPodGroup(app, minMember, totalResource); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v *VolcanoBatchScheduler) getAppPodGroupName(app *rayiov1alpha1.RayCluster) string {
+	return fmt.Sprintf("ray-%s-pg", app.Name)
+}
+
+func (v *VolcanoBatchScheduler) syncPodGroup(app *rayiov1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+	podGroupName := v.getAppPodGroupName(app)
+	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(context.TODO(), podGroupName, metav1.GetOptions{}); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		podGroup := v1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: app.Namespace,
+				Name:      podGroupName,
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(app, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
+				},
+			},
+			Spec: v1beta1.PodGroupSpec{
+				MinMember:    size,
+				MinResources: &totalResource,
+			},
+			Status: v1beta1.PodGroupStatus{
+				Phase: v1beta1.PodGroupPending,
+			},
+		}
+
+		if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+			podGroup.Spec.Queue = queue
+		}
+
+		if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
+			podGroup.Spec.PriorityClassName = priorityClassName
+		}
+
+		if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Create(
+			context.TODO(), &podGroup, metav1.CreateOptions{},
+		); err != nil {
+			if errors.IsAlreadyExists(err) {
+				v.log.Info("pod group already exists, no need to create")
+				return nil
+			}
+
+			v.log.Error(err, "Pod group CREATE error!", "PodGroup.Error", err)
+			return err
+		}
+	} else {
+		if pg.Spec.MinMember != size || !utils.Equals(*pg.Spec.MinResources, totalResource) {
+			pg.Spec.MinMember = size
+			pg.Spec.MinResources = &totalResource
+			if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Update(
+				context.TODO(), pg, metav1.UpdateOptions{},
+			); err != nil {
+				v.log.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayiov1alpha1.RayCluster, pod *v1.Pod) {
+	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = v.getAppPodGroupName(app)
+	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+		pod.Labels[QueueNameLabelKey] = queue
+	}
+	if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
+		pod.Spec.PriorityClassName = priorityClassName
+	}
+	pod.Spec.SchedulerName = v.Name()
+}
+
+func (v *VolcanoBatchScheduler) CleanupOnCompletion(app *rayiov1alpha1.RayCluster) error {
+	podGroupName := v.getAppPodGroupName(app)
+	err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Delete(context.TODO(), podGroupName, metav1.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
+	vkClient, err := volcanoclient.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize volcano client with error %v", err)
+	}
+
+	extClient, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize k8s extension client with error %v", err)
+	}
+
+	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
+		context.TODO(),
+		PodGroupName,
+		metav1.GetOptions{},
+	); err != nil {
+		if _, err := extClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(
+			context.TODO(),
+			PodGroupName,
+			metav1.GetOptions{},
+		); err != nil {
+			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %s", err)
+		}
+	}
+	return &VolcanoBatchScheduler{
+		extensionClient: extClient,
+		volcanoClient:   vkClient,
+		log:             logf.Log.WithName("volcano"),
+	}, nil
+}
+
+func (vf *VolcanoBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
+	return b.
+		Watches(&source.Kind{Type: &v1beta1.PodGroup{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &rayiov1alpha1.RayCluster{},
+		})
+}
