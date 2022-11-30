@@ -11,7 +11,6 @@ type BatchScheduler interface {
 	Name() string
 	DoBatchSchedulingOnSubmission(app *rayiov1alpha1.RayCluster) error
 	AddMetadataToPod(app *rayiov1alpha1.RayCluster, pod *v1.Pod)
-	CleanupOnCompletion(app *rayiov1alpha1.RayCluster) error
 }
 
 type BatchSchedulerFactory interface {
@@ -36,10 +35,6 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(app *rayiov1alpha1
 }
 
 func (d *DefaultBatchScheduler) AddMetadataToPod(app *rayiov1alpha1.RayCluster, pod *v1.Pod) {
-}
-
-func (d *DefaultBatchScheduler) CleanupOnCompletion(app *rayiov1alpha1.RayCluster) error {
-	return nil
 }
 
 func (df *DefaultBatchSchedulerFactory) New(config *rest.Config) (BatchScheduler, error) {

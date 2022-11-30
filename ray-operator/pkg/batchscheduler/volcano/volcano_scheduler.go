@@ -74,31 +74,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(app *rayiov1alpha1.RayCluster, size
 			return err
 		}
 
-		podGroup := v1beta1.PodGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: app.Namespace,
-				Name:      podGroupName,
-				OwnerReferences: []metav1.OwnerReference{
-					*metav1.NewControllerRef(app, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
-				},
-			},
-			Spec: v1beta1.PodGroupSpec{
-				MinMember:    size,
-				MinResources: &totalResource,
-			},
-			Status: v1beta1.PodGroupStatus{
-				Phase: v1beta1.PodGroupPending,
-			},
-		}
-
-		if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
-			podGroup.Spec.Queue = queue
-		}
-
-		if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
-			podGroup.Spec.PriorityClassName = priorityClassName
-		}
-
+		podGroup := createPodGroup(app, podGroupName, size, totalResource)
 		if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Create(
 			context.TODO(), &podGroup, metav1.CreateOptions{},
 		); err != nil {
@@ -125,6 +101,40 @@ func (v *VolcanoBatchScheduler) syncPodGroup(app *rayiov1alpha1.RayCluster, size
 	return nil
 }
 
+func createPodGroup(
+	app *rayiov1alpha1.RayCluster,
+	podGroupName string,
+	size int32,
+	totalResource corev1.ResourceList,
+) v1beta1.PodGroup {
+	podGroup := v1beta1.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: app.Namespace,
+			Name:      podGroupName,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(app, rayiov1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
+			},
+		},
+		Spec: v1beta1.PodGroupSpec{
+			MinMember:    size,
+			MinResources: &totalResource,
+		},
+		Status: v1beta1.PodGroupStatus{
+			Phase: v1beta1.PodGroupPending,
+		},
+	}
+
+	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+		podGroup.Spec.Queue = queue
+	}
+
+	if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
+		podGroup.Spec.PriorityClassName = priorityClassName
+	}
+
+	return podGroup
+}
+
 func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayiov1alpha1.RayCluster, pod *v1.Pod) {
 	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = v.getAppPodGroupName(app)
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
@@ -134,15 +144,6 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayiov1alpha1.RayCluster, 
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 	pod.Spec.SchedulerName = v.Name()
-}
-
-func (v *VolcanoBatchScheduler) CleanupOnCompletion(app *rayiov1alpha1.RayCluster) error {
-	podGroupName := v.getAppPodGroupName(app)
-	err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Delete(context.TODO(), podGroupName, metav1.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-	return nil
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
