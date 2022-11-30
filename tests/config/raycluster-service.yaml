@@ -1,5 +1,5 @@
 # Exposes a node port used by compatibility tests for Ray cluster command execution.
-# TODO: Use a less complex setup for command execution, such as kubectl exec.
+# TODO: Use a less complex tool for command execution, such as kubectl exec.
 apiVersion: v1
 kind: Service
 metadata:
