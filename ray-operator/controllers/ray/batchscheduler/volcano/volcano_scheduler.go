@@ -20,9 +20,9 @@ import (
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	schedulerinterface "github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/interface"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )

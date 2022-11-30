@@ -10,7 +10,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
