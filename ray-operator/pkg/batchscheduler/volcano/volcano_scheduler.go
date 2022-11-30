@@ -24,6 +24,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/interface"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -89,7 +90,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(app *rayiov1alpha1.RayCluster, size
 			return err
 		}
 	} else {
-		if pg.Spec.MinMember != size || !utils.Equals(*pg.Spec.MinResources, totalResource) {
+		if pg.Spec.MinMember != size || !quotav1.Equals(*pg.Spec.MinResources, totalResource) {
 			pg.Spec.MinMember = size
 			pg.Spec.MinResources = &totalResource
 			if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Update(

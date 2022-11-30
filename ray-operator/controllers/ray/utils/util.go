@@ -426,22 +426,3 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 
 	return hashStr, nil
 }
-
-// Equals returns true if the two lists are equivalent
-func Equals(a corev1.ResourceList, b corev1.ResourceList) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for key, value1 := range a {
-		value2, found := b[key]
-		if !found {
-			return false
-		}
-		if value1.Cmp(value2) != 0 {
-			return false
-		}
-	}
-
-	return true
-}
