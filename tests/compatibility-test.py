@@ -273,8 +273,11 @@ class RayFTTestCase(unittest.TestCase):
         docker_client.close()
 
 class RayServiceTestCase(unittest.TestCase):
+    """Integration tests for RayService"""
     service_template_file = 'tests/config/ray-service.yaml.template'
 
+    # The previous logic for testing updates was problematic.
+    # We need to test RayService updates.
     @classmethod
     def setUpClass(cls):
         if not utils.is_feature_supported(ray_version, CONST.RAY_SERVICE):
