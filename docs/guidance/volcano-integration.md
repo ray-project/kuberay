@@ -48,7 +48,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.0.0
+          image: rayproject/ray:2.1.0
           resources:
             limits:
               cpu: "1"
