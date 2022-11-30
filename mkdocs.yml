@@ -36,6 +36,7 @@ nav:
     - Ingress: guidance/ingress.md
     - Observability: guidance/observability.md
     - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
+    - KubeRay with Volcano: guidance/volcano-integration.md
   - Best Practice:
     - Worker reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting:
