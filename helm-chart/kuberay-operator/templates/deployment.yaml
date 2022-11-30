@@ -36,9 +36,11 @@ spec:
           command:
             - /manager
           args:
-          - --enable-leader-election
-          - --prioritize-workers-to-delete
-          - --enable-batch-scheduler
+          {{- if .Values.batchScheduler.enabled -}}
+            - --enable-batch-scheduler
+          {{- else -}}
+            []
+          {{- end -}}
           ports:
             - name: http
               containerPort: 8080
