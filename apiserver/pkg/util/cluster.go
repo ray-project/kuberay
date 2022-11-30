@@ -218,12 +218,12 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		Spec: v1.PodSpec{
 			InitContainers: []v1.Container{
 				{
-					Name:  "init-myservice",
+					Name:  "init",
 					Image: "busybox:1.28",
 					Command: []string{
 						"sh",
 						"-c",
-						"until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done",
+						"until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
 					},
 				},
 			},
