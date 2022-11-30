@@ -38,6 +38,8 @@ spec:
             image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.head.resources | nindent 14 }}
+            securityContext:
+            {{- toYaml .Values.head.securityContext | nindent 14 }}
             env:
             {{- toYaml .Values.head.containerEnv | nindent 14}}
             {{- with .Values.head.envFrom }}
@@ -86,12 +88,16 @@ spec:
           - name: init-myservice
             image: {{ $values.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+            securityContext:
+            {{- toYaml $values.initContainerSecurityContext | nindent 14 }}
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
             name: ray-worker
             image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
             imagePullPolicy: {{ $.Values.image.pullPolicy }}
             resources: {{- toYaml $values.resources | nindent 14 }}
+            securityContext:
+            {{- toYaml $values.securityContext | nindent 14 }}
             env:
             {{- toYaml $values.containerEnv | nindent 14}}
             {{- with $values.envFrom }}
@@ -137,12 +143,16 @@ spec:
           - name: init-myservice
             image: {{ .Values.worker.initContainerImage | default "busybox:1.28" }}
             command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+            securityContext:
+            {{- toYaml .Values.worker.initContainerSecurityContext | nindent 14 }}
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
             name: ray-worker
             image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             resources: {{- toYaml .Values.worker.resources | nindent 14 }}
+            securityContext:
+            {{- toYaml .Values.worker.securityContext | nindent 14 }}
             env:
             {{- toYaml .Values.worker.containerEnv | nindent 14}}
             {{- with .Values.worker.envFrom }}
