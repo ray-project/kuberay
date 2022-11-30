@@ -36,11 +36,11 @@ spec:
           command:
             - /manager
           args:
-          {{- if .Values.batchScheduler.enabled -}}
+          {{- if .Values.batchScheduler.enabled }}
             - --enable-batch-scheduler
-          {{- else -}}
+          {{- else }}
             []
-          {{- end -}}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
