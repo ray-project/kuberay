@@ -212,7 +212,7 @@ rules:
   - list
   - update
   - watch
-{{- if .Values.batchScheduler.enabled -}}
+{{- if .Values.batchScheduler.enabled }}
 - apiGroups:
   - scheduling.volcano.sh
   resources:
