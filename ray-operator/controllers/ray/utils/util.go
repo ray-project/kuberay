@@ -268,7 +268,6 @@ func sumResourceList(list []corev1.ResourceList) corev1.ResourceList {
 	totalResource := corev1.ResourceList{}
 	for _, l := range list {
 		for name, quantity := range l {
-
 			if value, ok := totalResource[name]; !ok {
 				totalResource[name] = quantity.DeepCopy()
 			} else {
