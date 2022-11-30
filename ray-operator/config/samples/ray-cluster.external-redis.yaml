@@ -91,6 +91,10 @@ spec:
         containers:
           - name: ray-head
             image: rayproject/ray:2.1.0
+            env:
+              # RAY_REDIS_ADDRESS can force ray to use external redis
+              - name: RAY_REDIS_ADDRESS
+                value: redis:6379
             ports:
               - containerPort: 6379
                 name: redis
