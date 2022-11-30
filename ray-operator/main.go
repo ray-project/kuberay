@@ -10,6 +10,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler"
 
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -21,7 +22,6 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
-	vcbetav1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -36,7 +36,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(vcbetav1.AddToScheme(scheme))
+	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

@@ -9,6 +9,7 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 
 	"github.com/go-logr/logr"
@@ -22,6 +23,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/pkg/batchscheduler/interface"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -175,6 +177,10 @@ func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinter
 		volcanoClient:   vkClient,
 		log:             logf.Log.WithName("volcano"),
 	}, nil
+}
+
+func (vf *VolcanoBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
+	utilruntime.Must(v1beta1.AddToScheme(scheme))
 }
 
 func (vf *VolcanoBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {

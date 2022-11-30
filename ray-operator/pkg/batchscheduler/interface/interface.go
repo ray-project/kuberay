@@ -3,6 +3,7 @@ package schedulerinterface
 import (
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 )
@@ -15,6 +16,7 @@ type BatchScheduler interface {
 
 type BatchSchedulerFactory interface {
 	New(config *rest.Config) (BatchScheduler, error)
+	AddToScheme(scheme *runtime.Scheme)
 	ConfigureReconciler(b *builder.Builder) *builder.Builder
 }
 
@@ -39,6 +41,9 @@ func (d *DefaultBatchScheduler) AddMetadataToPod(app *rayiov1alpha1.RayCluster, 
 
 func (df *DefaultBatchSchedulerFactory) New(config *rest.Config) (BatchScheduler, error) {
 	return &DefaultBatchScheduler{}, nil
+}
+
+func (df *DefaultBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
 }
 
 func (df *DefaultBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {

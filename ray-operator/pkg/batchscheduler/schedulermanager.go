@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 
@@ -31,6 +32,12 @@ func ConfigureReconciler(b *builder.Builder) *builder.Builder {
 		b = factory.ConfigureReconciler(b)
 	}
 	return b
+}
+
+func AddToScheme(scheme *runtime.Scheme) {
+	for _, factory := range schedulerContainers {
+		factory.AddToScheme(scheme)
+	}
 }
 
 type SchedulerManager struct {
