@@ -6,7 +6,7 @@
 
 ### Install Volcano
 
-Volcano needs to be successfully installed in your Kubernetes cluster before enabling Volcano integration with KubeRay. Refer to the [Quick Start Guide](https://github.com/volcano-sh/volcano#quick-start-guide)  for Volcano installation instructions.
+Volcano needs to be successfully installed in your Kubernetes cluster before enabling Volcano integration with KubeRay. Refer to the [Quick Start Guide](https://github.com/volcano-sh/volcano#quick-start-guide) for Volcano installation instructions.
 
 ### Install KubeRay Operator with Batch Scheduling
 
@@ -40,7 +40,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: test
 spec:
-  rayVersion: '2.0.0'
+  rayVersion: '2.1.0'
   headGroupSpec:
     serviceType: ClusterIP
     replicas: 1
@@ -52,7 +52,7 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1G"
+              memory: "2G"
             requests:
               cpu: "1"
               memory: "2G"
