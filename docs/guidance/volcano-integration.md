@@ -55,7 +55,7 @@ spec:
               memory: "1G"
             requests:
               cpu: "1"
-              memory: "1G"
+              memory: "2G"
   workerGroupSpecs: []
 ```
 
