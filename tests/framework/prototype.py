@@ -4,7 +4,7 @@ import logging
 import unittest
 import time
 import subprocess
-import os
+from pathlib import Path
 import yaml
 from kubernetes import client, config
 import jsonpatch
@@ -16,7 +16,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.INFO)
 
-class CONST(object):
+class CONST:
     """Constants"""
     __slots__ = ()
     # Docker images
@@ -28,9 +28,9 @@ class CONST(object):
     K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
 
     # Paths
-    REPO_ROOT = "/" + "/".join(os.path.abspath(os.path.dirname(__file__)).split('/')[1:-2]) + "/"
-    HELM_CHART_ROOT = REPO_ROOT + "helm-chart"
-    DEFAULT_KIND_CONFIG = REPO_ROOT + "tests/framework/config/kind-config.yaml"
+    REPO_ROOT = Path(__file__).absolute().parent.parent.parent
+    HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
+    DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
 
     # Ray features
     RAY_FT = "RAY_FT"
@@ -90,6 +90,7 @@ class KubernetesClusterManager:
     def check_cluster_exist(self) -> bool:
         """Check whether KinD cluster exists or not"""
         return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
+
 K8S_CLUSTER_MANAGER = KubernetesClusterManager()
 
 class OperatorManager:
