@@ -146,13 +146,19 @@ def check_pod_running(pods) -> bool:
             return False
     return True
 
-def shell_subprocess_run(command, check = True):
+def shell_subprocess_run(command, cr_namespace = None, check = True):
     """
     Command will be executed through the shell. If check=True, it will raise an error when
     the returncode of the execution is not 0.
     """
     logger.info("Execute command: %s", command)
-    return subprocess.run(command, shell = True, check = check).returncode
+    if check is False or cr_namespace is None:
+        return subprocess.run(command, shell = True, check = check).returncode
+    return_code = subprocess.run(command, shell = True, check = False).returncode
+    if check and return_code != 0:
+        show_cluster_info(cr_namespace)
+        raise Exception(f"Command exit with nonzero return code {return_code}. Command: {command}")
+    return return_code
 
 def shell_subprocess_check_output(command):
     """
@@ -201,9 +207,9 @@ def show_cluster_info(cr_namespace):
     # -1 when using selector.
     shell_subprocess_run(f'kubectl logs -n={cr_namespace} -l ray.io/node-type=head --tail=-1')
     operator_namespace = shell_subprocess_check_output('kubectl get pods '
-        '-l app.kubernetes.io/component=kuberay-operator -A '
+        '-l app.kubernetes.io/instance=kuberay-operator -A '
         '-o jsonpath={".items[0].metadata.namespace"}')
-    shell_subprocess_run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
+    shell_subprocess_run("kubectl logs -l app.kubernetes.io/instance=kuberay-operator -n "
         f'{operator_namespace.decode("utf-8")} --tail=-1')
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
@@ -324,7 +330,7 @@ class EasyJobRule(Rule):
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
         shell_subprocess_run(f"kubectl exec {headpod_name} -n {cr_namespace} --" +
-            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
+            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"", cr_namespace)
 
 class CurlServiceRule(Rule):
     """"Using curl to access the deployed application on Ray service"""
@@ -358,7 +364,8 @@ class RayClusterAddCREvent(CREvent):
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayclusters', body = self.custom_resource_object)
         else:
-            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
+            shell_subprocess_run(
+                f"kubectl apply -n {self.namespace} -f {self.filepath}", self.namespace)
 
     def wait(self):
         start_time = time.time()
@@ -428,7 +435,8 @@ class RayServiceAddCREvent(CREvent):
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayservices', body = self.custom_resource_object)
         else:
-            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
+            shell_subprocess_run(
+                f"kubectl apply -n {self.namespace} -f {self.filepath}", self.namespace)
 
     def wait(self):
         """Wait for RayService to converge"""""
