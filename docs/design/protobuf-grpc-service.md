@@ -8,11 +8,11 @@ There're few major blockers for users to use KubeRay Operator directly.
 
 - Using kubectl requires sophisticated permission system. Some kubernetes clusters do not enable user level authentication. In some companies, devops use loose RBAC management and corp SSO system is not integrated with Kubernetes OIDC at all.
 
-Due to above reason, it's worth to build generic abstraction on top of RayCluster CRD. With the core api support, we can easily build backend services, cli, etc to bridge users without Kubernetes experiences to KubeRay.
+Due to above reason, it's worth to build generic abstraction on top of RayCluster CRD. With the core API support, we can easily build backend services, cli, etc to bridge users without Kubernetes experiences to KubeRay.
 
 ## Goals
 
-- The api definition should be flexible enough to support different kinds of clients (e.g. backend, cli etc).
+- The APIs definition should be flexible enough to support different kinds of clients (e.g. backend, cli etc).
 - This backend service underneath should leverage generate clients to interact with existing RayCluster custom resources.
 - New added components should be plugable to existing operator.
 
@@ -44,9 +44,11 @@ In order to better define resources at the API level, a few proto files will be 
 - Some of the Kubernetes API like `tolerance` and `node affinity` are too complicated to be converted to an API.
 - We want to leave some flexibility to use database to store history data in the near future (for example, pagination, list options etc).
 
-We end up propsing a simple and easy API which can cover most of the daily requirements.
+We end up propsing a simple and easy API which can cover most of the daily requirements. 
 
-```
+For example, the protobuf definition of the `RayCluster`:
+
+```proto
 service ClusterService {
   // Creates a new Cluster.
   rpc CreateCluster(CreateClusterRequest) returns (Cluster) {
@@ -104,11 +106,18 @@ message GetClusterRequest {
 message ListClustersRequest {
   // The namespace of the clusters to be retrieved.
   string namespace = 1;
+
 }
 
 message ListClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
+
+  // The total number of clusters for the given query.
+  // int32 total_size = 2;
+
+  // The token to list the next page of clusters.
+  // string next_page_token = 3;
 }
 
 message ListAllClustersRequest {}
@@ -116,6 +125,12 @@ message ListAllClustersRequest {}
 message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
+
+  // The total number of clusters for the given query.
+  // int32 total_size = 2;
+
+  // The token to list the next page of clusters.
+  // string next_page_token = 3;
 }
 
 message DeleteClusterRequest {
@@ -155,6 +170,18 @@ message Cluster {
 
   // Output. The time that the cluster deleted.
   google.protobuf.Timestamp deleted_at = 8;
+
+  // Output. The status to show the cluster status.state
+  string cluster_state = 9;
+
+  // Output. The list related to the cluster.
+  repeated ClusterEvent events = 10;
+  
+  // Output. The service endpoint of the cluster
+  map<string, string> service_endpoint = 11;
+
+  // Optional input field. Container environment variables from user.
+  map<string, string> envs = 12;
 }
 
 message ClusterSpec {
@@ -164,6 +191,33 @@ message ClusterSpec {
   repeated WorkerGroupSpec worker_group_spec = 2;
 }
 
+message Volume {
+  string mount_path = 1;
+  enum VolumeType {
+    PERSISTENT_VOLUME_CLAIM = 0;
+    HOST_PATH = 1;
+  }
+  VolumeType volume_type = 2;
+  string name = 3;
+  string source = 4;
+  bool read_only = 5;
+  
+  // If indicate hostpath, we need to let user indicate which type 
+  // they would like to use.
+  enum HostPathType {
+    DIRECTORY = 0;
+    FILE = 1;
+  }
+  HostPathType host_path_type = 6;
+
+  enum MountPropagationMode {
+    NONE = 0;
+    HOSTTOCONTAINER = 1;
+    BIDIRECTIONAL = 2;
+  }
+  MountPropagationMode mount_propagation_mode = 7;
+}
+
 message HeadGroupSpec {
   // Optional. The computeTemplate of head node group
   string compute_template = 1;
@@ -171,8 +225,10 @@ message HeadGroupSpec {
   string image = 2;
   // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
   string service_type = 3;
-  // Optional. The ray start parames of head node group
+  // Optional. The ray start params of head node group
   map<string, string> ray_start_params = 4;
+  // Optional. The volumes mount to head pod
+  repeated Volume volumes = 5;
 }
 
 message WorkerGroupSpec {
@@ -190,201 +246,37 @@ message WorkerGroupSpec {
   int32 max_replicas = 6;
   // Optional. The ray start parames of worker node group
   map<string, string> ray_start_params = 7;
+  // Optional. The volumes mount to worker pods
+  repeated Volume volumes = 8;
 }
 
-service ComputeTemplateService {
-  // Creates a new compute template.
-  rpc CreateComputeTemplate(CreateComputeTemplateRequest) returns (ComputeTemplate) {
-    option (google.api.http) = {
-      post: "/apis/v1alpha2/compute_templates"
-      body: "compute_template"
-    };
-  }
+message ClusterEvent {
+  // Output. Unique Event Id.
+  string id = 1;
 
-  // Finds a specific compute template by its name and namespace.
-  rpc GetComputeTemplate(GetComputeTemplateRequest) returns (ComputeTemplate) {
-    option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
-    };
-  }
+  // Output. Human readable name for event.
+  string name = 2;
 
-  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
-  rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
-    option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates"
-    };
-  }
+  // Output. The creation time of the event. 
+  google.protobuf.Timestamp created_at = 3;
 
-  // Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
-  rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
-    option (google.api.http) = {
-      get: "/apis/v1alpha2/compute_templates"
-    };
-  }
+  // Output. The last time the event occur.
+  google.protobuf.Timestamp first_timestamp = 4;
 
-  // Deletes a compute template by its name and namespace 
-  rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
-    };
-  }
-}
+  // Output. The first time the event occur
+  google.protobuf.Timestamp last_timestamp = 5;
 
-message CreateComputeTemplateRequest {
-  // The compute template to be created.
-  ComputeTemplate compute_template = 1;
-  // The namespace of the compute template to be created
-  string namespace = 2;
-}
+  // Output. The reason for the transition into the object's current status.
+  string reason = 6;
 
-message GetComputeTemplateRequest {
-  // The name of the ComputeTemplate to be retrieved.
-  string name = 1;
-  // The namespace of the compute template to be retrieved.
-  string namespace = 2;
-}
+  // Output. A human-readable description of the status of this operation.
+  string message = 7;
 
-message ListComputeTemplatesRequest {
-  // The namespace of the compute templates to be retrieved. 
-  string namespace = 1;
-  // TODO: support paganation later
-}
-
-message ListComputeTemplatesResponse {
-  repeated ComputeTemplate compute_templates = 1;
-}
-
-message ListAllComputeTemplatesRequest {
-  // TODO: support paganation later
-}
-
-message ListAllComputeTemplatesResponse {
-  repeated ComputeTemplate compute_templates = 1;
-}
-
-message DeleteComputeTemplateRequest {
-  // The name of the compute template to be deleted.
-  string name = 1;
-  // The namespace of the compute template to be deleted.
-  string namespace = 2;
-}
-
-// ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
-message ComputeTemplate {
-  // The name of the compute template
-  string name = 1;
-  // The namespace of the compute template
-  string namespace = 2;
-  // Number of cpus
-  uint32 cpu = 3;
-  // Number of memory
-  uint32 memory = 4;
-  // Number of gpus
-  uint32 gpu = 5;
-  // The detail gpu accelerator type
-  string gpu_accelerator = 6;
-}
-
-
-service ImageTemplateService {
-  // Creates a new ImageTemplate.
-  rpc CreateImageTemplate(CreateImageTemplateRequest) returns (ImageTemplate) {
-    option (google.api.http) = {
-      post: "/apis/v1alpha2/image_templates"
-      body: "image_template"
-    };
-  }
-
-  // Finds a specific ImageTemplate by ID.
-  rpc GetImageTemplate(GetImageTemplateRequest) returns (ImageTemplate) {
-    option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
-    };
-  }
-
-  // Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
-  rpc ListImageTemplates(ListImageTemplatesRequest) returns (ListImageTemplatesResponse) {
-    option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates"
-    };
-  }
-
-  // Deletes an ImageTemplate.
-  rpc DeleteImageTemplate(DeleteImageTemplateRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
-    };
-  }
-}
-
-message CreateImageTemplateRequest {
-  // The image template to be created.
-  ImageTemplate image_template = 1;
-  // The namespace of the image template to be created.
-  string namespace = 2;
-}
-
-message GetImageTemplateRequest {
-  // The name of the image template to be retrieved.
-  string name = 1;
-  // The namespace of the image template to be retrieved.
-  string namespace = 2;
-}
-
-message ListImageTemplatesRequest {
-  // The namespace of the image templates to be retrieved.
-  string namespace = 1;
-  // TODO: support pagingation later
-}
-
-message ListImageTemplatesResponse {
-  // A list of Compute returned.
-  repeated ImageTemplate image_templates = 1;
-}
-
-message ListAllImageTemplatesRequest {
-  // TODO: support pagingation later
-}
-
-message ListAllImageTemplatesResponse {
-  // A list of Compute returned.
-  repeated ImageTemplate image_templates = 1;
-}
-
-message DeleteImageTemplateRequest {
-  // The name of the image template to be deleted.
-  string name = 1;
-  // The namespace of the image template to be deleted.
-  string namespace = 2;
-}
-
-// ImageTemplate can be used by worker group and workspce.
-// They can be distinguish by different entrypoints
-message ImageTemplate {
-  // The ID of the image template
-  string name = 1;
-  // The namespace of the image template
-  string namespace = 2;
-  // The base container image to be used for image building
-  string base_image = 3;
-  // The pip packages to install
-  repeated string pip_packages = 4;
-  // The conda packages to install
-  repeated string conda_packages = 5;
-  // The system packages to install
-  repeated string system_packages = 6;
-  // The environment variables to set
-  map<string, string> environment_variables = 7;
-  // The post install commands to execute
-  string custom_commands = 8;
-  // Output. The result image generated
-  string image = 9;
-}
-
-message Status {
-  string error = 1;
-  int32 code = 2;
-  repeated google.protobuf.Any details = 3;
+  // Output. Type of this event (Normal, Warning), new types could be added in the future
+  string type = 8;
+  
+  // Output. The number of times this event has occurred.
+  int32 count = 9;
 }
 
 ```
@@ -413,5 +305,6 @@ The service will implement gPRC server as following graph shows.
 ## Implementation History
 
 - 2021-11-25: inital proposal accepted.
+- 2022-12-01: new protobuf definition released.
 
 > Note: we should update doc when there's a large update.

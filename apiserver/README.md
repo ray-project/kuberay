@@ -1,25 +1,136 @@
-# KubeRay ApiServer
+# KubeRay APIServer
 
-The KubeRay ApiServer provides gRPC and HTTP APIs to manage KubeRay resources.
+The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
 
-!!! note
+**Note**
 
-    The KubeRay ApiServer is an optional component. It provides a layer of simplified
+    The KubeRay APIServer is an optional component. It provides a layer of simplified
     configuration for KubeRay resources. The KubeRay API server is used internally
     by some organizations to back user interfaces for KubeRay resource management.
 
-    The KubeRay ApiServer is community-managed and is not officially endorsed by the
+    The KubeRay APIServer is community-managed and is not officially endorsed by the
     Ray maintainers. At this time, the only officially supported methods for
     managing KubeRay resources are
 
     - Direct management of KubeRay custom resources via kubectl, kustomize, and Kubernetes language clients.
     - Helm charts.
 
-    KubeRay ApiServer maintainer contacts (GitHub handles):
+    KubeRay APIServer maintainer contacts (GitHub handles):
     @Jeffwan @scarlet25151
 
 
 ## Usage
+
+You can just install the KubeRay APIServer within the same kubernetes cluster by using the [helm chart](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver) or just use [kustomize](https://github.com/ray-project/kuberay/tree/master/apiserver/deploy/base)
+
+After the deployment we may use the `{{baseUrl}}` to access the 
+
+- (default) for nodeport access, we provide the default http port `31888` for connection and you can connect it using.
+
+- for ingress access, you will need to create your own ingress 
+
+The requests parameters detail can be seen in [KubeRay swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger), here we only present some basic example:
+
+## Setup end-to-end test
+
+0. (optional) you may use your local kind cluster or minikube
+
+```bash
+kind create cluster --name ray-test
+```
+
+1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
+
+```bash
+helm -n ray-system install kuberay-apiserver kuberay/helm-chart/kuberay-apiserver
+```
+or 
+
+```
+kubectl apply -k "github.com/ray-project/kuberay/apiserver/deploy/base?ref=${KUBERAY_VERSION}&timeout=90s
+```
+
+2. you can access by your nodeport
+
+```
+curl localhost:31888
+{"code":5, "message":"Not Found"}
+```
+
+3. you can just create `RayCluster` or `RayJobs` or  `RayService` by just dials the endpoints
+
+```
+curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "user-test-1",
+  "namespace": "default",
+  "user": "test",
+  "serveDeploymentGraphSpec": {
+      "importPath": "fruit.deployment_graph,
+      "runtimeEnv": "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
+      "serveConfigs": [
+      {
+        "deploymentName": "OrangeStand",
+        "replicas": 1,
+        "userConfig": "price: 2",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },
+      {
+        "deploymentName": "PearStand",
+        "replicas": 1,
+        "userConfig": "price: 1",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },
+      {
+        "deploymentName": "FruitMarket",
+        "replicas": 1,
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },{
+        "deploymentName": "DAGDriver",
+        "replicas": 1,
+        "routePrefix": "/",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      }]
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "default-template",
+      "image": "hub.byted.org/kuberay/ray:2.0.0",
+      "serviceType": "NodePort",
+      "rayStartParams": {
+            "port": "6379",
+            "node-ip-address": "$MY_POD_IP",
+            "dashboard-host": "0.0.0.0",
+            "metrics-export-port": "8080"
+        },
+       "volumes": [] 
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "small-wg",
+        "computeTemplate": "default-template",
+        "image": "hub.byted.org/kuberay/ray:2.0.0",
+        "replicas": 1,
+        "minReplicas": 0,
+        "maxReplicas": 5,
+        "rayStartParams": {
+                "node-ip-address": "$MY_POD_IP"
+            }
+      }
+    ]
+  }
+}'
+```
+then you can have the resource running in kubernetes cluster.
 
 ### Compute Template
 

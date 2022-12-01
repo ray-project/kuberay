@@ -55,9 +55,6 @@ In above cases, you will need to check if the client ray version is compatible w
 
 For example, when you deployed `kuberay/ray-operator/config/samples/ray-cluster.mini.yaml`, you need to be aware that `spec.rayVersion` and images version is the same with your expect ray release and same with your ray client version.
 
----
 **NOTE:**
 
 _In ray code, the version check will only go through major and minor version, so the python and ray image's minor version match is enough. Also the ray upstream community provide different python version support from 3.6 to 3.9, you can choose the image to match your python version._
-
----

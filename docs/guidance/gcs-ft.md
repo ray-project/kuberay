@@ -1,4 +1,4 @@
-## Ray GCS Fault Tolerance(GCS FT) (Alpha Release)
+## Ray GCS Fault Tolerance (GCS FT) (Alpha Release)
 
 > Note: This feature is in alpha release, there are a few limitations and stabilization will be done in future release from both Ray and KubeRay side.
 
