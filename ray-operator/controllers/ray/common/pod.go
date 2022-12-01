@@ -447,7 +447,7 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
 		}
 		if autoscalerOptions.SecurityContext != nil {
-			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext
+			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext.DeepCopy()
 		}
 	}
 }
