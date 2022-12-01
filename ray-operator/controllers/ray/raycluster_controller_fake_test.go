@@ -186,7 +186,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/autoscaler",
+						Image:   "rayproject/ray:2.1.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -209,7 +209,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/autoscaler",
+						Image:   "rayproject/ray:2.1.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -253,7 +253,6 @@ func setupTest(t *testing.T) {
 					"object-manager-port": "12345",
 					"node-manager-port":   "12346",
 					"object-store-memory": "100000000",
-					"redis-password":      "LetMeInRay",
 					"num-cpus":            "1",
 				},
 				Template: corev1.PodTemplateSpec{
@@ -262,7 +261,7 @@ func setupTest(t *testing.T) {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/autoscaler",
+								Image:   "rayproject/ray:2.1.0",
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -287,16 +286,15 @@ func setupTest(t *testing.T) {
 					MaxReplicas: pointer.Int32Ptr(10000),
 					GroupName:   groupNameStr,
 					RayStartParams: map[string]string{
-						"port":           "6379",
-						"redis-password": "LetMeInRay",
-						"num-cpus":       "1",
+						"port":     "6379",
+						"num-cpus": "1",
 					},
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/autoscaler",
+									Image:   "rayproject/ray:2.1.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{

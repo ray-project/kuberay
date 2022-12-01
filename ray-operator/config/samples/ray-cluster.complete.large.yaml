@@ -13,9 +13,8 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-complete
 spec:
-  rayVersion: '2.0.0'
-  ######################headGroupSpecs#################################
-  # head group template and specs, (perhaps 'group' is not needed in the name)
+  rayVersion: '2.1.0'
+  # Ray head pod template
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
@@ -29,18 +28,13 @@ spec:
     #pod template
     template:
       metadata:
-        labels:
-          # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
-          # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-          rayCluster: raycluster-sample # will be injected if missing
-          groupName: headgroup # will be injected if missing
-        # annotations for pod
-        annotations:
-          key: value
+        # Custom labels. NOTE: To avoid conflicts with KubeRay operator, do not define custom labels start with `raycluster`.
+        # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+        labels: {}
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.0.0
+          image: rayproject/ray:2.1.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
@@ -74,30 +68,27 @@ spec:
   - replicas: 1
     minReplicas: 1
     maxReplicas: 10
-    # logical group name, for this called small-group, also can be functional
-    groupName: small-group
-    # if worker pods need to be added, we can simply increment the replicas
-    # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
-    # the operator will remove pods from the list until the number of replicas is satisfied
-    # when a pod is confirmed to be deleted, its name will be removed from the list below
+    # logical group name, for this called large-group, also can be functional
+    groupName: large-group
+    # If worker pods need to be added, we can increment the replicas.
+    # If worker pods need to be removed, we decrement the replicas, and populate the workersToDelete list.
+    # The operator will remove pods from the list until the desired number of replicas is satisfied.
+    # If the difference between the current replica count and the desired replicas is greater than the
+    # number of entries in workersToDelete, random worker pods will be deleted.
     #scaleStrategy:
     #  workersToDelete:
-    #  - raycluster-complete-worker-small-group-bdtwh
-    #  - raycluster-complete-worker-small-group-hv457
-    #  - raycluster-complete-worker-small-group-k8tj7 
+    #  - raycluster-complete-worker-large-group-bdtwh
+    #  - raycluster-complete-worker-large-group-hv457
+    #  - raycluster-complete-worker-large-group-k8tj7
     # the following params are used to complete the ray start: ray start --block ...
     rayStartParams:
       block: 'true'
     #pod template
     template:
-      metadata:
-        labels:
-          rayCluster: raycluster-complete # will be injected if missing
-          groupName: small-group # will be injected if missing
       spec:
         containers:
-        - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.0.0
+        - name: ray-worker
+          image: rayproject/ray:2.1.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal

@@ -1,3 +1,4 @@
 docker
+GitPython
 kubernetes
 jsonpatch

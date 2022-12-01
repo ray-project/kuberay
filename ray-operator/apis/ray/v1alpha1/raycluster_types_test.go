@@ -23,7 +23,6 @@ var myRayCluster = &RayCluster{
 				"object-manager-port":         "12345",
 				"node-manager-port":           "12346",
 				"object-store-memory":         "100000000",
-				"redis-password":              "LetMeInRay",
 				"num-cpus":                    "1",
 				"dashboard-agent-listen-port": "52365",
 			},
@@ -65,7 +64,6 @@ var myRayCluster = &RayCluster{
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
 					"port":                        "6379",
-					"redis-password":              "LetMeInRay",
 					"num-cpus":                    "1",
 					"dashboard-agent-listen-port": "52365",
 				},

@@ -1,4 +1,5 @@
 ''' Test sample RayCluster YAML files to catch invalid and outdated ones. '''
+import git
 import unittest
 import os
 import logging
@@ -19,31 +20,42 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     NAMESPACE = 'default'
     SAMPLE_PATH = '../../ray-operator/config/samples/'
+    KUBERAY_GIT_ROOT = '../..'
 
     sample_yaml_files = []
 
-    # The free plan of GitHub Actions (i.e. KubeRay CI) only support 2-core CPU runners. Most
+    # The free plan of GitHub Actions (i.e. KubeRay CI) only supports 2-core CPU runners. Most
     # sample YAMLs cannot schedule all pods on Kubernetes nodes due to insufficient CPUs. We
     # decided to just run some tests on KubeRay CI and run all tests in the Ray CI.
+    # See https://github.com/ray-project/kuberay/issues/695.
     GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
-    github_action_tests = set([
+    github_action_tests = {
         "ray-cluster.getting-started.yaml",
         "ray-cluster.ingress.yaml",
         "ray-cluster.mini.yaml"
-        ]
+    }
+
+    # Paths of untracked files, specified as strings, relative to KubeRay
+    # git root directory.
+    untracked_files = set(
+        git.Repo(KUBERAY_GIT_ROOT).untracked_files
     )
 
-    for filename in os.scandir(SAMPLE_PATH):
-        if filename.is_file():
-            with open(filename, encoding="utf-8") as cr_yaml:
-                if GITHUB_ACTIONS and filename.name not in github_action_tests:
-                    continue
-                for k8s_object in yaml.safe_load_all(cr_yaml):
-                    if k8s_object['kind'] == 'RayCluster':
-                        sample_yaml_files.append(
-                            {'path': filename.path, 'name': filename.name, 'cr': k8s_object}
-                        )
-                        break
+    for file in os.scandir(SAMPLE_PATH):
+        if not file.is_file():
+            continue
+        # For local development, skip untracked files.
+        if os.path.relpath(file.path, KUBERAY_GIT_ROOT) in untracked_files:
+            continue
+        with open(file, encoding="utf-8") as cr_yaml:
+            if GITHUB_ACTIONS and file.name not in github_action_tests:
+                continue
+            for k8s_object in yaml.safe_load_all(cr_yaml):
+                if k8s_object['kind'] == 'RayCluster':
+                    sample_yaml_files.append(
+                        {'path': file.path, 'name': file.name, 'cr': k8s_object}
+                    )
+                    break
 
     skip_tests = {
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
@@ -55,7 +67,7 @@ if __name__ == '__main__':
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.0.0'),
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.1.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
     }
     logger.info(image_dict)

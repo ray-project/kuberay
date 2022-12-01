@@ -27,7 +27,6 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				"object-manager-port": "12345",
 				"node-manager-port":   "12346",
 				"object-store-memory": "100000000",
-				"redis-password":      "LetMeInRay",
 				"num-cpus":            "1",
 			},
 			Template: corev1.PodTemplateSpec{

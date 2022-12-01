@@ -63,7 +63,6 @@ var _ = Context("Inside the default namespace", func() {
 					"object-manager-port": "12345",
 					"node-manager-port":   "12346",
 					"object-store-memory": "100000000",
-					"redis-password":      "LetMeInRay",
 					"num-cpus":            "1",
 				},
 				Template: corev1.PodTemplateSpec{
@@ -72,7 +71,7 @@ var _ = Context("Inside the default namespace", func() {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/autoscaler",
+								Image:   "rayproject/ray:2.1.0",
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -97,16 +96,15 @@ var _ = Context("Inside the default namespace", func() {
 					MaxReplicas: pointer.Int32Ptr(4),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
-						"port":           "6379",
-						"redis-password": "LetMeInRay",
-						"num-cpus":       "1",
+						"port":     "6379",
+						"num-cpus": "1",
 					},
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/autoscaler",
+									Image:   "rayproject/ray:2.1.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{

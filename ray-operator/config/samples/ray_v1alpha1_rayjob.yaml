@@ -15,41 +15,22 @@ spec:
   #}'
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
   rayClusterSpec:
-    rayVersion: '2.0.0' # should match the Ray version in the image of the containers
-    ######################headGroupSpecs#################################
-    # head group template and specs, (perhaps 'group' is not needed in the name)
+    rayVersion: '2.1.0' # should match the Ray version in the image of the containers
+    # Ray head pod template
     headGroupSpec:
       # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
       serviceType: ClusterIP
-      # the pod replicas in this group typed head (assuming there could be more than 1 in the future)
-      replicas: 1
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
-        port: '6379' # should match container port named gcs-server
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
       #pod template
       template:
-        metadata:
-          labels:
-            # custom labels. NOTE: do not define custom labels start with `raycluster.`, they may be used in controller.
-            # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-            rayCluster: raycluster-sample # will be injected if missing
-            groupName: headgroup # will be injected if missing
-          # annotations for pod
-          annotations:
-            key: value
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.0.0
-              env:
-                - name: MY_POD_IP
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: status.podIP
+              image: rayproject/ray:2.1.0
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -84,12 +65,6 @@ spec:
           block: 'true'
         #pod template
         template:
-          metadata:
-            labels:
-              key: value
-            # annotations for pod
-            annotations:
-              key: value
           spec:
             initContainers:
               # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
@@ -97,46 +72,8 @@ spec:
                 image: busybox:1.28
                 command: [ 'sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done" ]
             containers:
-              - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.0.0
-                # environment variables to set in the container.Optional.
-                # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
-                env:
-                  - name: RAY_DISABLE_DOCKER_CPU_WARNING
-                    value: "1"
-                  - name: TYPE
-                    value: "worker"
-                  - name: CPU_REQUEST
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: requests.cpu
-                  - name: CPU_LIMITS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: limits.cpu
-                  - name: MEMORY_LIMITS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: limits.memory
-                  - name: MEMORY_REQUESTS
-                    valueFrom:
-                      resourceFieldRef:
-                        containerName: machine-learning
-                        resource: requests.memory
-                  - name: MY_POD_NAME
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: metadata.name
-                  - name: MY_POD_IP
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: status.podIP
-                ports:
-                  - containerPort: 80
-                    name: client
+              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+                image: rayproject/ray:2.1.0
                 lifecycle:
                   preStop:
                     exec:
