@@ -56,10 +56,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "2G"
+              memory: "2Gi"
             requests:
               cpu: "1"
-              memory: "2G"
+              memory: "2Gi"
   workerGroupSpecs: []
 ```
 
@@ -86,11 +86,11 @@ spec:
   weight: 1
   capability:
     cpu: 4
-    memory: 4Gi
+    memory: 6Gi
 EOF
 ```
 
-Next we'll create a RayCluster with a head node and two workers, each requesting 1 CPU and 1Gi of RAM each, for a total of 3 CPU and 3Gi of RAM:
+Next we'll create a RayCluster with a head node (1 CPU + 2Gi of RAM) and two workers (1 CPU + 1Gi of RAM each), for a total of 3 CPU and 4Gi of RAM:
 
 ```
 $ kubectl create -f - <<EOF
@@ -116,10 +116,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1Gi"
+              memory: "2Gi"
             requests:
               cpu: "1"
-              memory: "1Gi"
+              memory: "2Gi"
   workerGroupSpecs:
     - groupName: worker
       rayStartParams:
@@ -167,7 +167,7 @@ spec:
   minMember: 3
   minResources:
     cpu: "3"
-    memory: 3Gi
+    memory: 4Gi
   queue: kuberay-test-queue
 status:
   conditions:
@@ -195,7 +195,7 @@ metadata:
 spec:
   capability:
     cpu: 4
-    memory: 4Gi
+    memory: 6Gi
   reclaimable: true
   weight: 1
 status:
@@ -230,10 +230,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1Gi"
+              memory: "2Gi"
             requests:
               cpu: "1"
-              memory: "1Gi"
+              memory: "2Gi"
   workerGroupSpecs:
     - groupName: worker
       rayStartParams:
@@ -281,7 +281,7 @@ spec:
   minMember: 3
   minResources:
     cpu: "3"
-    memory: 3Gi
+    memory: 4Gi
   queue: kuberay-test-queue
 status:
   conditions:
@@ -295,7 +295,7 @@ status:
   phase: Pending
 ```
 
-Because our new cluster requires more CPU and RAM than our queue will allow, even though we could fit one of the pods with the remaining 1 CPU and 1Gi of RAM, none of the cluster's pods will be placed until there is enough room for all the pods. Without using Volcano for gang scheduling in this way, one of the pods would ordinarily be placed, leading to the cluster being partially allocated, and some jobs (like [Horovod](https://github.com/horovod/horovod) training) getting stuck waiting for resources to become available.
+Because our new cluster requires more CPU and RAM than our queue will allow, even though we could fit one of the pods with the remaining 1 CPU and 2Gi of RAM, none of the cluster's pods will be placed until there is enough room for all the pods. Without using Volcano for gang scheduling in this way, one of the pods would ordinarily be placed, leading to the cluster being partially allocated, and some jobs (like [Horovod](https://github.com/horovod/horovod) training) getting stuck waiting for resources to become available.
 
 We can see the effect this has on scheduling the pods for our new RayCluster, which are listed as `Pending`:
 
@@ -352,7 +352,7 @@ spec:
   minMember: 3
   minResources:
     cpu: "3"
-    memory: 3Gi
+    memory: 4Gi
   queue: kuberay-test-queue
 status:
   conditions:
