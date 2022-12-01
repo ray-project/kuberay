@@ -44,7 +44,7 @@ In order to better define resources at the API level, a few proto files will be 
 - Some of the Kubernetes API like `tolerance` and `node affinity` are too complicated to be converted to an API.
 - We want to leave some flexibility to use database to store history data in the near future (for example, pagination, list options etc).
 
-We end up propsing a simple and easy API which can cover most of the daily requirements. 
+To resolve these issues, we provide a simple API which can cover most common use-cases. 
 
 For example, the protobuf definition of the `RayCluster`:
 
