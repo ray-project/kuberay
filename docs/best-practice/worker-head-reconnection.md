@@ -22,7 +22,7 @@ It retries 600 times and each interval is 1s, resulting in total 600s timeout, i
 
 ## Best Practice
 
-GCS FT feature is now alpha release, for further understand we can rely on the FT feature. To enable the GCS, please refer to [Ray GCS Fault Tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md)
+The GCS Fault-Tolerance (FT) feature is alpha release. To enable GCS FT, please refer to [Ray GCS Fault Tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md)
 
 Also, to solve the workers-head connection lost, there are two others options:
 
