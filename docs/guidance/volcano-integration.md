@@ -74,7 +74,7 @@ If autoscaling is enabled, `minReplicas` will be used for gang scheduling, other
 
 In this example, we'll walk through how gang scheduling works with Volcano and KubeRay.
 
-First, let's create a queue with a capacity of 4 CPUs and 4Gi of RAM:
+First, let's create a queue with a capacity of 4 CPUs and 6Gi of RAM:
 
 ```
 $ kubectl create -f - <<EOF
@@ -89,6 +89,10 @@ spec:
     memory: 6Gi
 EOF
 ```
+
+The **weight** in the definition above indicates the relative weight of a queue in cluster resource division. This is useful in cases where the total **capability** of all the queues in your cluster exceeds the total available resources, forcing the queues to share among themselves. Queues with higher weight will be allocated a proportionally larger share of the total resources.
+
+The **capability** is a hard constraint on the maximum resources the queue will support at any given time. It can be updated as needed to allow more or fewer workloads to run at a time.
 
 Next we'll create a RayCluster with a head node (1 CPU + 2Gi of RAM) and two workers (1 CPU + 1Gi of RAM each), for a total of 3 CPU and 4Gi of RAM:
 
