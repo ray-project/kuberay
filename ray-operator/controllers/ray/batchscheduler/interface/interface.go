@@ -8,15 +8,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 )
 
+// BatchScheduler manages submitting RayCluster pods to a third-party scheduler.
 type BatchScheduler interface {
+	// Name corresponds to the schedulerName in Kubernetes:
+	// https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
 	Name() string
+
+	// DoBatchSchedulingOnSubmission handles submitting the RayCluster to the batch scheduler on creation / update
+	// For most batch schedulers, this results in the creation of a PodGroup.
 	DoBatchSchedulingOnSubmission(app *rayiov1alpha1.RayCluster) error
+
+	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
+	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToPod(app *rayiov1alpha1.RayCluster, pod *v1.Pod)
 }
 
+// BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
+// necessary callbacks with the operator, and the creation of the BatchScheduler itself.
 type BatchSchedulerFactory interface {
+	// New creates a new BatchScheduler for the scheduler plugin.
 	New(config *rest.Config) (BatchScheduler, error)
+
+	// AddToScheme adds the types in this scheduler to the given scheme (runs during init).
 	AddToScheme(scheme *runtime.Scheme)
+
+	// ConfigureReconciler configures the RayCluster Reconciler in the process of being built by
+	// adding watches for its scheduler-specific custom resource types, and any other needed setup.
 	ConfigureReconciler(b *builder.Builder) *builder.Builder
 }
 
