@@ -12,7 +12,7 @@ For the above reasons, it's worth it to build a generic abstraction on top of th
 
 ## Goals
 
-- The APIs definition should be flexible enough to support different kinds of clients (e.g. backend, cli etc).
+- The API definition should be flexible enough to support different kinds of clients (e.g. backend, cli etc).
 - This backend service underneath should leverage generate clients to interact with existing RayCluster custom resources.
 - New added components should be plugable to existing operator.
 
