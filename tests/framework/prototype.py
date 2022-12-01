@@ -155,7 +155,7 @@ def shell_subprocess_run(command, cr_namespace = None, check = True):
     if check is False or cr_namespace is None:
         return subprocess.run(command, shell = True, check = check).returncode
     return_code = subprocess.run(command, shell = True, check = False).returncode
-    if check and return_code != 0:
+    if return_code != 0:
         show_cluster_info(cr_namespace)
         raise Exception(f"Command exit with nonzero return code {return_code}. Command: {command}")
     return return_code
