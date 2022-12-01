@@ -123,6 +123,8 @@ type RayClusterStatus struct {
 	Endpoints map[string]string `json:"endpoints,omitempty"`
 	// Head info
 	Head HeadInfo `json:"head,omitempty"`
+	// Reason provides more information about current State
+	Reason string `json:"reason,omitempty"`
 }
 
 // HeadInfo gives info about head
@@ -171,5 +173,6 @@ func init() {
 type EventReason string
 
 const (
-	RayConfigError EventReason = "RayConfigError"
+	RayConfigError         EventReason = "RayConfigError"
+	PodReconciliationError EventReason = "PodReconciliationError"
 )

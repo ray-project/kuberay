@@ -11765,7 +11765,7 @@ spec:
                   of cluster Important: Run "make" to regenerat'
                 type: string
               jobStatus:
-                description: JobStatus is the Ray Job Status. https://docs.ray.io/en/latest/cluster/jobs-package-ref.
+                description: JobStatus is the Ray Job Status.
                 type: string
               message:
                 type: string
@@ -11813,6 +11813,9 @@ spec:
                       of each node group.
                     format: int32
                     type: integer
+                  reason:
+                    description: Reason provides more information about current State
+                    type: string
                   state:
                     description: 'INSERT ADDITIONAL STATUS FIELD - define observed
                       state of cluster Important: Run "make" to regenerat'

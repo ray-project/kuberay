@@ -19,7 +19,7 @@ Some of the main features of the operator are:
 
 ## Overview
 
-When deployed, the ray operator will watch for K8s events (create/delete/update) for the `raycluster` resources. The ray operator can create a raycluster (head + multipe workers), delete a cluster, or update the cluster by adding or removing worker pods.
+When deployed, the ray operator will watch for K8s events (create/delete/update) for the `raycluster` resources. The ray operator can create a raycluster (head + multiple workers), delete a cluster, or update the cluster by adding or removing worker pods.
 
 ### Ray cluster creation
 
@@ -144,7 +144,7 @@ Execute hello world Ray code
 $ kubectl exec raycluster-heterogeneous-head-9t28q -- python /opt/sample_code.py
 2022-09-21 13:28:41,176	INFO worker.py:1224 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
 2022-09-21 13:28:41,176	INFO worker.py:1333 -- Connecting to existing Ray cluster at address: 10.244.0.144:6379...
-2022-09-21 13:28:41,183	INFO worker.py:1515 -- Connected to Ray cluster. View the dashboard at http://10.244.0.144:8265 
+2022-09-21 13:28:41,183	INFO worker.py:1515 -- Connected to Ray cluster. View the dashboard at http://10.244.0.144:8265
 trying to connect to Ray!
 now executing some code with Ray!
 Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10.244.0.147'}

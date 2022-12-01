@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -214,6 +215,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
+		if updateErr := r.updateClusterReason(instance, err.Error()); updateErr != nil {
+			r.Log.Error(updateErr, "RayCluster update reason error", "cluster name", request.Name)
+		}
+		r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayiov1alpha1.PodReconciliationError), err.Error())
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// update the status if needed
@@ -762,6 +767,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
@@ -1047,5 +1053,10 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayiov1a
 
 func (r *RayClusterReconciler) updateClusterState(instance *rayiov1alpha1.RayCluster, clusterState rayiov1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
+	return r.Status().Update(context.Background(), instance)
+}
+
+func (r *RayClusterReconciler) updateClusterReason(instance *rayiov1alpha1.RayCluster, clusterReason string) error {
+	instance.Status.Reason = clusterReason
 	return r.Status().Update(context.Background(), instance)
 }

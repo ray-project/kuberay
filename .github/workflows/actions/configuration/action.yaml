@@ -48,29 +48,13 @@ runs:
       docker images ls -a
     shell: bash
 
-  - name: Download Artifact Apiserver
-    uses: actions/download-artifact@v2
-    with:
-      name: apiserver_img
-      path: /tmp
-
-  - name: Load KubeRay Apiserver Docker Image
-    run: |
-      docker load --input /tmp/apiserver.tar
-      docker images ls -a
-    shell: bash
-
   - name: Run configuration tests for sample YAML files.
     # compatibility test depends on operator & apiserver images built in previous steps.
     run: |
-      pushd manifests/base/
-      kustomize edit set image kuberay/operator=kuberay/operator:${{ steps.vars.outputs.sha_short }}
-      kustomize edit set image kuberay/apiserver=kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-      popd
       echo "Using Ray image ${{ inputs.ray_version }}"
       cd tests/framework
       GITHUB_ACTIONS=true \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
       OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
-      APISERVER_IMAGE="kuberay/apiserver:${{ steps.vars.outputs.sha_short }}" python test_sample_raycluster_yamls.py
+      python test_sample_raycluster_yamls.py
     shell: bash

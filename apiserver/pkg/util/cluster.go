@@ -135,6 +135,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 						},
 					},
 					// Customization is not allowed here. We should consider whether to make this part smart.
+					// For now we use serve 8000 port for rayservice and added at util/service.go, do not use the 8000 port here for other purpose.
 					Ports: []v1.ContainerPort{
 						{
 							Name:          "redis",
@@ -217,12 +218,12 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		Spec: v1.PodSpec{
 			InitContainers: []v1.Container{
 				{
-					Name:  "init-myservice",
+					Name:  "init",
 					Image: "busybox:1.28",
 					Command: []string{
 						"sh",
 						"-c",
-						"until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done",
+						"until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
 					},
 				},
 			},

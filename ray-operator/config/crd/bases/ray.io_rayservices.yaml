@@ -11869,6 +11869,10 @@ spec:
                           of each node group.
                         format: int32
                         type: integer
+                      reason:
+                        description: Reason provides more information about current
+                          State
+                        type: string
                       state:
                         description: 'INSERT ADDITIONAL STATUS FIELD - define observed
                           state of cluster Important: Run "make" to regenerat'
@@ -11877,7 +11881,7 @@ spec:
                   serveDeploymentStatuses:
                     items:
                       description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
+                        of a Serve deployment
                       properties:
                         healthLastUpdateTime:
                           description: Keep track of how long the service is healthy.
@@ -11890,7 +11894,7 @@ spec:
                           type: string
                         name:
                           description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
+                            and represent a Serve deployment's state.
                           type: string
                         status:
                           description: 'TODO: change status type to enum'
@@ -11976,6 +11980,10 @@ spec:
                           of each node group.
                         format: int32
                         type: integer
+                      reason:
+                        description: Reason provides more information about current
+                          State
+                        type: string
                       state:
                         description: 'INSERT ADDITIONAL STATUS FIELD - define observed
                           state of cluster Important: Run "make" to regenerat'
@@ -11984,7 +11992,7 @@ spec:
                   serveDeploymentStatuses:
                     items:
                       description: ServeDeploymentStatus defines the current state
-                        of Serve Deployment
+                        of a Serve deployment
                       properties:
                         healthLastUpdateTime:
                           description: Keep track of how long the service is healthy.
@@ -11997,7 +12005,7 @@ spec:
                           type: string
                         name:
                           description: Name, Status, Message are from Ray Dashboard
-                            to represent the state of a serve deployment.
+                            and represent a Serve deployment's state.
                           type: string
                         status:
                           description: 'TODO: change status type to enum'

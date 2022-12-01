@@ -10,6 +10,7 @@ from prototype import (
     RayServiceAddCREvent,
     EasyJobRule,
     CurlServiceRule,
+    CONST
 )
 
 
@@ -29,19 +30,19 @@ if __name__ == '__main__':
                 )
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
-    images = [
-        os.getenv('RAY_IMAGE', default='rayproject/ray:2.0.0'),
-        os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-        os.getenv('APISERVER_IMAGE', default='kuberay/apiserver:nightly')
-    ]
-    logger.info(images)
+    image_dict = {
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.0.0'),
+        CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
+    }
+    logger.info(image_dict)
+
     # Build a test plan
     logger.info("Build a test plan ...")
     test_cases = unittest.TestSuite()
     for index, new_cr in enumerate(sample_yaml_files):
         logger.info('[TEST %d]: %s', index, new_cr['name'])
         addEvent = RayServiceAddCREvent(new_cr['cr'], [rs], 90, NAMESPACE, new_cr['path'])
-        test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
+        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
 
     # Execute all tests
     runner = unittest.TextTestRunner()

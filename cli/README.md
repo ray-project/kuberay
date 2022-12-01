@@ -5,6 +5,21 @@
 
 KubeRay CLI provides the ability to manage kuberay resources (ray clusters, compute templates etc) through command line interface.
 
+!!! note
+
+    The KubeRay CLI is an optional interface backed by the KubeRay API server.
+    It provides a layer of simplified configuration for KubeRay resources.
+
+    The KubeRay CLI is community-managed and is not officially endorsed by the
+    Ray maintainers. At this time, the only officially supported methods for
+    managing KubeRay resources are
+
+    - Direct management of KubeRay custom resources via kubectl, kustomize, and Kubernetes language clients.
+    - Helm charts.
+
+    KubeRay CLI maintainer contacts (GitHub handles):
+    @Jeffwan @scarlet25151
+
 ## Installation
 
 Please check [release page](https://github.com/ray-project/kuberay/releases) and download the binaries. 
