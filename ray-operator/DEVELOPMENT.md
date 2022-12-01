@@ -135,14 +135,14 @@ python3 ../scripts/rbac-check.py
 We have some [end-to-end tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/actions/compatibility/action.yaml) on GitHub Actions.
 These tests operate small Ray clusters running within a [kind](https://kind.sigs.k8s.io/) (Kubernetes-in-docker) environment. To run the tests yourself, follow these steps:
 
-* Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), and [kustomize](https://kustomize.io/).
+* Step1: Install related dependencies, including [kind](https://kind.sigs.k8s.io/) and [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 
 * Step2: You must be in `/path/to/your/kuberay/`.
   ```bash
-  # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE APISERVER_IMAGE=$APISERVER_IMAGE python3 tests/compatibility-test.py
+  # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE python3 tests/compatibility-test.py
   #          These 3 environment variables are optional.
   # [Example]:
-  RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly APISERVER_IMAGE=kuberay/apiserver:nightly python3 tests/compatibility-test.py
+  RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
   ```
 ### Running configuration tests locally.
 
@@ -150,9 +150,9 @@ The sample RayCluster and RayService CRs under `ray-operator/config/samples` are
 and `tests/framework/test_sample_rayservice_yamls.py`.
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly APISERVER_IMAGE=kuberay/apiserver:nightly python3 tests/framework/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/framework/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly APISERVER_IMAGE=kuberay/apiserver:nightly python3 tests/framework/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/framework/test_sample_rayservice_yamls.py
 ```
 Currently, only a few of these sample configurations are tested in the CI. See
 [KubeRay issue #695](https://github.com/ray-project/kuberay/issues/695).

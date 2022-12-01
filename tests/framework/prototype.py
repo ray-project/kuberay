@@ -4,18 +4,41 @@ import logging
 import unittest
 import time
 import subprocess
+from pathlib import Path
 import yaml
 from kubernetes import client, config
-import docker
 import jsonpatch
 
-# Utility functions
+# Global variables
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.INFO)
 
+class CONST:
+    """Constants"""
+    __slots__ = ()
+    # Docker images
+    OPERATOR_IMAGE_KEY = "kuberay-operator-image"
+    RAY_IMAGE_KEY = "ray-image"
+
+    # Kubernetes API clients
+    K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
+    K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
+
+    # Paths
+    REPO_ROOT = Path(__file__).absolute().parent.parent.parent
+    HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
+    DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
+
+    # Ray features
+    RAY_FT = "RAY_FT"
+    RAY_SERVICE = "RAY_SERVICE"
+
+CONST = CONST()
+
+# Utility functions
 def search_path(yaml_object, steps, default_value = None):
     """
     Search the position in `yaml_object` based on steps. The following example uses
@@ -38,41 +61,83 @@ def search_path(yaml_object, steps, default_value = None):
             return default_value
     return curr
 
-# Functions for cluster preparation.
-def delete_kind_cluster() -> None:
-    """Delete a KinD cluster"""
-    shell_subprocess_run("kind delete cluster")
+class KubernetesClusterManager:
+    """
+    KubernetesClusterManager controlls the lifecycle of KinD cluster and Kubernetes API client.
+    """
+    def __init__(self) -> None:
+        self.k8s_client_dict = {}
 
-def create_kind_cluster():
-    """Create a KinD cluster"""
-    shell_subprocess_run("kind create cluster --wait 900s")
+    def delete_kind_cluster(self) -> None:
+        """Delete a KinD cluster"""
+        shell_subprocess_run("kind delete cluster")
+        for _, k8s_client in self.k8s_client_dict.items():
+            k8s_client.api_client.rest_client.pool_manager.clear()
+            k8s_client.api_client.close()
+        self.k8s_client_dict = {}
 
-def install_crd():
-    """Install Custom Resource Definition (CRD)"""
-    shell_subprocess_run("kubectl create -k ../../manifests/cluster-scope-resources")
+    def create_kind_cluster(self, kind_config = None) -> None:
+        """Create a KinD cluster"""
+        # To use NodePort service, `kind_config` needs to set `extraPortMappings` properly.
+        kind_config = CONST.DEFAULT_KIND_CONFIG if not kind_config else kind_config
+        shell_subprocess_run(f"kind create cluster --wait 900s --config {kind_config}")
+        config.load_kube_config()
+        self.k8s_client_dict.update({
+            CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
+            CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi()
+        })
 
-def download_images(docker_images):
-    """Download Docker images from DockerHub"""
-    docker_client = docker.from_env()
-    for image in docker_images:
-        # Only pull the image from DockerHub when the image does not
-        # exist in the local docker registry.
-        if shell_subprocess_run(f'docker image inspect {image} > /dev/null', check = False) != 0:
-            docker_client.images.pull(image)
-    docker_client.close()
+    def check_cluster_exist(self) -> bool:
+        """Check whether KinD cluster exists or not"""
+        return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
 
-def kind_load_images(docker_images):
-    """Load downloaded images into KinD cluster"""
-    for image in docker_images:
-        shell_subprocess_run(f'kind load docker-image {image}')
+K8S_CLUSTER_MANAGER = KubernetesClusterManager()
 
-def install_kuberay_operator():
-    """Install kuberay operator with image kuberay/operator:nightly"""
-    shell_subprocess_run('kubectl apply -k ../../manifests/base')
+class OperatorManager:
+    """
+    OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
+    load images into an existing KinD cluster, and install CRD and KubeRay operator.
+    """
+    def __init__(self, docker_image_dict) -> None:
+        for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
+            if key not in docker_image_dict:
+                raise Exception(f"Image {key} does not exist!")
+        self.docker_image_dict = docker_image_dict
 
-def check_cluster_exist():
-    """Check whether KinD cluster exists or not"""
-    return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
+    def prepare_operator(self):
+        """Prepare KubeRay operator for an existing KinD cluster"""
+        self.__kind_prepare_images()
+        self.__install_crd_and_operator()
+
+    def __kind_prepare_images(self):
+        """Download images and load images into KinD cluster"""
+        def download_images():
+            """Download Docker images from DockerHub"""
+            logger.info("Download Docker images: %s", self.docker_image_dict)
+            for key in self.docker_image_dict:
+                # Only pull the image from DockerHub when the image does not
+                # exist in the local docker registry.
+                image = self.docker_image_dict[key]
+                if shell_subprocess_run(
+                        f'docker image inspect {image} > /dev/null', check = False) != 0:
+                    shell_subprocess_run(f'docker pull {image}')
+                else:
+                    logger.info("Image %s exists", image)
+
+        download_images()
+        logger.info("Load images into KinD cluster")
+        for key in self.docker_image_dict:
+            image = self.docker_image_dict[key]
+            shell_subprocess_run(f'kind load docker-image {image}')
+
+    def __install_crd_and_operator(self):
+        """Install both CRD and KubeRay operator by kuberay-operator chart"""
+        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
+        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+        shell_subprocess_run(
+            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
+            f"--set image.repository={repo},image.tag={tag}"
+        )
 
 def check_pod_running(pods) -> bool:
     """"Check whether all of the pods are in running state"""
@@ -82,10 +147,21 @@ def check_pod_running(pods) -> bool:
     return True
 
 def shell_subprocess_run(command, check = True):
-    """Command will be executed through the shell.
-       If check=True, it will raise an error when the returncode of the execution is not 0"""
+    """
+    Command will be executed through the shell. If check=True, it will raise an error when
+    the returncode of the execution is not 0.
+    """
     logger.info("Execute command: %s", command)
     return subprocess.run(command, shell = True, check = check).returncode
+
+def shell_subprocess_check_output(command):
+    """
+    Run command and return STDOUT as encoded bytes.
+    """
+    logger.info("Execute command (check_output): %s", command)
+    output = subprocess.check_output(command, shell=True)
+    logger.info("Output: %s", output)
+    return output
 
 def get_expected_head_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
@@ -121,14 +197,14 @@ def show_cluster_info(cr_namespace):
     """Show system information"""
     shell_subprocess_run(f'kubectl get all -n={cr_namespace}')
     shell_subprocess_run(f'kubectl describe pods -n={cr_namespace}')
+    # With "--tail=-1", every line in the log will be printed. The default value of "tail" is not
+    # -1 when using selector.
     shell_subprocess_run(f'kubectl logs -n={cr_namespace} -l ray.io/node-type=head --tail=-1')
-    # --tail=-1 print all the lines in the log.
-    # Added because the default value when using selecter is not -1
-    operator_namespace = subprocess.check_output('kubectl get pods '
+    operator_namespace = shell_subprocess_check_output('kubectl get pods '
         '-l app.kubernetes.io/component=kuberay-operator -A '
-        '-o jsonpath={".items[0].metadata.namespace"}', shell=True)
+        '-o jsonpath={".items[0].metadata.namespace"}')
     shell_subprocess_run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
-        f'{operator_namespace.decode("utf-8") } --tail=-1')
+        f'{operator_namespace.decode("utf-8")} --tail=-1')
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
 class Mutator:
@@ -223,26 +299,28 @@ class HeadPodNameRule(Rule):
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         expected_val = search_path(custom_resource,
             "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        headpods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         assert headpods.items[0].spec.containers[0].name == expected_val
 
 class HeadSvcRule(Rule):
     """The labels of the head pod and the selectors of the head service must match."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        head_services = client.CoreV1Api().list_namespaced_service(
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        head_services = k8s_v1_api.list_namespaced_service(
             namespace= cr_namespace, label_selector="ray.io/node-type=head")
         assert len(head_services.items) == 1
         selector_dict = head_services.items[0].spec.selector
         selector = ','.join(map(lambda key: f"{key}={selector_dict[key]}", selector_dict))
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        headpods = k8s_v1_api.list_namespaced_pod(
             namespace =cr_namespace, label_selector=selector)
         assert len(headpods.items) == 1
 
 class EasyJobRule(Rule):
     """Submit a very simple Ray job to test the basic functionality of the Ray cluster."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        headpods = client.CoreV1Api().list_namespaced_pod(
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        headpods = k8s_v1_api.list_namespaced_pod(
             namespace = cr_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
         shell_subprocess_run(f"kubectl exec {headpod_name} -n {cr_namespace} --" +
@@ -255,18 +333,19 @@ class CurlServiceRule(Rule):
         shell_subprocess_run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
             "--command -- /bin/sh -c \"while true; do sleep 10;done\"")
         success_create = False
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         for _ in range(30):
-            resp = client.CoreV1Api().read_namespaced_pod(name="curl", namespace=cr_namespace)
+            resp = k8s_v1_api.read_namespaced_pod(name="curl", namespace=cr_namespace)
             if resp.status.phase != 'Pending':
                 success_create = True
                 break
             time.sleep(1)
         if not success_create:
             raise Exception("CurlServiceRule create curl pod timeout")
-        output = subprocess.check_output(f"kubectl exec curl -n {cr_namespace} "
+        output = shell_subprocess_check_output(f"kubectl exec curl -n {cr_namespace} "
             "-- curl -X POST -H 'Content-Type: application/json' "
             f"{custom_resource['metadata']['name']}-serve-svc.{cr_namespace}.svc.cluster.local:8000"
-            " -d '[\"MANGO\", 2]'", shell=True)
+            " -d '[\"MANGO\", 2]'")
         assert output == b'6'
         shell_subprocess_run(f"kubectl delete pod curl -n {cr_namespace}")
 
@@ -274,12 +353,10 @@ class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
     def exec(self):
         if not self.filepath:
-            k8s_cr_api = client.CustomObjectsApi()
+            k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
             k8s_cr_api.create_namespaced_custom_object(
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayclusters', body = self.custom_resource_object)
-            k8s_cr_api.api_client.rest_client.pool_manager.clear()
-            k8s_cr_api.api_client.close()
         else:
             shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -291,7 +368,7 @@ class RayClusterAddCREvent(CREvent):
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         converge = False
-        k8s_v1_api = client.CoreV1Api()
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         for _ in range(self.timeout):
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
@@ -304,10 +381,6 @@ class RayClusterAddCREvent(CREvent):
                 logger.info("--- RayClusterAddCREvent %s seconds ---", time.time() - start_time)
                 break
             time.sleep(1)
-        # I hope to move k8s_v1_api to constructor and close it in the destructor,
-        # but test_sample_raycluster_yamls.py will fail with unknown reasons.
-        k8s_v1_api.api_client.rest_client.pool_manager.clear()
-        k8s_v1_api.api_client.close()
 
         if not converge:
             logger.info("RayClusterAddCREvent wait() failed to converge in %d seconds.",
@@ -319,15 +392,13 @@ class RayClusterAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayCluster"""
-        k8s_cr_api = client.CustomObjectsApi()
+        k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         k8s_cr_api.delete_namespaced_custom_object(
             group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
             plural = 'rayclusters', name = self.custom_resource_object['metadata']['name'])
-        k8s_cr_api.api_client.rest_client.pool_manager.clear()
-        k8s_cr_api.api_client.close()
         # Wait pods to be deleted
         converge = False
-        k8s_v1_api = client.CoreV1Api()
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         start_time = time.time()
         for _ in range(self.timeout):
             headpods = k8s_v1_api.list_namespaced_pod(
@@ -339,8 +410,7 @@ class RayClusterAddCREvent(CREvent):
                 logger.info("--- Cleanup RayCluster %s seconds ---", time.time() - start_time)
                 break
             time.sleep(1)
-        k8s_v1_api.api_client.rest_client.pool_manager.clear()
-        k8s_v1_api.api_client.close()
+
         if not converge:
             logger.info("RayClusterAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
@@ -353,12 +423,10 @@ class RayServiceAddCREvent(CREvent):
     def exec(self):
         """Wait for RayService to converge"""""
         if not self.filepath:
-            k8s_cr_api = client.CustomObjectsApi()
+            k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
             k8s_cr_api.create_namespaced_custom_object(
                 group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
                 plural = 'rayservices', body = self.custom_resource_object)
-            k8s_cr_api.api_client.rest_client.pool_manager.clear()
-            k8s_cr_api.api_client.close()
         else:
             shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -372,7 +440,7 @@ class RayServiceAddCREvent(CREvent):
         #   (2) All head pods and worker pods are "Running".
         #   (3) Service named "rayservice-sample-serve" presents
         converge = False
-        k8s_v1_api = client.CoreV1Api()
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         for _ in range(self.timeout):
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
@@ -388,10 +456,6 @@ class RayServiceAddCREvent(CREvent):
                 logger.info("--- RayServiceAddCREvent %s seconds ---", time.time() - start_time)
                 break
             time.sleep(1)
-        # I hope to move k8s_v1_api to constructor and close it in the destructor,
-        # but test_sample_raycluster_yamls.py will fail with unknown reasons.
-        k8s_v1_api.api_client.rest_client.pool_manager.clear()
-        k8s_v1_api.api_client.close()
 
         if not converge:
             logger.info("RayServiceAddCREvent wait() failed to converge in %d seconds.",
@@ -403,15 +467,13 @@ class RayServiceAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayService"""
-        k8s_cr_api = client.CustomObjectsApi()
+        k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         k8s_cr_api.delete_namespaced_custom_object(
             group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
             plural = 'rayservices', name = self.custom_resource_object['metadata']['name'])
-        k8s_cr_api.api_client.rest_client.pool_manager.clear()
-        k8s_cr_api.api_client.close()
         # Wait pods to be deleted
         converge = False
-        k8s_v1_api = client.CoreV1Api()
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         start_time = time.time()
         for _ in range(self.timeout):
             headpods = k8s_v1_api.list_namespaced_pod(
@@ -423,8 +485,7 @@ class RayServiceAddCREvent(CREvent):
                 logger.info("--- Cleanup RayService %s seconds ---", time.time() - start_time)
                 break
             time.sleep(1)
-        k8s_v1_api.api_client.rest_client.pool_manager.clear()
-        k8s_v1_api.api_client.close()
+
         if not converge:
             logger.info("RayServiceAddCREvent clean_up() failed to converge in %d seconds.",
                 self.timeout)
@@ -434,23 +495,19 @@ class RayServiceAddCREvent(CREvent):
 
 class GeneralTestCase(unittest.TestCase):
     """TestSuite"""
-    def __init__(self, methodName, docker_images, cr_event):
+    def __init__(self, methodName, docker_image_dict, cr_event):
         super().__init__(methodName)
         self.cr_event = cr_event
-        self.images = docker_images
+        self.operator_manager = OperatorManager(docker_image_dict)
 
     @classmethod
     def setUpClass(cls):
-        delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
 
     def setUp(self):
-        if not check_cluster_exist():
-            create_kind_cluster()
-            install_crd()
-            download_images(self.images)
-            kind_load_images(self.images)
-            install_kuberay_operator()
-            config.load_kube_config()
+        if not K8S_CLUSTER_MANAGER.check_cluster_exist():
+            K8S_CLUSTER_MANAGER.create_kind_cluster()
+            self.operator_manager.prepare_operator()
 
     def runtest(self):
         """Run a configuration test"""
@@ -461,7 +518,7 @@ class GeneralTestCase(unittest.TestCase):
             self.cr_event.clean_up()
         except Exception as ex:
             logger.error(str(ex))
-            delete_kind_cluster()
+            K8S_CLUSTER_MANAGER.delete_kind_cluster()
 
 if __name__ == '__main__':
     TEMPLATE_NAME = 'config/ray-cluster.mini.yaml.template'
@@ -506,11 +563,14 @@ if __name__ == '__main__':
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(base_cr, patch_list)
-    images = ['rayproject/ray:2.1.0', 'kuberay/operator:nightly', 'kuberay/apiserver:nightly']
+    image_dict = {
+        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.1.0',
+        CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
+    }
 
     test_cases = unittest.TestSuite()
     for new_cr in mut.mutate():
         addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
-        test_cases.addTest(GeneralTestCase('runtest', images, addEvent))
+        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
     runner = unittest.TextTestRunner()
     runner.run(test_cases)

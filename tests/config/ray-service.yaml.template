@@ -8,7 +8,7 @@ spec:
   serveConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |
-      working_dir: "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip"
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
     deployments:
       - name: MangoStand
         numReplicas: 1
@@ -106,9 +106,9 @@ spec:
         template:
           spec:
             initContainers:
-              - name: init-myservice
+              - name: init
                 image: busybox:1.28
-                command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+                command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $$RAY_IP; sleep 2; done"]
             containers:
               - name: ray-worker
                 image: $ray_image
@@ -117,5 +117,3 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-
-

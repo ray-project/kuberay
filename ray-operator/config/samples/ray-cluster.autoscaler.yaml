@@ -120,9 +120,9 @@ spec:
       spec:
         initContainers:
         # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
-        - name: init-myservice
+        - name: init
           image: busybox:1.28
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker
           image: rayproject/ray:2.1.0

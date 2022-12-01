@@ -84,9 +84,9 @@ spec:
         template:
           spec:
             initContainers:
-              - name: init-myservice
+              - name: init
                 image: busybox:1.28
-                command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+                command: ['sh', '-c', "until nslookup $$RAY_IP.$$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $$RAY_IP; sleep 2; done"]
             containers:
                 name: ray-worker
                 image: $ray_image
@@ -95,5 +95,3 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-
-
