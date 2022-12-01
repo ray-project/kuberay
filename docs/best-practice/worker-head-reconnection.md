@@ -24,7 +24,7 @@ It retries 600 times and each interval is 1s, resulting in total 600s timeout, i
 
 The GCS Fault-Tolerance (FT) feature is alpha release. To enable GCS FT, please refer to [Ray GCS Fault Tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md)
 
-Also, to solve the workers-head connection lost, there are two others options:
+To reduce the chances of a lost worker-head connection, there are two other options:
 
 - Make head more stable: when creating the cluster, allocate sufficient amount of resources on head pod such that it tends to be stable and not easy to crash. You can also set {"num-cpus": "0"} in "rayStartParams" of "headGroupSpec" such that Ray scheduler will skip the head node when scheduling workloads. This also helps to maintain the stability of the head. 
 
