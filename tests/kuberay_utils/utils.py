@@ -7,13 +7,16 @@ import tarfile
 import time
 import tempfile
 import yaml
-import docker
 
 from kubernetes.stream import stream
-from kubernetes import config
-from framework.prototype import RayClusterAddCREvent
+from framework.prototype import (
+    CONST,
+    K8S_CLUSTER_MANAGER,
+    RayClusterAddCREvent,
+    RayServiceAddCREvent,
+    shell_subprocess_run
+)
 
-kindcluster_config_file = 'tests/config/cluster-config.yaml'
 raycluster_service_file = 'tests/config/raycluster-service.yaml'
 
 logger = logging.getLogger(__name__)
@@ -23,70 +26,16 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-
-def parse_ray_version(version_str):
-    tmp = version_str.split('.')
-    assert len(tmp) == 3
-    major = int(tmp[0])
-    minor = int(tmp[1])
-    patch = int(tmp[2])
-    return major, minor, patch
-
-
-def ray_ft_supported(ray_version):
+def is_feature_supported(ray_version, feature):
+    """Return True if `feature` is supported in `ray_version`"""
     if ray_version == "nightly":
         return True
-    major, minor, _ = parse_ray_version(ray_version)
-    return major * 100 + minor > 113
+    major, minor, _ = [int(s) for s in ray_version.split('.')]
+    if feature in [CONST.RAY_FT, CONST.RAY_SERVICE]:
+        return major * 100 + minor > 113
+    return False
 
-
-def ray_service_supported(ray_version):
-    if ray_version == "nightly":
-        return True
-    major, minor, _ = parse_ray_version(ray_version)
-    return major * 100 + minor > 113
-
-
-def shell_run(cmd, silent = False):
-    logger.info('executing cmd: {}'.format(cmd))
-    if silent:
-        cmd += ' > /dev/null'
-    return os.system(cmd)
-
-
-def shell_assert_success(cmd):
-    assert shell_run(cmd) == 0
-
-
-def shell_assert_failure(cmd):
-    assert shell_run(cmd) != 0
-
-
-def create_cluster():
-    """Create a KinD cluster"""
-    # Use `--wait 10m` flag to block until the control plane reaches a ready status.
-    shell_assert_success('kind create cluster --wait 10m --config {}'.format(kindcluster_config_file))
-    rtn = shell_run('kubectl wait --for=condition=ready pod -n kube-system --all --timeout=300s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    # Initialize Kubernetes config
-    config.load_kube_config()
-    assert rtn == 0
-
-
-def apply_kuberay_resources(images, kuberay_operator_image, kuberay_apiserver_image):
-    for image in images:
-        shell_assert_success('kind load docker-image {}'.format(image))
-    shell_assert_success('kubectl create -k manifests/cluster-scope-resources')
-    # use kustomize to build the yaml, then change the image to the one we want to testing.
-    shell_assert_success(
-        ('rm -f kustomization.yaml && kustomize create --resources manifests/base && ' +
-         'kustomize edit set image ' +
-         'kuberay/operator:nightly={0} kuberay/apiserver:nightly={1} && ' +
-         'kubectl apply -k .').format(kuberay_operator_image, kuberay_apiserver_image))
-
-
-def create_kuberay_cluster(template_name, ray_version, ray_image):
+def create_ray_cluster(template_name, ray_version, ray_image):
     """Create a RayCluster and a NodePort service."""
     context = {}
     with open(template_name, encoding="utf-8") as ray_cluster_template:
@@ -105,76 +54,52 @@ def create_kuberay_cluster(template_name, ray_version, ray_image):
 
     try:
         # Deploy a NodePort service to expose ports for users.
-        shell_assert_success(f'kubectl apply -f {raycluster_service_file}')
+        shell_subprocess_run(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
-            custom_resource_object = context['cr'], 
+            custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
             namespace='default',
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
-        return
+        return ray_cluster_add_event
     except Exception as ex:
-        # RayClusterAddCREvent fails to converge.
-        logger.error(str(ex))
-        shell_run('kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-        shell_run('kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
-    raise Exception("create_kuberay_cluster fails")
+        logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
+    raise Exception("create_ray_cluster fails")
 
-def create_kuberay_service(template_name, ray_version, ray_image):
-    template = None
-    with open(template_name, mode='r') as f:
-        template = Template(f.read())
+def create_ray_service(template_name, ray_version, ray_image):
+    """Create a RayService without a NodePort service."""
+    context = {}
+    with open(template_name, encoding="utf-8") as ray_service_template:
+        template = Template(ray_service_template.read())
+        yamlfile = template.substitute(
+            {'ray_image': ray_image, 'ray_version': ray_version}
+        )
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_service_yaml:
+            ray_service_yaml.write(yamlfile)
+            context['filepath'] = ray_service_yaml.name
 
-    rayservice_spec_buf = template.substitute(
-        {'ray_image': ray_image, 'ray_version': ray_version})
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayService':
+            context['cr'] = k8s_object
+            break
 
-    service_config_file = None
-    with tempfile.NamedTemporaryFile('w', delete=False) as f:
-        f.write(rayservice_spec_buf)
-        service_config_file = f.name
-
-    rtn = shell_run(
-        'kubectl wait --for=condition=ready pod -n ray-system --all --timeout=900s')
-    if rtn != 0:
-        shell_run('kubectl get pods -A')
-    assert rtn == 0
-    assert service_config_file is not None
-    shell_assert_success('kubectl apply -f {}'.format(service_config_file))
-
-    shell_run('kubectl get pods -A')
-
-    time.sleep(20)
-
-    shell_assert_success('kubectl apply -f {}'.format(raycluster_service_file))
-
-    wait_for_condition(
-        lambda: shell_run(
-            'kubectl get service rayservice-sample-serve-svc -o jsonpath="{.status}"') == 0,
-        timeout=900,
-        retry_interval_ms=5000,
-    )
-
-
-def delete_cluster():
-    shell_run('kind delete cluster')
-
-
-def download_images(images):
-    """Pull images from DockerHub if do not exist."""
-    client = docker.from_env()
-    for image in images:
-        if shell_run(f'docker image inspect {image}', silent=True) != 0:
-            # Only pull the image from DockerHub when the image does not
-            # exist in the local docker registry.
-            logger.info("Download docker image %s", image)
-            client.images.pull(image)
-        else:
-            logger.info("Image %s exists", image)
-    client.close()
+    try:
+        # Create a RayService
+        ray_service_add_event = RayServiceAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_service_add_event.trigger()
+        return ray_service_add_event
+    except Exception as ex:
+        logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
+    raise Exception("create_ray_service fails")
 
 def copy_to_container(container, src, dest, filename):
     oldpwd = os.getcwd()
@@ -230,12 +155,15 @@ def wait_for_condition(
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
 
-def get_pod(k8s_api, namespace, label_selector):
-    return k8s_api.list_namespaced_pod(namespace = namespace, label_selector = label_selector)
+def get_pod(namespace, label_selector):
+    return K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
+            namespace = namespace, label_selector = label_selector
+        )
 
-def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
+def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
     exec_command = ['/bin/sh', '-c'] + exec_command
-    resp = stream(k8s_api.connect_get_namespaced_pod_exec,
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    resp = stream(k8s_v1_api.connect_get_namespaced_pod_exec,
                 pod_name,
                 namespace,
                 command=exec_command,
@@ -246,7 +174,7 @@ def pod_exec_command(k8s_api, pod_name, namespace, exec_command, stderr=True, st
         logger.info(f"response: {resp}")
     return resp
 
-def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
+def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
     """
     `wait_for_new_head` is used to wait for new head is ready and running. For example, `test_detached_actor` kills
     the gcs_server process on the head pod. It takes nearly 1 min to kill the head pod, and the head pod will still
@@ -264,7 +192,6 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     become ready to serve new connections from ray clients. So, users need to retry until a Ray client connection succeeds.
 
     Args:
-        k8s_api: Kubernetes client (e.g. client.CoreV1Api())
         old_head_pod_name: Name of the old head pod.
         old_restart_count: If the Pod is restarted by Kubernetes Pod RestartPolicy, the restart_count will increase by 1.
         namespace: Namespace that the head pod is running in.
@@ -274,13 +201,14 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
     Raises:
         RuntimeError: If the condition is not met before the timeout expires, raise the RuntimeError.
     """
-    def check_status(k8s_api, old_head_pod_name, old_restart_count, namespace) -> bool:
-        all_pods = k8s_api.list_namespaced_pod(namespace = namespace)
-        headpods = get_pod(k8s_api, namespace=namespace, label_selector='ray.io/node-type=head')
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
+        all_pods = k8s_v1_api.list_namespaced_pod(namespace = namespace)
+        headpods = get_pod(namespace=namespace, label_selector='ray.io/node-type=head')
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
         # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
         # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`
-        # worker pods in the cluster. 
+        # worker pods in the cluster.
         if len(headpods.items) != 1:
             logger.info('Number of headpods is not equal to 1.')
             return False
@@ -318,7 +246,7 @@ def wait_for_new_head(k8s_api, old_head_pod_name, old_restart_count, namespace, 
                     logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
                     return False
         return True
-    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms, k8s_api=k8s_api,
+    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms,
         old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count, namespace=namespace)
     # After the cluster state converges, ray processes still need tens of seconds to become ready.
     # TODO (kevin85421): Make ray processes become ready when pods are "Ready" and "Running".
