@@ -213,6 +213,72 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	return count
 }
 
+func CalculateDesiredResources(cluster *rayiov1alpha1.RayCluster) corev1.ResourceList {
+	desiredResourcesList := []corev1.ResourceList{{}}
+	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
+		desiredResourcesList = append(desiredResourcesList, headPodResource)
+	}
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		podResource := calculatePodResource(nodeGroup.Template.Spec)
+		for i := int32(0); i < *nodeGroup.Replicas; i++ {
+			desiredResourcesList = append(desiredResourcesList, podResource)
+		}
+	}
+	return sumResourceList(desiredResourcesList)
+}
+
+func CalculateMinResources(cluster *rayiov1alpha1.RayCluster) corev1.ResourceList {
+	minResourcesList := []corev1.ResourceList{{}}
+	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
+		minResourcesList = append(minResourcesList, headPodResource)
+	}
+	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		podResource := calculatePodResource(nodeGroup.Template.Spec)
+		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
+			minResourcesList = append(minResourcesList, podResource)
+		}
+	}
+	return sumResourceList(minResourcesList)
+}
+
+func calculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
+	podResource := corev1.ResourceList{}
+	for _, container := range podSpec.Containers {
+		containerResource := container.Resources.Requests
+		for name, quantity := range container.Resources.Limits {
+			if _, ok := containerResource[name]; !ok {
+				containerResource[name] = quantity
+			}
+		}
+		for name, quantity := range containerResource {
+			if totalQuantity, ok := podResource[name]; ok {
+				totalQuantity.Add(quantity)
+				podResource[name] = totalQuantity
+			} else {
+				podResource[name] = quantity
+			}
+		}
+	}
+	return podResource
+}
+
+func sumResourceList(list []corev1.ResourceList) corev1.ResourceList {
+	totalResource := corev1.ResourceList{}
+	for _, l := range list {
+		for name, quantity := range l {
+			if value, ok := totalResource[name]; !ok {
+				totalResource[name] = quantity.DeepCopy()
+			} else {
+				value.Add(quantity)
+				totalResource[name] = value
+			}
+		}
+	}
+	return totalResource
+}
+
 func Contains(elems []string, searchTerm string) bool {
 	for _, s := range elems {
 		if searchTerm == s {

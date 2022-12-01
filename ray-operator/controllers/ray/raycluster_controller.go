@@ -8,6 +8,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -40,15 +41,17 @@ var (
 	DefaultRequeueDuration    = 2 * time.Second
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
+	EnableBatchScheduler      bool
 )
 
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 	return &RayClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		Recorder: mgr.GetEventRecorderFor("raycluster-controller"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controllers").WithName("RayCluster"),
+		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
+		BatchSchedulerMgr: batchscheduler.NewSchedulerManager(mgr.GetConfig()),
 	}
 }
 
@@ -57,9 +60,10 @@ var _ reconcile.Reconciler = &RayClusterReconciler{}
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Log               logr.Logger
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	BatchSchedulerMgr *batchscheduler.SchedulerManager
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -341,6 +345,16 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 	if err := r.List(context.TODO(), &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
+	if EnableBatchScheduler {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
+			if err := scheduler.DoBatchSchedulingOnSubmission(instance); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
@@ -659,6 +673,13 @@ func (r *RayClusterReconciler) createHeadPod(instance rayiov1alpha1.RayCluster) 
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
+	if EnableBatchScheduler {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, &pod)
+		} else {
+			return err
+		}
+	}
 
 	r.Log.Info("createHeadPod", "head pod with name", pod.GenerateName)
 	if err := r.Create(context.TODO(), &pod); err != nil {
@@ -687,6 +708,14 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
+	if EnableBatchScheduler {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, &pod)
+		} else {
+			return err
+		}
+	}
+
 	replica := pod
 	if err := r.Create(context.TODO(), &replica); err != nil {
 		if errors.IsAlreadyExists(err) {
@@ -765,7 +794,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayiov1alpha1.RayCluster,
 
 // SetupWithManager builds the reconciler.
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
@@ -776,7 +805,13 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &rayiov1alpha1.RayCluster{},
-		}).
+		})
+
+	if EnableBatchScheduler {
+		b = batchscheduler.ConfigureReconciler(b)
+	}
+
+	return b.
 		WithOptions(controller.Options{MaxConcurrentReconciles: reconcileConcurrency}).
 		Complete(r)
 }

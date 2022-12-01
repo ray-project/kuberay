@@ -212,4 +212,23 @@ rules:
   - list
   - update
   - watch
+{{- if .Values.batchScheduler.enabled }}
+- apiGroups:
+  - scheduling.volcano.sh
+  resources:
+  - podgroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+{{- end }}
 {{- end }}

@@ -55,3 +55,6 @@ readinessProbe:
 
 createCustomResource: true
 rbacEnable: true
+
+batchScheduler:
+  enabled: false

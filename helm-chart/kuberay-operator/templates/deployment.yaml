@@ -35,6 +35,12 @@ spec:
           volumeMounts: []
           command:
             - /manager
+          args:
+          {{- if .Values.batchScheduler.enabled }}
+            - --enable-batch-scheduler
+          {{- else }}
+            []
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080

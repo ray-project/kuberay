@@ -10,6 +10,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -35,6 +36,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1alpha1.AddToScheme(scheme))
+	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -63,6 +65,8 @@ func main() {
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
+	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
+		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
 
 	opts := k8szap.Options{
 		Development: true,
@@ -108,6 +112,9 @@ func main() {
 	}
 	if ray.ForcedClusterUpgrade {
 		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
+	}
+	if ray.EnableBatchScheduler {
+		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
