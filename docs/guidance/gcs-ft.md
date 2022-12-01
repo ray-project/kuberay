@@ -1,6 +1,6 @@
-## Ray GCS Fault Tolerance(GCS FT) (Experimental)
+## Ray GCS Fault Tolerance(GCS FT) (Alpha Release)
 
-> Note: This feature is still experimental, there are a few limitations and stabilization will be done in future release from both Ray and KubeRay side.
+> Note: This feature is in alpha release, there are a few limitations and stabilization will be done in future release from both Ray and KubeRay side.
 
 Ray GCS FT enables GCS server to use external storage backend. As a result, Ray clusters can tolerant GCS failures and recover from failures
 without affecting important services such as detached Actors & RayServe deployments.
