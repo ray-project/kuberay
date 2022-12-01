@@ -44,13 +44,8 @@ kind create cluster --name ray-test
 ```bash
 helm -n ray-system install kuberay-apiserver kuberay/helm-chart/kuberay-apiserver
 ```
-or 
 
-```
-kubectl apply -k "github.com/ray-project/kuberay/apiserver/deploy/base?ref=${KUBERAY_VERSION}&timeout=90s
-```
-
-2. you can access by your nodeport
+1. you can access by your nodeport
 
 ```
 curl localhost:31888
@@ -64,11 +59,11 @@ curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "user-test-1",
-  "namespace": "default",
-  "user": "test",
+  "namespace": "ray-system",
+  "user": "user",
   "serveDeploymentGraphSpec": {
-      "importPath": "fruit.deployment_graph,
-      "runtimeEnv": "https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
+      "importPath": "fruit.deployment_graph",
+      "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
       "serveConfigs": [
       {
         "deploymentName": "OrangeStand",
@@ -104,7 +99,7 @@ curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "hub.byted.org/kuberay/ray:2.0.0",
+      "image": "rayproject/ray:2.1.0",
       "serviceType": "NodePort",
       "rayStartParams": {
             "port": "6379",
@@ -118,7 +113,7 @@ curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "hub.byted.org/kuberay/ray:2.0.0",
+        "image": "rayproject/ray:2.1.0",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,

@@ -12,6 +12,7 @@ rules:
   resources:
   - rayclusters
   - rayjobs
+  - rayservices
   verbs:
   - create
   - delete

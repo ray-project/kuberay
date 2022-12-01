@@ -38,7 +38,7 @@ localhost:8888
 ```
 ./docker-image-builder.sh
 ```
-This script will build and optionally push the image to the remote docker hub (hub.byted.org, TODO: make it configurable).
+This script will build and optionally push the image to the remote docker hub (hub.byted.org).
 #### Start Service
 ```
 kubectl apply -f deploy/

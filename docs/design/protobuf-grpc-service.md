@@ -112,12 +112,6 @@ message ListClustersRequest {
 message ListClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
-
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
 }
 
 message ListAllClustersRequest {}
@@ -125,12 +119,6 @@ message ListAllClustersRequest {}
 message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1;
-
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
 }
 
 message DeleteClusterRequest {
