@@ -8,7 +8,7 @@ There're few major blockers for users to use KubeRay Operator directly.
 
 - Using kubectl requires sophisticated permission system. Some kubernetes clusters do not enable user level authentication. In some companies, devops use loose RBAC management and corp SSO system is not integrated with Kubernetes OIDC at all.
 
-Due to above reason, it's worth to build generic abstraction on top of RayCluster CRD. With the core API support, we can easily build backend services, cli, etc to bridge users without Kubernetes experiences to KubeRay.
+For the above reasons, it's worth it to build a generic abstraction on top of the RayCluster CRD. With the core API support, we can easily build backend services, cli, etc to bridge users without Kubernetes experience to KubeRay.
 
 ## Goals
 
