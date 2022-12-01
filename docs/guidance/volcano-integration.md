@@ -74,7 +74,7 @@ If autoscaling is enabled, `minReplicas` will be used for gang scheduling, other
 
 In this example, we'll walk through how gang scheduling works with Volcano and KubeRay.
 
-First, let's create a queue with a capacity of 4 CPUs and 4Gi or RAM:
+First, let's create a queue with a capacity of 4 CPUs and 4Gi of RAM:
 
 ```
 $ kubectl create -f - <<EOF
@@ -90,7 +90,7 @@ spec:
 EOF
 ```
 
-Next we'll create a RayCluster with a head node and two workers, each requesting 1 CPU and 1Gi of RAM each, for a total of 3 CPU and 3Gi or RAM:
+Next we'll create a RayCluster with a head node and two workers, each requesting 1 CPU and 1Gi of RAM each, for a total of 3 CPU and 3Gi of RAM:
 
 ```
 $ kubectl create -f - <<EOF
