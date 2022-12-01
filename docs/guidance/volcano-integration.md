@@ -153,6 +153,53 @@ And checking the status of our queue:
 Next we'll add an additional RayCluster with the same configuration of head / worker nodes, but a different name:
 
 ```
+kubectl create -f - <<EOF
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: test-cluster-2
+  labels:
+    ray.io/scheduler-name: volcano
+    volcano.sh/queue-name: ray-test
+spec:
+  rayVersion: '2.1.0'
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      block: 'true'
+    replicas: 1
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.1.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+  workerGroupSpecs:
+    - groupName: worker
+      rayStartParams:
+        block: 'true'
+      replicas: 2
+      minReplicas: 2
+      maxReplicas: 2
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.1.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "1Gi"
+              requests:
+                cpu: "1"
+                memory: "1Gi"
+EOF
 ```
 
 Because our new cluster requires more CPU and RAM than our queue will allow, even though we could fit one of the pods with the remaining 1 CPU and 1Gi of RAM, none of the cluster's pods will be placed until there is enough room for all the pods. Without using Volcano for gang scheduling in this way, one of the pods would ordinarily be placed, leading to the cluster being partially allocated, and some jobs (like [Horovod](https://github.com/horovod/horovod) training) getting stuck waiting for resources to become available.
