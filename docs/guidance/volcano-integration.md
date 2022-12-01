@@ -146,7 +146,7 @@ spec:
 EOF
 ```
 
-Because our queue has a capacity of 4 CPU and 4Gi of RAM, this resource should schedule successfully without any issues. We can verify this by checking the status of our cluster's Volcano PodGroup to see that the phase is `Running` and the last status is `Scheduled`:
+Because our queue has a capacity of 4 CPU and 6Gi of RAM, this resource should schedule successfully without any issues. We can verify this by checking the status of our cluster's Volcano PodGroup to see that the phase is `Running` and the last status is `Scheduled`:
 
 ```
 $ kubectl get podgroup ray-test-cluster-0-pg -o yaml
