@@ -3,7 +3,8 @@
 [![Build Status](https://github.com/ray-project/kuberay/workflows/Go-build-and-test/badge.svg)](https://github.com/ray-project/kuberay/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ray-project/kuberay)](https://goreportcard.com/report/github.com/ray-project/kuberay)
 
-KubeRay is an open source toolkit to run Ray applications on Kubernetes. It provides several tools to improve running and managing Ray's experience on Kubernetes.
+KubeRay is an open source toolkit to run Ray applications on Kubernetes.
+It provides several tools to simplify managing Ray clusters on Kubernetes.
 
 - Ray Operator
 - Backend services to create/delete cluster resources
