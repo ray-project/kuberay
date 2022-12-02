@@ -1,15 +1,15 @@
 ## Autoscaler (beta)
 
-
-### Prerequisite
-
 Ray Autoscaler integration is beta since KubeRay 0.3.0 and Ray 2.0.0.
 While autoscaling functionality is stable, the details of autoscaler behavior and configuration may change in future releases.
 
+See the [official Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html) for even more information about Ray autoscaling on Kubernetes.
+
+### Prerequisite
+
 Start by deploying the latest stable version of the KubeRay operator:
 ```
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0-rc.1&timeout=90s"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0-rc.1&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.3.0&timeout=90s"
 ```
 
 ### Deploy a cluster with autoscaling enabled
@@ -21,14 +21,26 @@ kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/release-0
 
 See the above config file for details on autoscaling configuration.
 
-The output of `kubectl get pods` should indicate the presence of two containers,
+!!! note
+
+    Ray container resource requests and limits in the example configuration above are too small
+    to be used in production. For typical use-cases, you should use large Ray pods. If possible,
+    each Ray pod should be sized to take up its entire K8s node. We don't recommend
+    allocating less than 8 gigabytes of memory for Ray containers running in production.
+    For an autoscaling configuration more suitable for production, see
+    [ray-cluster.autoscaler.large.yaml](https://raw.githubusercontent.com/ray-project/kuberay/release-0.3/ray-operator/config/samples/ray-cluster.autoscaler.large.yaml).
+
+The output of `kubectl get pods` should indicate the presence of
+a Ray head pod with two containers,
 the Ray container and the autoscaler container.
+You should also see a Ray worker pod with a single Ray container.
 
 
 ```
 $ kubectl get pods
 NAME                                             READY   STATUS    RESTARTS   AGE
 raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
+raycluster-autoscaler-worker-small-group-fg4fv   1/1     Running   0          4m41s
 ```
 
 Check the autoscaler container's logs to confirm that the autoscaler is healthy.
@@ -92,9 +104,18 @@ kubectl exec `kubectl get pods -o custom-columns=POD:metadata.name | grep rayclu
 In the Python interpreter, run the following snippet to scale up the cluster:
 
 ```
-import ray.autoscaler.sdk
-ray.init("auto")
+import ray
+ray.init()
 ray.autoscaler.sdk.request_resources(num_cpus=4)
 ```
 
 You should then see two extra Ray nodes (pods) scale up to satisfy the 4 CPU demand.
+
+```
+$ kubectl get pods
+NAME                                             READY   STATUS    RESTARTS   AGE
+raycluster-autoscaler-head-mgwwk                 2/2     Running   0          4m41s
+raycluster-autoscaler-worker-small-group-4d255   1/1     Running   0          40s
+raycluster-autoscaler-worker-small-group-fg4fv   1/1     Running   0          4m41s
+raycluster-autoscaler-worker-small-group-qzhvg   1/1     Running   0          40s
+```
