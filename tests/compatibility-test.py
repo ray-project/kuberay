@@ -182,6 +182,7 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
+        cluster_name_space = "default"
         docker_client = docker.from_env()
         container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                           network_mode='host', command=["/bin/sh"])
@@ -193,7 +194,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info("default")
+            show_cluster_info(cluster_name_space)
             raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -218,7 +219,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info("default")
+            show_cluster_info(cluster_name_space)
             raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -226,6 +227,7 @@ class RayFTTestCase(unittest.TestCase):
         docker_client.close()
 
     def test_detached_actor(self):
+        cluster_name_space = "default"
         docker_client = docker.from_env()
         container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                             network_mode='host', command=["/bin/sh"])
@@ -237,7 +239,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info("default")
+            show_cluster_info(cluster_name_space)
             raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -264,7 +266,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info("default")
+            show_cluster_info(cluster_name_space)
             raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
