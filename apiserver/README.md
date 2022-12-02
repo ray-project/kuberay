@@ -52,7 +52,7 @@ curl localhost:31888
 {"code":5, "message":"Not Found"}
 ```
 
-3. you can just create `RayCluster` or `RayJobs` or  `RayService` by just dials the endpoints
+3. you can create `RayCluster` or `RayJobs` or  `RayService` by dialing the endpoints
 
 ```
 curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
