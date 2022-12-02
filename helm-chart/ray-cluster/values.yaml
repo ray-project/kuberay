@@ -64,6 +64,8 @@ head:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Ray container security context.
+  securityContext: {}
   volumes:
     - name: log-volume
       emptyDir: {}
@@ -87,6 +89,8 @@ worker:
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
+  # Security context for the init container.
+  initContainerSecurityContext: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -111,6 +115,8 @@ worker:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Ray container security context.
+  securityContext: {}
   volumes:
     - name: log-volume
       emptyDir: {}
@@ -136,6 +142,8 @@ additionalWorkerGroups:
     rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
+    # Security context for the init container.
+    initContainerSecurityContext: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
     containerEnv: []
@@ -160,6 +168,8 @@ additionalWorkerGroups:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    # Ray container security context.
+    securityContext: {}
     volumes:
       - name: log-volume
         emptyDir: {}
