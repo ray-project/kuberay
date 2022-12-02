@@ -23,7 +23,7 @@ See the above config file for details on autoscaling configuration.
 
 !!! note
 
-    The Ray container resource requests and limits in the example file above are too small
+    Ray container resource requests and limits in the example configuration above are too small
     to be used in production. For typical use-cases, you should use large Ray pods. If possible,
     each Ray pod should be sized to take up its entire K8s node. We don't recommend
     allocating less than 8 gigabytes of memory for Ray containers running in production.
