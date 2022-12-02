@@ -14,7 +14,8 @@ from framework.prototype import (
     K8S_CLUSTER_MANAGER,
     OperatorManager,
     RuleSet,
-    shell_subprocess_run
+    shell_subprocess_run,
+    show_cluster_info
 )
 
 logger = logging.getLogger(__name__)
@@ -177,13 +178,7 @@ class RayFTTestCase(unittest.TestCase):
         rtn = shell_subprocess_run(
                 'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
         if rtn != 0:
-            shell_subprocess_run('kubectl get pods -A')
-            shell_subprocess_run(
-                'kubectl describe pod $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_subprocess_run(
-                'kubectl logs $(kubectl get pods | grep -e "-head" | awk "{print \$1}")')
-            shell_subprocess_run(
-                'kubectl logs -n $(kubectl get pods -A | grep -e "-operator" | awk \'{print $1 "  " $2}\')')
+            show_cluster_info("default")
         assert rtn == 0
 
     def test_ray_serve(self):
@@ -198,6 +193,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
+            show_cluster_info("default")
             raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -222,6 +218,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
+            show_cluster_info("default")
             raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -240,6 +237,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
+            show_cluster_info("default")
             raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -266,6 +264,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
+            show_cluster_info("default")
             raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
