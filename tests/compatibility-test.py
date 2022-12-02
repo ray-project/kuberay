@@ -200,7 +200,8 @@ class RayFTTestCase(unittest.TestCase):
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace='default', label_selector='ray.io/node-type=head')
+        headpods = utils.get_pod(namespace=cluster_name_space,
+            label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
@@ -209,10 +210,12 @@ class RayFTTestCase(unittest.TestCase):
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
         # will terminate.
         exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
+        utils.pod_exec_command(pod_name=old_head_pod_name,
+            namespace=cluster_name_space, exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
+        utils.wait_for_new_head(old_head_pod_name, restart_count,
+            cluster_name_space, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
@@ -245,7 +248,8 @@ class RayFTTestCase(unittest.TestCase):
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace='default', label_selector='ray.io/node-type=head')
+        headpods = utils.get_pod(namespace=cluster_name_space,
+            label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
@@ -254,10 +258,12 @@ class RayFTTestCase(unittest.TestCase):
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
         # will terminate.
         exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name, namespace='default', exec_command=exec_command)
+        utils.pod_exec_command(pod_name=old_head_pod_name,
+            namespace=cluster_name_space, exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count, 'default', timeout=300, retry_interval_ms=1000)
+        utils.wait_for_new_head(old_head_pod_name, restart_count,
+            cluster_name_space, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
         # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
