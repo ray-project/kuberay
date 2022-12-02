@@ -21,7 +21,7 @@ The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
 
 ## Usage
 
-You can just install the KubeRay APIServer within the same kubernetes cluster by using the [helm chart](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver) or just use [kustomize](https://github.com/ray-project/kuberay/tree/master/apiserver/deploy/base)
+You can install the KubeRay APIServer by using the [helm chart](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver) or [kustomize](https://github.com/ray-project/kuberay/tree/master/apiserver/deploy/base)
 
 After the deployment we may use the `{{baseUrl}}` to access the 
 
