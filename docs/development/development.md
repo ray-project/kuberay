@@ -6,12 +6,7 @@ See [ray-operator/DEVELOPMENT.md](https://github.com/ray-project/kuberay/blob/ma
 
 ### Develop KubeRay APIServer
 
-```sh
-cd apiserver
-
-# Build code
-go build cmd/main.go
-```
+See [apiserver/DEVELOPMENT.md](https://github.com/ray-project/kuberay/blob/master/apiserver/DEVELOPMENT.md) for more details.
 
 ### Develop KubeRay CLI
 
