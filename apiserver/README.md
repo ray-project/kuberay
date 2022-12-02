@@ -31,12 +31,44 @@ After the deployment we may use the `{{baseUrl}}` to access the
 
 The requests parameters detail can be seen in [KubeRay swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger), here we only present some basic example:
 
-## Setup end-to-end test
+### Setup end-to-end test
 
-0. (optional) you may use your local kind cluster or minikube
+0. (Optional) You may use your local kind cluster or minikube
 
 ```bash
-kind create cluster --name ray-test
+cat <<EOF | kind create cluster --name ray-test --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 30379
+        hostPort: 6379
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 30265
+        hostPort: 8265
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 30001
+        hostPort: 10001
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 8000
+        hostPort: 8000
+        listenAddress: "0.0.0.0"
+      - containerPort: 31888
+        hostPort: 31888
+        listenAddress: "0.0.0.0"
+  - role: worker
+  - role: worker
+EOF
 ```
 
 1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
@@ -45,17 +77,17 @@ kind create cluster --name ray-test
 helm -n ray-system install kuberay-apiserver kuberay/helm-chart/kuberay-apiserver
 ```
 
-1. you can access by your nodeport
+2. The APIServer expose service using `NodePort` by default. You can test access by your host and port, the default port is set to `31888`.
 
 ```
 curl localhost:31888
 {"code":5, "message":"Not Found"}
 ```
 
-3. you can create `RayCluster` or `RayJobs` or  `RayService` by dialing the endpoints
+3. You can create `RayCluster`, `RayJobs` or `RayService` by dialing the endpoints. The following is a simple example for creating the `RayService` object, follow [swagger support](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
 
 ```
-curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "user-test-1",
@@ -102,8 +134,6 @@ curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
       "image": "rayproject/ray:2.1.0",
       "serviceType": "NodePort",
       "rayStartParams": {
-            "port": "6379",
-            "node-ip-address": "$MY_POD_IP",
             "dashboard-host": "0.0.0.0",
             "metrics-export-port": "8080"
         },
@@ -125,7 +155,7 @@ curl -XPOST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
   }
 }'
 ```
-then you can have the resource running in kubernetes cluster.
+The Ray resource will then be created in your Kubernetes cluster.
 
 ### Compute Template
 
