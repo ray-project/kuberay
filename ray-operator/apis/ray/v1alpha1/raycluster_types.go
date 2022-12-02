@@ -76,6 +76,10 @@ type AutoscalerOptions struct {
 	Env []v1.EnvVar `json:"env,omitempty"`
 	// Optional list of sources to populate environment variables in the autoscaler container.
 	EnvFrom []v1.EnvFromSource `json:"envFrom,omitempty"`
+	// SecurityContext defines the security options the container should be run with.
+	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
+	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+	SecurityContext *v1.SecurityContext `json:"securityContext,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute).
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`

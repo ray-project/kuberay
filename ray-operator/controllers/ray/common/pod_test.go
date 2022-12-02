@@ -517,6 +517,22 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	customEnv := []v1.EnvVar{{Name: "fooEnv", Value: "fooValue"}}
 	customEnvFrom := []v1.EnvFromSource{{Prefix: "Pre"}}
 
+	// Define a custom security profile.
+	allowPrivilegeEscalation := false
+	capabilities := v1.Capabilities{
+		Drop: []v1.Capability{"ALL"},
+	}
+	seccompProfile := v1.SeccompProfile{
+		Type: v1.SeccompProfileTypeRuntimeDefault,
+	}
+	runAsNonRoot := true
+	customSecurityContext := v1.SecurityContext{
+		AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+		Capabilities:             &capabilities,
+		RunAsNonRoot:             &runAsNonRoot,
+		SeccompProfile:           &seccompProfile,
+	}
+
 	cluster.Spec.AutoscalerOptions = &rayiov1alpha1.AutoscalerOptions{
 		UpscalingMode:      &customUpscaling,
 		IdleTimeoutSeconds: &customTimeout,
@@ -525,6 +541,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		Resources:          &customResources,
 		Env:                customEnv,
 		EnvFrom:            customEnvFrom,
+		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, svcName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, svcName, "6379", &trueFlag, "")
@@ -534,6 +551,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.Resources = customResources
 	expectedContainer.EnvFrom = customEnvFrom
 	expectedContainer.Env = append(expectedContainer.Env, customEnv...)
+	expectedContainer.SecurityContext = &customSecurityContext
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
 	if !reflect.DeepEqual(expectedContainer, actualContainer) {
