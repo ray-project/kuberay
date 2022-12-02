@@ -179,7 +179,7 @@ class RayFTTestCase(unittest.TestCase):
                 'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
         if rtn != 0:
             show_cluster_info("default")
-        assert rtn == 0
+            raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
         docker_client = docker.from_env()
