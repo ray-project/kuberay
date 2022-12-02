@@ -7,7 +7,7 @@ Make sure your Kubernetes cluster and Kubectl are both at version at least 1.19.
 ```sh
 export KUBERAY_VERSION=master
 
-# Install CRD
+# Install CRDs
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 
 # Install KubeRay operator
@@ -19,13 +19,13 @@ kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VE
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-# Install both CRD and KubeRay operator
+# Install both CRDs and KubeRay operator
 helm install kuberay-operator kuberay/kuberay-operator
 ```
 
 #### Method 2: Kustomize
 ```sh
-# Install CRD
+# Install CRDs
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0"
 
 # Install KubeRay operator
@@ -42,7 +42,7 @@ Users can use the following commands to deploy KubeRay operator in a specific na
 ```sh
 export KUBERAY_NAMESPACE=<my-awesome-namespace>
 
-# Install CRD (Executed by cluster admin)
+# Install CRDs (Executed by cluster admin)
 kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources" | envsubst | kubectl create -f -
 
 # Install KubeRay operator (Executed by user)
