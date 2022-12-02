@@ -86,7 +86,16 @@ curl localhost:31888
 
 3. You can create `RayCluster`, `RayJobs` or `RayService` by dialing the endpoints. The following is a simple example for creating the `RayService` object, follow [swagger support](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
 
-```
+```shell
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "default-template",
+  "namespace": "ray-system",
+  "cpu": 2,
+  "memory": 4
+}'
+
 curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
 --header 'Content-Type: application/json' \
 --data '{
@@ -157,7 +166,14 @@ curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
 ```
 The Ray resource will then be created in your Kubernetes cluster.
 
+## Full definition of payload
+
 ### Compute Template
+
+For the purpose to simplify the setting of resource, we abstract the resource 
+of the pods template resource to the `compute template` for usage, you can 
+define the resource in the `compute template` and then choose the appropriate
+template for your `head` and `workergroup` when you are creating the real objects of `RayCluster`, `RayJobs` or `RayService`.
 
 #### Create compute templates in a given namespace
 
