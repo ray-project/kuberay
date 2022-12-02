@@ -76,6 +76,6 @@ into the release branch and form the next release candidate when appropriate.
 It is at the discretion of the release manager whether or not to cherry-pick a given commit.
 
 Once you arrive at a stable release candidate, you may form the final release commit, tagged as
-"vX.Y.Z", and tag the final operator and API server images.
+"vX.Y.Z". Then tag the final operator and API server images.
 
 The steps of generating release notes (Step 10) and updating CHANGELOG.md (Step 11) are only required for the final release.
