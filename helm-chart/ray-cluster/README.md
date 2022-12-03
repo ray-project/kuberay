@@ -1,67 +1,49 @@
-# Ray Cluster
+# RayCluster
 
-Make sure ray-operator has been deployed.
+RayCluster is a custom resource definition (CRD). **KubeRay operator** will listen to the resource events about RayCluster and create related Kubernetes resources (e.g. Pod & Service). Hence, **KubeRay operator** installation and **CRD** registration are required for this guide.
 
-[Ray](https://ray.io/) is a unified framework for scaling AI and Python applications. Ray consists of a core distributed runtime and a toolkit of libraries (Ray AIR) for simplifying ML compute.
+## Prerequisites
+See [kuberay-operator/README.md](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) for more details.
+* Helm
+* Install custom resource definition and KubeRay operator (covered by the following end-to-end example.)
 
-## Helm
+## End-to-end example
 
-```console
-$ helm version
-version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa28009b71", GitTreeState:"dirty", GoVersion:"go1.16.5"}
-```
+```sh
+# Step 1: Create a KinD cluster 
+kind create cluster
 
-## TL;DR;
+# Step 2: Register a Helm chart repo
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-```bash
-# Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
-cd helm-chart/ray-cluster
-helm install ray-cluster --namespace ray-system --create-namespace .
-```
+# Step 3: Install both CRDs and KubeRay operator v0.4.0.
+helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
 
-## Installing the Chart
+# Step 4: Install a RayCluster custom resource
+helm install raycluster kuberay/ray-cluster --version 0.4.0
 
-To install the chart with the release name `my-release`:
-```bash
-# Because the ray-cluster chart in release 0.3.0 has some bugs, we need to clone the KubeRay repo and install the latest ray-cluster chart until release 0.4.0.
-cd helm-chart/ray-cluster
-helm install my-release --namespace ray-system --create-namespace .
-```
+# Step 5: Verify the installation of KubeRay operator and RayCluster 
+kubectl get pods
+# NAME                                          READY   STATUS    RESTARTS   AGE
+# kuberay-operator-6fcbb94f64-gkpc9             1/1     Running   0          89s
+# raycluster-kuberay-head-qp9f4                 1/1     Running   0          66s
+# raycluster-kuberay-worker-workergroup-2jckt   1/1     Running   0          66s
 
-> note: The chart will submit a RayCluster.
+# Step 6: Forward the port of Dashboard
+kubectl port-forward --address 0.0.0.0 svc/raycluster-kuberay-head-svc 8265:8265
 
+# Step 7: Check ${YOUR_IP}:8265 for the Dashboard (e.g. 127.0.0.1:8265)
 
-## Uninstalling the Chart
+# Step 8: Log in to Ray head Pod and execute a job.
+kubectl exec -it ${RAYCLUSTER_HEAD_POD} -- bash
+python -c "import ray; ray.init(); print(ray.cluster_resources())" # (in Ray head Pod)
 
-To uninstall/delete the `my-release` deployment:
+# Step 9: Check ${YOUR_IP}:8265/#/job. The status of the job should be "SUCCEEDED".
 
-```console
-helm delete my-release -n ray-system
-```
+# Step 10: Uninstall RayCluster
+helm uninstall raycluster
 
-The command removes nearly all the Kubernetes components associated with the
-chart and deletes the release.
-
-## Check Cluster status
-
-### Get Service
-
-```console
-$ kubectl get svc -l ray.io/cluster=ray-cluster
-NAME                       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)                       AGE
-ray-cluster-head-svc   ClusterIP   10.103.36.68   <none>        10001/TCP,6379/TCP,8265/TCP   9m24s
-```
-
-## Forward to dashboard
-
-```console
-$ kubectl get pod -o wide
-NAME                                       READY   STATUS    RESTARTS   AGE    IP            NODE             NOMINATED NODE   READINESS GATES
-ray-cluster-head-sd77l                 1/1     Running   0          8h     10.1.61.208   docker-desktop   <none>           <none>
-ray-cluster-worker-workergroup-czxd6   1/1     Running   0          8h     10.1.61.207   docker-desktop   <none>           <none>
-kuberay-operator-687785b964-jgfhv          1/1     Running   6          3d4h   10.1.61.196   docker-desktop   <none>           <none>
-
-$ kubectl port-forward ray-cluster-head-sd77l 8265
-Forwarding from 127.0.0.1:8265 -> 8265
-Forwarding from [::1]:8265 -> 8265
+# Step 11: Verify that RayCluster has been removed successfully
+# NAME                                READY   STATUS    RESTARTS   AGE
+# kuberay-operator-6fcbb94f64-gkpc9   1/1     Running   0          9m57s
 ```

@@ -1,51 +1,60 @@
 # KubeRay Operator
 
-Kuberay-operator: A simple Helm chart
-
-Run a deployment of Ray Operator.
-
-Deploy ray operator first, then deploy ray cluster.
+This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and KubeRay operator with a Helm chart.
 
 ## Helm
 
-Make sure helm version is v3+
-```console
-$ helm version
-version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa28009b71", GitTreeState:"dirty", GoVersion:"go1.16.5"}
+Make sure the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+
+```sh
+helm version
 ```
 
-## Installing the Chart
+## Install CRDs and KubeRay operator
 
-To avoid duplicate CRD definitions in this repo, we reuse CRD config in `ray-operator`:
-```console
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v0.3.0&timeout=90s"
-```
-> Note that we must use `kubectl create` to install the CRDs.
-> The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
+* Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+  ```sh
+  helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-Use the following command to install the chart:
-```console
-$ helm install kuberay-operator --namespace ray-system --create-namespace $(curl -s https://api.github.com/repos/ray-project/kuberay/releases/tags/v0.3.0 | grep '"browser_download_url":' | sort | grep -om1 'https.*helm-chart-kuberay-operator.*tgz')
-```
+  # Install both CRDs and KubeRay operator v0.4.0.
+  helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
 
-## List the Chart
+  # Check the KubeRay operator Pod in `default` namespace
+  kubectl get pods
+  # NAME                                READY   STATUS    RESTARTS   AGE
+  # kuberay-operator-6fcbb94f64-mbfnr   1/1     Running   0          17s
+  ```
+
+* Install the nightly version
+  ```sh
+  # Step1: Clone KubeRay repository
+
+  # Step2: Move to `helm-chart/kuberay-operator`
+
+  # Step3: Install KubeRay operator
+  helm install kuberay-operator .
+  ```
+
+## List the chart
 
 To list the `my-release` deployment:
 
-```console
-$ helm list -n ray-system
+```sh
+helm ls
+# NAME                    NAMESPACE       REVISION        UPDATED                                   STATUS          CHART                   # APP VERSION
+# kuberay-operator        default         1               2022-12-02 02:13:37.514445313 +0000 UTC   deployed        kuberay-operator-0.4.0  1.0
 ```
 
-## Uninstalling the Chart
+## Uninstall the Chart
 
-To uninstall/delete the `my-release` deployment:
+```sh
+# Uninstall the `kuberay-operator` release
+helm uninstall kuberay-operator
 
-```console
-$ helm delete kuberay-operator -n ray-system
+# The operator Pod should be removed.
+kubectl get pods
+# No resources found in default namespace.
 ```
-
-The command removes nearly all the Kubernetes components associated with the
-chart and deletes the release.
 
 ## Working with Argo CD
 

@@ -1,59 +1,26 @@
 ## KubeRay Development Guidance
 
-Download this repo locally
-
-```
-mkdir -p $GOPATH/src/github.com/ray-project
-cd $GOPATH/src/github.com/ray-project
-git clone https://github.com/ray-project/kuberay.git
-```
-
-### Develop proto and OpenAPI
-
-Generate go clients and swagger file
-
-```
-make generate
-```
-
 ### Develop KubeRay Operator
 
-```
-cd ray-operator
-
-# Build codes
-make build
-
-# Run test
-make test
-
-# Build container image
-make docker-build
-```
+See [ray-operator/DEVELOPMENT.md](https://github.com/ray-project/kuberay/blob/master/ray-operator/DEVELOPMENT.md) for more details.
 
 ### Develop KubeRay APIServer
 
-```
-cd apiserver
-
-# Build code
-go build cmd/main.go
-```
+See [apiserver/DEVELOPMENT.md](https://github.com/ray-project/kuberay/blob/master/apiserver/DEVELOPMENT.md) for more details.
 
 ### Develop KubeRay CLI
 
-```
-cd cli
-go build -o kuberay -a main.go
-./kuberay help
-```
+See [cli/README.md](https://github.com/ray-project/kuberay/blob/master/cli/README.md) for more details.
+
+### Develop proto and OpenAPI
+
+See [proto/README.md](https://github.com/ray-project/kuberay/blob/master/proto/README.md) for more details.
 
 ### Deploy Docs locally
 
-We don't need to configure `mkdocs` environment. To check the static website locally, run
-the following command from the root of your clone of the KubeRay repo:
+Run the following command in the root directory of your KubeRay repo to deploy Docs locally:
 
-```
+```sh
 docker run --rm -it -p 8000:8000 -v ${PWD}:/docs squidfunk/mkdocs-material
 ```
 
