@@ -182,7 +182,7 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
-        cluster_name_space = "default"
+        cluster_namespace = "default"
         docker_client = docker.from_env()
         container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                           network_mode='host', command=["/bin/sh"])
@@ -194,13 +194,13 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info(cluster_name_space)
+            show_cluster_info(cluster_namespace)
             raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_name_space,
+        headpods = utils.get_pod(namespace=cluster_namespace,
             label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
@@ -211,18 +211,18 @@ class RayFTTestCase(unittest.TestCase):
         # will terminate.
         exec_command = ['pkill gcs_server']
         utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_name_space, exec_command=exec_command)
+            namespace=cluster_namespace, exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
-            cluster_name_space, timeout=300, retry_interval_ms=1000)
+            cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
         utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info(cluster_name_space)
+            show_cluster_info(cluster_namespace)
             raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
@@ -230,7 +230,7 @@ class RayFTTestCase(unittest.TestCase):
         docker_client.close()
 
     def test_detached_actor(self):
-        cluster_name_space = "default"
+        cluster_namespace = "default"
         docker_client = docker.from_env()
         container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
                                             network_mode='host', command=["/bin/sh"])
@@ -242,13 +242,13 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info(cluster_name_space)
+            show_cluster_info(cluster_namespace)
             raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
         # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
         # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_name_space,
+        headpods = utils.get_pod(namespace=cluster_namespace,
             label_selector='ray.io/node-type=head')
         assert(len(headpods.items) == 1)
         old_head_pod = headpods.items[0]
@@ -259,11 +259,11 @@ class RayFTTestCase(unittest.TestCase):
         # will terminate.
         exec_command = ['pkill gcs_server']
         utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_name_space, exec_command=exec_command)
+            namespace=cluster_namespace, exec_command=exec_command)
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
-            cluster_name_space, timeout=300, retry_interval_ms=1000)
+            cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
         # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
@@ -272,7 +272,7 @@ class RayFTTestCase(unittest.TestCase):
         exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
 
         if exit_code != 0:
-            show_cluster_info(cluster_name_space)
+            show_cluster_info(cluster_namespace)
             raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
                 "See above for command output. The output will be printed by the function exec_run_container.")
 
