@@ -40,12 +40,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
+
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
         run: make manifests
-
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
 
       - name: Verify Changed files
         id: verify-changed-files
