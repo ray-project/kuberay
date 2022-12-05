@@ -57,7 +57,7 @@ head:
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production;
-  # We don't recommend allocating less than 8G memory for a Ray pod in production.
+  # we don't recommend allocating less than 8G memory for a Ray pod in production.
   # Ray pods should be sized to take up entire K8s nodes when possible.
   # Always set CPU and memory limits for Ray pods.
   # It is usually best to set requests equal to limits.
@@ -116,7 +116,7 @@ worker:
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production;
-  # We don't recommend allocating less than 8G memory for a Ray pod in production.
+  # we don't recommend allocating less than 8G memory for a Ray pod in production.
   # Ray pods should be sized to take up entire K8s nodes when possible.
   # Always set CPU and memory limits for Ray pods.
   # It is usually best to set requests equal to limits.
@@ -177,7 +177,7 @@ additionalWorkerGroups:
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production;
-  # We don't recommend allocating less than 8G memory for a Ray pod in production.
+  # we don't recommend allocating less than 8G memory for a Ray pod in production.
   # Ray pods should be sized to take up entire K8s nodes when possible.
   # Always set CPU and memory limits for Ray pods.
   # It is usually best to set requests equal to limits.
