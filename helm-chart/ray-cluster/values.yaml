@@ -56,13 +56,21 @@ head:
   # ports: []
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
-  # Note that the resources in this example are much too small for production.
+  # Note that the resources in this example are much too small for production;
+  # We don't recommend allocating less than 8G memory for a Ray pod in production.
   # Ray pods should be sized to take up entire K8s nodes when possible.
+  # Always set CPU and memory limits for Ray pods.
+  # It is usually best to set requests equal to limits.
+  # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources
+  # for further guidance.
   resources:
     limits:
-      cpu: 1
+      cpu: "1"
+      # To avoid out-of-memory issues, never allocate less than 2G memory for the Ray head.
+      memory: "2G"
     requests:
-      cpu: 1
+      cpu: "1"
+      memory: "2G"
   annotations: {}
   nodeSelector: {}
   tolerations: []
@@ -72,6 +80,7 @@ head:
   volumes:
     - name: log-volume
       emptyDir: {}
+  # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
@@ -106,13 +115,20 @@ worker:
   # ports: []
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
-  # Note that the resources in this example are much too small for production.
+  # Note that the resources in this example are much too small for production;
+  # We don't recommend allocating less than 8G memory for a Ray pod in production.
   # Ray pods should be sized to take up entire K8s nodes when possible.
+  # Always set CPU and memory limits for Ray pods.
+  # It is usually best to set requests equal to limits.
+  # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources
+  # for further guidance.
   resources:
     limits:
-      cpu: 1
+      cpu: "1"
+      memory: "1G"
     requests:
-      cpu: 200m
+      cpu: "1"
+      memory: "1G"
   annotations:
     key: value
   nodeSelector: {}
@@ -123,6 +139,7 @@ worker:
   volumes:
     - name: log-volume
       emptyDir: {}
+  # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
@@ -157,15 +174,22 @@ additionalWorkerGroups:
         #     name: my-env-secret
     # ports optionally allows specifying ports for the Ray container.
     # ports: []
-    # resource requests and limits for the Ray head container.
-    # Modify as needed for your application.
-    # Note that the resources in this example are much too small for production.
-    # Ray pods should be sized to take up entire K8s nodes when possible.
+  # resource requests and limits for the Ray head container.
+  # Modify as needed for your application.
+  # Note that the resources in this example are much too small for production;
+  # We don't recommend allocating less than 8G memory for a Ray pod in production.
+  # Ray pods should be sized to take up entire K8s nodes when possible.
+  # Always set CPU and memory limits for Ray pods.
+  # It is usually best to set requests equal to limits.
+  # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources
+  # for further guidance.
     resources:
       limits:
         cpu: 1
+        memory: "1G"
       requests:
-        cpu: 200m
+        cpu: 1
+        memory: "1G"
     annotations:
       key: value
     nodeSelector: {}
@@ -176,6 +200,7 @@ additionalWorkerGroups:
     volumes:
       - name: log-volume
         emptyDir: {}
+  # Ray writes logs to /tmp/ray/session_latests/logs
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
