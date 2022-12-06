@@ -119,5 +119,3 @@ jobs:
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:${{ github.event.inputs.tag }};
         docker push kuberay/operator:${{ github.event.inputs.tag }}
-
-      working-directory: ${{env.working-directory}}
