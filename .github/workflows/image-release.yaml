@@ -6,7 +6,7 @@ on:
         required: true
 
 jobs:
-  release_apiserver:
+  release_apiserver_image:
     env:
       working-directory: ./apiserver
     name: Release APIServer Docker Image
@@ -68,7 +68,7 @@ jobs:
           docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:${{ github.event.inputs.tag }};
           docker push kuberay/apiserver:${{ github.event.inputs.tag }}
 
-  build_operator:
+  release_operator_image:
     env:
       working-directory: ./ray-operator
     name: Build Operator Docker Images
