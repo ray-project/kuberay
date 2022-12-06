@@ -40,6 +40,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Go 1.17.x
+        uses: actions/setup-go@v2
+        with:
+          # Use the same go version with build job
+          go-version: '1.17'
+
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
         run: make manifests
