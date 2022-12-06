@@ -23,5 +23,5 @@ bases:
 images:
 - name: kuberay/operator
   newName: kuberay/operator
-  newTag: nightly
+  newTag: v0.4.0-rc.0
 
