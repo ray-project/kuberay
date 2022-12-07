@@ -1,27 +1,179 @@
-# KubeRay ApiServer
+# KubeRay APIServer
 
-The KubeRay ApiServer provides gRPC and HTTP APIs to manage KubeRay resources.
+The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
 
-!!! note
+**Note**
 
-    The KubeRay ApiServer is an optional component. It provides a layer of simplified
+    The KubeRay APIServer is an optional component. It provides a layer of simplified
     configuration for KubeRay resources. The KubeRay API server is used internally
     by some organizations to back user interfaces for KubeRay resource management.
 
-    The KubeRay ApiServer is community-managed and is not officially endorsed by the
+    The KubeRay APIServer is community-managed and is not officially endorsed by the
     Ray maintainers. At this time, the only officially supported methods for
     managing KubeRay resources are
 
     - Direct management of KubeRay custom resources via kubectl, kustomize, and Kubernetes language clients.
     - Helm charts.
 
-    KubeRay ApiServer maintainer contacts (GitHub handles):
+    KubeRay APIServer maintainer contacts (GitHub handles):
     @Jeffwan @scarlet25151
 
 
 ## Usage
 
+You can install the KubeRay APIServer by using the [helm chart](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver) or [kustomize](https://github.com/ray-project/kuberay/tree/master/apiserver/deploy/base)
+
+After the deployment we may use the `{{baseUrl}}` to access the 
+
+- (default) for nodeport access, we provide the default http port `31888` for connection and you can connect it using.
+
+- for ingress access, you will need to create your own ingress 
+
+The requests parameters detail can be seen in [KubeRay swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger), here we only present some basic example:
+
+### Setup end-to-end test
+
+0. (Optional) You may use your local kind cluster or minikube
+
+```bash
+cat <<EOF | kind create cluster --name ray-test --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 30379
+        hostPort: 6379
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 30265
+        hostPort: 8265
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 30001
+        hostPort: 10001
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 8000
+        hostPort: 8000
+        listenAddress: "0.0.0.0"
+      - containerPort: 31888
+        hostPort: 31888
+        listenAddress: "0.0.0.0"
+  - role: worker
+  - role: worker
+EOF
+```
+
+1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
+
+```bash
+helm -n ray-system install kuberay-apiserver kuberay/helm-chart/kuberay-apiserver
+```
+
+2. The APIServer expose service using `NodePort` by default. You can test access by your host and port, the default port is set to `31888`.
+
+```
+curl localhost:31888
+{"code":5, "message":"Not Found"}
+```
+
+3. You can create `RayCluster`, `RayJobs` or `RayService` by dialing the endpoints. The following is a simple example for creating the `RayService` object, follow [swagger support](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
+
+```shell
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "default-template",
+  "namespace": "ray-system",
+  "cpu": 2,
+  "memory": 4
+}'
+
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "user-test-1",
+  "namespace": "ray-system",
+  "user": "user",
+  "serveDeploymentGraphSpec": {
+      "importPath": "fruit.deployment_graph",
+      "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
+      "serveConfigs": [
+      {
+        "deploymentName": "OrangeStand",
+        "replicas": 1,
+        "userConfig": "price: 2",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },
+      {
+        "deploymentName": "PearStand",
+        "replicas": 1,
+        "userConfig": "price: 1",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },
+      {
+        "deploymentName": "FruitMarket",
+        "replicas": 1,
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      },{
+        "deploymentName": "DAGDriver",
+        "replicas": 1,
+        "routePrefix": "/",
+        "actorOptions": {
+          "cpusPerActor": 0.1
+        }
+      }]
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "default-template",
+      "image": "rayproject/ray:2.1.0",
+      "serviceType": "NodePort",
+      "rayStartParams": {
+            "dashboard-host": "0.0.0.0",
+            "metrics-export-port": "8080"
+        },
+       "volumes": [] 
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "small-wg",
+        "computeTemplate": "default-template",
+        "image": "rayproject/ray:2.1.0",
+        "replicas": 1,
+        "minReplicas": 0,
+        "maxReplicas": 5,
+        "rayStartParams": {
+                "node-ip-address": "$MY_POD_IP"
+            }
+      }
+    ]
+  }
+}'
+```
+The Ray resource will then be created in your Kubernetes cluster.
+
+## Full definition of payload
+
 ### Compute Template
+
+For the purpose to simplify the setting of resource, we abstract the resource 
+of the pods template resource to the `compute template` for usage, you can 
+define the resource in the `compute template` and then choose the appropriate
+template for your `head` and `workergroup` when you are creating the real objects of `RayCluster`, `RayJobs` or `RayService`.
 
 #### Create compute templates in a given namespace
 
