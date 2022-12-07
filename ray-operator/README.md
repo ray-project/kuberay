@@ -84,11 +84,12 @@ Sample  | Description
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
     [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for examples of RayCluster
     resource configurations suitable for production.
-    The rest of the sample configs above are geared towards experimentation in local kind or minikube environments.
+    The rest of the sample configs above are meant only for experimentation in local kind or minikube environments.
 
     The memory usage of the KubeRay Operator depends on the number of pods and Ray clusters being managed.
     Anecdotally, managing 500 Ray pods requires roughly 500MB memory. Monitor memory usage and adjust requests and limits as needed.
 
+We recommend running the following example in a kind or minikube environment with a resource capacity of at least 4CPU and 4Gb memory.
 ```shell
 # Create a RayCluster and a ConfigMap with hello world Ray code.
 $ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
