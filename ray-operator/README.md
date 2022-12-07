@@ -9,7 +9,7 @@ Below are some of the main features of the KubeRay operator:
 - Management of first-class RayClusters via a [custom resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-resources).
 - Support for heterogenous worker types in a single Ray cluster.
 - Optional Ray Autoscaler integration; autoscaling based on Ray application semantics.
-- Use of Kubernetes `PodTemplates` to configure Ray pods
+- Use of Kubernetes `PodTemplates` to configure Ray pods.
 - Use of `ScaleStrategy` to remove specific Ray worker pods.
 - Automatated management of critical configuration, such as required `environment variables`, the `ray start` entrypoint, and a `dev/shm` volume mount for Ray's shared memory.
 - Built-in monitoring via Prometheus.
