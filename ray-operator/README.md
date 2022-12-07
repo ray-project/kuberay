@@ -155,7 +155,7 @@ $ kubectl logs raycluster-heterogeneous-head-9t28q
 2022-09-21 13:22:00,515	INFO scripts.py:910 -- Running subprocesses are monitored and a message will be printed if any of them terminate unexpectedly. Subprocesses exit with SIGTERM will be treated as graceful, thus NOT reported.
 ```
 
-Execute hello world Ray code
+Now, we can run the hello world Ray code mounted from the config map created above.
 ```shell
 # Substitute the name of your head pod in this step.
 $ kubectl exec raycluster-heterogeneous-head-9t28q -- python /opt/sample_code.py
@@ -168,7 +168,7 @@ Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10
 Execution time =  4.855740308761597
 ```
 
-The output of the hello world Ray code show 5 nodes in the Ray cluster
+The output of the hello world Ray code shows 5 nodes in the Ray cluster.
 ```
 Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10.244.0.147'}
 ```
