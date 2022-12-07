@@ -90,13 +90,16 @@ Sample  | Description
     Anecdotally, managing 500 Ray pods requires roughly 500MB memory. Monitor memory usage and adjust requests and limits as needed.
 
 We recommend running the following example in a kind or minikube environment with a resource capacity of at least 4CPU and 4Gb memory.
+Run the following commands from the root of your cloned kuberay repo.
 ```shell
-# From the parent of your cloned kuberay repo:
-$ cd kuberay/ray-operator
+# Clone the kuberay repo if you haven't already.
+$ git clone https://github.com/ray-project/kuberay
+# Enter the root of the repo
+$ cd kuberay/
 # If you haven't already done so, deploy the KubeRay operator.
-$ kubectl create -k config/default
+$ kubectl create -k ray-operator/config/default
 # Create a RayCluster and a ConfigMap with hello world Ray code.
-$ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
+$ kubectl create -f ray-operator/config/samples/ray-cluster.heterogeneous.yaml
 configmap/ray-code created
 raycluster.ray.io/raycluster-heterogeneous created
 
@@ -106,6 +109,9 @@ NAME                AGE
 raycluster-heterogeneous   2m48s
 
 # The created cluster should include a head pod, worker pod, and a head service.
+# It may take a few minutes for the pods to enter Running status.
+# If you're on minikube or kind, a Pending status indicates that your local Kubernetes environment
+# may not have sufficient CPU or memory capacity -- try adjusting your Docker settings.
 $ kubectl get pods
 NAME                                                 READY   STATUS    RESTARTS   AGE
 raycluster-heterogeneous-head-9t28q                  1/1     Running   0          97s
@@ -123,8 +129,8 @@ raycluster-heterogeneous-head-svc   ClusterIP   10.96.47.129   <none>        637
 ```
 
 ```shell
-# check the logs of the head pod
-$ kubectl logs raycluster-heterogeneous-head-5r6qr
+# Check the logs of the head pod. (Substitute the name of your head pod in this step.)
+$ kubectl logs raycluster-heterogeneous-head-9t28q
 2022-09-21 13:21:57,505	INFO usage_lib.py:479 -- Usage stats collection is enabled by default without user confirmation because this terminal is detected to be non-interactive. To disable this, add `--disable-usage-stats` to the command that starts the cluster, or run the following command: `ray disable-usage-stats` before starting the cluster. See https://docs.ray.io/en/master/cluster/usage-stats.html for more details.
 2022-09-21 13:21:57,505	INFO scripts.py:719 -- Local node IP: 10.244.0.144
 2022-09-21 13:22:00,513	SUCC scripts.py:756 -- --------------------
@@ -151,6 +157,7 @@ $ kubectl logs raycluster-heterogeneous-head-5r6qr
 
 Execute hello world Ray code
 ```shell
+# Substitute the name of your head pod in this step.
 $ kubectl exec raycluster-heterogeneous-head-9t28q -- python /opt/sample_code.py
 2022-09-21 13:28:41,176	INFO worker.py:1224 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
 2022-09-21 13:28:41,176	INFO worker.py:1333 -- Connecting to existing Ray cluster at address: 10.244.0.144:6379...
@@ -161,7 +168,7 @@ Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10
 Execution time =  4.855740308761597
 ```
 
-The output of hello world Ray code show 5 nodes in the Ray cluster
+The output of the hello world Ray code show 5 nodes in the Ray cluster
 ```
 Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10.244.0.147'}
 ```
