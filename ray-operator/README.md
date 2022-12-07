@@ -1,24 +1,24 @@
 # Ray Kubernetes Operator
 
-The KubeRay Operator makes deploying and managing Ray clusters on top of Kubernetes painless - clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller. The operator automates management Ray cluster lifecycle, autoscaling, and other critical functions.
-The Ray Operator is a Kubernetes operator to automate provisioning, management, autoscaling and operations of Ray clusters deployed to Kubernetes.
+The KubeRay Operator makes deploying and managing Ray clusters on top of Kubernetes painless. Clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller. The KubeRay Operator automates Ray cluster lifecycle management, autoscaling, and other critical functions.
 
 ![Overview](media/overview.png)
 
-Some of the main features of the operator are:
+Below are some of the main features of the KubeRay operator:
+
 - Management of first-class RayClusters via a [custom resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-resources).
 - Support for heterogenous worker types in a single Ray cluster.
-- Ray Autoscaler integration; autoscaling based on Ray application semantics.
-- Use of `ScaleStrategy` to remove specific nodes in specific groups
-- Built-in monitoring via Prometheus.
+- Optional Ray Autoscaler integration; autoscaling based on Ray application semantics.
 - Use of Kubernetes `PodTemplates` to configure Ray pods
-- Updated RayCluster Status based on the state of running Ray pods
-- Events added to the `RayCluster` instance
+- Use of `ScaleStrategy` to remove specific Ray worker pods.
 - Automatated management of critical configuration, such as required `environment variables`, the `ray start` entrypoint, and a `dev/shm` volume mount for Ray's shared memory.
+- Built-in monitoring via Prometheus.
+- Each `RayCluster`'s Status is updated based on the state of running Ray pods.
+- Kubernetes Events concerning `RayCluster` instances are emitted to aid observability.
 
 ## Overview
 
-When deployed, the KubeRay Operator will watch for K8s events (Create/Delete/Update) for the `RayCluster` resources. The KubeRay Operator can create a Raycluster (Ray head pod + multiple Ray worker pods), delete a cluster, or update the cluster by adding or removing worker pods.
+When deployed, the KubeRay Operator will watch for K8s events (Create/Delete/Update) for `RayCluster` resources. The KubeRay Operator can create a Ray cluster (Ray head pod + multiple Ray worker pods), delete a Ray cluster, or update the Ray cluster by adding or removing worker pods.
 
 ### Ray cluster creation
 
@@ -28,7 +28,7 @@ Once a `RayCluster` resource is created, the operator will configure and create 
 
 ### Ray cluster update
 
-You can update the number of replicas in a worker group, and specify which exact replica to remove by updated the RayCluster resource manifest:
+You can update the number of replicas in a worker group, and specify which exact replica to remove by updating the RayCluster resource manifest:
 
 ![](media/update-ray-cluster.gif)
 
@@ -57,7 +57,7 @@ NAME                            READY   STATUS    RESTARTS   AGE
 ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 ```
 
-Delete the operator
+Delete the operator.
 ```shell
 kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
