@@ -80,7 +80,7 @@ Sample  | Description
     For production use-cases, make sure to allocate sufficient resources for your Ray pods; it usually makes
     sense to run one large Ray pod per Kubernetes node. We do not recommend allocating less than 8Gb memory for a Ray pod
     running in production. Always set limits for memory and CPU. When possible, set requests equal to limits.
-    See the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html) for further guidance.
+    See the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources) for further guidance.
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
     [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for examples of RayCluster
     resource configurations suitable for production.
