@@ -52,7 +52,6 @@ spec:
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        node-ip-address: $$MY_POD_IP # auto-completed as the head pod IP
         block: 'true'
         num-cpus: "1000"
       #pod template
@@ -67,11 +66,6 @@ spec:
             - name: ray-head
               image: $ray_image
               imagePullPolicy: Always
-              env:
-                - name: MY_POD_IP
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: status.podIP
               ports:
                 - containerPort: 6379
                   name: gcs-server
