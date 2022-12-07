@@ -99,10 +99,6 @@ spec:
       block: 'true'
     #pod template
     template:
-      metadata:
-        labels:
-          rayCluster: raycluster-pod-security # will be injected if missing
-          groupName: small-group # will be injected if missing
       spec:
         containers:
         - name: machine-learning # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
