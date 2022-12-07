@@ -10,7 +10,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-pod-security
 spec:
-  rayVersion: '2.0.0'
+  rayVersion: '2.1.0'
   ######################headGroupSpec#################################
   # head group template and specs, (perhaps 'group' is not needed in the name)
   headGroupSpec:
