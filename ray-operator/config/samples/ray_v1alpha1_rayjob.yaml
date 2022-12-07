@@ -61,7 +61,6 @@ spec:
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
         rayStartParams:
-          node-ip-address: $MY_POD_IP
           block: 'true'
         #pod template
         template:
