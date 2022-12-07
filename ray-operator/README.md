@@ -1,44 +1,44 @@
 # Ray Kubernetes Operator
 
-KubeRay operator makes deploying and managing Ray clusters on top of Kubernetes painless - clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller.
-The Ray Operator is a Kubernetes operator to automate provisioning, management, autoscaling and operations of Ray clusters deployed to Kubernetes.
+The KubeRay Operator makes deploying and managing Ray clusters on top of Kubernetes painless. Clusters are defined as a custom RayCluster resource and managed by a fault-tolerant Ray controller. The KubeRay Operator automates Ray cluster lifecycle management, autoscaling, and other critical functions.
 
-![overview](media/overview.png)
+![Overview](media/overview.png)
 
-Some of the main features of the operator are:
+Below are some of the main features of the KubeRay operator:
+
 - Management of first-class RayClusters via a [custom resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-resources).
 - Support for heterogenous worker types in a single Ray cluster.
+- Optional Ray Autoscaler integration; autoscaling based on Ray application semantics.
+- Use of Kubernetes `PodTemplates` to configure Ray pods.
+- Use of `ScaleStrategy` to remove specific Ray worker pods.
+- Automatated management of critical configuration, such as required `environment variables`, the `ray start` entrypoint, and a `dev/shm` volume mount for Ray's shared memory.
 - Built-in monitoring via Prometheus.
-- Use of `PodTemplate` to create Ray pods
-- Updated status based on the running pods
-- Events added to the `RayCluster` instance
-- Automatically populate `environment variables` in the containers
-- Automatically prefix your container command with the `ray start` command
-- Automatically adding the volumeMount at `/dev/shm` for shared memory
-- Use of `ScaleStartegy` to remove specific nodes in specific groups
+- Each `RayCluster`'s Status is updated based on the state of running Ray pods.
+- Kubernetes Events concerning `RayCluster` instances are emitted to aid observability.
 
 ## Overview
 
-When deployed, the ray operator will watch for K8s events (create/delete/update) for the `raycluster` resources. The ray operator can create a raycluster (head + multiple workers), delete a cluster, or update the cluster by adding or removing worker pods.
+When deployed, the KubeRay Operator will watch for K8s events (Create/Delete/Update) for `RayCluster` resources. The KubeRay Operator can create a Ray cluster (Ray head pod + multiple Ray worker pods), delete a Ray cluster, or update the Ray cluster by adding or removing worker pods.
 
 ### Ray cluster creation
 
-Once a `raycluster` resource is created, the operator will configure and create the ray-head and the ray-workers specified in the `raycluster` manifest as shown below.
+Once a `RayCluster` resource is created, the operator will configure and create the Ray head pod and the Ray worker pods specified in the `raycluster` manifest as shown below.
 
 ![](media/create-ray-cluster.gif)
 
-### Ray cluster Update
+### Ray cluster update
 
-You can update the number of replicas in a worker goup, and specify which exact replica to remove by updated the raycluster resource manifest:
+You can update the number of replicas in a worker group, and specify which exact replica to remove by updating the RayCluster resource manifest:
 
 ![](media/update-ray-cluster.gif)
 
-### Ray cluster example code
+!!! note
 
-An example ray code is defined in this [configmap](config/samples/config-map-ray-code.yaml) that is mounted into the ray head-pod. By examining the logs of the head pod, we can see the list of the IP addresses of the nodes that joined the ray cluster:
-
-![](media/logs-ray-cluster.gif)
-
+    While updating `replicas` and `workersToDeleteUpdate` is supported, updating other fields in RayCluster manifests is **not** supported.
+    In particular, updating Ray head pod and Ray worker pod configuration is not supported. To update pod configuration,
+    delete the RayCluster, edit its configuration and then re-create the cluster. In other words,
+    use `kubectl delete` and `kubectl create` to update a RayCluster's pod configuration, rather than `kubectl apply`.
+    Support for in-place updates of pod configuration is tracked in KubeRay issue [#527](https://github.com/ray-project/kuberay/issues/527).
 
 ### Deploy the operator
 
@@ -57,7 +57,7 @@ NAME                            READY   STATUS    RESTARTS   AGE
 ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 ```
 
-Delete the operator
+Delete the operator.
 ```shell
 kubectl delete -k "github.com/ray-project/kuberay/ray-operator/config/default"
 ```
@@ -78,15 +78,28 @@ Sample  | Description
 !!! note
 
     For production use-cases, make sure to allocate sufficient resources for your Ray pods; it usually makes
-    sense to run one large Ray pod per Kubernetes node.
+    sense to run one large Ray pod per Kubernetes node. We do not recommend allocating less than 8Gb memory for a Ray pod
+    running in production. Always set limits for memory and CPU. When possible, set requests equal to limits.
+    See the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources) for further guidance.
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
-    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for guidance. The rest of the sample configs above are geared towards experimentation in local kind or minikube environments.
+    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for examples of RayCluster
+    resource configurations suitable for production.
+    The rest of the sample configs above are meant only for experimentation in local kind or minikube environments.
 
-    The memory usage of the KubeRay operator depends on the number of pods and Ray clusters being managed. Anecdotally, managing 500 Ray pods requires roughly 500MB memory. Monitor memory usage and adjust requests and limits as needed.
+    The memory usage of the KubeRay Operator depends on the number of pods and Ray clusters being managed.
+    Anecdotally, managing 500 Ray pods requires roughly 500MB memory. Monitor memory usage and adjust requests and limits as needed.
 
+We recommend running the following example in a kind or minikube environment with a resource capacity of at least 4CPU and 4Gb memory.
+Run the following commands from the root of your cloned kuberay repo.
 ```shell
+# Clone the kuberay repo if you haven't already.
+$ git clone https://github.com/ray-project/kuberay
+# Enter the root of the repo
+$ cd kuberay/
+# If you haven't already done so, deploy the KubeRay operator.
+$ kubectl create -k ray-operator/config/default
 # Create a RayCluster and a ConfigMap with hello world Ray code.
-$ kubectl create -f config/samples/ray-cluster.heterogeneous.yaml
+$ kubectl create -f ray-operator/config/samples/ray-cluster.heterogeneous.yaml
 configmap/ray-code created
 raycluster.ray.io/raycluster-heterogeneous created
 
@@ -96,6 +109,9 @@ NAME                AGE
 raycluster-heterogeneous   2m48s
 
 # The created cluster should include a head pod, worker pod, and a head service.
+# It may take a few minutes for the pods to enter Running status.
+# If you're on minikube or kind, a Pending status indicates that your local Kubernetes environment
+# may not have sufficient CPU or memory capacity -- try adjusting your Docker settings.
 $ kubectl get pods
 NAME                                                 READY   STATUS    RESTARTS   AGE
 raycluster-heterogeneous-head-9t28q                  1/1     Running   0          97s
@@ -113,8 +129,8 @@ raycluster-heterogeneous-head-svc   ClusterIP   10.96.47.129   <none>        637
 ```
 
 ```shell
-# check the logs of the head pod
-$ kubectl logs raycluster-heterogeneous-head-5r6qr
+# Check the logs of the head pod. (Substitute the name of your head pod in this step.)
+$ kubectl logs raycluster-heterogeneous-head-9t28q
 2022-09-21 13:21:57,505	INFO usage_lib.py:479 -- Usage stats collection is enabled by default without user confirmation because this terminal is detected to be non-interactive. To disable this, add `--disable-usage-stats` to the command that starts the cluster, or run the following command: `ray disable-usage-stats` before starting the cluster. See https://docs.ray.io/en/master/cluster/usage-stats.html for more details.
 2022-09-21 13:21:57,505	INFO scripts.py:719 -- Local node IP: 10.244.0.144
 2022-09-21 13:22:00,513	SUCC scripts.py:756 -- --------------------
@@ -139,8 +155,9 @@ $ kubectl logs raycluster-heterogeneous-head-5r6qr
 2022-09-21 13:22:00,515	INFO scripts.py:910 -- Running subprocesses are monitored and a message will be printed if any of them terminate unexpectedly. Subprocesses exit with SIGTERM will be treated as graceful, thus NOT reported.
 ```
 
-Execute hello world Ray code
+Now, we can run the hello world Ray code mounted from the config map created above.
 ```shell
+# Substitute the name of your head pod in this step.
 $ kubectl exec raycluster-heterogeneous-head-9t28q -- python /opt/sample_code.py
 2022-09-21 13:28:41,176	INFO worker.py:1224 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
 2022-09-21 13:28:41,176	INFO worker.py:1333 -- Connecting to existing Ray cluster at address: 10.244.0.144:6379...
@@ -151,7 +168,7 @@ Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10
 Execution time =  4.855740308761597
 ```
 
-The output of hello world Ray code show 5 nodes in the Ray cluster
+The output of the hello world Ray code shows 5 nodes in the Ray cluster.
 ```
 Ray Nodes:  {'10.244.0.145', '10.244.0.143', '10.244.0.146', '10.244.0.144', '10.244.0.147'}
 ```

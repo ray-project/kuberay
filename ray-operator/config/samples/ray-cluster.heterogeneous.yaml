@@ -43,7 +43,7 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      num-cpus: '1' # can be auto-completed from the limits
+      num-cpus: '1' # can be auto-completed from Ray container resource limits
       block: 'true'
     #pod template
     template:
