@@ -61,12 +61,6 @@ spec:
             - name: ray-head
               image: rayproject/ray:2.1.0
               imagePullPolicy: Always
-              #image: bonsaidev.azurecr.io/bonsai/lazer-0-9-0-cpu:dev
-              env:
-                - name: MY_POD_IP
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: status.podIP
               resources:
                 limits:
                   cpu: 2

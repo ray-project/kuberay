@@ -15,18 +15,12 @@ spec:
       port: '6379'
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
-      node-ip-address: $MY_POD_IP # auto-completed as the head pod IP
     #pod template
     template:
       spec:
         containers:
         - name: ray-head
           image: rayproject/ray:2.1.0
-          env:
-          - name: MY_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
           ports:
           - containerPort: 6379
             name: gcs-server
