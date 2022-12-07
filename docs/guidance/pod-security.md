@@ -95,19 +95,19 @@ kubectl apply -n pod-security -f ray-cluster.pod-security.yaml
 # Wait for the RayCluster convergence and check audit logs for the messages.
 docker exec kind-control-plane cat /var/log/kubernetes/kube-apiserver-audit.log
 
+# Forward the dashboard port
+kubectl port-forward --address 0.0.0.0 svc/raycluster-pod-security-head-svc -n pod-security 8265:8265
+
 # Log in to the head Pod
 kubectl exec -it -n pod-security ${YOUR_HEAD_POD} -- bash
 
-# Run a sample job in the Pod
+# (Head Pod) Run a sample job in the Pod
 python3 samples/xgboost_example.py
-
-# Forward the dashboard port
-kubectl port-forward --address 0.0.0.0 svc/raycluster-pod-security-head-svc -n pod-security 8265:8265
 
 # Check the job status in the dashboard on your browser.
 # http://127.0.0.1:8265/#/job => The job status should be "SUCCEEDED".
 
-# Make sure Python dependencies can be installed under `restricted` security standard 
+# (Head Pod) Make sure Python dependencies can be installed under `restricted` security standard 
 pip3 install jsonpatch
 echo $? # Check the exit code of `pip3 install jsonpatch`. It should be 0.
 
@@ -119,4 +119,3 @@ kubectl delete -n pod-security -f ray-cluster.pod-security.yaml
 One head Pod and one worker Pod will be created as specified in `ray-cluster.pod-security.yaml`.
 First, we log in to the head Pod, run a XGBoost example script, and check the job
 status in the dashboard. Next, we use `pip` to install a Python dependency (i.e. `jsonpatch`), and the exit code of the `pip` command should be 0.
-
