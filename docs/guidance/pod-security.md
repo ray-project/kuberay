@@ -49,6 +49,15 @@ With the `pod-security.kubernetes.io` labels, the built-in Kubernetes Pod securi
 
 # Step 4: Install the KubeRay operator
 ```bash
+# Update the field securityContext in helm-chart/kuberay-operator/values.yaml
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
 # Path: helm-chart/kuberay-operator
 helm install -n pod-security kuberay-operator .
 ```

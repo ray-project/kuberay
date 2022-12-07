@@ -59,11 +59,6 @@ rbacEnable: true
 batchScheduler:
   enabled: false
 
-# Respect the "restricted" security policy
-securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop: ["ALL"]
-  runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
+# Set up `securityContext` to improve Pod security.
+# See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
+securityContext: {}
