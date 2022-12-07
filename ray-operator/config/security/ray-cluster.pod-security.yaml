@@ -138,7 +138,6 @@ spec:
         volumes:
           - name: ray-logs
             emptyDir: {}
-######################status#################################
 ---
 apiVersion: v1
 kind: ConfigMap
