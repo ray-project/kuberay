@@ -1,6 +1,6 @@
-# KubeRay Operator
+# KubeRay API Server
 
-This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and KubeRay operator with a Helm chart.
+This document provides instructions to install the KubeRay API Server with a Helm chart.
 
 ## Helm
 
