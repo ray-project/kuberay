@@ -37,12 +37,12 @@ helm version
 
 ## List the chart
 
-To list the `my-release` deployment:
+To list the `kuberay-apiserver` release:
 
 ```sh
 helm ls
-# NAME                      NAMESPACE       REVISION        UPDATED                                   STATUS          CHART                     APP VERSION
-# kuberay-api-server        default         1               2022-12-02 02:13:37.514445313 +0000 UTC   deployed        kuberay-api-server-0.4.0  0.4.0
+# NAME                      NAMESPACE       REVISION        UPDATED                                    STATUS         CHART
+# kuberay-apiserver         default         1               2022-12-02 02:13:37.514445313 +0000 UTC    deployed       kuberay-apiserver-0.4.0
 ```
 
 ## Uninstall the Chart
