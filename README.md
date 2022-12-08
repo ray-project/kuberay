@@ -24,7 +24,7 @@ We also recommend checking out the official Ray guides for deploying on Kubernet
 
 ### Use YAML
 
-Please choose the version you would like to install. The examples below uses the latest stable version `v0.3.0`.
+Please choose the version you would like to install. The examples below use the latest stable version `v0.3.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
