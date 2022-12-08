@@ -19,7 +19,7 @@ You can validate the charts as follows:
 
 * Confirm that the [releases](https://github.com/ray-project/kuberay-helm/releases) are created as expected.
 * Confirm that [index.yaml](https://github.com/ray-project/kuberay-helm/blob/gh-pages/index.yaml) exists.
-* Check whether [index.yaml](https://github.com/ray-project/kuberay-helm/blob/gh-pages/index.yaml) has the metadata of all releases, including old versions.
+* Confirm that [index.yaml](https://github.com/ray-project/kuberay-helm/blob/gh-pages/index.yaml) has the metadata of all releases, including old versions.
 * Check the creation/update time of all releases and `index.yaml` to ensure they are updated.
 
 * Install charts from Helm repository.
