@@ -11,8 +11,7 @@ metadata:
   name: raycluster-complete
 spec:
   rayVersion: '2.1.0'
-  ######################headGroupSpec#################################
-  # Ray head pod template and specs
+  # Ray head pod configuration
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
     serviceType: ClusterIP
