@@ -48,7 +48,7 @@ at which point final release artifacts are built, release notes are published, a
     git tag v0.4.0-rc.0
     git push upstream v0.4.0-rc.0
     ```
-    d. Release rc0 Helm charts following the instructions in ...
+    d. Release rc0 Helm charts following the [instructions](../release/helm-chart.md).
     e. Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass. [Example](https://github.com/ray-project/ray/pull/30944/files). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/7141#0184ef25-e62c-4dab-9c7e-ddfd583803cd) passes before merging.
     f. Announce the `rc0` release on the KubeRay slack, with deployment instructions. [Example.](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1670375020308739).
 
