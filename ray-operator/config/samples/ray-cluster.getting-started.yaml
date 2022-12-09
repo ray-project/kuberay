@@ -10,7 +10,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-getting-started
 spec:
-  rayVersion: '2.1.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.2.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
@@ -25,7 +25,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.1.0
+          image: rayproject/ray:2.2.0
           volumeMounts:
           - mountPath: /opt
             name: config

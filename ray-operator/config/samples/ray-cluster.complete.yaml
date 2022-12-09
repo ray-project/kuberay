@@ -10,7 +10,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-complete
 spec:
-  rayVersion: '2.1.0'
+  rayVersion: '2.2.0'
   # Ray head pod configuration
   headGroupSpec:
     # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
@@ -28,7 +28,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.1.0
+          image: rayproject/ray:2.2.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -88,7 +88,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.1.0
+          image: rayproject/ray:2.2.0
           lifecycle:
             preStop:
               exec:

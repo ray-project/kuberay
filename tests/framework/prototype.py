@@ -564,7 +564,7 @@ if __name__ == '__main__':
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
     mut = Mutator(base_cr, patch_list)
     image_dict = {
-        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.1.0',
+        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.2.0',
         CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
     }
 
