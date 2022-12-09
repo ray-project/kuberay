@@ -2,7 +2,7 @@
 
 ## Prerequisite
 
-- [KubeRay GitHub](https://github.com/ray-project/kuberay) write permissions to cut a release tag/branch.
+You need [KubeRay GitHub](https://github.com/ray-project/kuberay) write permissions to cut a release branch and create a release tag.
 
 ### Overview
 
