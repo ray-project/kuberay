@@ -18,9 +18,9 @@ Then build final release artifacts, publish release notes, and announce the rele
 
 ### Steps
 
-1. Ensure that the desired master commit is stable.
+1. Ensure that the desired master commit is stable by verifying the following:
 
-    - Make sure the last master commit you want to release passes the [Go-build-and-test](https://github.com/ray-project/kuberay/actions/workflows/test-job.yaml) workflow.
+    - The last master commit you want to release passes the [Go-build-and-test](https://github.com/ray-project/kuberay/actions/workflows/test-job.yaml) workflow.
     - The KubeRay documentation is up-to-date.
     - All example configurations use the latest released version of Ray.
     - The example configurations work.
