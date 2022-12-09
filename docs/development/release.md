@@ -25,9 +25,9 @@ Then build final release artifacts, publish release notes, and announce the rele
     - All example configurations use the latest released version of Ray.
     - The example configurations work.
 
-   During the KubeRay `0.4.0` release, we used spreadsheets to track [testing](https://anyscaleteam.slack.com/archives/D0412MV3X3J/p1670030376001989) and [documentation updates](https://docs.google.com/spreadsheets/d/1wlTXCWNtQxCUENa0fP2-dV6UYNUhUCix4exiGsep5GQ/edit#gid=0). The bulk of the manual testing was done right before the branch cut. No substantive code changes were made between the time of the branch cut and final release.
+   During the KubeRay `0.4.0` release, we used spreadsheets to track [testing](https://anyscaleteam.slack.com/archives/D0412MV3X3J/p1670030376001989) and [documentation updates](https://docs.google.com/spreadsheets/d/1wlTXCWNtQxCUENa0fP2-dV6UYNUhUCix4exiGsep5GQ/edit#gid=0). The bulk of the manual testing was done immediately before making the branch cut. No substantive code changes were made between the time of the branch cut and final release.
 
-   For future releases, we plan to automate more of the relese testing process. Use your best judgement to decide when to test manually while carrying out the release process.
+   For future releases, we plan to automate more of the relese testing process. Use your best judgement to decide when to test manually during the release process.
    To track the progress of KubeRay test development, see the [CI label on the KubeRay GitHub](https://github.com/ray-project/kuberay/labels/ci).
 
 2. Depending on whether the release is major, minor, or patch take the following steps.
