@@ -62,13 +62,13 @@ into the release branch.
 
 6. Ask @Jeffwan to build and upload CLI binaries for the release.
 
-7. Run following code and fetch online git commits from last release (v0.3.0) to current release (v0.4.0).
+7. Run the following code to fetch git commits between the last release (e.g. v0.3.0) and the current release (e.g. v0.4.0).
 
     ```
     git log v0.3.0..v0.4.0 --oneline
     ```
 
-8. Write release notes and update the GitHub release. You can use the [v0.3.0 notes](https://github.com/ray-project/kuberay/releases/tag/v0.3.0) as a guide.
+8. Use the output of the last command to write release notes and update the GitHub release. You can use the [v0.3.0 notes](https://github.com/ray-project/kuberay/releases/tag/v0.3.0) as a guide.
 
 9. Send a PR to add the release notes to [CHANGELOG.md](../../CHANGELOG.md).
 
