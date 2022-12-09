@@ -26,10 +26,10 @@ helm install kuberay-operator kuberay/kuberay-operator
 #### Method 2: Kustomize
 ```sh
 # Install CRDs
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.3.0"
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.4.0"
 
 # Install KubeRay operator
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.3.0"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v0.4.0"
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources.

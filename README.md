@@ -24,23 +24,23 @@ We also recommend checking out the official Ray guides for deploying on Kubernet
 
 ### Use YAML
 
-Please choose the version you would like to install. The examples below use the latest stable version `v0.3.0`.
+Please choose the version you would like to install. The examples below use the latest stable version `v0.4.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
-|  master  |    N    | v1.19 - v1.24 |
-|  v0.3.0  |    Y    | v1.19 - v1.24 |
+|  master  |    N    | v1.19 - v1.25 |
+|  v0.4.0  |    Y    | v1.19 - v1.25 |
 
 Make sure your Kubernetes and Kubectl versions are both within the suggested range.
 Once you have connected to a Kubernetes cluster, run the following commands to deploy the KubeRay Operator.
 ```
-export KUBERAY_VERSION=v0.3.0
+export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
 ```
 
 To deploy both the KubeRay Operator and the optional KubeRay API Server run the following commands.
 ```
-export KUBERAY_VERSION=v0.3.0
+export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 ```

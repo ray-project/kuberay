@@ -72,7 +72,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v0.3.0
+    targetRevision: v0.4.0
     path: helm-chart/kuberay-operator/crds
   destination:
     server: https://kubernetes.default.svc
@@ -92,7 +92,7 @@ metadata:
 spec:
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v0.3.0
+    targetRevision: v0.4.0
     path: helm-chart/kuberay-operator
     helm:
       skipCrds: true
