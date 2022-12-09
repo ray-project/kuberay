@@ -13,7 +13,7 @@ until you reach a satisfactory final release commit.
 Immediately after cutting the release branch, create a commit for a release candidate (e.g. `0.4.0-rc.0`),
 and build the associated artifacts (images and charts).
 If further changes need to be made to the release, pick changes from the master branch into the release branch.
-As many release candidates are made as necessary until a stable final release commit is reached,
+Make as many release candidates as necessary until a stable final release commit is reached,
 at which point final release artifacts are built, release notes are published, and the release is announced.
 
 ### Steps
