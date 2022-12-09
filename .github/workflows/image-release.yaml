@@ -72,7 +72,7 @@ jobs:
   release_operator_image:
     env:
       working-directory: ./ray-operator
-    name: Build Operator Docker Images
+    name: Release Operator Docker Images
     runs-on: ubuntu-latest
     steps:
 
