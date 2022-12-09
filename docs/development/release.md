@@ -7,7 +7,7 @@
 ### Overview
 
 Each major release (e.g. `0.4`) is managed in its own GitHub branch.
-To release KubeRay, cut a release branch from master and build commits on that branch
+To release KubeRay, cut a release branch (e.g. `release-0.4`) from master and build commits on that branch
 until you reach a satisfactory final release commit.
 
 Immediately after cutting the release branch, create a commit for a release candidate (e.g. `0.4.0-rc.0`),
