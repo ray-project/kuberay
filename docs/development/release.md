@@ -40,7 +40,7 @@ Then build final release artifacts, publish release notes, and announce the rele
 
 3. Create a first release candidate (`v0.4.0-rc.0`).
 
-    a. Merge a PR into the release branch updating Helm chart versions and images. For `v0.4.0-rc0`, we did this in two PRs [1](https://github.com/ray-project/kuberay/pull/784/files) [2](https://github.com/ray-project/kuberay/pull/804/files), but it's fine to do it one. Note that [we no longer include appVersion in the Helm charts](https://github.com/ray-project/kuberay/pull/810).
+    a. Merge a PR into the release branch updating Helm chart versions and images. For `v0.4.0-rc0`, we did this in two PRs [1](https://github.com/ray-project/kuberay/pull/784/files) [2](https://github.com/ray-project/kuberay/pull/804/files), but it's fine to do it in a single PR. Note that [we no longer include appVersion in the Helm charts](https://github.com/ray-project/kuberay/pull/810).
     b. Release `rc0` images using the [release-image-build](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml) workflow on GitHub actions.
     You will prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
     c. Tag the tip of release branch with `vX.Y.Z-rc.0`.
