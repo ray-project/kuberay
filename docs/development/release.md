@@ -30,7 +30,7 @@ Then build final release artifacts, publish release notes, and announce the rele
    For future releases, we plan to automate more of the relese testing process. Use your best judgement to decide when to test manually during the release process.
    To track the progress of KubeRay test development, see the [CI label on the KubeRay GitHub](https://github.com/ray-project/kuberay/labels/ci).
 
-2. Depending on whether the release is major, minor, or patch take the following steps.
+2. Depending on whether the release is for a major, minor, or patch version, take the following steps.
     - **Major or Minor version** (e.g. `0.4.0` or `1.0.0`). Create a release branch named `release-X.Y`:
     ```
     git checkout -b release-0.4
