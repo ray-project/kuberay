@@ -2,13 +2,12 @@
 
 > Note: This is the alpha version of Ray Services. There will be ongoing improvements for Ray Services in the future releases.
 
-### Prerequisite
+### Prerequisites
 
-* Ray 2.0 is required.
+* Ray 2.0 or newer.
+* KubeRay 0.3.0 or newer.
 
 ### What is a RayService?
-
-RayService is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayService manages 2 things:
 
@@ -25,7 +24,7 @@ A RayService manages 2 things:
 ### Deploy the Operator
 
 ```
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.3.0&timeout=90s"
+$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=90s"
 ```
 
 Check that the controller is running.

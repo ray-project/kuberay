@@ -5,11 +5,9 @@
 ### Prerequisites
 
 * Ray 1.10 or higher
-* KubeRay v0.3.0
+* KubeRay v0.3.0+. (v0.4.0 is recommended)
 
 ### What is a RayJob?
-
-RayJob is a new custom resource (CR) supported by KubeRay in v0.3.0.
 
 A RayJob manages 2 things:
 * Ray Cluster: Manages resources in a Kubernetes cluster.
@@ -22,7 +20,8 @@ A RayJob manages 2 things:
 
 ### Deploy KubeRay
 
-Make sure KubeRay v0.3.0 version is deployed in your cluster.
+Make sure your KubeRay operator version is at least v0.3.0.
+The latest released KubeRay version (v0.4.0) is recommended.
 For installation instructions, please follow [the documentation](../deploy/installation.md).
 
 ### Run an example Job
