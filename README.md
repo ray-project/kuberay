@@ -29,20 +29,33 @@ Please choose the version you would like to install. The examples below use the 
 |  master  |    N    | v1.19 - v1.25 |
 |  v0.4.0  |    Y    | v1.19 - v1.25 |
 
-### Use YAML (kubectl v1.22.0+)
+### Use YAML
 
 Make sure your Kubernetes and Kubectl versions are both within the suggested range.
 Once you have connected to a Kubernetes cluster, run the following commands to deploy the KubeRay Operator.
-```
+
+```sh
+# case 1: kubectl >= v1.22.0
 export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
+
+# case 2: kubectl < v1.22.0
+# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.4`.
+kubectl create -k ray-operator/config/default
 ```
 
 To deploy both the KubeRay Operator and the optional KubeRay API Server run the following commands.
-```
+
+```sh
+# case 1: kubectl >= v1.22.0
 export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
+
+# case 2: kubectl < v1.22.0
+# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.4`.
+kubectl create -k manifests/cluster-scope-resources
+kubectl apply -k manifests/base
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources. The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
