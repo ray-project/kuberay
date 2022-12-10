@@ -22,8 +22,6 @@ We also recommend checking out the official Ray guides for deploying on Kubernet
 
 ## Quick Start
 
-### Use YAML
-
 Please choose the version you would like to install. The examples below use the latest stable version `v0.4.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
@@ -31,27 +29,54 @@ Please choose the version you would like to install. The examples below use the 
 |  master  |    N    | v1.19 - v1.25 |
 |  v0.4.0  |    Y    | v1.19 - v1.25 |
 
+### Use YAML
+
 Make sure your Kubernetes and Kubectl versions are both within the suggested range.
 Once you have connected to a Kubernetes cluster, run the following commands to deploy the KubeRay Operator.
-```
+
+```sh
+# case 1: kubectl >= v1.22.0
 export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
+
+# case 2: kubectl < v1.22.0
+# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.4`.
+kubectl create -k ray-operator/config/default
 ```
 
 To deploy both the KubeRay Operator and the optional KubeRay API Server run the following commands.
-```
+
+```sh
+# case 1: kubectl >= v1.22.0
 export KUBERAY_VERSION=v0.4.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
+
+# case 2: kubectl < v1.22.0
+# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.4`.
+kubectl create -k manifests/cluster-scope-resources
+kubectl apply -k manifests/base
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources. The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
 
-### Use Helm
+### Use Helm (Helm v3+)
 
 A Helm chart is a collection of files that describe a related set of Kubernetes resources.
 It can help users to deploy the KubeRay Operator and Ray clusters conveniently.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster. To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
+
+```sh
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+
+# Install both CRDs and KubeRay operator v0.4.0.
+helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
+
+# Check the KubeRay operator Pod in `default` namespace
+kubectl get pods
+# NAME                                READY   STATUS    RESTARTS   AGE
+# kuberay-operator-6fcbb94f64-mbfnr   1/1     Running   0          17s
+```
 
 ## Development
 
