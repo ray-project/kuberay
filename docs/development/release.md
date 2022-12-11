@@ -61,18 +61,12 @@ into the release branch.
 
 5. Create a final release by repeating Step 4 once more using the tag of the release (`vX.Y.Z`) with no `-rc` suffix.
 
-6. Ask @Jeffwan to build and upload CLI binaries for the release.
+6. Run `make release` in cli folder and generate `kuberay-$VERSION-darwin-amd64.zip` and `kuberay-$VERSION-linux-amd64.zip` files. Upload them to the GitHub release.
 
-7. Run the following code to fetch git commits between the last release (e.g. v0.3.0) and the current release (e.g. v0.4.0).
+7. Follow the [instructions](../release/changelog.md) to generate release notes and add notes in the GitHub release.
 
-    ```
-    git log v0.3.0..v0.4.0 --oneline
-    ```
+8. Send a PR to add the release notes to [CHANGELOG.md](../../CHANGELOG.md).
 
-8. Use the output of the last command to write release notes and update the GitHub release. You can use the [v0.3.0 notes](https://github.com/ray-project/kuberay/releases/tag/v0.3.0) as a guide.
+9. Update KubeRay versions in Ray and KubeRay master. [Ray Example](https://github.com/ray-project/ray/pull/30981), [KubeRay Example](https://github.com/ray-project/kuberay/pull/821).
 
-9. Send a PR to add the release notes to [CHANGELOG.md](../../CHANGELOG.md).
-
-10. Update KubeRay versions in Ray and KubeRay master. [Ray Example](https://github.com/ray-project/ray/pull/30981), [KubeRay Example](https://github.com/ray-project/kuberay/pull/821).
-
-11. Announce the release on the KubeRay slack!
+10. Announce the release on the KubeRay slack!
