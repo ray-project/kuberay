@@ -2,22 +2,23 @@
 
 ## Prerequisite
 
-1. Prepare your Github Token
+1. Prepare your [Github Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 
-1. Install Github python dependencies to generate changlog 
+1. Install the Github python dependencies needed to generate the changelog.
     ```
     pip install PyGithub
     ```
 
 ## Generate release notes
 
-1. Run following command and fetch oneline git commits from last release (v0.3.0) to current release (v0.4.0).
+1. Run the following command and fetch oneline git commits from the last release (v0.3.0) to current release (v0.4.0).
 
     ```
      git log v0.3.0..v0.4.0 --oneline
     ```
- 
-1. Copy above commit history to `scripts/changelog-generator.py` and replace `<your_github_token>` with your Github token. Run the python scripts to generate changelogs.
+
+1. Copy the above commit history to `scripts/changelog-generator.py` and replace `<your_github_token>` with your Github token.
+Run the script to generate changelogs.
 
     ```
     from github import Github
@@ -59,13 +60,16 @@
         pr_id = int(pr_match.group(1))
         print("* {}".format(g.generate(pr_id)))
     ```
-1. You probably need to update the commit logs if it contains tag information or additional PRs links.
-
+1. To create the release notes, save the output of the script and modify the output as follows.
+- Remove extraneous data, such as commits with tag information.
+```
 - c1cbaed (tag: v0.4.0-rc.0) Update chart versions for 0.4.0-rc.0 (#804) -> c1cbaed Update chart versions for 0.4.0-rc.0 (#804)
 - 86b0af2 Remove ingress.enabled from KubeRay operator chart (#812) (#816) -> 86b0af2 Remove ingress.enabled from KubeRay operator chart (#816)
+```
+- Grouping commits by category. (The choice of categories is at the release manager's discretion.)
+- Adding a section summarizing important changes.
+- Adding a section listing individuals who contributed to the release.
 
-1. Cut release from tags and copy results from last step. You can group commits into `Features`, `Bugs` etc and add to release notes.
-See example [v0.3.0 release](https://github.com/ray-project/kuberay/releases/tag/v0.3.0)
+1. Cut the release from tags and add the release notes from the last step. See example [v0.3.0 release](https://github.com/ray-project/kuberay/releases/tag/v0.3.0).
 
-1. Send a PR to update [CHANGELOG.md](https://github.com/ray-project/kuberay/blob/master/CHANGELOG.md)
- 
+1. Send a PR to update [CHANGELOG.md](https://github.com/ray-project/kuberay/blob/master/CHANGELOG.md). The changelog should be updated by prepending the new release notes.
