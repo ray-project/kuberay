@@ -52,7 +52,6 @@ These changes pertain to KubeRay's Helm charts.
 * Fix Helm chart default configuration ([#530](https://github.com/ray-project/kuberay/pull/530), @kevin85421)
 * helm-chart/ray-cluster: Allow setting pod lifecycle ([#494](https://github.com/ray-project/kuberay/pull/494), @ulfox)
 
-
 ### CI
 
 The changes in this section pertain to KubeRay CI, testing, and developer workflows.
