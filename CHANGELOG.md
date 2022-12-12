@@ -79,7 +79,6 @@ The changes in this section pertain to KubeRay CI, testing, and developer workfl
 * [Feature] Add consistency check for types.go, CRDs, and generated API in GitHub Actions ([#546](https://github.com/ray-project/kuberay/pull/546), @kevin85421)
 * support ray 2.0.0 in compatibility test ([#508](https://github.com/ray-project/kuberay/pull/508), @wilsonwang371)
 
-
 ### KubeRay Operator deployment
 
 The changes in this section pertain to deployment of the KubeRay Operator.
