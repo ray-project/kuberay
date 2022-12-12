@@ -14,7 +14,7 @@
 1. Run the following command and fetch oneline git commits from the last release (v0.3.0) to current release (v0.4.0).
 
     ```
-     git log v0.3.0..v0.4.0 --oneline
+    git log v0.3.0..v0.4.0 --oneline
     ```
 
 1. Copy the above commit history to `scripts/changelog-generator.py` and replace `<your_github_token>` with your Github token.
