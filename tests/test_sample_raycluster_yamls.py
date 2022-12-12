@@ -12,6 +12,9 @@ from framework.prototype import (
     HeadPodNameRule,
     EasyJobRule,
     HeadSvcRule,
+)
+
+from framework.utils import (
     CONST
 )
 
@@ -73,7 +76,7 @@ if __name__ == '__main__':
     # Build a test plan
     logger.info("Build a test plan ...")
     test_cases = unittest.TestSuite()
-    for index, new_cr in enumerate(sample_yaml_files[0:1]):
+    for index, new_cr in enumerate(sample_yaml_files):
         if new_cr['name'] in skip_tests:
             logger.info('[SKIP TEST %d] %s: %s', index, new_cr['name'], skip_tests[new_cr['name']])
             continue

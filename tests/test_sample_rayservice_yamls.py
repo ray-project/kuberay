@@ -9,10 +9,12 @@ from framework.prototype import (
     GeneralTestCase,
     RayServiceAddCREvent,
     EasyJobRule,
-    CurlServiceRule,
-    CONST
+    CurlServiceRule
 )
 
+from framework.utils import (
+    CONST
+)
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ import docker
 
 import kuberay_utils.utils as utils
 from framework.prototype import (
-    CONST,
     CurlServiceRule,
     K8S_CLUSTER_MANAGER,
     OperatorManager,
@@ -18,7 +17,8 @@ from framework.prototype import (
 )
 
 from framework.utils import (
-    shell_subprocess_run
+    shell_subprocess_run,
+    CONST
 )
 
 logger = logging.getLogger(__name__)

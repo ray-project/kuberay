@@ -2,7 +2,6 @@
 from typing import List
 import unittest
 import time
-from pathlib import Path
 import yaml
 from kubernetes import client, config
 import jsonpatch
@@ -10,30 +9,9 @@ import jsonpatch
 from framework.utils import (
     logger,
     shell_subprocess_run,
-    shell_subprocess_check_output
+    shell_subprocess_check_output,
+    CONST
 )
-
-class CONST:
-    """Constants"""
-    __slots__ = ()
-    # Docker images
-    OPERATOR_IMAGE_KEY = "kuberay-operator-image"
-    RAY_IMAGE_KEY = "ray-image"
-
-    # Kubernetes API clients
-    K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
-    K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
-
-    # Paths
-    REPO_ROOT = Path(__file__).absolute().parent.parent.parent
-    HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
-    DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
-
-    # Ray features
-    RAY_FT = "RAY_FT"
-    RAY_SERVICE = "RAY_SERVICE"
-
-CONST = CONST()
 
 # Utility functions
 def search_path(yaml_object, steps, default_value = None):

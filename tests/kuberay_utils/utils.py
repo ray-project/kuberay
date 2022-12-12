@@ -10,14 +10,14 @@ import yaml
 
 from kubernetes.stream import stream
 from framework.prototype import (
-    CONST,
     K8S_CLUSTER_MANAGER,
     RayClusterAddCREvent,
     RayServiceAddCREvent
 )
 
 from framework.utils import (
-    shell_subprocess_run
+    shell_subprocess_run,
+    CONST
 )
 
 raycluster_service_file = CONST.REPO_ROOT.joinpath("tests/config/raycluster-service.yaml")
