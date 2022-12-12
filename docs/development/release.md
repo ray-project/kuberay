@@ -42,15 +42,20 @@ Then build final release artifacts, publish release notes, and announce the rele
 
     a. Merge a PR into the release branch updating Helm chart versions, Helm chart image tags, and kustomize manifest image tags.
     For `v0.4.0-rc0`, we did this in two PRs [1](https://github.com/ray-project/kuberay/pull/784/files) [2](https://github.com/ray-project/kuberay/pull/804/files), but it's fine to do it in a single PR. Note that [we no longer include appVersion in the Helm charts](https://github.com/ray-project/kuberay/pull/810).
+
     b. Release `rc0` images using the [release-image-build](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml) workflow on GitHub actions.
     You will prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
+
     c. Tag the tip of release branch with `vX.Y.Z-rc.0`.
     ```
     git tag v0.4.0-rc.0
     git push upstream v0.4.0-rc.0
     ```
+
     d. Release rc0 Helm charts following the [instructions](../release/helm-chart.md).
+
     e. Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass. [Example](https://github.com/ray-project/ray/pull/30944/files). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/7141#0184ef25-e62c-4dab-9c7e-ddfd583803cd) passes before merging.
+
     f. Announce the `rc0` release on the KubeRay slack, with deployment instructions. [Example.](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1670375020308739).
 
 4. If necessary, create more release candidates (`rc1`, `rc2`, ...)
