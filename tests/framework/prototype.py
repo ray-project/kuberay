@@ -1,20 +1,17 @@
 """Configuration test framework for KubeRay"""
 from typing import List
-import logging
 import unittest
 import time
-import subprocess
 from pathlib import Path
 import yaml
 from kubernetes import client, config
 import jsonpatch
 
-# Global variables
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+from framework.utils import (
+    logger,
+    shell_subprocess_run,
+    shell_subprocess_check_output
+)
 
 class CONST:
     """Constants"""
@@ -145,23 +142,6 @@ def check_pod_running(pods) -> bool:
         if pod.status.phase != 'Running':
             return False
     return True
-
-def shell_subprocess_run(command, check = True):
-    """
-    Command will be executed through the shell. If check=True, it will raise an error when
-    the returncode of the execution is not 0.
-    """
-    logger.info("Execute command: %s", command)
-    return subprocess.run(command, shell = True, check = check).returncode
-
-def shell_subprocess_check_output(command):
-    """
-    Run command and return STDOUT as encoded bytes.
-    """
-    logger.info("Execute command (check_output): %s", command)
-    output = subprocess.check_output(command, shell=True)
-    logger.info("Output: %s", output)
-    return output
 
 def get_expected_head_pods(custom_resource):
     """Get the number of head pods in custom_resource"""

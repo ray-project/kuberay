@@ -7,15 +7,18 @@ import random
 import string
 import docker
 
-from kuberay_utils import utils
+import kuberay_utils.utils as utils
 from framework.prototype import (
     CONST,
     CurlServiceRule,
     K8S_CLUSTER_MANAGER,
     OperatorManager,
     RuleSet,
-    shell_subprocess_run,
     show_cluster_info
+)
+
+from framework.utils import (
+    shell_subprocess_run
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +37,7 @@ kuberay_operator_image = 'kuberay/operator:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
-    cluster_template_file = 'tests/config/ray-cluster.mini.yaml.template'
+    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
 
     @classmethod
     def setUpClass(cls):
@@ -144,7 +147,7 @@ print(len(ray.nodes()))
 
 
 class RayFTTestCase(unittest.TestCase):
-    cluster_template_file = 'tests/config/ray-cluster.ray-ft.yaml.template'
+    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
 
     @classmethod
     def setUpClass(cls):
