@@ -60,15 +60,15 @@ Run the script to generate changelogs.
         pr_id = int(pr_match.group(1))
         print("* {}".format(g.generate(pr_id)))
     ```
-1. To create the release notes, save the output of the script and modify the output as follows.
+1. To create the release notes, save the output of the script. Modify the script's output as follows.
 - Remove extraneous data, such as commits with tag information.
 ```
 - c1cbaed (tag: v0.4.0-rc.0) Update chart versions for 0.4.0-rc.0 (#804) -> c1cbaed Update chart versions for 0.4.0-rc.0 (#804)
 - 86b0af2 Remove ingress.enabled from KubeRay operator chart (#812) (#816) -> 86b0af2 Remove ingress.enabled from KubeRay operator chart (#816)
 ```
-- Grouping commits by category. (The choice of categories is at the release manager's discretion.)
-- Adding a section summarizing important changes.
-- Adding a section listing individuals who contributed to the release.
+- Group commits by category. (The choice of categories is at the release manager's discretion.)
+- Add a section summarizing important changes.
+- Add a section listing individuals who contributed to the release.
 
 1. Cut the release from tags and add the release notes from the last step. See example [v0.3.0 release](https://github.com/ray-project/kuberay/releases/tag/v0.3.0).
 
