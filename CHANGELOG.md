@@ -13,7 +13,7 @@ The KubeRay 0.4.0 release includes the following improvements.
 
 * Integrations for the [MCAD](https://ray-project.github.io/kuberay/guidance/kuberay-with-MCAD/)
 and [Volcano](https://ray-project.github.io/kuberay/guidance/volcano-integration/) batch scheduling systems.
-* Stable Helm support for the [KubeRay Operator](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md), [KubeRay API Server](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver#readme), and [RayClusters](https://github.com/ray-project/kuberay/blob/master/helm-chart/ray-cluster/README.md). These charts are now hosted at a [Helm repo](https://github.com/ray-project/kuberay-helm).
+* Stable Helm support for the [KubeRay Operator](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md), [KubeRay API Server](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver#readme), and [Ray clusters](https://github.com/ray-project/kuberay/blob/master/helm-chart/ray-cluster/README.md). These charts are now hosted at a [Helm repo](https://github.com/ray-project/kuberay-helm).
 * Critical stability improvements to the [Ray Autoscaler integration](https://ray-project.github.io/kuberay/guidance/autoscaler/). (To benefit from these improvements, use KubeRay >=0.4.0 and Ray >=2.2.0.)
 * Numerous improvements to CI, tests, and developer workflows; a new [configuration test framework](https://github.com/ray-project/kuberay/pull/605).
 * Numerous improvements to documentation.
