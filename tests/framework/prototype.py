@@ -2,7 +2,6 @@
 from typing import List
 import unittest
 import time
-import yaml
 import jsonpatch
 
 from framework.utils import (
@@ -400,58 +399,3 @@ class GeneralTestCase(unittest.TestCase):
         except Exception as ex:
             logger.error(str(ex))
             K8S_CLUSTER_MANAGER.delete_kind_cluster()
-
-if __name__ == '__main__':
-    TEMPLATE_NAME = 'config/ray-cluster.mini.yaml.template'
-    NAMESPACE = 'default'
-    with open(TEMPLATE_NAME, encoding="utf-8") as base_yaml:
-        base_cr = yaml.load(base_yaml, Loader=yaml.FullLoader)
-    patch_list = [
-        # Pass
-        jsonpatch.JsonPatch([{'op': 'replace',
-            'path': '/spec/headGroupSpec/template/spec/containers/0/name','value': 'ray-head-1'}
-        ]),
-        # Pass
-        jsonpatch.JsonPatch([{'op': 'replace',
-            'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}
-        ]),
-        # Reproduce #587: https://github.com/ray-project/kuberay/pull/587
-        jsonpatch.JsonPatch([
-            {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
-            {'op': 'add', 'path': '/spec/workerGroupSpecs/0/template/metadata/name', 'value': 'ha'}
-        ]),
-        # Reproduce #585: https://github.com/ray-project/kuberay/pull/585
-        jsonpatch.JsonPatch([{'op': 'add',
-            'path': '/spec/headGroupSpec/rayStartParams/object-manager-port', 'value': '12345'}
-        ]),
-        # Reproduce: (Fixed by pull request #572. Use v0.3.0 to reproduce.)
-        #   #572: https://github.com/ray-project/kuberay/pull/572
-        #   #530: https://github.com/ray-project/kuberay/pull/530
-        jsonpatch.JsonPatch([{'op': 'add',
-            'path': '/spec/headGroupSpec/template/metadata/labels/app.kubernetes.io~1name',
-            'value': 'ray'}
-        ]),
-        # Reproduce #529: https://github.com/ray-project/kuberay/pull/529
-        jsonpatch.JsonPatch([
-            {'op': 'replace',
-                'path': '/spec/headGroupSpec/template/spec/containers/0/resources/requests/memory',
-                'value': '256Mi'},
-            {'op': 'replace',
-                'path': '/spec/headGroupSpec/template/spec/containers/0/resources/limits/memory',
-                'value': '512Mi'}
-        ])
-    ]
-
-    rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
-    mut = Mutator(base_cr, patch_list)
-    image_dict = {
-        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.1.0',
-        CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
-    }
-
-    test_cases = unittest.TestSuite()
-    for new_cr in mut.mutate():
-        addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
-        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
-    runner = unittest.TextTestRunner()
-    runner.run(test_cases)
