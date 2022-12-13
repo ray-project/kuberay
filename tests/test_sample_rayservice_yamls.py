@@ -4,29 +4,32 @@ import os
 import logging
 import yaml
 
-from prototype import (
+from framework.prototype import (
     RuleSet,
     GeneralTestCase,
     RayServiceAddCREvent,
     EasyJobRule,
-    CurlServiceRule,
-    CONST
+    CurlServiceRule
 )
 
+from framework.utils import (
+    CONST
+)
 
 logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
     NAMESPACE = 'default'
-    SAMPLE_PATH = '../../ray-operator/config/samples/'
+    SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
     YAMLs = ['ray_v1alpha1_rayservice.yaml']
 
     sample_yaml_files = []
     for filename in YAMLs:
-        with open(SAMPLE_PATH+filename, encoding="utf-8") as cr_yaml:
+        filepath = SAMPLE_PATH.joinpath(filename)
+        with open(filepath, encoding="utf-8") as cr_yaml:
             for k8s_object in yaml.safe_load_all(cr_yaml):
                 sample_yaml_files.append(
-                    {'path': SAMPLE_PATH+filename, 'name': filename, 'cr': k8s_object}
+                    {'path': filepath, 'name': filename, 'cr': k8s_object}
                 )
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])

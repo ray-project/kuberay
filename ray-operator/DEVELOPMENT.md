@@ -167,13 +167,15 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
   ```
 ### Running configuration tests locally.
 
-The sample RayCluster and RayService CRs under `ray-operator/config/samples` are tested in `tests/framework/test_sample_raycluster_yamls.py`
-and `tests/framework/test_sample_rayservice_yamls.py`.
+The sample RayCluster and RayService CRs under `ray-operator/config/samples` are tested in `tests/test_sample_raycluster_yamls.py`
+and `tests/test_sample_rayservice_yamls.py`. Currently, only a few of these sample configurations are tested in the CI. See
+[KubeRay issue #695](https://github.com/ray-project/kuberay/issues/695). 
+
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/framework/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/framework/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.1.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 ```
-Currently, only a few of these sample configurations are tested in the CI. See
-[KubeRay issue #695](https://github.com/ray-project/kuberay/issues/695).
+
+See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.
