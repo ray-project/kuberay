@@ -10,11 +10,6 @@ image:
 nameOverride: "kuberay-operator"
 fullnameOverride: "kuberay-operator"
 
-## Install Default RBAC roles and bindings
-rbac:
-  create: true
-  apiVersion: v1
-
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -50,7 +45,6 @@ readinessProbe:
   periodSeconds: 5
   failureThreshold: 5
 
-createCustomResource: true
 rbacEnable: true
 
 batchScheduler:
