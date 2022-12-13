@@ -10,6 +10,7 @@ import docker
 import kuberay_utils.utils as utils
 from framework.prototype import (
     CurlServiceRule,
+    EasyJobRule,
     RuleSet,
     show_cluster_info
 )
@@ -41,11 +42,7 @@ class BasicRayTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Ray cluster is running inside a local Kind environment.
-        # We use port mapping to connect to the Kind environment
-        # from another local ray container. The local ray container
-        # outside Kind environment has the same ray version as the
-        # ray cluster running inside Kind environment.
+        """Create a Kind cluster, a KubeRay operator, and a RayCluster."""
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
         image_dict = {
@@ -58,92 +55,38 @@ class BasicRayTestCase(unittest.TestCase):
                                      ray_version, ray_image)
 
     def test_simple_code(self):
-        # connect from a ray container client to ray cluster
-        # inside a local Kind environment and run a simple test
-        client = docker.from_env()
-        container = client.containers.run(ray_image,
-                                          remove=True,
-                                          detach=True,
-                                          tty=True,
-                                          network_mode='host')
-        rtn_code, output = container.exec_run(['python',
-                                               '-c', '''
+        """
+        Run a simple example in the head Pod to test the basic functionality of the Ray cluster.
+        The example is from https://docs.ray.io/en/latest/ray-core/walkthrough.html#running-a-task.
+        """
+        cluster_namespace = "default"
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        headpods = k8s_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
+        headpod_name = headpods.items[0].metadata.name
+        shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+            " python -c '''{}'''".format(
+'''
 import ray
-ray.init(address='ray://127.0.0.1:10001')
+ray.init()
 
-def retry_with_timeout(func, count=90):
-    tmp = 0
-    err = None
-    while tmp < count:
-        try:
-            return func()
-        except Exception as e:
-            err = e
-            tmp += 1
-    assert err is not None
-    raise err
-
+# Define the square task.
 @ray.remote
-def f(x):
+def square(x):
     return x * x
 
-def get_result():
-    futures = [f.remote(i) for i in range(4)]
-    print(ray.get(futures))
-    return 0
-rtn = retry_with_timeout(get_result)
-assert rtn == 0
-'''],
-                                              demux=True)
-        stdout_str, stderr_str = output
+# Launch four parallel square tasks.
+futures = [square.remote(i) for i in range(4)]
 
-        container.stop()
-
-        if stdout_str != b'[0, 1, 4, 9]\n':
-            logger.error('test_simple_code returns {}'.format(output))
-            raise Exception(('test_simple_code returns invalid result. ' +
-                             'Expected: {} Actual: {} Stderr: {}').format(
-                b'[0, 1, 4, 9]', stdout_str, stderr_str))
-        if rtn_code != 0:
-            msg = 'invalid return code {}'.format(rtn_code)
-            logger.error(msg)
-            raise Exception(msg)
-
-        client.close()
+# Check results.
+assert ray.get(futures) == [0, 1, 4, 9]
+'''
+            )
+        )
 
     def test_cluster_info(self):
-        # connect from a ray container client to ray cluster
-        # inside a local Kind environment and run a test that
-        # gets the amount of nodes in the ray cluster.
-        client = docker.from_env()
-        container = client.containers.run(ray_image,
-                                          remove=True,
-                                          detach=True,
-                                          tty=True,
-                                          network_mode='host')
-        rtn_code, output = container.exec_run(['python',
-                                               '-c', '''
-import ray
-ray.init(address='ray://127.0.0.1:10001')
-
-print(len(ray.nodes()))
-'''],
-                                              demux=True)
-        stdout_str, _ = output
-
-        container.stop()
-
-        if stdout_str != b'2\n':
-            logger.error('test_cluster_info returns {}'.format(output))
-            raise Exception(('test_cluster_info returns invalid result. ' +
-                             'Expected: {} Actual: {}').format(b'2',
-                                                               stdout_str))
-        if rtn_code != 0:
-            msg = 'invalid return code {}'.format(rtn_code)
-            logger.error(msg)
-            raise Exception(msg)
-
-        client.close()
+        """Execute "print(ray.cluster_resources())" in the head Pod."""
+        EasyJobRule().assert_rule()
 
 
 class RayFTTestCase(unittest.TestCase):
