@@ -10,7 +10,8 @@ from framework.utils import (
     shell_subprocess_run,
     shell_subprocess_check_output,
     CONST,
-    K8S_CLUSTER_MANAGER
+    K8S_CLUSTER_MANAGER,
+    OperatorManager
 )
 
 # Utility functions
@@ -35,52 +36,6 @@ def search_path(yaml_object, steps, default_value = None):
         else:
             return default_value
     return curr
-
-class OperatorManager:
-    """
-    OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
-    load images into an existing KinD cluster, and install CRD and KubeRay operator.
-    """
-    def __init__(self, docker_image_dict) -> None:
-        for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
-            if key not in docker_image_dict:
-                raise Exception(f"Image {key} does not exist!")
-        self.docker_image_dict = docker_image_dict
-
-    def prepare_operator(self):
-        """Prepare KubeRay operator for an existing KinD cluster"""
-        self.__kind_prepare_images()
-        self.__install_crd_and_operator()
-
-    def __kind_prepare_images(self):
-        """Download images and load images into KinD cluster"""
-        def download_images():
-            """Download Docker images from DockerHub"""
-            logger.info("Download Docker images: %s", self.docker_image_dict)
-            for key in self.docker_image_dict:
-                # Only pull the image from DockerHub when the image does not
-                # exist in the local docker registry.
-                image = self.docker_image_dict[key]
-                if shell_subprocess_run(
-                        f'docker image inspect {image} > /dev/null', check = False) != 0:
-                    shell_subprocess_run(f'docker pull {image}')
-                else:
-                    logger.info("Image %s exists", image)
-
-        download_images()
-        logger.info("Load images into KinD cluster")
-        for key in self.docker_image_dict:
-            image = self.docker_image_dict[key]
-            shell_subprocess_run(f'kind load docker-image {image}')
-
-    def __install_crd_and_operator(self):
-        """Install both CRD and KubeRay operator by kuberay-operator chart"""
-        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
-        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-        shell_subprocess_run(
-            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
-            f"--set image.repository={repo},image.tag={tag}"
-        )
 
 def check_pod_running(pods) -> bool:
     """"Check whether all of the pods are in running state"""
