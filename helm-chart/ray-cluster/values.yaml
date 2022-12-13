@@ -17,7 +17,6 @@ imagePullSecrets: []
   # - name: an-existing-secret
 
 head:
-  groupName: headgroup
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -39,8 +38,6 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
-  # labels:
-  #   key: value
   rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
@@ -95,9 +92,6 @@ worker:
   # disabled: true
   groupName: workergroup
   replicas: 1
-  type: worker
-  # labels:
-  #   key: value
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
@@ -157,8 +151,6 @@ additionalWorkerGroups:
     replicas: 1
     minReplicas: 1
     maxReplicas: 3
-    type: worker
-    labels: {}
     rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
