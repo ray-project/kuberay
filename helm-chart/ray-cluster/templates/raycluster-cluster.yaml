@@ -61,7 +61,7 @@ spec:
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
       metadata:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
-        labels:
+        labels: {{- toYaml .Values.head.labels | nindent 10 }}
 {{ include "ray-cluster.labels" . | indent 10 }}
 
   workerGroupSpecs:
@@ -117,7 +117,7 @@ spec:
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
       metadata:
         annotations: {{- toYaml $values.annotations | nindent 10 }}
-        labels:
+        labels: {{- toYaml $values.labels | nindent 10 }}
 {{ include "ray-cluster.labels" $ | indent 10 }}
   {{- end }}
   {{- end }}
@@ -172,6 +172,6 @@ spec:
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
-        labels:
+        labels: {{- toYaml .Values.worker.labels | nindent 10 }}
 {{ include "ray-cluster.labels" . | indent 10 }}
   {{- end }}
