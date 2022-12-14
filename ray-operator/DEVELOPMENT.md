@@ -37,21 +37,42 @@ export PATH="$GOROOT/bin:$PATH"
 
 Setting up workspace configuration is required because KubeRay contains multiple Go modules. See the [VS Code Go documentation](https://github.com/golang/vscode-go/blob/master/README.md#setting-up-your-workspace) for details.
 
-### Build the source code
+### End-to-end local development process on Kind
 
-```
-make build
-```
+```bash
+# Step 1: Create a Kind cluster
+kind create cluster --image=kindest/node:v1.24.0
 
-### Building the container image
+# Step 2: Modify KubeRay source code
+# For example, add a log "Hello KubeRay" in the function `Reconcile` in `raycluster_controller.go`.
 
-Once building is finished, push it to DockerHub so it can be pulled down and run in the Kubernetes cluster.
-
-```shell script
+# Step 3: Build a Docker image
+#         This command will copy the source code directory into the image, and build it.
+# Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
+
+# Step 4: Load the custom KubeRay image into the Kind cluster.
+# Command: kind load docker-image {IMG_REPO}:{IMG_TAG}
+kind load docker-image kuberay/operator:nightly
+
+# Step 5: Keep consistency
+# If you update RBAC or CRD, you need to synchronize them.
+# See the section "Consistency check" for more information.
+
+# Step 6: Install KubeRay operator with the custom image via local Helm chart
+# (Path: helm-chart/kuberay-operator)
+# Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} .
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
+
+# Step 7: Check the log of KubeRay operator
+kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
+# 2022-12-09T04:41:59.946Z        INFO    controllers.RayCluster  Hello KubeRay
+# ...
 ```
 
-> Note: replace `kuberay/operator:nightly` with your own registry, image name and tag.  
+* Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
+* The command `make docker-build` (Step 3) will also run `make test` (unit tests).
+* Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 ### Running the tests
 

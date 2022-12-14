@@ -12,8 +12,9 @@ BUILD_FLAGS = -ldflags="-X '${REPO}/cli/pkg/cmd/version.Version=$(VERSION)' \
 
 build:
 	go build $(BUILD_FLAGS) -o $(OUTPUT_NAME) main.go
-	chmod +x $(OUTPUT_NAME)
 
-# GOOS=linux GOARCH=amd64 make build
-# GOOS=darwin GOARCH=amd64 make build
-
+release:
+	GOOS=linux GOARCH=amd64 make build OUTPUT_NAME=_output/linux/amd64/$(OUTPUT_NAME)
+	GOOS=darwin GOARCH=amd64 make build OUTPUT_NAME=_output/darwin/amd64/$(OUTPUT_NAME)
+	zip _output/kuberay-$(VERSION)-linux-amd64.zip _output/linux/amd64/$(OUTPUT_NAME)
+	zip _output/kuberay-$(VERSION)-darwin-amd64.zip _output/darwin/amd64/$(OUTPUT_NAME)

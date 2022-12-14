@@ -9,7 +9,7 @@ See the [official Ray documentation](https://docs.ray.io/en/latest/cluster/kuber
 
 Start by deploying the latest stable version of the KubeRay operator:
 ```
-kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.3.0&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=90s"
 ```
 
 ### Deploy a cluster with autoscaling enabled
