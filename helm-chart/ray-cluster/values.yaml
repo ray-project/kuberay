@@ -38,7 +38,8 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
-  labels: {}
+  labels:
+    headkey: headval
   rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
@@ -93,7 +94,8 @@ worker:
   # disabled: true
   groupName: workergroup
   replicas: 1
-  labels: {}
+  labels:
+    workerkey: workerval
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
@@ -148,11 +150,12 @@ worker:
 additionalWorkerGroups:
   smallGroup:
     # Disabled by default
-    disabled: true
+    disabled: false
     replicas: 1
     minReplicas: 1
     maxReplicas: 3
-    labels: {}
+    labels:
+      smallGroupKey: smallGroupVal
     rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
