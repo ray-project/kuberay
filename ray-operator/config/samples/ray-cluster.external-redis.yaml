@@ -77,7 +77,7 @@ metadata:
   # An unique identifier for the head node and workers of this cluster.
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.1.0'
+  rayVersion: '2.2.0'
   headGroupSpec:
     serviceType: ClusterIP
     replicas: 1
@@ -90,7 +90,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.1.0
+            image: rayproject/ray:2.2.0
             env:
               # RAY_REDIS_ADDRESS can force ray to use external redis
               - name: RAY_REDIS_ADDRESS
@@ -128,7 +128,7 @@ spec:
               command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.1.0
+              image: rayproject/ray:2.2.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
