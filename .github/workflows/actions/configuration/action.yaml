@@ -49,12 +49,11 @@ runs:
     shell: bash
 
   - name: Run configuration tests for sample YAML files.
-    # compatibility test depends on operator & apiserver images built in previous steps.
+    # Depends on the KubeRay operator image built in previous steps.
     run: |
       echo "Using Ray image ${{ inputs.ray_version }}"
-      cd tests/framework
       GITHUB_ACTIONS=true \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
       OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
-      python test_sample_raycluster_yamls.py
+      python tests/test_sample_raycluster_yamls.py
     shell: bash

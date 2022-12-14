@@ -1,42 +1,17 @@
 """Configuration test framework for KubeRay"""
 from typing import List
-import logging
 import unittest
 import time
-import subprocess
-from pathlib import Path
-import yaml
-from kubernetes import client, config
 import jsonpatch
 
-# Global variables
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
-
-class CONST:
-    """Constants"""
-    __slots__ = ()
-    # Docker images
-    OPERATOR_IMAGE_KEY = "kuberay-operator-image"
-    RAY_IMAGE_KEY = "ray-image"
-
-    # Kubernetes API clients
-    K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
-    K8S_V1_CLIENT_KEY = "k8s-v1-api-client"
-
-    # Paths
-    REPO_ROOT = Path(__file__).absolute().parent.parent.parent
-    HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
-    DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
-
-    # Ray features
-    RAY_FT = "RAY_FT"
-    RAY_SERVICE = "RAY_SERVICE"
-
-CONST = CONST()
+from framework.utils import (
+    logger,
+    shell_subprocess_run,
+    shell_subprocess_check_output,
+    CONST,
+    K8S_CLUSTER_MANAGER,
+    OperatorManager
+)
 
 # Utility functions
 def search_path(yaml_object, steps, default_value = None):
@@ -61,107 +36,12 @@ def search_path(yaml_object, steps, default_value = None):
             return default_value
     return curr
 
-class KubernetesClusterManager:
-    """
-    KubernetesClusterManager controlls the lifecycle of KinD cluster and Kubernetes API client.
-    """
-    def __init__(self) -> None:
-        self.k8s_client_dict = {}
-
-    def delete_kind_cluster(self) -> None:
-        """Delete a KinD cluster"""
-        shell_subprocess_run("kind delete cluster")
-        for _, k8s_client in self.k8s_client_dict.items():
-            k8s_client.api_client.rest_client.pool_manager.clear()
-            k8s_client.api_client.close()
-        self.k8s_client_dict = {}
-
-    def create_kind_cluster(self, kind_config = None) -> None:
-        """Create a KinD cluster"""
-        # To use NodePort service, `kind_config` needs to set `extraPortMappings` properly.
-        kind_config = CONST.DEFAULT_KIND_CONFIG if not kind_config else kind_config
-        shell_subprocess_run(f"kind create cluster --wait 900s --config {kind_config}")
-        config.load_kube_config()
-        self.k8s_client_dict.update({
-            CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
-            CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi()
-        })
-
-    def check_cluster_exist(self) -> bool:
-        """Check whether KinD cluster exists or not"""
-        return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
-
-K8S_CLUSTER_MANAGER = KubernetesClusterManager()
-
-class OperatorManager:
-    """
-    OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
-    load images into an existing KinD cluster, and install CRD and KubeRay operator.
-    """
-    def __init__(self, docker_image_dict) -> None:
-        for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
-            if key not in docker_image_dict:
-                raise Exception(f"Image {key} does not exist!")
-        self.docker_image_dict = docker_image_dict
-
-    def prepare_operator(self):
-        """Prepare KubeRay operator for an existing KinD cluster"""
-        self.__kind_prepare_images()
-        self.__install_crd_and_operator()
-
-    def __kind_prepare_images(self):
-        """Download images and load images into KinD cluster"""
-        def download_images():
-            """Download Docker images from DockerHub"""
-            logger.info("Download Docker images: %s", self.docker_image_dict)
-            for key in self.docker_image_dict:
-                # Only pull the image from DockerHub when the image does not
-                # exist in the local docker registry.
-                image = self.docker_image_dict[key]
-                if shell_subprocess_run(
-                        f'docker image inspect {image} > /dev/null', check = False) != 0:
-                    shell_subprocess_run(f'docker pull {image}')
-                else:
-                    logger.info("Image %s exists", image)
-
-        download_images()
-        logger.info("Load images into KinD cluster")
-        for key in self.docker_image_dict:
-            image = self.docker_image_dict[key]
-            shell_subprocess_run(f'kind load docker-image {image}')
-
-    def __install_crd_and_operator(self):
-        """Install both CRD and KubeRay operator by kuberay-operator chart"""
-        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
-        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-        shell_subprocess_run(
-            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
-            f"--set image.repository={repo},image.tag={tag}"
-        )
-
 def check_pod_running(pods) -> bool:
     """"Check whether all of the pods are in running state"""
     for pod in pods:
         if pod.status.phase != 'Running':
             return False
     return True
-
-def shell_subprocess_run(command, check = True):
-    """
-    Command will be executed through the shell. If check=True, it will raise an error when
-    the returncode of the execution is not 0.
-    """
-    logger.info("Execute command: %s", command)
-    return subprocess.run(command, shell = True, check = check).returncode
-
-def shell_subprocess_check_output(command):
-    """
-    Run command and return STDOUT as encoded bytes.
-    """
-    logger.info("Execute command (check_output): %s", command)
-    output = subprocess.check_output(command, shell=True)
-    logger.info("Output: %s", output)
-    return output
 
 def get_expected_head_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
@@ -519,58 +399,3 @@ class GeneralTestCase(unittest.TestCase):
         except Exception as ex:
             logger.error(str(ex))
             K8S_CLUSTER_MANAGER.delete_kind_cluster()
-
-if __name__ == '__main__':
-    TEMPLATE_NAME = 'config/ray-cluster.mini.yaml.template'
-    NAMESPACE = 'default'
-    with open(TEMPLATE_NAME, encoding="utf-8") as base_yaml:
-        base_cr = yaml.load(base_yaml, Loader=yaml.FullLoader)
-    patch_list = [
-        # Pass
-        jsonpatch.JsonPatch([{'op': 'replace',
-            'path': '/spec/headGroupSpec/template/spec/containers/0/name','value': 'ray-head-1'}
-        ]),
-        # Pass
-        jsonpatch.JsonPatch([{'op': 'replace',
-            'path': '/spec/headGroupSpec/template/spec/containers/0/name', 'value': 'ray-head-2'}
-        ]),
-        # Reproduce #587: https://github.com/ray-project/kuberay/pull/587
-        jsonpatch.JsonPatch([
-            {'op': 'replace', 'path': '/spec/workerGroupSpecs/0/replicas', 'value': 2},
-            {'op': 'add', 'path': '/spec/workerGroupSpecs/0/template/metadata/name', 'value': 'ha'}
-        ]),
-        # Reproduce #585: https://github.com/ray-project/kuberay/pull/585
-        jsonpatch.JsonPatch([{'op': 'add',
-            'path': '/spec/headGroupSpec/rayStartParams/object-manager-port', 'value': '12345'}
-        ]),
-        # Reproduce: (Fixed by pull request #572. Use v0.3.0 to reproduce.)
-        #   #572: https://github.com/ray-project/kuberay/pull/572
-        #   #530: https://github.com/ray-project/kuberay/pull/530
-        jsonpatch.JsonPatch([{'op': 'add',
-            'path': '/spec/headGroupSpec/template/metadata/labels/app.kubernetes.io~1name',
-            'value': 'ray'}
-        ]),
-        # Reproduce #529: https://github.com/ray-project/kuberay/pull/529
-        jsonpatch.JsonPatch([
-            {'op': 'replace',
-                'path': '/spec/headGroupSpec/template/spec/containers/0/resources/requests/memory',
-                'value': '256Mi'},
-            {'op': 'replace',
-                'path': '/spec/headGroupSpec/template/spec/containers/0/resources/limits/memory',
-                'value': '512Mi'}
-        ])
-    ]
-
-    rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
-    mut = Mutator(base_cr, patch_list)
-    image_dict = {
-        CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.2.0',
-        CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
-    }
-
-    test_cases = unittest.TestSuite()
-    for new_cr in mut.mutate():
-        addEvent = RayClusterAddCREvent(new_cr, [rs], 90, NAMESPACE)
-        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
-    runner = unittest.TextTestRunner()
-    runner.run(test_cases)

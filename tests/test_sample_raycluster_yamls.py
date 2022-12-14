@@ -1,17 +1,20 @@
 ''' Test sample RayCluster YAML files to catch invalid and outdated ones. '''
-import git
+import logging
 import unittest
 import os
-import logging
+import git
 import yaml
 
-from prototype import (
+from framework.prototype import (
     RuleSet,
     GeneralTestCase,
     RayClusterAddCREvent,
     HeadPodNameRule,
     EasyJobRule,
     HeadSvcRule,
+)
+
+from framework.utils import (
     CONST
 )
 
@@ -19,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
     NAMESPACE = 'default'
-    SAMPLE_PATH = '../../ray-operator/config/samples/'
-    KUBERAY_GIT_ROOT = '../..'
+    SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
 
     sample_yaml_files = []
 
@@ -38,14 +40,14 @@ if __name__ == '__main__':
     # Paths of untracked files, specified as strings, relative to KubeRay
     # git root directory.
     untracked_files = set(
-        git.Repo(KUBERAY_GIT_ROOT).untracked_files
+        git.Repo(CONST.REPO_ROOT).untracked_files
     )
 
     for file in os.scandir(SAMPLE_PATH):
         if not file.is_file():
             continue
         # For local development, skip untracked files.
-        if os.path.relpath(file.path, KUBERAY_GIT_ROOT) in untracked_files:
+        if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
         with open(file, encoding="utf-8") as cr_yaml:
             if GITHUB_ACTIONS and file.name not in github_action_tests:
