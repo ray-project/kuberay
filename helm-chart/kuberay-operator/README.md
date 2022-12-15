@@ -35,7 +35,7 @@ helm version
   helm install kuberay-operator .
   ```
 
-* Install KubeRay operator only: Use Helm's built-in `--skip-crds` flag. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
+* Install KubeRay operator without installing CRDs: Use Helm's built-in `--skip-crds` flag. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
   ```sh
   # Step 1: Install KubeRay operator only.
   helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0 --skip-crds
