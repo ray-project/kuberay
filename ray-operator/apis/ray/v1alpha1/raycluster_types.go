@@ -21,8 +21,8 @@ type RayClusterSpec struct {
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions  *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
-	ServiceAnnotations map[string]string  `json:"serviceAnnotations,omitempty"`
+	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod

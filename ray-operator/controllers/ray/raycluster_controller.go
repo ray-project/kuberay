@@ -311,7 +311,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 				labels[common.KubernetesApplicationNameLabelKey] = val
 			}
 			annotations := make(map[string]string)
-			for k, v := range instance.Spec.ServiceAnnotations {
+			for k, v := range instance.Spec.HeadServiceAnnotations {
 				annotations[k] = v
 			}
 			raySvc, err = common.BuildServiceForHeadPod(*instance, labels, annotations)

@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -278,8 +278,8 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 		*out = new(AutoscalerOptions)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ServiceAnnotations != nil {
-		in, out := &in.ServiceAnnotations, &out.ServiceAnnotations
+	if in.HeadServiceAnnotations != nil {
+		in, out := &in.HeadServiceAnnotations, &out.HeadServiceAnnotations
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
