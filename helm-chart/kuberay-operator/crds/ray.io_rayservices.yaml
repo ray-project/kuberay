@@ -5963,6 +5963,10 @@ spec:
                     description: RayVersion is the version of ray being used. this
                       affects the command used to start ray
                     type: string
+                  serviceAnnotations:
+                    additionalProperties:
+                      type: string
+                    type: object
                   workerGroupSpecs:
                     description: WorkerGroupSpecs are the specs for the worker pods
                     items:
