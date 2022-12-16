@@ -35,6 +35,17 @@ helm version
   helm install kuberay-operator .
   ```
 
+* Install KubeRay operator without installing CRDs
+  * In some cases, the installation of the CRDs and the installation of the operator may require different levels of admin permissions, so these two installations could be handled as different steps by different roles.
+  * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
+  ```sh
+  # Step 1: Install CRDs only (for cluster admin)
+  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.4.0&timeout=90s"
+
+  # Step 2: Install KubeRay operator only. (for developer)
+  helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0 --skip-crds
+  ``` 
+
 ## List the chart
 
 To list the `my-release` deployment:
