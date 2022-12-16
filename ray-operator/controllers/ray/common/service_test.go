@@ -63,7 +63,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 }
 
 func TestBuildServiceForHeadPod(t *testing.T) {
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil)
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[RayClusterLabelKey]
@@ -96,7 +96,8 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	labels := make(map[string]string)
 	labels[KubernetesApplicationNameLabelKey] = "testname"
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels)
+
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[KubernetesApplicationNameLabelKey]
@@ -111,5 +112,17 @@ func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	expectedLength := 5
 	if actualLength != expectedLength {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
+	}
+}
+
+func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
+	annotations := make(map[string]string)
+	annotations["key1"] = "testvalue1"
+	annotations["key2"] = "testvalue2"
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, annotations)
+	assert.Nil(t, err)
+
+	if !reflect.DeepEqual(svc.ObjectMeta.Annotations, annotations) {
+		t.Fatalf("Expected `%v` but got `%v`", annotations, svc.ObjectMeta.Annotations)
 	}
 }

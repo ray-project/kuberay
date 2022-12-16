@@ -319,7 +319,7 @@ func setupTest(t *testing.T) {
 		},
 	}
 
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil)
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
@@ -904,7 +904,7 @@ func TestGetHeadServiceIP(t *testing.T) {
 	defer tearDown(t)
 
 	headServiceIP := "1.2.3.4"
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil)
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}

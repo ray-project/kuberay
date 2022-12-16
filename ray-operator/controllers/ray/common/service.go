@@ -21,7 +21,7 @@ func HeadServiceLabels(cluster rayiov1alpha1.RayCluster) map[string]string {
 
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]string) (*corev1.Service, error) {
+func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -34,11 +34,16 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		}
 	}
 
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateServiceName(cluster.Name),
-			Namespace: cluster.Namespace,
-			Labels:    labels,
+			Name:        utils.GenerateServiceName(cluster.Name),
+			Namespace:   cluster.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
@@ -61,7 +66,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
 func BuildHeadServiceForRayService(rayService rayiov1alpha1.RayService, rayCluster rayiov1alpha1.RayCluster) (*corev1.Service, error) {
-	service, err := BuildServiceForHeadPod(rayCluster, nil)
+	service, err := BuildServiceForHeadPod(rayCluster, nil, nil)
 	if err != nil {
 		return nil, err
 	}

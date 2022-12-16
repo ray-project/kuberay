@@ -310,7 +310,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
 				labels[common.KubernetesApplicationNameLabelKey] = val
 			}
-			raySvc, err = common.BuildServiceForHeadPod(*instance, labels)
+			annotations := make(map[string]string)
+			for k, v := range instance.Spec.HeadServiceAnnotations {
+				annotations[k] = v
+			}
+			raySvc, err = common.BuildServiceForHeadPod(*instance, labels, annotations)
 		} else if serviceType == common.AgentService {
 			raySvc, err = common.BuildDashboardService(*instance)
 		}
