@@ -65,23 +65,7 @@ class BasicRayTestCase(unittest.TestCase):
             namespace = cluster_namespace, label_selector='ray.io/node-type=head')
         headpod_name = headpods.items[0].metadata.name
         shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
-            " python -c '''{}'''".format(
-'''
-import ray
-ray.init()
-
-# Define the square task.
-@ray.remote
-def square(x):
-    return x * x
-
-# Launch four parallel square tasks.
-futures = [square.remote(i) for i in range(4)]
-
-# Check results.
-assert ray.get(futures) == [0, 1, 4, 9]
-'''
-            )
+            " python samples/simple_code.py"
         )
 
     def test_cluster_info(self):
