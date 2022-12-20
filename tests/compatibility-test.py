@@ -5,7 +5,6 @@ import time
 import os
 import random
 import string
-import docker
 
 import kuberay_utils.utils as utils
 from framework.prototype import (
@@ -113,33 +112,40 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
+        """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
         cluster_namespace = "default"
-        docker_client = docker.from_env()
-        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                          network_mode='host', command=["/bin/sh"])
-        # Deploy a model with ray serve
-        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info(f'namespace: {ray_namespace}')
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        headpods = k8s_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
+        headpod_name = headpods.items[0].metadata.name
 
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_1.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
+        # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
+        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
+        logger.info('namespace: %s', ray_namespace)
+
+        # Deploy a Ray Serve model.
+        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+            f" python samples/test_ray_serve_1.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
+            raise Exception(
+                f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}."
+            )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
-        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
+        # KubeRay only allows at most 1 head pod per RayCluster instance. In addition, if no
+        # head pod exists at this moment, it indicates that the head pod crashes unexpectedly.
         headpods = utils.get_pod(namespace=cluster_namespace,
             label_selector='ray.io/node-type=head')
-        assert(len(headpods.items) == 1)
+        assert len(headpods.items) == 1
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
-        # will terminate.
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
+        # node pod will be terminated.
         exec_command = ['pkill gcs_server']
         utils.pod_exec_command(pod_name=old_head_pod_name,
             namespace=cluster_namespace, exec_command=exec_command)
@@ -149,16 +155,19 @@ class RayFTTestCase(unittest.TestCase):
             cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
+        headpods = k8s_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
+        headpod_name = headpods.items[0].metadata.name
+        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+            f" python samples/test_ray_serve_2.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
-
-        container.stop()
-        docker_client.close()
+            raise Exception(
+                f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}."
+            )
 
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""

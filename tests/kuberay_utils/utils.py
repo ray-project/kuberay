@@ -104,33 +104,6 @@ def create_ray_service(template_name, ray_version, ray_image):
         logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
     raise Exception("create_ray_service fails")
 
-def copy_to_container(container, src, dest, filename):
-    oldpwd = os.getcwd()
-    try:
-        os.chdir(src)
-        with tempfile.NamedTemporaryFile(suffix='.tar') as tf:
-            with tarfile.open(fileobj=tf, mode='w') as tar:
-                try:
-                    tar.add(filename)
-                finally:
-                    tar.close()
-                with open(tf.name, 'rb') as data:
-                    container.put_archive(dest, data.read())
-    finally:
-        os.chdir(oldpwd)
-
-def exec_run_container(container, cmd, timeout_sec, silent = False):
-    """Executes the command `cmd` in `container`, and logs the output if `silent` is False."""
-    timeout_cmd = 'timeout {}s {}'.format(timeout_sec, cmd)
-    # If the exit_code is 124, 125, 126, 127, 137, it is related to the `timeout` command.
-    # See https://manpages.courier-mta.org/htmlman1/timeout.1.html for more details.
-    exit_code, output = container.exec_run(cmd = timeout_cmd)
-    if not silent:
-        logger.info(f"cmd: {timeout_cmd}")
-        logger.info(f"exit_code: {exit_code}")
-        logger.info(f"output: {output.decode()}")
-    return exit_code, output.decode()
-
 def wait_for_condition(
         condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
 ):
