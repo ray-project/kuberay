@@ -38,6 +38,7 @@ kuberay_operator_image = 'kuberay/operator:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
+    """Test the basic functionalities of RayCluster by executing simple jobs."""
     cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
 
     @classmethod
@@ -160,33 +161,40 @@ class RayFTTestCase(unittest.TestCase):
         docker_client.close()
 
     def test_detached_actor(self):
+        """Kill GCS process on the head Pod and then test a detached actor."""
         cluster_namespace = "default"
-        docker_client = docker.from_env()
-        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                            network_mode='host', command=["/bin/sh"])
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        headpods = k8s_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
+        headpod_name = headpods.items[0].metadata.name
+
+        # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info(f'namespace: {ray_namespace}')
+        logger.info('namespace: %s', ray_namespace)
 
         # Register a detached actor
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_1.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
+        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+            f" python samples/test_detached_actor_1.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
+            raise Exception(
+                f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}."
+            )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
-        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
+        # KubeRay only allows at most 1 head pod per RayCluster instance. In addition, if no
+        # head pod exists at this moment, it indicates that the head pod crashes unexpectedly.
         headpods = utils.get_pod(namespace=cluster_namespace,
             label_selector='ray.io/node-type=head')
-        assert(len(headpods.items) == 1)
+        assert len(headpods.items) == 1
         old_head_pod = headpods.items[0]
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
-        # will terminate.
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
+        # node pod will be terminated.
         exec_command = ['pkill gcs_server']
         utils.pod_exec_command(pod_name=old_head_pod_name,
             namespace=cluster_namespace, exec_command=exec_command)
@@ -196,18 +204,22 @@ class RayFTTestCase(unittest.TestCase):
             cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
-        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
-        #        `test_detached_actor_2.py` will retry until a Ray client connection succeeds.
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_2.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
+        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds
+        # to relaunch actors. Hence, `test_detached_actor_2.py` will retry until a Ray client
+        # connection succeeds.
+        headpods = k8s_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
+        headpod_name = headpods.items[0].metadata.name
+        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+            f" python samples/test_detached_actor_2.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
-
-        container.stop()
-        docker_client.close()
+            raise Exception(
+                f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}."
+            )
 
 class RayServiceTestCase(unittest.TestCase):
     """Integration tests for RayService"""
