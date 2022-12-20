@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 from string import Template
 
-import os
 import logging
-import tarfile
 import time
 import tempfile
 import yaml
@@ -15,12 +13,9 @@ from framework.prototype import (
 )
 
 from framework.utils import (
-    shell_subprocess_run,
     CONST,
     K8S_CLUSTER_MANAGER
 )
-
-raycluster_service_file = CONST.REPO_ROOT.joinpath("tests/config/raycluster-service.yaml")
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -56,8 +51,6 @@ def create_ray_cluster(template_name, ray_version, ray_image):
             break
 
     try:
-        # Deploy a NodePort service to expose ports for users.
-        shell_subprocess_run(f'kubectl apply -f {raycluster_service_file}')
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
