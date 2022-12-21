@@ -127,3 +127,19 @@ def shell_subprocess_check_output(command):
     output = subprocess.check_output(command, shell=True)
     logger.info("Output: %s", output)
     return output
+
+def get_pod(namespace, label_selector):
+    """Gets pods in the `namespace`. Returns the first pod that has `label_filter`.
+    Returns None if the number of matches is not equal to 1.
+    """
+    pods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
+            namespace = namespace, label_selector = label_selector
+        )
+    if len(pods.items) != 1:
+        logger.warning("No match for selector `%s` in namespace %s.", label_selector, namespace)
+        return None
+    return pods.items[0]
+
+def get_head_pod(namespace):
+    """Gets a head pod in the `namespace`. Returns None if there are no matches."""
+    return get_pod(namespace, 'ray.io/node-type=head')

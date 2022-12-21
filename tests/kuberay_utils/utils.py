@@ -13,6 +13,7 @@ from framework.prototype import (
 )
 
 from framework.utils import (
+    get_head_pod,
     CONST,
     K8S_CLUSTER_MANAGER
 )
@@ -124,11 +125,6 @@ def wait_for_condition(
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
 
-def get_pod(namespace, label_selector):
-    return K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
-            namespace = namespace, label_selector = label_selector
-        )
-
 def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
     exec_command = ['/bin/sh', '-c'] + exec_command
     k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
@@ -173,17 +169,9 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
     k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
     def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
         all_pods = k8s_v1_api.list_namespaced_pod(namespace = namespace)
-        headpods = get_pod(namespace=namespace, label_selector='ray.io/node-type=head')
-        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. On the other
-        # hands, when we kill a worker, the operator will reconcile a new one immediately without waiting
-        # for the Pod termination to complete. Hence, it is possible to have more than `worker.Replicas`
-        # worker pods in the cluster.
-        if len(headpods.items) != 1:
-            logger.info('Number of headpods is not equal to 1.')
-            return False
-        new_head_pod = headpods.items[0]
-        new_head_pod_name = new_head_pod.metadata.name
-        new_restart_count = new_head_pod.status.container_statuses[0].restart_count
+        headpod = get_head_pod(namespace)
+        new_head_pod_name = headpod.metadata.name
+        new_restart_count = headpod.status.container_statuses[0].restart_count
         # The default container restartPolicy of a Pod is `Always`. Hence, when GCS server is killed,
         # the head pod will restart the old one rather than create a new one.
         if new_head_pod_name != old_head_pod_name:

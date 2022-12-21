@@ -15,6 +15,7 @@ from framework.prototype import (
 )
 
 from framework.utils import (
+    get_head_pod,
     shell_subprocess_run,
     CONST,
     K8S_CLUSTER_MANAGER,
@@ -60,10 +61,8 @@ class BasicRayTestCase(unittest.TestCase):
         The example is from https://docs.ray.io/en/latest/ray-core/walkthrough.html#running-a-task.
         """
         cluster_namespace = "default"
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
         shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
             " python samples/simple_code.py"
         )
@@ -114,10 +113,8 @@ class RayFTTestCase(unittest.TestCase):
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
         cluster_namespace = "default"
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
 
         # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
@@ -135,12 +132,7 @@ class RayFTTestCase(unittest.TestCase):
                 f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}."
             )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance. In addition, if no
-        # head pod exists at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_namespace,
-            label_selector='ray.io/node-type=head')
-        assert len(headpods.items) == 1
-        old_head_pod = headpods.items[0]
+        old_head_pod = get_head_pod(cluster_namespace)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
@@ -155,9 +147,8 @@ class RayFTTestCase(unittest.TestCase):
             cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
         exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
             f" python samples/test_ray_serve_2.py {ray_namespace}",
             check = False
@@ -172,10 +163,8 @@ class RayFTTestCase(unittest.TestCase):
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""
         cluster_namespace = "default"
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
 
         # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
@@ -193,12 +182,7 @@ class RayFTTestCase(unittest.TestCase):
                 f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}."
             )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance. In addition, if no
-        # head pod exists at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_namespace,
-            label_selector='ray.io/node-type=head')
-        assert len(headpods.items) == 1
-        old_head_pod = headpods.items[0]
+        old_head_pod = get_head_pod(cluster_namespace)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
@@ -216,9 +200,8 @@ class RayFTTestCase(unittest.TestCase):
         # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds
         # to relaunch actors. Hence, `test_detached_actor_2.py` will retry until a Ray client
         # connection succeeds.
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
         exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
             f" python samples/test_detached_actor_2.py {ray_namespace}",
             check = False
