@@ -6,7 +6,6 @@ import time
 import tempfile
 import yaml
 
-from kubernetes.stream import stream
 from framework.prototype import (
     RayClusterAddCREvent,
     RayServiceAddCREvent
@@ -124,20 +123,6 @@ def wait_for_condition(
     if last_ex is not None:
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
-
-def pod_exec_command(pod_name, namespace, exec_command, stderr=True, stdin=False, stdout=True, tty=False, silent=False):
-    exec_command = ['/bin/sh', '-c'] + exec_command
-    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-    resp = stream(k8s_v1_api.connect_get_namespaced_pod_exec,
-                pod_name,
-                namespace,
-                command=exec_command,
-                stderr=stderr, stdin=stdin,
-                stdout=stdout, tty=tty)
-    if not silent:
-        logger.info(f"cmd: {exec_command}")
-        logger.info(f"response: {resp}")
-    return resp
 
 def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
     """

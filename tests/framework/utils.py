@@ -143,3 +143,7 @@ def get_pod(namespace, label_selector):
 def get_head_pod(namespace):
     """Gets a head pod in the `namespace`. Returns None if there are no matches."""
     return get_pod(namespace, 'ray.io/node-type=head')
+
+def pod_exec_command(pod_name, namespace, exec_command, check = True):
+    """kubectl exec the `exec_command` in the given `pod_name` Pod in the given `namespace`."""
+    return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)

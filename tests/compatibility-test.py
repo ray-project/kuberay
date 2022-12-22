@@ -16,6 +16,7 @@ from framework.prototype import (
 
 from framework.utils import (
     get_head_pod,
+    pod_exec_command,
     shell_subprocess_run,
     CONST,
     K8S_CLUSTER_MANAGER,
@@ -39,7 +40,7 @@ kuberay_operator_image = 'kuberay/operator:nightly'
 
 class BasicRayTestCase(unittest.TestCase):
     """Test the basic functionalities of RayCluster by executing simple jobs."""
-    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
 
     @classmethod
     def setUpClass(cls):
@@ -52,8 +53,7 @@ class BasicRayTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_ray_cluster(BasicRayTestCase.cluster_template_file,
-                                     ray_version, ray_image)
+        utils.create_ray_cluster(BasicRayTestCase.cluster_template, ray_version, ray_image)
 
     def test_simple_code(self):
         """
@@ -63,9 +63,7 @@ class BasicRayTestCase(unittest.TestCase):
         cluster_namespace = "default"
         headpod = get_head_pod(cluster_namespace)
         headpod_name = headpod.metadata.name
-        shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
-            " python samples/simple_code.py"
-        )
+        pod_exec_command(headpod_name, cluster_namespace, "python samples/simple_code.py")
 
     def test_cluster_info(self):
         """Execute "print(ray.cluster_resources())" in the head Pod."""
@@ -73,7 +71,8 @@ class BasicRayTestCase(unittest.TestCase):
 
 
 class RayFTTestCase(unittest.TestCase):
-    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
+    """Test Ray GCS Fault Tolerance"""
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
 
     @classmethod
     def setUpClass(cls):
@@ -87,8 +86,7 @@ class RayFTTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_ray_cluster(RayFTTestCase.cluster_template_file,
-                                     ray_version, ray_image)
+        utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
 
     @unittest.skip("Skip test_kill_head due to its flakiness.")
     def test_kill_head(self):
@@ -121,7 +119,7 @@ class RayFTTestCase(unittest.TestCase):
         logger.info('namespace: %s', ray_namespace)
 
         # Deploy a Ray Serve model.
-        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
             f" python samples/test_ray_serve_1.py {ray_namespace}",
             check = False
         )
@@ -138,9 +136,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
         # node pod will be terminated.
-        exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_namespace, exec_command=exec_command)
+        pod_exec_command(old_head_pod_name, cluster_namespace, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
@@ -149,7 +145,7 @@ class RayFTTestCase(unittest.TestCase):
         # Try to connect to the deployed model again
         headpod = get_head_pod(cluster_namespace)
         headpod_name = headpod.metadata.name
-        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
             f" python samples/test_ray_serve_2.py {ray_namespace}",
             check = False
         )
@@ -171,7 +167,7 @@ class RayFTTestCase(unittest.TestCase):
         logger.info('namespace: %s', ray_namespace)
 
         # Register a detached actor
-        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
             f" python samples/test_detached_actor_1.py {ray_namespace}",
             check = False
         )
@@ -188,9 +184,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
         # node pod will be terminated.
-        exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_namespace, exec_command=exec_command)
+        pod_exec_command(old_head_pod_name, cluster_namespace, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
@@ -202,7 +196,7 @@ class RayFTTestCase(unittest.TestCase):
         # connection succeeds.
         headpod = get_head_pod(cluster_namespace)
         headpod_name = headpod.metadata.name
-        exit_code = shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
             f" python samples/test_detached_actor_2.py {ray_namespace}",
             check = False
         )
@@ -215,7 +209,7 @@ class RayFTTestCase(unittest.TestCase):
 
 class RayServiceTestCase(unittest.TestCase):
     """Integration tests for RayService"""
-    service_template_file = 'tests/config/ray-service.yaml.template'
+    service_template = 'tests/config/ray-service.yaml.template'
 
     # The previous logic for testing updates was problematic.
     # We need to test RayService updates.
@@ -235,7 +229,7 @@ class RayServiceTestCase(unittest.TestCase):
     def test_ray_serve_work(self):
         """Create a RayService, send a request to RayService via `curl`, and compare the result."""
         cr_event = utils.create_ray_service(
-            RayServiceTestCase.service_template_file, ray_version, ray_image)
+            RayServiceTestCase.service_template, ray_version, ray_image)
         # When Pods are READY and RUNNING, RayService still needs tens of seconds to be ready
         # for serving requests. This `sleep` function is a workaround, and should be removed
         # when https://github.com/ray-project/kuberay/pull/730 is merged.
