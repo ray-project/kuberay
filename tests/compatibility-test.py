@@ -5,7 +5,6 @@ import time
 import os
 import random
 import string
-import docker
 
 import kuberay_utils.utils as utils
 from framework.prototype import (
@@ -16,6 +15,8 @@ from framework.prototype import (
 )
 
 from framework.utils import (
+    get_head_pod,
+    pod_exec_command,
     shell_subprocess_run,
     CONST,
     K8S_CLUSTER_MANAGER,
@@ -38,7 +39,8 @@ kuberay_operator_image = 'kuberay/operator:nightly'
 
 
 class BasicRayTestCase(unittest.TestCase):
-    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
+    """Test the basic functionalities of RayCluster by executing simple jobs."""
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
 
     @classmethod
     def setUpClass(cls):
@@ -51,8 +53,7 @@ class BasicRayTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_ray_cluster(BasicRayTestCase.cluster_template_file,
-                                     ray_version, ray_image)
+        utils.create_ray_cluster(BasicRayTestCase.cluster_template, ray_version, ray_image)
 
     def test_simple_code(self):
         """
@@ -60,29 +61,9 @@ class BasicRayTestCase(unittest.TestCase):
         The example is from https://docs.ray.io/en/latest/ray-core/walkthrough.html#running-a-task.
         """
         cluster_namespace = "default"
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cluster_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
-        shell_subprocess_run(f"kubectl exec {headpod_name} -n {cluster_namespace} --" +
-            " python -c '''{}'''".format(
-'''
-import ray
-ray.init()
-
-# Define the square task.
-@ray.remote
-def square(x):
-    return x * x
-
-# Launch four parallel square tasks.
-futures = [square.remote(i) for i in range(4)]
-
-# Check results.
-assert ray.get(futures) == [0, 1, 4, 9]
-'''
-            )
-        )
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
+        pod_exec_command(headpod_name, cluster_namespace, "python samples/simple_code.py")
 
     def test_cluster_info(self):
         """Execute "print(ray.cluster_resources())" in the head Pod."""
@@ -90,7 +71,8 @@ assert ray.get(futures) == [0, 1, 4, 9]
 
 
 class RayFTTestCase(unittest.TestCase):
-    cluster_template_file = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
+    """Test Ray GCS Fault Tolerance"""
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
 
     @classmethod
     def setUpClass(cls):
@@ -104,8 +86,7 @@ class RayFTTestCase(unittest.TestCase):
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-        utils.create_ray_cluster(RayFTTestCase.cluster_template_file,
-                                     ray_version, ray_image)
+        utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
 
     @unittest.skip("Skip test_kill_head due to its flakiness.")
     def test_kill_head(self):
@@ -128,106 +109,107 @@ class RayFTTestCase(unittest.TestCase):
             raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
+        """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
         cluster_namespace = "default"
-        docker_client = docker.from_env()
-        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                          network_mode='host', command=["/bin/sh"])
-        # Deploy a model with ray serve
-        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info(f'namespace: {ray_namespace}')
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
 
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_1.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_1.py {ray_namespace}', timeout_sec = 180)
+        # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
+        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
+        logger.info('Ray namespace: %s', ray_namespace)
+
+        # Deploy a Ray Serve model.
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
+            f" python samples/test_ray_serve_1.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_ray_serve_1.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
+            raise Exception(
+                f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}."
+            )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
-        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_namespace,
-            label_selector='ray.io/node-type=head')
-        assert(len(headpods.items) == 1)
-        old_head_pod = headpods.items[0]
+        old_head_pod = get_head_pod(cluster_namespace)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
-        # will terminate.
-        exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_namespace, exec_command=exec_command)
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
+        # node pod will be terminated.
+        pod_exec_command(old_head_pod_name, cluster_namespace, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
             cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_ray_serve_2.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_ray_serve_2.py {ray_namespace}', timeout_sec = 180)
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
+            f" python samples/test_ray_serve_2.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_ray_serve_2.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
-
-        container.stop()
-        docker_client.close()
+            raise Exception(
+                f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}."
+            )
 
     def test_detached_actor(self):
+        """Kill GCS process on the head Pod and then test a detached actor."""
         cluster_namespace = "default"
-        docker_client = docker.from_env()
-        container = docker_client.containers.run(ray_image, remove=True, detach=True, stdin_open=True, tty=True,
-                                            network_mode='host', command=["/bin/sh"])
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
+
+        # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info(f'namespace: {ray_namespace}')
+        logger.info('Ray namespace: %s', ray_namespace)
 
         # Register a detached actor
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_1.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_1.py {ray_namespace}', timeout_sec = 180)
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
+            f" python samples/test_detached_actor_1.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_detached_actor_1.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
+            raise Exception(
+                f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}."
+            )
 
-        # KubeRay only allows at most 1 head pod per RayCluster instance at the same time. In addition,
-        # if we have 0 head pods at this moment, it indicates that the head pod crashes unexpectedly.
-        headpods = utils.get_pod(namespace=cluster_namespace,
-            label_selector='ray.io/node-type=head')
-        assert(len(headpods.items) == 1)
-        old_head_pod = headpods.items[0]
+        old_head_pod = get_head_pod(cluster_namespace)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head node pod
-        # will terminate.
-        exec_command = ['pkill gcs_server']
-        utils.pod_exec_command(pod_name=old_head_pod_name,
-            namespace=cluster_namespace, exec_command=exec_command)
+        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
+        # node pod will be terminated.
+        pod_exec_command(old_head_pod_name, cluster_namespace, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
         utils.wait_for_new_head(old_head_pod_name, restart_count,
             cluster_namespace, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
-        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds to relaunch actors. Hence,
-        #        `test_detached_actor_2.py` will retry until a Ray client connection succeeds.
-        utils.copy_to_container(container, 'tests/scripts', '/usr/local/', 'test_detached_actor_2.py')
-        exit_code, _ = utils.exec_run_container(container, f'python3 /usr/local/test_detached_actor_2.py {ray_namespace}', timeout_sec = 180)
+        # [Note] When all pods become running and ready, the RayCluster still needs tens of seconds
+        # to relaunch actors. Hence, `test_detached_actor_2.py` will retry until a Ray client
+        # connection succeeds.
+        headpod = get_head_pod(cluster_namespace)
+        headpod_name = headpod.metadata.name
+        exit_code = pod_exec_command(headpod_name, cluster_namespace,
+            f" python samples/test_detached_actor_2.py {ray_namespace}",
+            check = False
+        )
 
         if exit_code != 0:
             show_cluster_info(cluster_namespace)
-            raise Exception(f"There was an exception during the execution of test_detached_actor_2.py. The exit code is {exit_code}." +
-                "See above for command output. The output will be printed by the function exec_run_container.")
-
-        container.stop()
-        docker_client.close()
+            raise Exception(
+                f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}."
+            )
 
 class RayServiceTestCase(unittest.TestCase):
     """Integration tests for RayService"""
-    service_template_file = 'tests/config/ray-service.yaml.template'
+    service_template = 'tests/config/ray-service.yaml.template'
 
     # The previous logic for testing updates was problematic.
     # We need to test RayService updates.
@@ -247,7 +229,7 @@ class RayServiceTestCase(unittest.TestCase):
     def test_ray_serve_work(self):
         """Create a RayService, send a request to RayService via `curl`, and compare the result."""
         cr_event = utils.create_ray_service(
-            RayServiceTestCase.service_template_file, ray_version, ray_image)
+            RayServiceTestCase.service_template, ray_version, ray_image)
         # When Pods are READY and RUNNING, RayService still needs tens of seconds to be ready
         # for serving requests. This `sleep` function is a workaround, and should be removed
         # when https://github.com/ray-project/kuberay/pull/730 is merged.

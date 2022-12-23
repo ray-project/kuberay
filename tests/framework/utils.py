@@ -127,3 +127,28 @@ def shell_subprocess_check_output(command):
     output = subprocess.check_output(command, shell=True)
     logger.info("Output: %s", output)
     return output
+
+def get_pod(namespace, label_selector):
+    """Gets pods in the `namespace`. Returns the first pod that has `label_filter`.
+    Returns None if the number of matches is not equal to 1.
+    """
+    pods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
+            namespace = namespace, label_selector = label_selector
+        )
+    if len(pods.items) != 1:
+        logger.warning(
+            "There are %d matches for selector %s in namespace %s, but the expected match is 1.",
+            len(pods.items), label_selector, namespace
+        )
+        return None
+    return pods.items[0]
+
+def get_head_pod(namespace):
+    """Gets a head pod in the `namespace`. Returns None if there are no matches."""
+    return get_pod(namespace, 'ray.io/node-type=head')
+
+def pod_exec_command(pod_name, namespace, exec_command, check = True):
+    """kubectl exec the `exec_command` in the given `pod_name` Pod in the given `namespace`.
+    Both STDOUT and STDERR of `exec_command` will be printed.
+    """
+    return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
