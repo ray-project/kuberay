@@ -116,7 +116,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info('namespace: %s', ray_namespace)
+        logger.info('Ray namespace: %s', ray_namespace)
 
         # Deploy a Ray Serve model.
         exit_code = pod_exec_command(headpod_name, cluster_namespace,
@@ -164,7 +164,7 @@ class RayFTTestCase(unittest.TestCase):
 
         # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
         ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info('namespace: %s', ray_namespace)
+        logger.info('Ray namespace: %s', ray_namespace)
 
         # Register a detached actor
         exit_code = pod_exec_command(headpod_name, cluster_namespace,

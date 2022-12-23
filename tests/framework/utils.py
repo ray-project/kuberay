@@ -136,7 +136,10 @@ def get_pod(namespace, label_selector):
             namespace = namespace, label_selector = label_selector
         )
     if len(pods.items) != 1:
-        logger.warning("No match for selector `%s` in namespace %s.", label_selector, namespace)
+        logger.warning(
+            "There are %d matches for selector %s in namespace %s, but the expected match is 1.",
+            len(pods.items), label_selector, namespace
+        )
         return None
     return pods.items[0]
 
@@ -145,5 +148,7 @@ def get_head_pod(namespace):
     return get_pod(namespace, 'ray.io/node-type=head')
 
 def pod_exec_command(pod_name, namespace, exec_command, check = True):
-    """kubectl exec the `exec_command` in the given `pod_name` Pod in the given `namespace`."""
+    """kubectl exec the `exec_command` in the given `pod_name` Pod in the given `namespace`.
+    Both STDOUT and STDERR of `exec_command` will be printed.
+    """
     return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
