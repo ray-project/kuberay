@@ -51,9 +51,9 @@ def get_expected_head_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
     resource_kind = custom_resource["kind"]
     head_replica_paths = {
-       "RayCluster": "spec.headGroupSpec.replicas",
-       "RayService": "spec.rayClusterConfig.headGroupSpec.replicas",
-       "RayJob": "spec.rayClusterSpec.headGroupSpec.replicas"
+       CONST.RAY_CLUSTER_CRD: "spec.headGroupSpec.replicas",
+       CONST.RAY_SERVICE_CRD: "spec.rayClusterConfig.headGroupSpec.replicas",
+       CONST.RAY_JOB_CRD: "spec.rayClusterSpec.headGroupSpec.replicas"
     }
     if resource_kind in head_replica_paths:
         path = head_replica_paths[resource_kind]
@@ -64,9 +64,9 @@ def get_expected_worker_pods(custom_resource):
     """Get the number of head pods in custom_resource"""
     resource_kind = custom_resource["kind"]
     worker_specs_paths = {
-       "RayCluster": "spec.workerGroupSpecs",
-       "RayService": "spec.rayClusterConfig.workerGroupSpecs",
-       "RayJob": "spec.rayClusterSpec.workerGroupSpecs"
+       CONST.RAY_CLUSTER_CRD: "spec.workerGroupSpecs",
+       CONST.RAY_SERVICE_CRD: "spec.rayClusterConfig.workerGroupSpecs",
+       CONST.RAY_JOB_CRD: "spec.rayClusterSpec.workerGroupSpecs"
     }
     if resource_kind in worker_specs_paths:
         path = worker_specs_paths[resource_kind]
@@ -99,6 +99,7 @@ class Mutator:
     def __init__(self, base_custom_resource, json_patch_list: List[jsonpatch.JsonPatch]):
         self.base_cr = base_custom_resource
         self.patch_list = json_patch_list
+
     def mutate(self):
         """ Generate a new cr by applying the json patch to `cr`. """
         for patch in self.patch_list:
@@ -112,12 +113,14 @@ class Rule:
     """
     def __init__(self):
         pass
+
     def trigger_condition(self, custom_resource=None) -> bool:
         """
         The rule will only be checked when `trigger_condition` is true. For example, we will only
         check "HeadPodNameRule" when "spec.headGroupSpec" is defined in CR YAML file.
         """
         return True
+
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         """Check whether the actual cluster state fulfills the rule or not."""
         raise NotImplementedError
@@ -126,6 +129,7 @@ class RuleSet:
     """A set of Rule"""
     def __init__(self, rules: List[Rule]):
         self.rules = rules
+
     def check_rule_set(self, custom_resource, namespace):
         """Check all rules that the trigger conditions are fulfilled."""
         for rule in self.rules:
@@ -156,19 +160,26 @@ class CREvent:
         self.exec()
         self.wait()
         self.check_rule_sets()
+
     def exec(self):
         """
         Execute a command to trigger the CREvent. For example, create a CR by a
         `kubectl apply` command.
         """
-        raise NotImplementedError
+        if not self.filepath:
+            create_custom_object(self.namespace, self.custom_resource_object)
+        else:
+            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
+
     def wait(self):
         """Wait for the system to converge."""
         time.sleep(self.timeout)
+
     def check_rule_sets(self):
         """When the system converges, check all registered RuleSets."""
         for ruleset in self.rulesets:
             ruleset.check_rule_set(self.custom_resource_object, self.namespace)
+
     def clean_up(self):
         """Cleanup the CR."""
         raise NotImplementedError
@@ -232,12 +243,6 @@ class CurlServiceRule(Rule):
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
-    def exec(self):
-        if not self.filepath:
-            create_custom_object(CONST.RAY_CLUSTER_CRD, self.namespace, self.custom_resource_object)
-        else:
-            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
-
     def wait(self):
         start_time = time.time()
         expected_head_pods = get_expected_head_pods(self.custom_resource_object)
@@ -270,8 +275,11 @@ class RayClusterAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayCluster"""
-        delete_custom_object(
-            CONST.RAY_CLUSTER_CRD, self.namespace, self.custom_resource_object['metadata']['name'])
+        if not self.filepath:
+            delete_custom_object(CONST.RAY_CLUSTER_CRD,
+                self.namespace, self.custom_resource_object['metadata']['name'])
+        else:
+            shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath}")
         # Wait pods to be deleted
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
@@ -296,13 +304,6 @@ class RayClusterAddCREvent(CREvent):
 
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
-    def exec(self):
-        """Wait for RayService to converge"""""
-        if not self.filepath:
-            create_custom_object(CONST.RAY_SERVICE_CRD, self.namespace, self.custom_resource_object)
-        else:
-            shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
-
     def wait(self):
         """Wait for RayService to converge"""""
         start_time = time.time()
@@ -340,8 +341,11 @@ class RayServiceAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayService"""
-        delete_custom_object(
-            CONST.RAY_SERVICE_CRD, self.namespace, self.custom_resource_object['metadata']['name'])
+        if not self.filepath:
+            delete_custom_object(CONST.RAY_SERVICE_CRD,
+                self.namespace, self.custom_resource_object['metadata']['name'])
+        else:
+            shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath}")
         # Wait pods to be deleted
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]

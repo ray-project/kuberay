@@ -34,7 +34,8 @@ if __name__ == '__main__':
     github_action_tests = {
         "ray-cluster.getting-started.yaml",
         "ray-cluster.ingress.yaml",
-        "ray-cluster.mini.yaml"
+        "ray-cluster.mini.yaml",
+        "ray-cluster.external-redis.yaml"
     }
 
     # Paths of untracked files, specified as strings, relative to KubeRay
@@ -61,8 +62,6 @@ if __name__ == '__main__':
 
     skip_tests = {
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
-        'ray-cluster.external-redis.yaml':
-            'It installs multiple Kubernetes resources and cannot clean up by DeleteCREvent.',
         'ray-cluster.autoscaler.large.yaml':
             'Skip this test because it requires a lot of resources.'
     }
