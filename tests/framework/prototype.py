@@ -5,7 +5,11 @@ import time
 import jsonpatch
 
 from framework.utils import (
+    create_custom_object,
+    delete_custom_object,
+    get_head_pod,
     logger,
+    pod_exec_command,
     shell_subprocess_run,
     shell_subprocess_check_output,
     CONST,
@@ -179,9 +183,8 @@ class HeadPodNameRule(Rule):
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
         expected_val = search_path(custom_resource,
             "spec.headGroupSpec.template.spec.containers.0.name".split('.'))
-        headpods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
-            namespace = cr_namespace, label_selector='ray.io/node-type=head')
-        assert headpods.items[0].spec.containers[0].name == expected_val
+        headpod = get_head_pod(cr_namespace)
+        assert headpod.spec.containers[0].name == expected_val
 
 class HeadSvcRule(Rule):
     """The labels of the head pod and the selectors of the head service must match."""
@@ -199,12 +202,10 @@ class HeadSvcRule(Rule):
 class EasyJobRule(Rule):
     """Submit a very simple Ray job to test the basic functionality of the Ray cluster."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        headpods = k8s_v1_api.list_namespaced_pod(
-            namespace = cr_namespace, label_selector='ray.io/node-type=head')
-        headpod_name = headpods.items[0].metadata.name
-        shell_subprocess_run(f"kubectl exec {headpod_name} -n {cr_namespace} --" +
-            " python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
+        headpod = get_head_pod(cr_namespace)
+        headpod_name = headpod.metadata.name
+        pod_exec_command(headpod_name, cr_namespace,
+            "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
     """"Using curl to access the deployed application on Ray service"""
@@ -233,10 +234,7 @@ class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
     def exec(self):
         if not self.filepath:
-            k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
-            k8s_cr_api.create_namespaced_custom_object(
-                group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
-                plural = 'rayclusters', body = self.custom_resource_object)
+            create_custom_object(CONST.RAY_CLUSTER_CRD, self.namespace, self.custom_resource_object)
         else:
             shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -272,10 +270,8 @@ class RayClusterAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayCluster"""
-        k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
-        k8s_cr_api.delete_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
-            plural = 'rayclusters', name = self.custom_resource_object['metadata']['name'])
+        delete_custom_object(
+            CONST.RAY_CLUSTER_CRD, self.namespace, self.custom_resource_object['metadata']['name'])
         # Wait pods to be deleted
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
@@ -303,10 +299,7 @@ class RayServiceAddCREvent(CREvent):
     def exec(self):
         """Wait for RayService to converge"""""
         if not self.filepath:
-            k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
-            k8s_cr_api.create_namespaced_custom_object(
-                group = 'ray.io',version = 'v1alpha1', namespace = self.namespace,
-                plural = 'rayservices', body = self.custom_resource_object)
+            create_custom_object(CONST.RAY_SERVICE_CRD, self.namespace, self.custom_resource_object)
         else:
             shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -347,10 +340,8 @@ class RayServiceAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayService"""
-        k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
-        k8s_cr_api.delete_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
-            plural = 'rayservices', name = self.custom_resource_object['metadata']['name'])
+        delete_custom_object(
+            CONST.RAY_SERVICE_CRD, self.namespace, self.custom_resource_object['metadata']['name'])
         # Wait pods to be deleted
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
