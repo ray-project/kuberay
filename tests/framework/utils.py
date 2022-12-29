@@ -31,6 +31,11 @@ class CONST:
     RAY_FT = "RAY_FT"
     RAY_SERVICE = "RAY_SERVICE"
 
+    # Custom Resource Definitions
+    RAY_CLUSTER_CRD = "RayCluster"
+    RAY_SERVICE_CRD = "RayService"
+    RAY_JOB_CRD = "RayJob"
+
 CONST = CONST()
 
 class KubernetesClusterManager:
@@ -152,3 +157,32 @@ def pod_exec_command(pod_name, namespace, exec_command, check = True):
     Both STDOUT and STDERR of `exec_command` will be printed.
     """
     return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
+
+def create_custom_object(namespace, cr_object):
+    """Create a custom resource based on `cr_object` in the given `namespace`."""
+    k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+    crd = cr_object["kind"]
+    if crd == CONST.RAY_CLUSTER_CRD:
+        k8s_cr_api.create_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayclusters', body = cr_object)
+    elif crd == CONST.RAY_SERVICE_CRD:
+        k8s_cr_api.create_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayservices', body = cr_object)
+    elif crd == CONST.RAY_JOB_CRD:
+        raise NotImplementedError
+
+def delete_custom_object(crd, namespace, cr_name):
+    """Delete the given `cr_name` custom resource in the given `namespace`."""
+    k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+    if crd == CONST.RAY_CLUSTER_CRD:
+        k8s_cr_api.delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayclusters', name = cr_name)
+    elif crd == CONST.RAY_SERVICE_CRD:
+        k8s_cr_api.delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayservices', name = cr_name)
+    elif crd == CONST.RAY_JOB_CRD:
+        raise NotImplementedError
