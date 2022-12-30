@@ -234,7 +234,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 }
 
 func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayCluster) error {
