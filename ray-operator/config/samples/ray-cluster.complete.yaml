@@ -13,8 +13,6 @@ spec:
   rayVersion: '2.2.0'
   # Ray head pod configuration
   headGroupSpec:
-    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
-    serviceType: ClusterIP
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'

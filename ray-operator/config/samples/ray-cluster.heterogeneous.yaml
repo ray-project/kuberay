@@ -38,8 +38,6 @@ spec:
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
-    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
-    serviceType: ClusterIP
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'

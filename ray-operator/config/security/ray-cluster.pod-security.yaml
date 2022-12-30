@@ -13,8 +13,6 @@ spec:
   rayVersion: '2.2.0'
   # Ray head pod configuration
   headGroupSpec:
-    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
-    serviceType: ClusterIP
     # for the head group, replicas should always be 1.
     # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
     replicas: 1
