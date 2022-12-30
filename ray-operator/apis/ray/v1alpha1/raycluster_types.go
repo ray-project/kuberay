@@ -101,6 +101,7 @@ const (
 	Ready     ClusterState = "ready"
 	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
+	Pending   ClusterState = "pending"
 )
 
 // RayClusterStatus defines the observed state of RayCluster
