@@ -233,9 +233,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 			r.Log.Error(err, "Update status error", "cluster name", request.Name)
 		}
 	}
-	if instance.Status.State == rayiov1alpha1.Pending {
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
-	}
 
 	return ctrl.Result{}, nil
 }
@@ -861,8 +858,6 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	} else {
 		if utils.CheckAllPodsRunnning(runtimePods) {
 			instance.Status.State = rayiov1alpha1.Ready
-		} else {
-			instance.Status.State = rayiov1alpha1.Pending
 		}
 	}
 
