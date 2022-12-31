@@ -6,7 +6,7 @@ import os
 import random
 import string
 
-import kuberay_utils.utils as utils
+from kuberay_utils import utils
 from framework.prototype import (
     CurlServiceRule,
     EasyJobRule,
@@ -17,7 +17,6 @@ from framework.prototype import (
 from framework.utils import (
     get_head_pod,
     pod_exec_command,
-    shell_subprocess_run,
     CONST,
     K8S_CLUSTER_MANAGER,
     OperatorManager
@@ -90,23 +89,8 @@ class RayFTTestCase(unittest.TestCase):
 
     @unittest.skip("Skip test_kill_head due to its flakiness.")
     def test_kill_head(self):
-        # This test will delete head node and wait for a new replacement to
-        # come up.
-        shell_subprocess_run(
-            'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
-
-        # wait for new head node to start
-        time.sleep(80)
-        shell_subprocess_run('kubectl get pods -A')
-
-        # make sure the new head is ready
-        # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
-        # make sure both head and worker pods are ready
-        rtn = shell_subprocess_run(
-                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
-        if rtn != 0:
-            show_cluster_info("default")
-            raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
+        """TODO: Kill Head pod and wait for a new replacement."""
+        raise NotImplementedError
 
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
