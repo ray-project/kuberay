@@ -57,8 +57,6 @@ spec:
         memory: "512Mi"
   # Ray head pod template
   headGroupSpec:
-    # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
-    serviceType: ClusterIP
     # the following params are used to complete the ray start: ray start --head --block --port=6379 ...
     rayStartParams:
       # Flag "no-monitor" will be automatically set when autoscaling is enabled.

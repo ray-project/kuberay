@@ -199,5 +199,6 @@ additionalWorkerGroups:
         name: log-volume
     sidecarContainers: []
 
-service:
-  type: ClusterIP
+# Configuration for Head's Kubernetes Service
+service: {}
+#   type: ClusterIP # The default type is ClusterIP.

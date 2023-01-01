@@ -5970,7 +5970,6 @@ spec:
                         type: object
                     required:
                     - rayStartParams
-                    - serviceType
                     - template
                     type: object
                   headServiceAnnotations:
