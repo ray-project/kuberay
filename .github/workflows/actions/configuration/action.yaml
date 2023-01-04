@@ -57,6 +57,6 @@ runs:
       echo "Using Ray image ${{ inputs.ray_version }}"
       GITHUB_ACTIONS=true \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
-      OPERATOR_IMAGE="kuberay/operator:${{ operator_version }}" \
+      OPERATOR_IMAGE="kuberay/operator:${{ inputs.operator_version }}" \
       python tests/test_sample_raycluster_yamls.py
     shell: bash
