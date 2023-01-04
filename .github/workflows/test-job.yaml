@@ -366,7 +366,7 @@ jobs:
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: "Sample YAML Config Test - Ray: 2.1.0, KubeRay: nightly"
+    name: Sample YAML Config Test - Ray (2.1.0), KubeRay (nightly)
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -382,13 +382,13 @@ jobs:
 
   sample-yaml-config-test-2_1_0-latest-release:
     env:
-      KUBERAY_LATEST_RELEASE: 0.4.0
+      KUBERAY_LATEST_RELEASE: v0.4.0
     needs:
       - build_operator
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: "Sample YAML Config Test - Ray: 2.1.0, KubeRay: ${{env.KUBERAY_LATEST_RELEASE}} (latest release)"
+    name: Sample YAML Config Test - Ray (2.1.0), KubeRay (latest release)
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
