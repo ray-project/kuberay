@@ -51,22 +51,22 @@ runs:
       docker images ls -a
     shell: bash
 
-  - name: Run configuration tests for sample YAML files.
+  - name: Run tests for sample YAML files with the nightly operator.
     # Depends on the KubeRay operator image built in previous steps.
-    if: "${{ github.event.inputs.operator_version == '' }}"
+    if: github.event.inputs.operator_version == ''
     run: |
-      echo "Using Ray image ${{ inputs.ray_version }}"
+      echo "Using Ray image ${{ inputs.ray_version }} and nightly operator."
       GITHUB_ACTIONS=true \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
       OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
       python tests/test_sample_raycluster_yamls.py
     shell: bash
 
-  - name: Run configuration tests for sample YAML files.
+  - name: Run tests for sample YAML files with the latest KubeRay release.
     # Depends on latest KubeRay release.
-    if: "${{ github.event.inputs.operator_version != '' }}"
+    if: github.event.inputs.operator_version != ''
     run: |
-      echo "Using Ray image ${{ inputs.ray_version }}"
+      echo "Using Ray image ${{ inputs.ray_version }} and ${{ inputs.operator_version }} operator."
       GITHUB_ACTIONS=true \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
       OPERATOR_IMAGE="kuberay/operator:${{ inputs.operator_version }}" \
