@@ -360,13 +360,13 @@ jobs:
         with:
           ray_version: nightly
 
-  sample-yaml-config-test-2_1_0-nightly:
+  sample-yaml-config-test-2_1_0:
     needs:
       - build_operator
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Sample YAML Config Test - Ray (2.1.0), KubeRay (nightly)
+    name: Sample YAML Config Test - 2.1.0
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -379,24 +379,3 @@ jobs:
         with:
           ray_version: 2.1.0
 
-  sample-yaml-config-test-2_1_0-latest-release:
-    env:
-      KUBERAY_LATEST_RELEASE: v0.4.0
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-latest
-    name: Sample YAML Config Test - Ray (2.1.0), KubeRay (latest release)
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: ./.github/workflows/actions/configuration
-        with:
-          ray_version: 2.1.0
-          operator_version: ${{env.KUBERAY_LATEST_RELEASE}}
