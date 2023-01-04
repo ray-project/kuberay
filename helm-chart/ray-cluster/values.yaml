@@ -201,4 +201,5 @@ additionalWorkerGroups:
 
 # Configuration for Head's Kubernetes Service
 service:
-  type: ClusterIP # This is optional, and the default is ClusterIP.
+  # This is optional, and the default is ClusterIP.
+  type: ClusterIP
