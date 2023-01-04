@@ -38,6 +38,7 @@ spec:
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
+    serviceType: ClusterIP # optional
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
