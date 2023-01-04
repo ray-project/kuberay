@@ -378,7 +378,6 @@ jobs:
       - uses: ./.github/workflows/actions/configuration
         with:
           ray_version: 2.1.0
-          operator_version: ${{github.event.pull_request.head.sha}}
 
   sample-yaml-config-test-2_1_0-latest-release:
     env:

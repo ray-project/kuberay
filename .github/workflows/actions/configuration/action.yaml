@@ -7,7 +7,7 @@ inputs:
     required: true
   operator_version:
     description: "version of KubeRay operator"
-    required: true
+    required: false
 
 runs:
   using: "composite"
@@ -53,6 +53,18 @@ runs:
 
   - name: Run configuration tests for sample YAML files.
     # Depends on the KubeRay operator image built in previous steps.
+    if: "${{ github.event.inputs.operator_version == '' }}"
+    run: |
+      echo "Using Ray image ${{ inputs.ray_version }}"
+      GITHUB_ACTIONS=true \
+      RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
+      OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
+      python tests/test_sample_raycluster_yamls.py
+    shell: bash
+
+  - name: Run configuration tests for sample YAML files.
+    # Depends on latest KubeRay release.
+    if: "${{ github.event.inputs.operator_version != '' }}"
     run: |
       echo "Using Ray image ${{ inputs.ray_version }}"
       GITHUB_ACTIONS=true \
