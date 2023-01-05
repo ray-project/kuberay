@@ -200,5 +200,6 @@ additionalWorkerGroups:
     sidecarContainers: []
 
 # Configuration for Head's Kubernetes Service
-service: {}
-#   type: ClusterIP # The default type is ClusterIP.
+service:
+  # This is optional, and the default is ClusterIP.
+  type: ClusterIP

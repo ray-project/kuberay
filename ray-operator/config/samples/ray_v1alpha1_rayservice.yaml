@@ -46,6 +46,7 @@ spec:
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
+      serviceType: ClusterIP # optional
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
       rayStartParams:
         port: '6379' # should match container port named gcs-server

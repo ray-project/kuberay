@@ -17,6 +17,7 @@ class CONST:
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v0.4.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
@@ -109,12 +110,21 @@ class OperatorManager:
 
     def __install_crd_and_operator(self):
         """Install both CRD and KubeRay operator by kuberay-operator chart"""
-        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-        shell_subprocess_run(
-            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
-            f"--set image.repository={repo},image.tag={tag}"
-        )
+        if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
+            logger.info("Install both CRD and KubeRay operator with the latest release.")
+            shell_subprocess_run(
+                "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
+            )
+            shell_subprocess_run(
+                f"helm install kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
+            )
+        else:
+            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")
+            shell_subprocess_run(
+                f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
+                f"--set image.repository={repo},image.tag={tag}"
+            )
 
 def shell_subprocess_run(command, check = True):
     """
