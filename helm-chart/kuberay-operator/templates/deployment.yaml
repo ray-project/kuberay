@@ -48,7 +48,8 @@ spec:
             {{- $watchNamespace = .Release.Namespace -}}
             {{- end -}}
             {{- if $watchNamespace -}}
-            {{- $argList = append $argList (print "--watch-namespace=" $watchNamespace) -}}
+            {{- $argList = append $argList "--watch-namespace" -}}
+            {{- $argList = append $argList $watchNamespace -}}
             {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
