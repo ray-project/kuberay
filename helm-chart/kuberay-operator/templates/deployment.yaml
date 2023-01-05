@@ -37,11 +37,21 @@ spec:
           command:
             - /manager
           args:
-          {{- if .Values.batchScheduler.enabled }}
-            - --enable-batch-scheduler
-          {{- else }}
-            []
-          {{- end }}
+            {{- $argList := list -}}
+            {{- if .Values.batchScheduler.enabled -}}
+            {{- $argList = append $argList "--enable-batch-scheduler" -}}
+            {{- end -}}
+            {{- $watchNamespace := "" -}}
+            {{- if .Values.watchNamespace -}}
+            {{- $watchNamespace = .Values.watchNamespace -}}
+            {{- else if .Values.singleNamespaceInstall -}}
+            {{- $watchNamespace = .Release.Namespace -}}
+            {{- end -}}
+            {{- if $watchNamespace -}}
+            {{- $argList = append $argList (print "--watch-namespace=" $watchNamespace) -}}
+            {{- end -}}
+            {{- (printf "\n") -}}
+            {{- $argList | toYaml | indent 12 }}
           ports:
             - name: http
               containerPort: 8080
