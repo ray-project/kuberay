@@ -2,9 +2,9 @@
 {{- if .Values.rbacEnable }}
 
 {{- if .Values.singleNamespaceInstall }}
-kind: ClusterRole
-{{- else }}
 kind: Role
+{{- else }}
+kind: ClusterRole
 {{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
