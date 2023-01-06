@@ -14,7 +14,6 @@ subjects:
   name: {{ .Values.serviceAccount.name  }}
   namespace: {{ .Release.Namespace }}
 roleRef:
-  
 {{- if .Values.singleNamespaceInstall }}
   kind: Role
 {{- else }}

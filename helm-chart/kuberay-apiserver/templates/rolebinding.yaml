@@ -14,12 +14,11 @@ subjects:
   name: {{ .Values.serviceAccount.name  }}
   namespace: {{ .Release.Namespace }}
 roleRef:
-  
-{{- if .Values.singleNamespaceInstall }}
-kind: Role
-{{- else }}
-kind: ClusterRole
-{{- end }}
+  {{- if .Values.singleNamespaceInstall }}
+  kind: Role
+  {{- else }}
+  kind: ClusterRole
+  {{- end }}
   name: {{ include "kuberay-apiserver.fullname" . }}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}
