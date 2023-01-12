@@ -33,7 +33,7 @@ def is_feature_supported(ray_version, feature):
         return major * 100 + minor > 113
     return False
 
-def create_ray_cluster(template_name, ray_version, ray_image):
+def create_ray_cluster(template_name, ray_version, ray_image, namespace='default'):
     """Create a RayCluster and a NodePort service."""
     context = {}
     with open(template_name, encoding="utf-8") as ray_cluster_template:
@@ -56,7 +56,7 @@ def create_ray_cluster(template_name, ray_version, ray_image):
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
-            namespace='default',
+            namespace = namespace,
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
