@@ -56,7 +56,7 @@ def create_ray_cluster(template_name, ray_version, ray_image):
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
-            namespace = 'default',
+            namespace='default',
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
