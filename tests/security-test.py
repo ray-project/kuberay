@@ -56,7 +56,7 @@ class PodSecurityTestCase(unittest.TestCase):
         operator_manager.prepare_operator()
 
         context = {}
-        with open(cluster_without_pod_security, encoding="utf-8") as ray_cluster_yaml:
+        with open(cluster_with_pod_security, encoding="utf-8") as ray_cluster_yaml:
             context['filepath'] = ray_cluster_yaml.name
             for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
                 if k8s_object['kind'] == 'RayCluster':
