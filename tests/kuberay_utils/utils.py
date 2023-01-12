@@ -49,6 +49,7 @@ def create_ray_cluster(template_name, ray_version, ray_image):
         if k8s_object['kind'] == 'RayCluster':
             context['cr'] = k8s_object
             break
+
     try:
         # Create a RayCluster
         ray_cluster_add_event = RayClusterAddCREvent(
@@ -87,7 +88,7 @@ def create_ray_service(template_name, ray_version, ray_image):
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
-            namespace = 'default',
+            namespace='default',
             filepath = context['filepath']
         )
         ray_service_add_event.trigger()

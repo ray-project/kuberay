@@ -3,7 +3,6 @@ import logging
 import unittest
 import yaml
 
-
 from framework.prototype import (
     RayClusterAddCREvent
 )
