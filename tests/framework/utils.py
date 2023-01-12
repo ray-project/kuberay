@@ -115,12 +115,12 @@ class OperatorManager:
             logger.info("Install both CRD and KubeRay operator with the latest release.")
             shell_subprocess_run(
                 "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
-            )    
+            )
             shell_subprocess_run(
                 f"helm install kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
             )
         else:
-            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")      
+            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")
             shell_subprocess_run(
                 f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
                 f"--set image.repository={repo},image.tag={tag}"
