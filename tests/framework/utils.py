@@ -82,10 +82,10 @@ class OperatorManager:
                 raise Exception(f"Image {key} does not exist!")
         self.docker_image_dict = docker_image_dict
 
-    def prepare_operator(self,namespace='default',helm_chart_values = None):
+    def prepare_operator(self):
         """Prepare KubeRay operator for an existing KinD cluster"""
         self.__kind_prepare_images()
-        self.__install_crd_and_operator(namespace,helm_chart_values)
+        self.__install_crd_and_operator()
 
     def __kind_prepare_images(self):
         """Download images and load images into KinD cluster"""
@@ -108,24 +108,21 @@ class OperatorManager:
             image = self.docker_image_dict[key]
             shell_subprocess_run(f'kind load docker-image {image}')
 
-    def __install_crd_and_operator(self,namespace='default',helm_chart_values = None):
+    def __install_crd_and_operator(self):
         """Install both CRD and KubeRay operator by kuberay-operator chart"""
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
         if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
             logger.info("Install both CRD and KubeRay operator with the latest release.")
             shell_subprocess_run(
                 "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
-            )
-            helm_chart_values = helm_chart_values if helm_chart_values!=None else "kuberay/kuberay-operator/values.yaml"
-           
+            )    
             shell_subprocess_run(
-                f"helm install -n {namespace} -f {helm_chart_values} kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
+                f"helm install kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
             )
         else:
-            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")
-          
+            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")      
             shell_subprocess_run(
-                f"helm install -n {namespace} -f {helm_chart_values} kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
+                f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
                 f"--set image.repository={repo},image.tag={tag}"
             )
 
