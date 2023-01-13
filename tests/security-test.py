@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import logging
 import unittest
 import yaml
 
@@ -14,11 +13,8 @@ from framework.utils import (
     OperatorManager
 )
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO
+from kuberay_utils.utils import (
+   logger
 )
 
 class PodSecurityTestCase(unittest.TestCase):
@@ -29,10 +25,9 @@ class PodSecurityTestCase(unittest.TestCase):
         that force the restricted Pod security standard to all pods.
         '''
         cluster_with_pod_security = CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
-        cluster_without_pod_security = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/ray-cluster.complete.yaml")
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
         image_dict = {
-            CONST.RAY_IMAGE_KEY: 'rayproject/ray:2.2.0',
+            CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
             CONST.OPERATOR_IMAGE_KEY: 'kuberay/operator:nightly'
         }
         cluster_namespace = "pod-security"
@@ -56,6 +51,10 @@ class PodSecurityTestCase(unittest.TestCase):
         operator_manager.prepare_operator()
 
         context = {}
+        # Alternatively, open cluster_without_pod_security
+        # = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/ray-cluster.complete.yaml")
+        # to create a pod without security configuration.
+        # pod will be forbidden due to violating PodSecurity.
         with open(cluster_with_pod_security, encoding="utf-8") as ray_cluster_yaml:
             context['filepath'] = ray_cluster_yaml.name
             for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
@@ -67,7 +66,7 @@ class PodSecurityTestCase(unittest.TestCase):
             ray_cluster_add_event = RayClusterAddCREvent(
                 custom_resource_object = context['cr'],
                 rulesets = [],
-                timeout = 500,
+                timeout = 90,
                 namespace=cluster_namespace,
                 filepath = context['filepath']
             )
