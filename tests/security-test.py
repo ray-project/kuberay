@@ -59,15 +59,15 @@ class PodSecurityTestCase(unittest.TestCase):
         operator_manager.prepare_operator()
 
         context = {}
-        cluster_with_pod_security = CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
-        with open(cluster_with_pod_security, encoding="utf-8") as ray_cluster_yaml:
+        cr_yaml = CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
+        with open(cr_yaml, encoding="utf-8") as ray_cluster_yaml:
             context['filepath'] = ray_cluster_yaml.name
             for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
                 if k8s_object['kind'] == 'RayCluster':
                     context['cr'] = k8s_object
                     break
         try:
-            #create a RayCluster with proper securityContext configurations
+            #create a RayCluster with securityContext configurations in namespace pod-security.
             ray_cluster_add_event = RayClusterAddCREvent(
                 custom_resource_object = context['cr'],
                 rulesets = [],
