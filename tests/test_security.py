@@ -30,7 +30,7 @@ class PodSecurityTestCase(unittest.TestCase):
     def test_pod_security(self):
         '''
         The differences between this test and pod-security.md are:
-        (1) (Step 4) Installs the operator in the default namespace rather than the pod-security namespace.
+        (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
         (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
         '''
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
@@ -51,14 +51,14 @@ class PodSecurityTestCase(unittest.TestCase):
         # Install the KubeRay operator in default namespace(for now)
         image_dict = {
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
-            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
+            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
 
         context = {}
-        cr_yaml = CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
-        with open(cr_yaml, encoding="utf-8") as ray_cluster_yaml:
+        path=CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
+        with open(path, encoding="utf-8") as ray_cluster_yaml:
             context['filepath'] = ray_cluster_yaml.name
             for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
                 if k8s_object['kind'] == 'RayCluster':
@@ -77,7 +77,7 @@ class PodSecurityTestCase(unittest.TestCase):
         if shell_subprocess_run(
             f'kubectl run -n {cluster_namespace} busybox --image=busybox',
             check = False) == 0:
-            logger.error(f'A Pod that violates restricted security policies should be rejected.')
+            logger.error('A Pod that violates restricted security policies should be rejected.')
             raise Exception("A Pod that violates restricted security policies should be rejected.")
 
 if __name__ == '__main__':
