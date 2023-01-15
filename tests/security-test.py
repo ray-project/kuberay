@@ -29,16 +29,16 @@ class PodSecurityTestCase(unittest.TestCase):
     """
     def test_pod_security(self):
         '''
-        The differences with the test described in the document are that this test installs
-        the operator in the default namespace and ensures pods without securityContext in
-        the pod-security namespace will be forbidden by creating a light pod instead of RayCluster.
+        The differences between this test and pod-security.md are:
+        (1) (Step 4) Installs the operator in the default namespace rather than the pod-security namespace.
+        (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
         '''
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
         K8S_CLUSTER_MANAGER.create_kind_cluster(kind_config = kind_config)
         # Apply the restricted Pod security standard to all Pods in the namespace pod-security.
         # The label pod-security.kubernetes.io/enforce=restricted means that
-        # The Pod that violate the policies will be rejected.
+        # the Pod that violate the policies will be rejected.
         cluster_namespace = "pod-security"
         shell_subprocess_run(f"kubectl create ns {cluster_namespace}")
         shell_subprocess_run(f"kubectl label --overwrite ns {cluster_namespace} \
@@ -77,8 +77,8 @@ class PodSecurityTestCase(unittest.TestCase):
         if shell_subprocess_run(
             f'kubectl run -n {cluster_namespace} busybox --image=busybox',
             check = False) == 0:
-            logger.error(f'pod without securityContext has been wrongly created. It violate the restricted security policies')
-            raise Exception("pod without securityContext has been wrongly created. It violate the restricted security policies")
+            logger.error(f'A Pod that violates restricted security policies should be rejected.')
+            raise Exception("A Pod that violates restricted security policies should be rejected.")
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
