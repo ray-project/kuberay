@@ -20,7 +20,9 @@ helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
 
 # Step 4: Install a RayCluster custom resource
-helm install raycluster kuberay/ray-cluster --version 0.4.0
+# [Note] Ray community recently has an experimental Mac M1 chip support.
+#        Hence, Mac M1 users must use the Docker image "rayproject/ray:nightly".
+helm install raycluster kuberay/ray-cluster --version 0.4.0 --set image.tag=nightly
 
 # Step 5: Verify the installation of KubeRay operator and RayCluster 
 kubectl get pods
