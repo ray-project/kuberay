@@ -1,8 +1,13 @@
-"""Test for the Pod security standard in CI"""
+"""
+https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md
+Test for pod-security.md in CI
+"""
 import os
 import logging
 import unittest
 import yaml
+from kubernetes import client
+from kubernetes.client.rest import ApiException
 
 from framework.prototype import (
     RayClusterAddCREvent
@@ -28,11 +33,11 @@ class PodSecurityTestCase(unittest.TestCase):
     Test for the document for the Pod security standard in CI
     """
     def test_pod_security(self):
-        '''
+        """
         The differences between this test and pod-security.md are:
         (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
         (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
-        '''
+        """
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
         K8S_CLUSTER_MANAGER.create_kind_cluster(kind_config = kind_config)
@@ -53,32 +58,47 @@ class PodSecurityTestCase(unittest.TestCase):
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
+        logger.info(image_dict)
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
 
         context = {}
-        path=CONST.REPO_ROOT.joinpath("ray-operator/config/security/ray-cluster.pod-security.yaml")
-        with open(path, encoding="utf-8") as ray_cluster_yaml:
+        cr_yaml = CONST.REPO_ROOT.joinpath(
+            "ray-operator/config/security/ray-cluster.pod-security.yaml"
+        )
+        with open(cr_yaml, encoding="utf-8") as ray_cluster_yaml:
             context['filepath'] = ray_cluster_yaml.name
             for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
                 if k8s_object['kind'] == 'RayCluster':
                     context['cr'] = k8s_object
                     break
         # Create a RayCluster with securityContext configurations in namespace pod-security.
+        logger.info('[TEST]:Create RayCluster with securityContext config under restricted mode')
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
-            namespace=cluster_namespace,
+            namespace = cluster_namespace,
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
         # Create a pod without securityContext configurations in namespace pod-security.
-        if shell_subprocess_run(
-            f'kubectl run -n {cluster_namespace} busybox --image=busybox',
-            check = False) == 0:
-            logger.error('A Pod that violates restricted security policies should be rejected.')
-            raise Exception("A Pod that violates restricted security policies should be rejected.")
+        logger.info('[TEST]:Create pod without securityContext config under restricted mode')
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        pod_spec = client.V1PodSpec(containers=[client.V1Container(name='busybox',image='busybox')])
+        pod_metadata = client.V1ObjectMeta(name='my-pod', namespace=cluster_namespace)
+        pod_body = client.V1Pod(api_version='v1', kind='Pod', metadata=pod_metadata, spec=pod_spec)
+        with self.assertRaises(
+            ApiException,
+            msg = 'A Pod that violates restricted security policies should be rejected.'
+        ) as ex:
+            k8s_v1_api.create_namespaced_pod(namespace=cluster_namespace, body=pod_body)
+        # check if raise forbidden error. Only forbidden error is allowed
+        self.assertEqual(
+            first = ex.exception.status,
+            second = 403,
+            msg = f'forbidden error is expedted but pod creation failed with {ex.exception.status}'
+        )
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
