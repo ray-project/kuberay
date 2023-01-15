@@ -13,7 +13,8 @@ from framework.prototype import (
 )
 
 from framework.utils import (
-    CONST
+    CONST,
+    retrieve_images
 )
 
 logger = logging.getLogger(__name__)
@@ -33,10 +34,8 @@ if __name__ == '__main__':
                 )
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
-    image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.2.0'),
-        CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-    }
+    image_dict = retrieve_images(list(map(lambda x:str(x['path']),sample_yaml_files)))
+    image_dict[CONST.OPERATOR_IMAGE_KEY] = os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly')
     logger.info(image_dict)
 
     # Build a test plan
