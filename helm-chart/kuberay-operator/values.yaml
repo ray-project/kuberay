@@ -53,3 +53,11 @@ batchScheduler:
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
 securityContext: {}
+
+# Option to install without using clusterRoles or clusterRoleBindings
+# for multitenant clusters with limited permissions
+singleNamespaceInstall: false
+
+# Arg to set the --watch-namespace CLI flag, overrides singleNamespaceInstall if set,
+# which sets the --watch-namespace to the release namespace
+# watchNamespace: ray-user-namespace

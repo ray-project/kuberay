@@ -50,3 +50,7 @@ ingress:
   enabled: false
 
 rbacEnable: true
+
+# Option to install without using clusterRoles or clusterRoleBindings
+# for multitenant clusters with limited permissions
+singleNamespaceInstall: false
