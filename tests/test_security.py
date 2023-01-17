@@ -42,8 +42,8 @@ class PodSecurityTestCase(unittest.TestCase):
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
         K8S_CLUSTER_MANAGER.create_kind_cluster(kind_config = kind_config)
         # Apply the restricted Pod security standard to all Pods in the namespace pod-security.
-        # The label pod-security.kubernetes.io/enforce=restricted means that
-        # the Pod that violate the policies will be rejected.
+        # The label pod-security.kubernetes.io/enforce=restricted means that the Pod that violates
+        # the policies will be rejected.
         cluster_namespace = "pod-security"
         shell_subprocess_run(f"kubectl create ns {cluster_namespace}")
         shell_subprocess_run(f"kubectl label --overwrite ns {cluster_namespace} \
@@ -72,7 +72,7 @@ class PodSecurityTestCase(unittest.TestCase):
                 if k8s_object['kind'] == 'RayCluster':
                     context['cr'] = k8s_object
                     break
-        # Create a RayCluster with securityContext configurations in namespace pod-security.
+
         logger.info('[TEST]:Create RayCluster with securityContext config under restricted mode')
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
@@ -82,7 +82,7 @@ class PodSecurityTestCase(unittest.TestCase):
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
-        # Create a pod without securityContext configurations in namespace pod-security.
+
         logger.info('[TEST]:Create pod without securityContext config under restricted mode')
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         pod_spec = client.V1PodSpec(containers=[client.V1Container(name='busybox',image='busybox')])
@@ -97,7 +97,7 @@ class PodSecurityTestCase(unittest.TestCase):
         self.assertEqual(
             first = ex.exception.status,
             second = 403,
-            msg = f'forbidden error is expedted but pod creation failed with {ex.exception.status}'
+            msg = f'Error code 403 is expected but Pod creation failed with {ex.exception.status}'
         )
 
 if __name__ == '__main__':
