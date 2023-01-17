@@ -49,14 +49,14 @@ class FrameworkUtilsTestCase(unittest.TestCase):
                 paths.append(path)
                 self.assertTrue(
                     filename in test_dict,
-                    msg = f'PLease add {filename}\'s images info in test_framework_utils.py'
+                    msg = f'Please add {filename}\'s images info in test_framework_utils.py'
                 )
                 logger.info('[test] retrieve all images from  %s',filename)
                 image_dict = retrieve_images([path])
                 self.assertTrue(
                     test_dict[filename] == set(image_dict.values()),
                     msg = (f'retrieved images from {filename} fails. '
-                           'Condiser update image info in test_framework_utils.py'
+                           'Consider updating image info in test_framework_utils.py'
                     )
                 )
         #test for bunch of files
@@ -65,7 +65,7 @@ class FrameworkUtilsTestCase(unittest.TestCase):
         self.assertTrue(
         functools.reduce(lambda x,y: x.union(y),test_dict.values()) == set(image_dict.values()),
         msg = (f'retrieve images for all files under {sample_yaml_dir} fails. '
-               'Condiser update image info in test_framework_utils.py')
+               'Consider updating image info in test_framework_utils.py')
         )
 
 if __name__ == '__main__':

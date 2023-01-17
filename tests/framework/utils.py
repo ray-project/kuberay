@@ -197,8 +197,8 @@ def delete_custom_object(crd, namespace, cr_name):
 
 def retrieve_images(filepaths):
     '''
-    retrieve all images needed based on the yaml files. It will return a dict that include all image
-    names. The tipical use case is to pass the image dict created by retrieve_images to
+    retrieve all images needed based on the yaml files. It will return a dict that includes image
+    names. The typical use case is to pass the image dict created by retrieve_images to
     operator_manager, then the operator manager will download all images to cluster:
     image_dict = retrieve_images(filepaths)
     image_dict[CONST.OPERATOR_IMAGE_KEY] = os.getenv(
@@ -210,16 +210,16 @@ def retrieve_images(filepaths):
     '''
     def prepare_next(cur,step):
         """
-        Cur is a list, its element is either a list or a dict that may include images.
-        Step is either a dict key, index of a list or '*' indicator(meaning to go through the list)
-        prepare_next will return the next cur based on the step.
+        A cur is a list, its element is either a list, or a dict that may include images.
+        A step is either a dict key, index of a list, or '*' indicator. This function will
+        return the next cur based on the providing step.
         """
         if cur == []:
             return []
         # case1: cur element is a list and only cur[step] is needed
         if step.isnumeric() and isinstance(cur[0],list) and int(step)<=len(cur[0]):
             return list(map( lambda x : x[int(step)],cur))
-        # case2: cur element is a dic
+        # case2: cur element is a dict
         # [Example] cur=[{'containers':[{'name':'nginx','image':'nginx:1.14.2'}],step='containers'
         # the new cur should be: [[{'name':'nginx','image':'nginx:1.14.2'}]]
         if step!='*' and isinstance(cur[0],dict) and step in cur[0]:
@@ -231,17 +231,17 @@ def retrieve_images(filepaths):
         #                        {'name':'nginx','image':'nginx:1.14.3'}]
         if isinstance(cur[0],list):
             return [ele for ele_list in cur for ele in ele_list]
-        # case4: invliad
+        # case4: invalid
         return []
 
     image_dict = {}
     file_dict = {}
-    # image_path_dict defines the path of the image for k8s kinds. May add more kind in the future.
-    # * indicate it is a list and needs to go through all the elements in the list. examples:
-    # 'spec/workerGroupSpecs/* is a list, since multiple workerGroup can be created and each
+    # image_path_dict stores the image paths for k8s kinds.
+    # * indicates it is a list and needs to go through all the elements in the list. examples:
+    # 'spec/workerGroupSpecs/* is a list since multiple workerGroup can be created and each
     # workerGroup can have different images.
     image_path_dict = {
-        # Custom resources:
+        # Custom Resources:
         'RayCluster': [
             'spec/headGroupSpec/template/spec/containers/*/image',
             'spec/workerGroupSpecs/*/template/spec/containers/*/image',
@@ -275,7 +275,7 @@ def retrieve_images(filepaths):
             file_dict[filepath] = set()
             for k8s_object in yaml.safe_load_all(k8s_yaml):
                 kind = k8s_object['kind']
-                # if kind is not ray cr or Workloads, no knowledge about the image path, hence skip
+                # if image_path_dict does not include this kind's image paths, skip.
                 if kind not in image_path_dict:
                     continue
                 for steps in image_path_dict[kind]:
@@ -286,7 +286,7 @@ def retrieve_images(filepaths):
                         cur = prepare_next(cur,step)
                         if cur == []:
                             break
-                    # After go through the image path, cur is now a list that conatin images
+                    # After going through the image path, cur is now a list that contains images
                     for image in cur:
                         file_dict[filepath].add(image)
                         if image not in image_dict:

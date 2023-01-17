@@ -35,7 +35,10 @@ if __name__ == '__main__':
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
     image_dict = retrieve_images(list(map(lambda x:str(x['path']),sample_yaml_files)))
-    image_dict[CONST.OPERATOR_IMAGE_KEY] = os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly')
+    image_dict[CONST.OPERATOR_IMAGE_KEY] = os.getenv(
+        'OPERATOR_IMAGE',
+        default='kuberay/operator:nightly'
+    )
     logger.info(image_dict)
 
     # Build a test plan
