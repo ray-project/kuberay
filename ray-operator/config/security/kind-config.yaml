@@ -24,6 +24,7 @@ nodes:
             pathType: DirectoryOrCreate
   # mount the local file on the control plane
   extraMounts:
-  - hostPath: ./audit-policy.yaml
+  - hostPath: ray-operator/config/security/audit-policy.yaml
     containerPath: /etc/kubernetes/policies/audit-policy.yaml
     readOnly: true
+

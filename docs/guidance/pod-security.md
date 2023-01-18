@@ -14,8 +14,8 @@ references can help you understand this document better:
 
 # Step 1: Create a KinD cluster
 ```bash
-# Path: ray-operator/config/security
-kind create cluster --config kind-config.yaml --image=kindest/node:v1.24.0
+# Path: /KUBERAY
+kind create cluster --config ray-operator/config/security/kind-config.yaml --image=kindest/node:v1.24.0
 ```
 The `kind-config.yaml` enables audit logging with the audit policy defined in `audit-policy.yaml`. The `audit-policy.yaml`
 defines an auditing policy to listen to the Pod events in the namespace `pod-security`. With this policy, we can check
