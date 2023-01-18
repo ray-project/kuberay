@@ -57,7 +57,7 @@ securityContext: {}
 # When singleNamespaceInstall is true:
 # - the chart can be installed by users with permissions to a single namespace only
 #   (this excludes the CRDs which can only be installed at cluster-scope)
-# - the KubeRay operator will only listen to the resource 
+# - the KubeRay operator will only listen to the resource
 #   events from the operator's namespace by default
 singleNamespaceInstall: false
 
