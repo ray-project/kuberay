@@ -51,6 +51,5 @@ ingress:
 
 rbacEnable: true
 
-# Option to install without using clusterRoles or clusterRoleBindings
-# for multitenant clusters with limited permissions
+# the chart can be installed by users with permissions to a single namespace only
 singleNamespaceInstall: false

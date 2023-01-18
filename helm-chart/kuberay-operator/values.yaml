@@ -54,10 +54,12 @@ batchScheduler:
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
 securityContext: {}
 
-# Option to install without using clusterRoles or clusterRoleBindings
-# for multitenant clusters with limited permissions
+# When singleNamespaceInstall is true:
+# - the chart can be installed by users with permissions to a single namespace only
+#   (this excludes the CRDs which can only be installed at cluster-scope)
+# - the KubeRay operator will only listen to the resource 
+#   events from the operator's namespace by default (can be overriden by watchNamespace)
 singleNamespaceInstall: false
 
-# Arg to set the --watch-namespace CLI flag, overrides singleNamespaceInstall if set,
-# which sets the --watch-namespace to the release namespace
+# kuberay operator will only watch the resource events from the "watchNamespace" namespace.
 # watchNamespace: ray-user-namespace
