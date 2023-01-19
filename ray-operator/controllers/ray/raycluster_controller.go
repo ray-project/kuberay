@@ -864,6 +864,8 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	} else {
 		if utils.CheckAllPodsRunnning(runtimePods) {
 			instance.Status.State = rayiov1alpha1.Ready
+		} else {
+			instance.Status.State = rayiov1alpha1.Pending
 		}
 	}
 

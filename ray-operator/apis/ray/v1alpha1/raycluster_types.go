@@ -98,6 +98,7 @@ type UpscalingMode string
 type ClusterState string
 
 const (
+	Pending   ClusterState = "pending"
 	Ready     ClusterState = "ready"
 	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
