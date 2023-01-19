@@ -126,3 +126,26 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", annotations, svc.ObjectMeta.Annotations)
 	}
 }
+
+func TestBuildServiceForHeadPodWithCustomLabel(t *testing.T) {
+	labels := make(map[string]string)
+	labels["key1"] = "testvalue1"
+	labels["key2"] = "testvalue2"
+
+	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector
+	expectedResult := labels
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLength := len(svc.Spec.Selector)
+	// We have 5 default labels in `BuildServiceForHeadPod`, and two custom labels
+	// Hence, `expectedLength` should also be 5+2=7.
+	expectedLength := 7
+	if actualLength != expectedLength {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
+	}
+}
