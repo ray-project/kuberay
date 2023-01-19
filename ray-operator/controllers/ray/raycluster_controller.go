@@ -310,6 +310,9 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
 				labels[common.KubernetesApplicationNameLabelKey] = val
 			}
+			for k, v := range instance.Spec.HeadServiceCustomLabels {
+				labels[k] = v
+			}
 			annotations := make(map[string]string)
 			for k, v := range instance.Spec.HeadServiceAnnotations {
 				annotations[k] = v
