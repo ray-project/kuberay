@@ -108,11 +108,4 @@ spec:
                   requests:
                     cpu: "500m"
                     memory: "2Gi"
-    headServiceAnnotations:
-      # annotations passed on for the Head Service
-      service_key: "service_value"
-    HeadServiceCustomLabels:
-      test_key0: "test_key0"
-      test_key1: "test_key1"
-      test_key2: "test_key2"
 

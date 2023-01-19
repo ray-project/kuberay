@@ -79,11 +79,7 @@ spec:
 
     headServiceAnnotations:
       # annotations passed on for the Head Service
-      service_key: "service_value"
-    HeadServiceCustomLabels:
-      test_key0: "test_key0"
-      test_key1: "test_key1"
-      test_key2: "test_key2"
+      # service_key: "service_value"
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
 # it is mounted into the container and executed to show the Ray job at work
