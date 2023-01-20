@@ -73,8 +73,6 @@ metadata:
 spec:
   rayVersion: '$ray_version'
   headGroupSpec:
-    serviceType: ClusterIP
-    replicas: 1
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1'

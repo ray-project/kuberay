@@ -28,7 +28,7 @@ type RayClusterSpec struct {
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
-	ServiceType v1.ServiceType `json:"serviceType"`
+	ServiceType v1.ServiceType `json:"serviceType,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// HeadGroupSpec.Replicas is deprecated and ignored; there can only be one head pod per Ray cluster.

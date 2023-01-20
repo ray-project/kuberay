@@ -42,8 +42,6 @@ spec:
     ######################headGroupSpecs#################################
     # head group template and specs, (perhaps 'group' is not needed in the name)
     headGroupSpec:
-      # Kubernetes Service Type, valid values are 'ClusterIP', 'NodePort' and 'LoadBalancer'
-      serviceType: ClusterIP
       # the following params are used to complete the ray start: ray start --head --block ...
       rayStartParams:
         port: '6379' # should match container port named gcs-server

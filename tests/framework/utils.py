@@ -17,6 +17,7 @@ class CONST:
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v0.4.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
@@ -30,6 +31,11 @@ class CONST:
     # Ray features
     RAY_FT = "RAY_FT"
     RAY_SERVICE = "RAY_SERVICE"
+
+    # Custom Resource Definitions
+    RAY_CLUSTER_CRD = "RayCluster"
+    RAY_SERVICE_CRD = "RayService"
+    RAY_JOB_CRD = "RayJob"
 
 CONST = CONST()
 
@@ -104,12 +110,21 @@ class OperatorManager:
 
     def __install_crd_and_operator(self):
         """Install both CRD and KubeRay operator by kuberay-operator chart"""
-        logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-        shell_subprocess_run(
-            f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
-            f"--set image.repository={repo},image.tag={tag}"
-        )
+        if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
+            logger.info("Install both CRD and KubeRay operator with the latest release.")
+            shell_subprocess_run(
+                "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
+            )
+            shell_subprocess_run(
+                f"helm install kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
+            )
+        else:
+            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")
+            shell_subprocess_run(
+                f"helm install kuberay-operator {CONST.HELM_CHART_ROOT}/kuberay-operator/ "
+                f"--set image.repository={repo},image.tag={tag}"
+            )
 
 def shell_subprocess_run(command, check = True):
     """
@@ -152,3 +167,32 @@ def pod_exec_command(pod_name, namespace, exec_command, check = True):
     Both STDOUT and STDERR of `exec_command` will be printed.
     """
     return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
+
+def create_custom_object(namespace, cr_object):
+    """Create a custom resource based on `cr_object` in the given `namespace`."""
+    k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+    crd = cr_object["kind"]
+    if crd == CONST.RAY_CLUSTER_CRD:
+        k8s_cr_api.create_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayclusters', body = cr_object)
+    elif crd == CONST.RAY_SERVICE_CRD:
+        k8s_cr_api.create_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayservices', body = cr_object)
+    elif crd == CONST.RAY_JOB_CRD:
+        raise NotImplementedError
+
+def delete_custom_object(crd, namespace, cr_name):
+    """Delete the given `cr_name` custom resource in the given `namespace`."""
+    k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+    if crd == CONST.RAY_CLUSTER_CRD:
+        k8s_cr_api.delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayclusters', name = cr_name)
+    elif crd == CONST.RAY_SERVICE_CRD:
+        k8s_cr_api.delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayservices', name = cr_name)
+    elif crd == CONST.RAY_JOB_CRD:
+        raise NotImplementedError
