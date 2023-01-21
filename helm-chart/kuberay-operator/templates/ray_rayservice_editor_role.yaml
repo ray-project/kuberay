@@ -1,7 +1,12 @@
 # permissions for end users to edit rayservices.
 {{- if .Values.rbacEnable }}
 apiVersion: rbac.authorization.k8s.io/v1
+
+{{- if .Values.singleNamespaceInstall }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
   name: rayservice-editor-role
 rules:
