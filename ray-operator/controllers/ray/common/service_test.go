@@ -134,7 +134,7 @@ func TestBuildServiceForHeadPodWithCustomLabel(t *testing.T) {
 	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
 	assert.Nil(t, err)
 
-	// Selector shoudl not contain any custom label
+	// Selector should not contain any custom label
 	for k := range svc.Spec.Selector {
 		if k == "key" {
 			t.Fatalf("Expected `%v` not exit", k)

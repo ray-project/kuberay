@@ -39,6 +39,3 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-  headServiceAnnotations:
-    # annotations passed on for the Head Service
-    service_key: "service_value"
