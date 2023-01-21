@@ -307,13 +307,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		var err error
 		if serviceType == common.HeadService {
 			labels := make(map[string]string)
-			default_labels := map[string]struct{}{
-				common.RayClusterLabelKey:                {},
-				common.RayNodeTypeLabelKey:               {},
-				common.RayIDLabelKey:                     {},
-				common.KubernetesApplicationNameLabelKey: {},
-				common.KubernetesCreatedByLabelKey:       {},
-			}
+			default_labels := common.HeadServiceLabels(*instance)
 			for k, v := range instance.Spec.HeadServiceCustomLabels {
 				// CustomLabels should not change default labels
 				if _, ok := default_labels[k]; !ok {
