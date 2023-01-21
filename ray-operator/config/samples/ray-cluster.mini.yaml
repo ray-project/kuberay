@@ -39,3 +39,4 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+            
