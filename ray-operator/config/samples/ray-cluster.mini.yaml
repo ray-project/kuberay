@@ -39,3 +39,11 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+  headServiceAnnotations:
+    # annotations passed on for the Head Service
+    service_key: "service_value"
+  headServiceCustomLabels:
+    test_key0: "test_value0"
+    test_key1: "test_value1"
+    test_key2: "test_value2"
+    app.kubernetes.io/name: "fake_name"

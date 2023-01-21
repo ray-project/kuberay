@@ -135,7 +135,7 @@ func TestBuildServiceForHeadPodWithCustomLabel(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Selector shoudl not contain any custom label
-	for k, _ := range svc.Spec.Selector {
+	for k := range svc.Spec.Selector {
 		if k == "key" {
 			t.Fatalf("Expected `%v` not exit", k)
 		}
