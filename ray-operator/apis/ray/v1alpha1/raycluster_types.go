@@ -23,7 +23,7 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions       *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 	HeadServiceAnnotations  map[string]string  `json:"headServiceAnnotations,omitempty"`
-	HeadServiceCustomLabels map[string]string  `json:"HeadServiceCustomLabels,omitempty"`
+	HeadServiceCustomLabels map[string]string  `json:"headServiceCustomLabels,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod

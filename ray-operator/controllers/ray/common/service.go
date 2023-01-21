@@ -34,6 +34,12 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		}
 	}
 
+	selector := make(map[string]string)
+
+	for k, _ := range default_labels {
+		selector[k] = labels[k]
+	}
+
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
@@ -46,7 +52,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: labels,
+			Selector: selector,
 			Ports:    []corev1.ServicePort{},
 			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
 		},

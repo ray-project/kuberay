@@ -41,10 +41,6 @@ spec:
                 description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
                   NOTE: json tags are required.'
                 properties:
-                  HeadServiceCustomLabels:
-                    additionalProperties:
-                      type: string
-                    type: object
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
                       for the Ray autoscaler.
@@ -5963,6 +5959,10 @@ spec:
                     - template
                     type: object
                   headServiceAnnotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  headServiceCustomLabels:
                     additionalProperties:
                       type: string
                     type: object

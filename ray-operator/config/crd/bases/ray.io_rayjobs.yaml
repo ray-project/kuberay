@@ -55,10 +55,6 @@ spec:
               rayClusterSpec:
                 description: RayClusterSpec is the cluster template to run the job
                 properties:
-                  HeadServiceCustomLabels:
-                    additionalProperties:
-                      type: string
-                    type: object
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
                       for the Ray autoscaler.
@@ -5977,6 +5973,10 @@ spec:
                     - template
                     type: object
                   headServiceAnnotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  headServiceCustomLabels:
                     additionalProperties:
                       type: string
                     type: object

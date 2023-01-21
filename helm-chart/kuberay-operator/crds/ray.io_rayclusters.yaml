@@ -34,10 +34,6 @@ spec:
           spec:
             description: Specification of the desired behavior of the RayCluster.
             properties:
-              HeadServiceCustomLabels:
-                additionalProperties:
-                  type: string
-                type: object
               autoscalerOptions:
                 description: AutoscalerOptions specifies optional configuration for
                   the Ray autoscaler.
@@ -5713,6 +5709,10 @@ spec:
                 - template
                 type: object
               headServiceAnnotations:
+                additionalProperties:
+                  type: string
+                type: object
+              headServiceCustomLabels:
                 additionalProperties:
                   type: string
                 type: object

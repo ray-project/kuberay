@@ -307,11 +307,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 		var err error
 		if serviceType == common.HeadService {
 			labels := make(map[string]string)
-			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
-				labels[common.KubernetesApplicationNameLabelKey] = val
-			}
 			for k, v := range instance.Spec.HeadServiceCustomLabels {
 				labels[k] = v
+			}
+			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
+				labels[common.KubernetesApplicationNameLabelKey] = val
 			}
 			annotations := make(map[string]string)
 			for k, v := range instance.Spec.HeadServiceAnnotations {
