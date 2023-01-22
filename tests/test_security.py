@@ -31,7 +31,12 @@ class PodSecurityTestCase(unittest.TestCase):
     """
     https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md
     Test for the document for the Pod security standard in CI
+    The differences between this test and pod-security.md are:
+    (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
+    (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
     """
+    namespace = "pod-security"
+
     @classmethod
     def setUpClass(cls):
         K8S_CLUSTER_MANAGER.delete_kind_cluster()
@@ -40,15 +45,14 @@ class PodSecurityTestCase(unittest.TestCase):
         # Apply the restricted Pod security standard to all Pods in the namespace pod-security.
         # The label pod-security.kubernetes.io/enforce=restricted means that the Pod that violates
         # the policies will be rejected.
-        cluster_namespace = "pod-security"
-        shell_subprocess_run(f"kubectl create ns {cluster_namespace}")
-        shell_subprocess_run(f"kubectl label --overwrite ns {cluster_namespace} \
-                             {cluster_namespace}.kubernetes.io/warn=restricted \
-                             {cluster_namespace}.kubernetes.io/warn-version=latest \
-                             {cluster_namespace}.kubernetes.io/audit=restricted \
-                             {cluster_namespace}.kubernetes.io/audit-version=latest \
-                             {cluster_namespace}.kubernetes.io/enforce=restricted \
-                             {cluster_namespace}.kubernetes.io/enforce-version=latest")
+        shell_subprocess_run(f"kubectl create ns {PodSecurityTestCase.namespace}")
+        shell_subprocess_run(f"kubectl label --overwrite ns {PodSecurityTestCase.namespace} \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/warn=restricted \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/warn-version=latest \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/audit=restricted \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/audit-version=latest \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/enforce=restricted \
+                             {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
         # Install the KubeRay operator in default namespace(for now)
         image_dict = {
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
@@ -57,13 +61,10 @@ class PodSecurityTestCase(unittest.TestCase):
         logger.info(image_dict)
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
-    def test_pod_security(self):
+    def test_ray_cluster_with_security_context(self):
         """
-        The differences between this test and pod-security.md are:
-        (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
-        (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
+        Create a RayCluster with securityContext config under restricted mode
         """
-        cluster_namespace = "pod-security"
         context = {}
         cr_yaml = CONST.REPO_ROOT.joinpath(
             "ray-operator/config/security/ray-cluster.pod-security.yaml"
@@ -80,27 +81,30 @@ class PodSecurityTestCase(unittest.TestCase):
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,
-            namespace = cluster_namespace,
+            namespace = PodSecurityTestCase.namespace,
             filepath = context['filepath']
         )
         ray_cluster_add_event.trigger()
 
-        logger.info('[TEST]:Create pod without securityContext config under restricted mode')
+    def test_pod_without_security_context(self):
+        """
+        Create a pod without securityContext config under restricted mode
+        """
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         pod_spec = client.V1PodSpec(containers=[client.V1Container(name='busybox',image='busybox')])
-        pod_metadata = client.V1ObjectMeta(name='my-pod', namespace=cluster_namespace)
+        pod_metadata = client.V1ObjectMeta(name='my-pod', namespace=PodSecurityTestCase.namespace)
         pod_body = client.V1Pod(api_version='v1', kind='Pod', metadata=pod_metadata, spec=pod_spec)
+        logger.info('[TEST]:Create pod without securityContext config under restricted mode')
         with self.assertRaises(
             ApiException,
             msg = 'A Pod that violates restricted security policies should be rejected.'
         ) as ex:
-            k8s_v1_api.create_namespaced_pod(namespace=cluster_namespace, body=pod_body)
+            k8s_v1_api.create_namespaced_pod(namespace=PodSecurityTestCase.namespace, body=pod_body)
         # check if raise forbidden error. Only forbidden error is allowed
         self.assertEqual(
             first = ex.exception.status,
             second = 403,
             msg = f'Error code 403 is expected but Pod creation failed with {ex.exception.status}'
         )
-
 if __name__ == '__main__':
     unittest.main(verbosity=2)
