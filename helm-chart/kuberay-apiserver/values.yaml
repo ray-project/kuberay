@@ -50,3 +50,6 @@ ingress:
   enabled: false
 
 rbacEnable: true
+
+# the chart can be installed by users with permissions to a single namespace only
+singleNamespaceInstall: false
