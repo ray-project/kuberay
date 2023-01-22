@@ -134,11 +134,9 @@ func TestBuildServiceForHeadPodWithCustomLabel(t *testing.T) {
 	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
 	assert.Nil(t, err)
 
-	// Selector should not contain any custom label
-	for k := range svc.Spec.Selector {
-		if k == "key" {
-			t.Fatalf("Expected `%v` not exit", k)
-		}
+	// Selector should not contain any custom label.
+	if _, ok := svc.Spec.Selector["key"]; ok {
+		t.Fatalf("Expected `%v` not to exist", "key")
 	}
 
 	if _, ok := svc.ObjectMeta.Labels["key"]; !ok {
