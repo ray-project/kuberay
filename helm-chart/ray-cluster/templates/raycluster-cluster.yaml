@@ -188,3 +188,9 @@ spec:
         labels: {{ include "ray-cluster.labels" $ | nindent 10 }}
         {{- end }}
   {{- end }}
+  {{- if .Values.service.headServiceAnnotations }}
+  headServiceAnnotations: {{- toYaml .Values.service.headServiceAnnotations | nindent 4 }}
+  {{- end }}
+    {{- if .Values.service.headServiceCustomLabels }}
+  headServiceCustomLabels: {{- toYaml .Values.service.headServiceCustomLabels | nindent 4 }}
+  {{- end }}

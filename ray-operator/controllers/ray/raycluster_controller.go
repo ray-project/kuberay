@@ -309,7 +309,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			labels := make(map[string]string)
 			default_labels := common.HeadServiceLabels(*instance)
 			for k, v := range instance.Spec.HeadServiceCustomLabels {
-				// CustomLabels should not change default labels
+				// Custom labels should not change default labels.
 				if _, ok := default_labels[k]; !ok {
 					labels[k] = v
 				}

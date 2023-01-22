@@ -138,8 +138,20 @@ func TestBuildServiceForHeadPodWithCustomLabel(t *testing.T) {
 	if _, ok := svc.Spec.Selector["key"]; ok {
 		t.Fatalf("Expected `%v` not to exist", "key")
 	}
+	actualLength := len(svc.Spec.Selector)
+	// Selector only contains 5 default labels.
+	expectedLength := 5
+	if actualLength != expectedLength {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
+	}
 
 	if _, ok := svc.ObjectMeta.Labels["key"]; !ok {
 		t.Fatalf("Expected `%v`", "key")
+	}
+	actualLength = len(svc.ObjectMeta.Labels)
+	// Service label contains 5 default labels and a custom label.
+	expectedLength = 6
+	if actualLength != expectedLength {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLength, actualLength)
 	}
 }

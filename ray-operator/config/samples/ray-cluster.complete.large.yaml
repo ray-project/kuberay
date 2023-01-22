@@ -122,13 +122,8 @@ spec:
           - name: ray-logs
             emptyDir: {}
 ######################status#################################
-  # annotations passed on for the Head Service
+  # Annotations passed on for the Head Service
   headServiceAnnotations: {}
-  # custom labels passed on for the Head Service
-  # custom labels should not overwrite 
-  #   app.kubernetes.io/created-by
-  #   app.kubernetes.io/name
-  #   ray.io/cluster
-  #   ray.io/identifier
-  #   ray.io/node-type
+  # Custom labels passed on for the Head Service
+  # To avoid conflicts, custom labels should not start with either of the prefixes `app.kubernetenes.io/` or `ray.io/`
   headServiceCustomLabels: {}

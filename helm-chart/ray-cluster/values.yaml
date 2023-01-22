@@ -203,3 +203,8 @@ additionalWorkerGroups:
 service:
   # This is optional, and the default is ClusterIP.
   type: ClusterIP
+  # Annotations passed on for the Head Service
+  headServiceAnnotations: {}
+  # Custom labels passed on for the Head Service
+  # To avoid conflicts, custom labels should not start with either of the prefixes `app.kubernetenes.io/` or `ray.io/`
+  headServiceCustomLabels: {}
