@@ -30,7 +30,7 @@ logging.basicConfig(
 class PodSecurityTestCase(unittest.TestCase):
     """
     https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md
-    Test for the document for the Pod security standard in CI
+    Test for the document for the Pod security standard in CI.
     The differences between this test and pod-security.md are:
     (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
     (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
@@ -53,7 +53,7 @@ class PodSecurityTestCase(unittest.TestCase):
                              {PodSecurityTestCase.namespace}.kubernetes.io/audit-version=latest \
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce=restricted \
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
-        # Install the KubeRay operator in default namespace(for now)
+        # Install the KubeRay operator in default namespace(for now).
         image_dict = {
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
@@ -63,7 +63,7 @@ class PodSecurityTestCase(unittest.TestCase):
         operator_manager.prepare_operator()
     def test_ray_cluster_with_security_context(self):
         """
-        Create a RayCluster with securityContext config under restricted mode
+        Create a RayCluster with securityContext config under restricted mode.
         """
         context = {}
         cr_yaml = CONST.REPO_ROOT.joinpath(
@@ -88,7 +88,7 @@ class PodSecurityTestCase(unittest.TestCase):
 
     def test_pod_without_security_context(self):
         """
-        Create a pod without securityContext config under restricted mode
+        Create a pod without securityContext config under restricted mode.
         """
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         pod_spec = client.V1PodSpec(containers=[client.V1Container(name='busybox',image='busybox')])
