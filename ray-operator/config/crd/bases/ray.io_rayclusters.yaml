@@ -16,7 +16,28 @@ spec:
     singular: raycluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.desiredWorkerReplicas
+      name: desired workers
+      type: integer
+    - jsonPath: .status.availableWorkerReplicas
+      name: available workers
+      type: integer
+    - jsonPath: .status.state
+      name: status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: age
+      type: date
+    - jsonPath: .status.head.podIP
+      name: head pod IP
+      priority: 1
+      type: string
+    - jsonPath: .status.head.serviceIP
+      name: head service IP
+      priority: 1
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: RayCluster is the Schema for the RayClusters API
