@@ -3,6 +3,8 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -234,8 +236,17 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		}
 	}
 
-	// Unconditionally requeue after 60 seconds.
-	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+	// Unconditionally requeue after the number of seconds specified in the
+	// environment variable RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S. If the
+	// environment variable is not set, requeue after 5 minutes.
+	var requeueAfterSeconds int
+	requeueAfterSeconds, err := strconv.Atoi(os.Getenv("RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S"))
+	if err != nil {
+		r.Log.Info("RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S is not set, using default value 300s", "cluster name", request.Name)
+		requeueAfterSeconds = 5 * 60
+	}
+	r.Log.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
+	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
 }
 
 func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayCluster) error {
