@@ -20,6 +20,7 @@ Below are some of the main features of the KubeRay operator:
 
 When deployed, the KubeRay Operator will watch for K8s events (Create/Delete/Update) for `RayCluster` resources. The KubeRay Operator can create a Ray cluster (Ray head pod + multiple Ray worker pods), delete a Ray cluster, or update the Ray cluster by adding or removing worker pods.
 
+
 ### Ray cluster creation
 
 Once a `RayCluster` resource is created, the operator will configure and create the Ray head pod and the Ray worker pods specified in the `raycluster` manifest as shown below.
