@@ -157,6 +157,13 @@ var _ = Context("Inside the default namespace", func() {
 			}
 		})
 
+		It("cluster's .status.state should be updated to 'ready'", func() {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+				time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+			Expect(myRayCluster.Status.State).Should(Equal(rayiov1alpha1.Ready))
+		})
+
 		It("should create a head pod resource", func() {
 			var headPods corev1.PodList
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
