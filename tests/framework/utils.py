@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import tempfile
 import yaml
+import jsonpatch
 from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
@@ -84,10 +85,10 @@ class OperatorManager:
                 raise Exception(f"Image {key} does not exist!")
         self.docker_image_dict = docker_image_dict
 
-    def prepare_operator(self,namespace='default',helm_chart_values=None):
+    def prepare_operator(self,namespace='default',patch=jsonpatch.JsonPatch([])):
         """Prepare KubeRay operator for an existing KinD cluster"""
         self.__kind_prepare_images()
-        self.__install_crd_and_operator(namespace,helm_chart_values)
+        self.__install_crd_and_operator(namespace,patch)
 
     def __kind_prepare_images(self):
         """Download images and load images into KinD cluster"""
@@ -110,28 +111,36 @@ class OperatorManager:
             image = self.docker_image_dict[key]
             shell_subprocess_run(f'kind load docker-image {image}')
 
-    def __install_crd_and_operator(self,namespace,helm_chart_values):
-        """Install both CRD and KubeRay operator by kuberay-operator chart"""
-        with tempfile.NamedTemporaryFile('w') as values_fd:
-            yaml.safe_dump(helm_chart_values,values_fd)
-            values_path = '' if helm_chart_values is None else '-f' + values_fd.name
-            repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-            if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
-                logger.info("Install both CRD and KubeRay operator with the latest release.")
-                shell_subprocess_run(
-                    "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
-                )
-                shell_subprocess_run(
-                    f"helm install -n {namespace} {values_path}"
-                    f"kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
-                )
-            else:
-                logger.info("Install both nightly CRD and KubeRay operator")
-                shell_subprocess_run(
-                    f"helm install -n {namespace} {values_path} kuberay-operator "
-                    f"{CONST.HELM_CHART_ROOT}/kuberay-operator/ "
-                    f"--set image.repository={repo},image.tag={tag}"
-                )
+    def __install_crd_and_operator(self,namespace,patch):
+        """
+        Install both CRD and KubeRay operator by kuberay-operator chart.
+        KubeRay operator will install in the {namespace} with custom config describe in {patch}.
+        The default KubeRay operator config is in kuberay/helm-chart/kuberay-operator/values.yaml.
+        """
+        base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
+        with open(base_yaml,encoding = "utf-8") as base_fd:
+            with tempfile.NamedTemporaryFile('w') as values_fd:
+                helm_chart_values = yaml.safe_load(base_fd)
+                yaml.safe_dump(patch.apply(helm_chart_values),values_fd)
+                repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+                if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
+                    logger.info("Install both CRD and KubeRay operator with the latest release.")
+                    shell_subprocess_run(
+                        "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
+                    )
+                    shell_subprocess_run(
+                        f"helm install -n {namespace} -f {values_fd.name}"
+                        f"kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
+                    )
+                else:
+                    logger.info(
+                        "Install both nightly CRD and KubeRay operator by kuberay-operator chart"
+                    )
+                    shell_subprocess_run(
+                        f"helm install -n {namespace} -f {values_fd.name} kuberay-operator "
+                        f"{CONST.HELM_CHART_ROOT}/kuberay-operator/ "
+                        f"--set image.repository={repo},image.tag={tag}"
+                    )
 
 def shell_subprocess_run(command, check = True):
     """

@@ -6,6 +6,7 @@ import os
 import logging
 import unittest
 import yaml
+import jsonpatch
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
@@ -60,19 +61,20 @@ class PodSecurityTestCase(unittest.TestCase):
         }
         logger.info(image_dict)
         operator_manager = OperatorManager(image_dict)
-        with open(
-            CONST.REPO_ROOT.joinpath("helm-chart/kuberay-operator/values.yaml"),
-            encoding="utf-8"
-        ) as helm_chart_fd:
-            helm_chart_values = yaml.safe_load(helm_chart_fd)
-            helm_chart_values['securityContext']['allowPrivilegeEscalation'] = False
-            helm_chart_values['securityContext']['capabilities'] = {'drop':["ALL"]}
-            helm_chart_values['securityContext']['runAsNonRoot'] = True
-            helm_chart_values['securityContext']['seccompProfile'] = {'type': 'RuntimeDefault'}
-            operator_manager.prepare_operator(
-                namespace=PodSecurityTestCase.namespace,
-                helm_chart_values=helm_chart_values
-            )
+        patch = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/securityContext/allowPrivilegeEscalation', 'value': False},
+            {'op': 'add', 'path': '/securityContext/capabilities', 'value': {'drop':["ALL"]}},
+            {'op': 'add', 'path': '/securityContext/runAsNonRoot', 'value': True},
+            {
+                'op': 'add',
+                'path': '/securityContext/seccompProfile',
+                'value': {'type': 'RuntimeDefault'}
+            }
+        ])
+        operator_manager.prepare_operator(
+            namespace = PodSecurityTestCase.namespace,
+            patch  = patch 
+        )
     def test_ray_cluster_with_security_context(self):
         """
         Create a RayCluster with securityContext config under restricted mode.
@@ -81,9 +83,9 @@ class PodSecurityTestCase(unittest.TestCase):
         cr_yaml = CONST.REPO_ROOT.joinpath(
             "ray-operator/config/security/ray-cluster.pod-security.yaml"
         )
-        with open(cr_yaml, encoding="utf-8") as ray_cluster_yaml:
-            context['filepath'] = ray_cluster_yaml.name
-            for k8s_object in yaml.safe_load_all(ray_cluster_yaml):
+        with open(cr_yaml, encoding="utf-8") as cr_fd:
+            context['filepath'] = cr_fd.name
+            for k8s_object in yaml.safe_load_all(cr_fd):
                 if k8s_object['kind'] == 'RayCluster':
                     context['cr'] = k8s_object
                     break
