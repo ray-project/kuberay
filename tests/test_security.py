@@ -60,7 +60,6 @@ class PodSecurityTestCase(unittest.TestCase):
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         logger.info(image_dict)
-        operator_manager = OperatorManager(image_dict,PodSecurityTestCase.namespace)
         security_context = {
                 'allowPrivilegeEscalation': False,
                 'capabilities': {'drop':["ALL"]},
@@ -72,10 +71,9 @@ class PodSecurityTestCase(unittest.TestCase):
             'path': '/securityContext/',
             'value': security_context
         }])
-        operator_manager.prepare_operator(
-            namespace = PodSecurityTestCase.namespace,
-            patch  = patch
-        )
+        operator_manager = OperatorManager(image_dict, PodSecurityTestCase.namespace, patch)
+        operator_manager.prepare_operator()
+
     def test_ray_cluster_with_security_context(self):
         """
         Create a RayCluster with securityContext config under restricted mode.
