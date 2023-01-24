@@ -115,7 +115,7 @@ class OperatorManager:
         """
         Install both CRD and KubeRay operator by kuberay-operator chart.
         KubeRay operator will install in the {namespace} with custom config describe in {patch}.
-        The default KubeRay operator config is in kuberay/helm-chart/kuberay-operator/values.yaml.
+        The default KubeRay operator config is in helm-chart/kuberay-operator/values.yaml.
         """
         base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
         with open(base_yaml,encoding = "utf-8") as base_fd:
