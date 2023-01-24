@@ -60,20 +60,21 @@ class PodSecurityTestCase(unittest.TestCase):
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         logger.info(image_dict)
-        operator_manager = OperatorManager(image_dict)
-        patch = jsonpatch.JsonPatch([
-            {'op': 'add', 'path': '/securityContext/allowPrivilegeEscalation', 'value': False},
-            {'op': 'add', 'path': '/securityContext/capabilities', 'value': {'drop':["ALL"]}},
-            {'op': 'add', 'path': '/securityContext/runAsNonRoot', 'value': True},
-            {
-                'op': 'add',
-                'path': '/securityContext/seccompProfile',
-                'value': {'type': 'RuntimeDefault'}
+        operator_manager = OperatorManager(image_dict,PodSecurityTestCase.namespace)
+        security_context = {
+                'allowPrivilegeEscalation': False,
+                'capabilities': {'drop':["ALL"]},
+                'runAsNonRoot': True,
+                'seccompProfile': {'type': 'RuntimeDefault'}
             }
-        ])
+        patch = jsonpatch.JsonPatch([{
+            'op': 'add',
+            'path': '/securityContext/',
+            'value': security_context
+        }])
         operator_manager.prepare_operator(
             namespace = PodSecurityTestCase.namespace,
-            patch  = patch 
+            patch  = patch
         )
     def test_ray_cluster_with_security_context(self):
         """
@@ -120,5 +121,6 @@ class PodSecurityTestCase(unittest.TestCase):
             second = 403,
             msg = f'Error code 403 is expected but Pod creation failed with {ex.exception.status}'
         )
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

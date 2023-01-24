@@ -79,16 +79,17 @@ class OperatorManager:
     OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
     load images into an existing KinD cluster, and install CRD and KubeRay operator.
     """
-    def __init__(self, docker_image_dict) -> None:
+    def __init__(self, docker_image_dict, namespace = 'default') -> None:
         for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
             if key not in docker_image_dict:
                 raise Exception(f"Image {key} does not exist!")
         self.docker_image_dict = docker_image_dict
+        self.namespace = namespace
 
-    def prepare_operator(self, namespace = 'default', patch = jsonpatch.JsonPatch([])):
+    def prepare_operator(self, patch = jsonpatch.JsonPatch([])):
         """Prepare KubeRay operator for an existing KinD cluster"""
         self.__kind_prepare_images()
-        self.__install_crd_and_operator(namespace, patch)
+        self.__install_crd_and_operator(patch)
 
     def __kind_prepare_images(self):
         """Download images and load images into KinD cluster"""
@@ -111,18 +112,19 @@ class OperatorManager:
             image = self.docker_image_dict[key]
             shell_subprocess_run(f'kind load docker-image {image}')
 
-    def __install_crd_and_operator(self, namespace, patch):
+    def __install_crd_and_operator(self, patch):
         """
         Install both CRD and KubeRay operator by kuberay-operator chart.
-        KubeRay operator will install in the {namespace} with custom config describe in {patch}.
+        KubeRay operator will install in the self.namespace with custom config describe in patch.
         The default KubeRay operator config is in kuberay/helm-chart/kuberay-operator/values.yaml.
         """
         base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
-        with open(base_yaml,encoding = "utf-8") as base_fd:
-            with tempfile.NamedTemporaryFile('w') as values_fd:
-                helm_chart_values = yaml.safe_load(base_fd)
-                yaml.safe_dump(patch.apply(helm_chart_values),values_fd)
-                values_yaml = values_fd.name
+        with open(base_yaml, encoding = "utf-8") as base_fd:
+            with tempfile.NamedTemporaryFile('w') as updated_fd:
+                base_values = yaml.safe_load(base_fd)
+                yaml.safe_dump(patch.apply(base_values),updated_fd)
+                updated_values = '-f ' + updated_fd.name if bool(patch) else ''
+                namespace = '-n ' + self.namespace
                 repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
                 if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
                     logger.info("Install both CRD and KubeRay operator with the latest release.")
@@ -130,15 +132,15 @@ class OperatorManager:
                         "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
                     )
                     shell_subprocess_run(
-                        f"helm install -n {namespace} -f {values_yaml} "
-                        f"kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
+                        f"helm install {namespace} {updated_values} kuberay-operator "
+                        f"kuberay/kuberay-operator --version {tag[1:]}"
                     )
                 else:
                     logger.info(
                         "Install both nightly CRD and KubeRay operator by kuberay-operator chart"
                     )
                     shell_subprocess_run(
-                        f"helm install -n {namespace} -f {values_yaml} kuberay-operator "
+                        f"helm install {namespace} {updated_values} kuberay-operator "
                         f"{CONST.HELM_CHART_ROOT}/kuberay-operator/ "
                         f"--set image.repository={repo},image.tag={tag}"
                     )
