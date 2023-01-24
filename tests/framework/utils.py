@@ -125,7 +125,6 @@ class OperatorManager:
             with tempfile.NamedTemporaryFile('w') as updated_fd:
                 base_values = yaml.safe_load(base_fd)
                 yaml.safe_dump(self.patch.apply(base_values),updated_fd)
-                print(self.patch.apply(base_values))
                 updated_values = '-f ' + updated_fd.name if bool(self.patch) else ''
                 namespace = '-n ' + self.namespace
                 repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
