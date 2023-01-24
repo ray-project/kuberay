@@ -68,7 +68,7 @@ class PodSecurityTestCase(unittest.TestCase):
             }
         patch = jsonpatch.JsonPatch([{
             'op': 'add',
-            'path': '/securityContext/',
+            'path': '/securityContext',
             'value': security_context
         }])
         operator_manager = OperatorManager(image_dict, PodSecurityTestCase.namespace, patch)
