@@ -814,14 +814,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		For(&rayiov1alpha1.RayCluster{}).Named("raycluster-controller").
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
-		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayiov1alpha1.RayCluster{},
-		}).
-		Watches(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayiov1alpha1.RayCluster{},
-		})
+		Owns(&corev1.Pod{}).
+		Owns(&corev1.Service{})
 
 	if EnableBatchScheduler {
 		b = batchscheduler.ConfigureReconciler(b)
