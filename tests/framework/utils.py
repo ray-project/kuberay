@@ -130,7 +130,7 @@ class OperatorManager:
                         "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
                     )
                     shell_subprocess_run(
-                        f"helm install -n {namespace} -f {values_yaml}"
+                        f"helm install -n {namespace} -f {values_yaml} "
                         f"kuberay-operator kuberay/kuberay-operator --version {tag[1:]}"
                     )
                 else:
