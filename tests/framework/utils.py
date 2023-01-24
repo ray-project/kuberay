@@ -79,17 +79,19 @@ class OperatorManager:
     OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
     load images into an existing KinD cluster, and install CRD and KubeRay operator.
     """
-    def __init__(self, docker_image_dict, namespace = 'default') -> None:
+    def __init__(self, docker_image_dict,
+        namespace = 'default', patch = jsonpatch.JsonPatch([])) -> None:
         for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
             if key not in docker_image_dict:
                 raise Exception(f"Image {key} does not exist!")
         self.docker_image_dict = docker_image_dict
         self.namespace = namespace
+        self.patch = patch
 
-    def prepare_operator(self, patch = jsonpatch.JsonPatch([])):
+    def prepare_operator(self):
         """Prepare KubeRay operator for an existing KinD cluster"""
         self.__kind_prepare_images()
-        self.__install_crd_and_operator(patch)
+        self.__install_crd_and_operator()
 
     def __kind_prepare_images(self):
         """Download images and load images into KinD cluster"""
@@ -112,18 +114,18 @@ class OperatorManager:
             image = self.docker_image_dict[key]
             shell_subprocess_run(f'kind load docker-image {image}')
 
-    def __install_crd_and_operator(self, patch):
+    def __install_crd_and_operator(self):
         """
         Install both CRD and KubeRay operator by kuberay-operator chart.
-        KubeRay operator will install in the self.namespace with custom config describe in patch.
+        KubeRay operator will install in the {namespace} with custom config describe in {patch}.
         The default KubeRay operator config is in kuberay/helm-chart/kuberay-operator/values.yaml.
         """
         base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
         with open(base_yaml, encoding = "utf-8") as base_fd:
             with tempfile.NamedTemporaryFile('w') as updated_fd:
                 base_values = yaml.safe_load(base_fd)
-                yaml.safe_dump(patch.apply(base_values),updated_fd)
-                updated_values = '-f ' + updated_fd.name if bool(patch) else ''
+                yaml.safe_dump(self.patch.apply(base_values),updated_fd)
+                updated_values = '-f ' + updated_fd.name if bool(self.patch) else ''
                 namespace = '-n ' + self.namespace
                 repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
                 if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
