@@ -53,14 +53,26 @@ class PodSecurityTestCase(unittest.TestCase):
                              {PodSecurityTestCase.namespace}.kubernetes.io/audit-version=latest \
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce=restricted \
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
-        # Install the KubeRay operator in default namespace(for now).
+        # Install the KubeRay operator in the namespace pod-security.
         image_dict = {
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         logger.info(image_dict)
         operator_manager = OperatorManager(image_dict)
-        operator_manager.prepare_operator()
+        with open(
+            CONST.REPO_ROOT.joinpath("helm-chart/kuberay-operator/values.yaml"),
+            encoding="utf-8"
+        ) as helm_chart_fd:
+            helm_chart_values = yaml.safe_load(helm_chart_fd)
+            helm_chart_values['securityContext']['allowPrivilegeEscalation'] = False
+            helm_chart_values['securityContext']['capabilities'] = {'drop':["ALL"]}
+            helm_chart_values['securityContext']['runAsNonRoot'] = True
+            helm_chart_values['securityContext']['seccompProfile'] = {'type': 'RuntimeDefault'}
+            operator_manager.prepare_operator(
+                namespace=PodSecurityTestCase.namespace,
+                helm_chart_values=helm_chart_values
+            )
     def test_ray_cluster_with_security_context(self):
         """
         Create a RayCluster with securityContext config under restricted mode.
