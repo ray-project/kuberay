@@ -16,9 +16,11 @@ limitations under the License.
 package ray
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -79,6 +81,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(k8sClient).ToNot(BeNil())
 
 	// Suggested way to run tests
+	os.Setenv(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: "0",

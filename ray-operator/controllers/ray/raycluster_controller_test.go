@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"log"
 	"reflect"
 	"time"
 
@@ -46,6 +47,7 @@ const (
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
+	var headPods corev1.PodList
 	enableInTreeAutoscaling := true
 
 	myRayCluster := &rayiov1alpha1.RayCluster{
@@ -62,7 +64,6 @@ var _ = Context("Inside the default namespace", func() {
 					"port":                "6379",
 					"object-manager-port": "12345",
 					"node-manager-port":   "12346",
-					"object-store-memory": "100000000",
 					"num-cpus":            "1",
 				},
 				Template: corev1.PodTemplateSpec{
@@ -126,7 +127,8 @@ var _ = Context("Inside the default namespace", func() {
 		},
 	}
 
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
+	headFilterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
+	workerFilterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
 
 	Describe("When creating a raycluster", func() {
 		It("should create a raycluster object", func() {
@@ -150,24 +152,15 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should create 3 workers", func() {
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
 			}
 		})
 
-		It("cluster's .status.state should be updated to 'ready'", func() {
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-			Expect(myRayCluster.Status.State).Should(Equal(rayiov1alpha1.Ready))
-		})
-
 		It("should create a head pod resource", func() {
-			var headPods corev1.PodList
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
-			err := k8sClient.List(ctx, &headPods, filterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
+			err := k8sClient.List(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
 			Expect(err).NotTo(HaveOccurred(), "failed list head pods")
 			Expect(len(headPods.Items)).Should(BeNumerically("==", 1), "My head pod list= %v", headPods.Items)
 
@@ -197,9 +190,42 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "autoscaler RoleBinding = %v", rbName)
 		})
 
+		It("should be able to update all Pods to Running", func() {
+			// We need to manually update Pod statuses otherwise they'll always be Pending.
+			// envtest doesn't create a full K8s cluster. It's only the control plane.
+			// There's no container runtime or any other K8s controllers.
+			// So Pods are created, but no controller updates them from Pending to Running.
+			// See https://book.kubebuilder.io/reference/envtest.html
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
+			}
+			err := k8sClient.List(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"})
+			Expect(err).ShouldNot(HaveOccurred(), "failed to list head Pods")
+			for _, headPod := range headPods.Items {
+				Expect(headPod.Status.Phase).Should(Equal(corev1.PodRunning))
+			}
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+			}
+			err = k8sClient.List(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"})
+			Expect(err).ShouldNot(HaveOccurred(), "failed to list worker Pods")
+			for _, workerPod := range workerPods.Items {
+				Expect(workerPod.Status.Phase).Should(Equal(corev1.PodRunning))
+			}
+		})
+
+		It("cluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+			Eventually(
+				getClusterState(ctx, "default", myRayCluster.Name),
+				time.Second*(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayiov1alpha1.Ready))
+		})
+
 		It("should re-create a deleted worker", func() {
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			pod := workerPods.Items[0]
@@ -210,7 +236,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// at least 3 pods should be in none-failed phase
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -235,7 +261,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should have only 2 running worker", func() {
 			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -257,7 +283,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should have only 1 running worker", func() {
 			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -282,14 +308,14 @@ var _ = Context("Inside the default namespace", func() {
 		It("should scale to maxReplicas (4) workers", func() {
 			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("should countinue to have only maxReplicas (4) workers", func() {
 			// check that pod count stays at 4 for two seconds.
 			Consistently(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*2, time.Millisecond*200).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
@@ -336,4 +362,14 @@ func retryOnOldRevision(attempts int, sleep time.Duration, f func() error) error
 		}
 	}
 	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
+}
+
+func getClusterState(ctx context.Context, namespace string, clusterName string) func() rayiov1alpha1.ClusterState {
+	return func() rayiov1alpha1.ClusterState {
+		var cluster rayiov1alpha1.RayCluster
+		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
+			log.Fatal(err)
+		}
+		return cluster.Status.State
+	}
 }

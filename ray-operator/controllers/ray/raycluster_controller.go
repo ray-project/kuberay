@@ -238,13 +238,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 	}
 
 	// Unconditionally requeue after the number of seconds specified in the
-	// environment variable RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S. If the
-	// environment variable is not set, requeue after 5 minutes.
+	// environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
+	// environment variable is not set, requeue after the default value.
 	var requeueAfterSeconds int
-	requeueAfterSeconds, err := strconv.Atoi(os.Getenv("RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S"))
+	requeueAfterSeconds, err := strconv.Atoi(os.Getenv(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV))
 	if err != nil {
-		r.Log.Info("RAYCLUSTER_DEFAULT_RECONCILE_LOOP_S is not set, using default value 300s", "cluster name", request.Name)
-		requeueAfterSeconds = 5 * 60
+		r.Log.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d seconds", common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS), "cluster name", request.Name)
+		requeueAfterSeconds = common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
 	}
 	r.Log.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
