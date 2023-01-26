@@ -57,19 +57,18 @@ class PodSecurityTestCase(unittest.TestCase):
         # Install the KubeRay operator in the namespace pod-security.
         image_dict = {
             CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.2.0',
-            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
+            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly')
         }
         logger.info(image_dict)
-        security_context = {
+        patch = jsonpatch.JsonPatch([{
+            'op': 'add',
+            'path': '/securityContext',
+            'value': {
                 'allowPrivilegeEscalation': False,
                 'capabilities': {'drop':["ALL"]},
                 'runAsNonRoot': True,
                 'seccompProfile': {'type': 'RuntimeDefault'}
             }
-        patch = jsonpatch.JsonPatch([{
-            'op': 'add',
-            'path': '/securityContext',
-            'value': security_context
         }])
         operator_manager = OperatorManager(image_dict, PodSecurityTestCase.namespace, patch)
         operator_manager.prepare_operator()

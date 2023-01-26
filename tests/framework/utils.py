@@ -4,6 +4,7 @@ import subprocess
 import logging
 from pathlib import Path
 import tempfile
+from urllib import request
 import yaml
 import jsonpatch
 from kubernetes import client, config
@@ -118,35 +119,34 @@ class OperatorManager:
         """
         Install both CRD and KubeRay operator by kuberay-operator chart.
         KubeRay operator will install in the {namespace} with custom config describe in {patch}.
-        The default KubeRay operator config is in kuberay/helm-chart/kuberay-operator/values.yaml.
         """
-        base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
-        with open(base_yaml, encoding = "utf-8") as base_fd:
-            with tempfile.NamedTemporaryFile('w') as updated_fd:
-                base_values = yaml.safe_load(base_fd)
-                yaml.safe_dump(self.patch.apply(base_values),updated_fd)
-                updated_values = '-f ' + updated_fd.name if bool(self.patch) else ''
-                namespace = '-n ' + self.namespace
-                repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
-                if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
-                    logger.info("Install both CRD and KubeRay operator with the latest release.")
+        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+        if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
+            logger.info("Install both CRD and KubeRay operator with the latest release.")
+            base_url = ("https://github.com/ray-project/kuberay-helm"
+                        "/raw/main/helm-chart/kuberay-operator/values.yaml"
+            )
+            with request.urlopen(base_url) as base_fd:
+                with tempfile.NamedTemporaryFile('w') as updated_fd:
+                    yaml.safe_dump(self.patch.apply(yaml.safe_load(base_fd)),updated_fd)
                     shell_subprocess_run(
                         "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
                     )
                     shell_subprocess_run(
-                        f"helm install {namespace} {updated_values} kuberay-operator "
+                        f"helm install -n {self.namespace} -f {updated_fd.name} kuberay-operator "
                         f"kuberay/kuberay-operator --version {tag[1:]}"
                     )
-                else:
-                    logger.info(
-                        "Install both nightly CRD and KubeRay operator by kuberay-operator chart"
-                    )
+        else:
+            logger.info("Install both nightly CRD and KubeRay operator by kuberay-operator chart")
+            base_yaml = CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
+            with open(base_yaml, encoding = "utf-8") as base_fd:
+                with tempfile.NamedTemporaryFile('w') as updated_fd:
+                    yaml.safe_dump(self.patch.apply(yaml.safe_load(base_fd)),updated_fd)
                     shell_subprocess_run(
-                        f"helm install {namespace} {updated_values} kuberay-operator "
+                        f"helm install -n {self.namespace} -f {updated_fd.name} kuberay-operator "
                         f"{CONST.HELM_CHART_ROOT}/kuberay-operator/ "
                         f"--set image.repository={repo},image.tag={tag}"
                     )
-
 def shell_subprocess_run(command, check = True):
     """
     Command will be executed through the shell. If check=True, it will raise an error when
