@@ -32,9 +32,8 @@ class PodSecurityTestCase(unittest.TestCase):
     """
     https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md
     Test for the document for the Pod security standard in CI.
-    The differences between this test and pod-security.md are:
-    (1) (Step 4) Installs the operator in default namespace rather than pod-security namespace.
-    (2) (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
+    The differences between this test and pod-security.md is:
+    (Step 5.1) Installs a simple Pod without securityContext instead of a RayCluster.
     """
     namespace = "pod-security"
 
