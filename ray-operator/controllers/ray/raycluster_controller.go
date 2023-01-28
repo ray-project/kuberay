@@ -23,7 +23,6 @@ import (
 	_ "k8s.io/api/apps/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -93,7 +92,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	var err error
 
 	// Try to fetch the Event instance
-	event := &v1.Event{}
+	event := &corev1.Event{}
 	if err = r.Get(context.TODO(), request.NamespacedName, event); err == nil {
 		return r.eventReconcile(request, event)
 	}
@@ -114,7 +113,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 }
 
-func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *v1.Event) (ctrl.Result, error) {
+func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev1.Event) (ctrl.Result, error) {
 	var unhealthyPod *corev1.Pod
 	pods := corev1.PodList{}
 
@@ -315,7 +314,7 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 
 	// Create head service if there's no existing one in the cluster.
 	if services.Items == nil || len(services.Items) == 0 {
-		var raySvc *v1.Service
+		var raySvc *corev1.Service
 		var err error
 		if serviceType == common.HeadService {
 			labels := make(map[string]string)
