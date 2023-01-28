@@ -41,30 +41,29 @@ def create_ray_cluster(template_name, ray_version, ray_image):
         yamlfile = template.substitute(
             {'ray_image': ray_image, 'ray_version': ray_version}
         )
-    with tempfile.NamedTemporaryFile('w', suffix = '_ray_cluster_yaml') as ray_cluster_yaml:
-        ray_cluster_yaml.write(yamlfile)
-        ray_cluster_yaml.flush()
-        context['filepath'] = ray_cluster_yaml.name
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_cluster_yaml:
+            ray_cluster_yaml.write(yamlfile)
+            context['filepath'] = ray_cluster_yaml.name
 
-        for k8s_object in yaml.safe_load_all(yamlfile):
-            if k8s_object['kind'] == 'RayCluster':
-                context['cr'] = k8s_object
-                break
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayCluster':
+            context['cr'] = k8s_object
+            break
 
-        try:
-            # Create a RayCluster
-            ray_cluster_add_event = RayClusterAddCREvent(
-                custom_resource_object = context['cr'],
-                rulesets = [],
-                timeout = 90,
-                namespace='default',
-                filepath = context['filepath']
-            )
-            ray_cluster_add_event.trigger()
-            return ray_cluster_add_event
-        except Exception as ex:
-            logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
-        raise Exception("create_ray_cluster fails")
+    try:
+        # Create a RayCluster
+        ray_cluster_add_event = RayClusterAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_cluster_add_event.trigger()
+        return ray_cluster_add_event
+    except Exception as ex:
+        logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
+    raise Exception("create_ray_cluster fails")
 
 def create_ray_service(template_name, ray_version, ray_image):
     """Create a RayService without a NodePort service."""
@@ -74,30 +73,29 @@ def create_ray_service(template_name, ray_version, ray_image):
         yamlfile = template.substitute(
             {'ray_image': ray_image, 'ray_version': ray_version}
         )
-    with tempfile.NamedTemporaryFile('w', suffix = '_ray_service_yaml') as ray_service_yaml:
-        ray_service_yaml.write(yamlfile)
-        ray_service_yaml.flush()
-        context['filepath'] = ray_service_yaml.name
+        with tempfile.NamedTemporaryFile('w', delete=False) as ray_service_yaml:
+            ray_service_yaml.write(yamlfile)
+            context['filepath'] = ray_service_yaml.name
 
-        for k8s_object in yaml.safe_load_all(yamlfile):
-            if k8s_object['kind'] == 'RayService':
-                context['cr'] = k8s_object
-                break
+    for k8s_object in yaml.safe_load_all(yamlfile):
+        if k8s_object['kind'] == 'RayService':
+            context['cr'] = k8s_object
+            break
 
-        try:
-            # Create a RayService
-            ray_service_add_event = RayServiceAddCREvent(
-                custom_resource_object = context['cr'],
-                rulesets = [],
-                timeout = 90,
-                namespace='default',
-                filepath = context['filepath']
-            )
-            ray_service_add_event.trigger()
-            return ray_service_add_event
-        except Exception as ex:
-            logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
-        raise Exception("create_ray_service fails")
+    try:
+        # Create a RayService
+        ray_service_add_event = RayServiceAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_service_add_event.trigger()
+        return ray_service_add_event
+    except Exception as ex:
+        logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
+    raise Exception("create_ray_service fails")
 
 def wait_for_condition(
         condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
