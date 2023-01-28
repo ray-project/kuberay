@@ -312,3 +312,34 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
 }
+
+func TestCalculateAvailableReplicas(t *testing.T) {
+	podList := corev1.PodList{
+		Items: []corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod1",
+					Labels: map[string]string{
+						"ray.io/node-type": string(rayiov1alpha1.HeadNode),
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod2",
+					Labels: map[string]string{
+						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+				},
+			},
+		},
+	}
+	count := CalculateAvailableReplicas(podList)
+	assert.Equal(t, count, int32(1), "expect 1 available replica")
+}

@@ -181,7 +181,7 @@ func CalculateDesiredReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
 	return count
 }
 
-// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+// CalculateMinReplicas calculates min worker replicas at the cluster level
 func CalculateMinReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
@@ -191,7 +191,7 @@ func CalculateMinReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
 	return count
 }
 
-// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+// CalculateMaxReplicas calculates max worker replicas at the cluster level
 func CalculateMaxReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
@@ -201,10 +201,14 @@ func CalculateMaxReplicas(cluster *rayiov1alpha1.RayCluster) int32 {
 	return count
 }
 
-// CalculateDesiredReplicas calculate desired worker replicas at the cluster level
+// CalculateAvailableReplicas calculates available worker replicas at the cluster level
+// A worker is available if its Pod is running or pending.
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	count := int32(0)
 	for _, pod := range pods.Items {
+		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayiov1alpha1.WorkerNode) {
+			continue
+		}
 		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
 			count++
 		}
