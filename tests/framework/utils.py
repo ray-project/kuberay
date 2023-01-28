@@ -90,20 +90,19 @@ class OperatorManager:
         namespace = 'default', patch = jsonpatch.JsonPatch([])) -> None:
         self.docker_image_dict = docker_image_dict
         self.namespace = namespace
-        self.values = {}
+        self.values_yaml = {}
         for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
             if key not in self.docker_image_dict:
                 raise Exception(f"Image {key} does not exist!")
-
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
         if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
-            url = ( f"https://github.com/ray-project/kuberay-helm"
+            url = ( "https://github.com/ray-project/kuberay-helm"
                     f"/raw/kuberay-operator-{tag[1:]}/helm-chart/kuberay-operator/values.yaml"
             )
         else:
             url = "file:///" + str(CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml"))
         with request.urlopen(url) as base_fd:
-            self.values = patch.apply(yaml.safe_load(base_fd))
+            self.values_yaml = patch.apply(yaml.safe_load(base_fd))
 
     def prepare_operator(self):
         """Prepare KubeRay operator for an existing KinD cluster"""
@@ -137,7 +136,7 @@ class OperatorManager:
         """
         with tempfile.NamedTemporaryFile('w', suffix = '_values.yaml') as values_fd:
             # dump the config to a temporary file and use the file as values.yaml in the chart.
-            yaml.safe_dump(self.values, values_fd)
+            yaml.safe_dump(self.values_yaml, values_fd)
             repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
             if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
                 logger.info("Install both CRD and KubeRay operator with the latest release.")
