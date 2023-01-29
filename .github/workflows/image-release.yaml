@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -76,10 +76,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
