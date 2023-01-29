@@ -1,5 +1,5 @@
 # Generate client code (go & json) from API protocol buffers
-FROM golang:1.17.8 as generator
+FROM --platform=linux/amd64 golang:1.17.8 as generator
 
 ENV PROTOC_VERSION 3.17.3
 ENV GOLANG_PROTOBUF_VERSION v1.5.2
