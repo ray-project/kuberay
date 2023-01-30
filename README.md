@@ -22,7 +22,8 @@ We also recommend checking out the official Ray guides for deploying on Kubernet
 
 ## Quick Start
 
-Please choose the version you would like to install. The examples below use the latest stable version `v0.4.0`.
+* Try this [end-to-end example](helm-chart/ray-cluster/README.md)!
+* Please choose the version you would like to install. The examples below use the latest stable version `v0.4.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
