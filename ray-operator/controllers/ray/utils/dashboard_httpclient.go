@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -178,7 +178,7 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("GetDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -214,7 +214,7 @@ func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeployment
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -235,7 +235,7 @@ func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, e
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetDeploymentsStatus fail: %s %s", resp.Status, string(body))
@@ -336,7 +336,7 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 		return nil, nil
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	var jobResp RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
@@ -397,7 +397,7 @@ func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err erro
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
