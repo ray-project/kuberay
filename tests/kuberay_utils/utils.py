@@ -51,20 +51,16 @@ def create_ray_cluster(template_name, ray_version, ray_image):
                 context['cr'] = k8s_object
                 break
 
-        try:
-            # Create a RayCluster
-            ray_cluster_add_event = RayClusterAddCREvent(
-                custom_resource_object = context['cr'],
-                rulesets = [],
-                timeout = 90,
-                namespace='default',
-                filepath = context['filepath']
-            )
-            ray_cluster_add_event.trigger()
-            return ray_cluster_add_event
-        except Exception as ex:
-            logger.error(f"RayClusterAddCREvent fails to converge: {str(ex)}")
-        raise Exception("create_ray_cluster fails")
+        # Create a RayCluster
+        ray_cluster_add_event = RayClusterAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_cluster_add_event.trigger()
+        return ray_cluster_add_event
 
 def create_ray_service(template_name, ray_version, ray_image):
     """Create a RayService without a NodePort service."""
@@ -84,20 +80,16 @@ def create_ray_service(template_name, ray_version, ray_image):
                 context['cr'] = k8s_object
                 break
 
-        try:
-            # Create a RayService
-            ray_service_add_event = RayServiceAddCREvent(
-                custom_resource_object = context['cr'],
-                rulesets = [],
-                timeout = 90,
-                namespace='default',
-                filepath = context['filepath']
-            )
-            ray_service_add_event.trigger()
-            return ray_service_add_event
-        except Exception as ex:
-            logger.error(f"RayServiceAddCREvent fails to converge: {str(ex)}")
-        raise Exception("create_ray_service fails")
+        # Create a RayService
+        ray_service_add_event = RayServiceAddCREvent(
+            custom_resource_object = context['cr'],
+            rulesets = [],
+            timeout = 90,
+            namespace='default',
+            filepath = context['filepath']
+        )
+        ray_service_add_event.trigger()
+        return ray_service_add_event
 
 def wait_for_condition(
         condition_predictor, timeout=10, retry_interval_ms=100, **kwargs
