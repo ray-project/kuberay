@@ -65,7 +65,7 @@ jobs:
     - name: Run linter against apiserver
       uses: golangci/golangci-lint-action@v2
       with:
-        version: v1.29
+        version: v1.50.1
         working-directory: ./apiserver
         args: --timeout=3m
         skip-go-installation: true
@@ -74,7 +74,7 @@ jobs:
     - name: Run linter against cli
       uses: golangci/golangci-lint-action@v2
       with:
-        version: v1.29
+        version: v1.50.1
         working-directory: ./cli
         args: --timeout=3m
         skip-go-installation: true
