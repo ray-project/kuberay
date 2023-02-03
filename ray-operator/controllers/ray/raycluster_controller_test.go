@@ -196,25 +196,24 @@ var _ = Context("Inside the default namespace", func() {
 			// There's no container runtime or any other K8s controllers.
 			// So Pods are created, but no controller updates them from Pending to Running.
 			// See https://book.kubebuilder.io/reference/envtest.html
+
 			for _, headPod := range headPods.Items {
 				headPod.Status.Phase = corev1.PodRunning
 				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
 			}
-			err := k8sClient.List(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"})
-			Expect(err).ShouldNot(HaveOccurred(), "failed to list head Pods")
-			for _, headPod := range headPods.Items {
-				Expect(headPod.Status.Phase).Should(Equal(corev1.PodRunning))
-			}
+
+			Eventually(
+				isAllPodsRunning(ctx, headPods, headFilterLabels, "default"),
+				time.Second*15, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
 
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
 				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
 			}
-			err = k8sClient.List(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"})
-			Expect(err).ShouldNot(HaveOccurred(), "failed to list worker Pods")
-			for _, workerPod := range workerPods.Items {
-				Expect(workerPod.Status.Phase).Should(Equal(corev1.PodRunning))
-			}
+
+			Eventually(
+				isAllPodsRunning(ctx, workerPods, workerFilterLabels, "default"),
+				time.Second*15, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
 		})
 
 		It("cluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
@@ -372,4 +371,15 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 		}
 		return cluster.Status.State
 	}
+}
+
+func isAllPodsRunning(ctx context.Context, podlist corev1.PodList, filterLabels client.MatchingLabels, namespace string) bool {
+	err := k8sClient.List(ctx, &podlist, filterLabels, &client.ListOptions{Namespace: namespace})
+	Expect(err).ShouldNot(HaveOccurred(), "failed to list Pods")
+	for _, pod := range podlist.Items {
+		if pod.Status.Phase != corev1.PodRunning {
+			return false
+		}
+	}
+	return true
 }
