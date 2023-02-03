@@ -338,6 +338,28 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 					Phase: corev1.PodRunning,
 				},
 			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod2",
+					Labels: map[string]string{
+						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod2",
+					Labels: map[string]string{
+						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodFailed,
+				},
+			},
 		},
 	}
 	count := CalculateAvailableReplicas(podList)
