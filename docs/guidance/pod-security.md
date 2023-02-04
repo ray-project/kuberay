@@ -14,7 +14,7 @@ references can help you understand this document better:
 
 # Step 1: Create a KinD cluster
 ```bash
-# Path: /KUBERAY
+# Path: kuberay/
 kind create cluster --config ray-operator/config/security/kind-config.yaml --image=kindest/node:v1.24.0
 ```
 The `kind-config.yaml` enables audit logging with the audit policy defined in `audit-policy.yaml`. The `audit-policy.yaml`
@@ -58,7 +58,7 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
-# Path: helm-chart/kuberay-operator
+# Path: kuberay/helm-chart/kuberay-operator
 helm install -n pod-security kuberay-operator .
 ```
 
@@ -68,7 +68,7 @@ helm install -n pod-security kuberay-operator .
 
 ## Step 5.1: Create a RayCluster without proper `securityContext` configurations
 ```bash
-# Path: ray-operator/config/samples
+# Path: kuberay/ray-operator/config/samples
 kubectl apply -n pod-security -f ray-cluster.complete.yaml
 
 # Wait 20 seconds and check audit logs for the error messages.
@@ -89,7 +89,7 @@ No Pod will be created in the namespace `pod-security`, and check audit logs for
 
 ## Step 5.2: Create a RayCluster with proper `securityContext` configurations
 ```bash
-# Path: ray-operator/config/security
+# Path: kuberay/ray-operator/config/security
 kubectl apply -n pod-security -f ray-cluster.pod-security.yaml
 
 # Wait for the RayCluster convergence and check audit logs for the messages.
