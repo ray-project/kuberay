@@ -1,10 +1,12 @@
 package common
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -40,8 +42,17 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    "ray-head",
-							Image:   "rayproject/autoscaler",
+							Name:  "ray-head",
+							Image: "rayproject/autoscaler",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 6379,
+									Name:          "gcs",
+								},
+								{
+									ContainerPort: 8265,
+								},
+							},
 							Command: []string{"python"},
 							Args:    []string{"/opt/code.py"},
 							Env: []corev1.EnvVar{
@@ -125,4 +136,29 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 	if !reflect.DeepEqual(svc.ObjectMeta.Annotations, annotations) {
 		t.Fatalf("Expected `%v` but got `%v`", annotations, svc.ObjectMeta.Annotations)
 	}
+}
+
+func TestGetPortsFromCluster(t *testing.T) {
+	svcPorts, err := getPortsFromCluster(*instanceWithWrongSvc)
+	assert.Nil(t, err)
+
+	svcNames := map[int32]string{}
+	for name, port := range svcPorts {
+		if name == (fmt.Sprint(port) + "-port") {
+			name = ""
+		}
+		svcNames[port] = name
+	}
+
+	index := utils.FindRayContainerIndex(instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec)
+	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+
+	for _, cPort := range cPorts {
+		expectedResult := cPort.Name
+		actualResult := svcNames[cPort.ContainerPort]
+		if !reflect.DeepEqual(expectedResult, actualResult) {
+			t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+		}
+	}
+
 }
