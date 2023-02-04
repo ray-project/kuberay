@@ -160,5 +160,4 @@ func TestGetPortsFromCluster(t *testing.T) {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 		}
 	}
-
 }
