@@ -3,21 +3,19 @@ kind: PodMonitor
 metadata:
   name: ray-workers-monitor
   namespace: prometheus-system
+  labels:
+    # `release: $HELM_RELEASE`: Prometheus can only detect PodMonitor with this label.
+    release: prometheus
 spec:
   jobLabel: ray-workers
+  # Only select Kubernetes Pods in the "default" namespace.
   namespaceSelector:
     matchNames:
       - default
-      - ray-system
+  # Only select Kubernetes Pods with "matchLabels".
   selector:
     matchLabels:
       ray.io/node-type: worker
-      ray.io/is-ray-node: "yes"
+  # A list of endpoints allowed as part of this PodMonitor.
   podMetricsEndpoints:
   - port: metrics
-    interval: 1m
-    scrapeTimeout: 10s
-  # - targetPort: 90001
-  #   interval: 1m
-  #   scrapeTimeout: 10s
-
