@@ -74,7 +74,7 @@ EOF
 1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
 
 ```bash
-helm -n ray-system install kuberay-apiserver kuberay/helm-chart/kuberay-apiserver
+helm -n ray-system install kuberay-apiserver kuberay/kuberay-apiserver
 ```
 
 2. The APIServer expose service using `NodePort` by default. You can test access by your host and port, the default port is set to `31888`.
