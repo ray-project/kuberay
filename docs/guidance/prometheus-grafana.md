@@ -100,6 +100,15 @@ spec:
   # ($HELM_RELEASE is "prometheus".)
   # NAME            NAMESPACE               REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
   # prometheus      prometheus-system       1               2023-02-06 06:27:05.530950815 +0000 UTC deployed        kube-prometheus-stack-44.3.1    v0.62.0
+
+  kubectl get prometheuses.monitoring.coreos.com -n prometheus-system -oyaml
+  # podMonitorSelector:
+  #   matchLabels:
+  #     release: prometheus
+  # ...
+  # serviceMonitorSelector:
+  #   matchLabels:
+  #     release: prometheus
   ```
 
 * `namespaceSelector` and `seletor` are used to select exporter's Kubernetes service. Because Ray uses a built-in exporter, the **ServiceMonitor** selects Ray's head servie which exposes the metrics endpoint (i.e. port 8080 here).
