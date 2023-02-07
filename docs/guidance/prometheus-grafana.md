@@ -29,13 +29,7 @@ kubectl get all -n prometheus-system
 
 ## Step 3: Install a KubeRay operator
 
-```sh
-helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-
-# Install both CRDs and KubeRay operator v0.4.0 in the default namespace.
-helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
-```
-* Install a stable version via Helm repository (only supports KubeRay v0.4.0+). 
+* Follow this [document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
 ## Step 4: Install a RayCluster
 
