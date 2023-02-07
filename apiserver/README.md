@@ -18,10 +18,63 @@ The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
     KubeRay APIServer maintainer contacts (GitHub handles):
     @Jeffwan @scarlet25151
 
+## Installation
+
+### Helm
+
+Make sure the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+
+```sh
+helm version
+```
+
+### Install KubeRay APIServer
+
+* Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+  ```sh
+  helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+
+  # Install both KubeRay APIServer v0.4.0.
+  helm install kuberay-apiserver kuberay/kuberay-apiserver --version 0.4.0
+
+  # Check the KubeRay APIServer Pod in `default` namespace
+  kubectl get pods
+  # NAME                                 READY   STATUS    RESTARTS   AGE
+  # kuberay-apiserver-67b46b88bf-m7dzg   1/1     Running   0          6s
+  ```
+
+* Install the nightly version
+  ```sh
+  # Step1: Clone KubeRay repository
+
+  # Step2: Move to `helm-chart/kuberay-apiserver`
+
+  # Step3: Install KubeRay operator
+  helm install kuberay-apiserver .
+  ```
+  
+### List the chart
+
+To list the `my-release` deployment:
+
+```sh
+helm ls
+# NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS  CHART                    APP VERSION
+# kuberay-apiserver       default         1               2023-02-07 09:28:15.510869781 -0500 EST deployedkuberay-apiserver-0.4.0
+```
+
+### Uninstall the Chart
+
+```sh
+# Uninstall the `kuberay-operator` release
+helm uninstall kuberay-apiserver
+
+# The operator Pod should be removed.
+kubectl get pods
+# No resources found in default namespace.
+```
 
 ## Usage
-
-You can install the KubeRay APIServer by using the [helm chart](https://github.com/ray-project/kuberay/tree/master/helm-chart/kuberay-apiserver) or [kustomize](https://github.com/ray-project/kuberay/tree/master/apiserver/deploy/base)
 
 After the deployment we may use the `{{baseUrl}}` to access the 
 
@@ -74,6 +127,7 @@ EOF
 1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
 
 ```bash
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm -n ray-system install kuberay-apiserver kuberay/kuberay-apiserver
 ```
 
