@@ -34,7 +34,7 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both KubeRay APIServer v0.4.0.
+  # Install KubeRay APIServer v0.4.0.
   helm install kuberay-apiserver kuberay/kuberay-apiserver --version 0.4.0
 
   # Check the KubeRay APIServer Pod in `default` namespace
