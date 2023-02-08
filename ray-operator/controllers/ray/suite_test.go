@@ -101,8 +101,6 @@ var _ = BeforeSuite(func(done Done) {
 		err = mgr.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())
 	}()
-	k8sClient = mgr.GetClient()
-	Expect(k8sClient).ToNot(BeNil())
 
 	close(done)
 }, 60)
