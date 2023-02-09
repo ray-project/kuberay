@@ -156,7 +156,7 @@ spec:
 ## Step 7: Access Prometheus Web UI
 ```sh
 # Forward the port of Prometheus Web UI in the Prometheus server Pod.
-kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-prometheus-0 9090:9090
+kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-prometheus-0 -n prometheus-system 9090:9090
 
 # Check ${YOUR_IP}:9090/targets for the Web UI (e.g. 127.0.0.1:9090/targets)
 # You should be able to see "podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)"
