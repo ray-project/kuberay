@@ -49,7 +49,7 @@ helm version
 
   # Step2: Move to `helm-chart/kuberay-apiserver`
 
-  # Step3: Install KubeRay operator
+  # Step3: Install KubeRay APIServer
   helm install kuberay-apiserver .
   ```
   
@@ -66,10 +66,10 @@ helm ls
 ### Uninstall the Chart
 
 ```sh
-# Uninstall the `kuberay-operator` release
+# Uninstall the `kuberay-apiserver` release
 helm uninstall kuberay-apiserver
 
-# The operator Pod should be removed.
+# The KubeRay APIServer Pod should be removed.
 kubectl get pods
 # No resources found in default namespace.
 ```
