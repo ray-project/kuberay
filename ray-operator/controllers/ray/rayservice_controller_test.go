@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
@@ -299,17 +300,21 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
 			// adding a scale strategy
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 
-			podToDelete1 := workerPods.Items[0]
-			rep := new(int32)
-			*rep = 1
-			myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = rep
-			myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
+				podToDelete1 := workerPods.Items[0]
+				rep := new(int32)
+				*rep = 1
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = rep
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
 
-			Expect(k8sClient.Update(ctx, myRayService)).Should(Succeed(), "failed to update test RayService resource")
+				return k8sClient.Update(ctx, myRayService)
+			})
+
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 
 			// Confirm switch to a new Ray Cluster.
 			Eventually(
@@ -348,10 +353,16 @@ var _ = Context("Inside the default namespace", func() {
 
 			// The cluster shouldn't switch until deployments are finished updating
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UPDATING"))
-			myRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
-			myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
 
-			Expect(k8sClient.Update(ctx, myRayService)).Should(Succeed(), "failed to update test RayService resource")
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+				myRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Env[1].Value = "UPDATED_VALUE"
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
