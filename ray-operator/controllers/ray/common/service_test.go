@@ -142,6 +142,10 @@ func TestGetPortsFromCluster(t *testing.T) {
 	svcPorts, err := getPortsFromCluster(*instanceWithWrongSvc)
 	assert.Nil(t, err)
 
+	// getPortsFromCluster creates service ports based on the container ports.
+	// It will assign a generated service port name if the container port name
+	// is not defined. To compare created service ports with container ports, 
+	// all generated service port names need to be reverted to empty strings.
 	svcNames := map[int32]string{}
 	for name, port := range svcPorts {
 		if name == (fmt.Sprint(port) + "-port") {
