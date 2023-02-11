@@ -39,11 +39,6 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-const (
-	DefaultAttempts               = 16
-	DefaultSleepDurationInSeconds = 3
-)
-
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
