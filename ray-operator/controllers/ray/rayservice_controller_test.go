@@ -305,9 +305,9 @@ var _ = Context("Inside the default namespace", func() {
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 
-				podToDelete1 := workerPods.Items[0]
+				podToDelete := workerPods.Items[0]
 				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
-				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
 
 				return k8sClient.Update(ctx, myRayService)
 			})
