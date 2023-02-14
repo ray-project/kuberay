@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -181,6 +183,9 @@ func getPortsFromCluster(cluster rayiov1alpha1.RayCluster) (map[string]int32, er
 	index := utils.FindRayContainerIndex(cluster.Spec.HeadGroupSpec.Template.Spec)
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
 	for _, port := range cPorts {
+		if port.Name == "" {
+			port.Name = fmt.Sprint(port.ContainerPort) + "-port"
+		}
 		svcPorts[port.Name] = port.ContainerPort
 	}
 
