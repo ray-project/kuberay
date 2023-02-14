@@ -33,15 +33,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
-)
-
-const (
-	DefaultAttempts               = 16
-	DefaultSleepDurationInSeconds = 3
 )
 
 var _ = Context("Inside the default namespace", func() {
@@ -92,9 +87,9 @@ var _ = Context("Inside the default namespace", func() {
 			},
 			WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32Ptr(3),
-					MinReplicas: pointer.Int32Ptr(0),
-					MaxReplicas: pointer.Int32Ptr(4),
+					Replicas:    pointer.Int32(3),
+					MinReplicas: pointer.Int32(0),
+					MaxReplicas: pointer.Int32(4),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":     "6379",
@@ -229,7 +224,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod,
-				&client.DeleteOptions{GracePeriodSeconds: pointer.Int64Ptr(0)})
+				&client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
 
 			Expect(err).NotTo(HaveOccurred(), "failed delete a pod")
 
@@ -241,13 +236,11 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should update a raycluster object deleting a random pod", func() {
 			// adding a scale down
-			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-				rep := new(int32)
-				*rep = 2
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
 
 				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
 				// We need to handle conflict error and retry the update.
@@ -266,17 +259,16 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should update a raycluster object", func() {
 			// adding a scale strategy
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-				time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-
-			podToDelete1 := workerPods.Items[0]
-			rep := new(int32)
-			*rep = 1
-			myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
-			myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
-
-			Expect(k8sClient.Update(ctx, myRayCluster)).Should(Succeed(), "failed to update test RayCluster resource")
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				podToDelete := workerPods.Items[0]
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
+				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
+				return k8sClient.Update(ctx, myRayCluster)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
 
 		It("should have only 1 running worker", func() {
@@ -288,13 +280,11 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should increase replicas past maxReplicas", func() {
 			// increasing replicas to 5, which is greater than maxReplicas (4)
-			err := retryOnOldRevision(DefaultAttempts, DefaultSleepDurationInSeconds, func() error {
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-				rep := new(int32)
-				*rep = 5
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = rep
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(5)
 
 				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
 				// We need to handle conflict error and retry the update.
@@ -341,26 +331,6 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		return count, nil
 	}
-}
-
-func retryOnOldRevision(attempts int, sleep time.Duration, f func() error) error {
-	var err error
-	for i := 0; i < attempts; i++ {
-		if i > 0 {
-			fmt.Printf("retrying after error: %v", err)
-			time.Sleep(sleep)
-			sleep *= 2
-		}
-		err = f()
-		if err == nil {
-			return nil
-		}
-
-		if !errors.IsConflict(err) {
-			return nil
-		}
-	}
-	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
 }
 
 func getClusterState(ctx context.Context, namespace string, clusterName string) func() rayiov1alpha1.ClusterState {
