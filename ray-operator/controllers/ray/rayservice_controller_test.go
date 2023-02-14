@@ -90,7 +90,7 @@ var _ = Context("Inside the default namespace", func() {
 				RayVersion: "1.12.1",
 				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
-					Replicas:    pointer.Int32Ptr(1),
+					Replicas:    pointer.Int32(1),
 					RayStartParams: map[string]string{
 						"port":                        "6379",
 						"object-store-memory":         "100000000",
@@ -168,9 +168,9 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
 					{
-						Replicas:    pointer.Int32Ptr(3),
-						MinReplicas: pointer.Int32Ptr(0),
-						MaxReplicas: pointer.Int32Ptr(10000),
+						Replicas:    pointer.Int32(3),
+						MinReplicas: pointer.Int32(0),
+						MaxReplicas: pointer.Int32(10000),
 						GroupName:   "small-group",
 						RayStartParams: map[string]string{
 							"port":                        "6379",
@@ -306,9 +306,7 @@ var _ = Context("Inside the default namespace", func() {
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 
 				podToDelete1 := workerPods.Items[0]
-				rep := new(int32)
-				*rep = 1
-				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = rep
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
 				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete1.Name}
 
 				return k8sClient.Update(ctx, myRayService)
