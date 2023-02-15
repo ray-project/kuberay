@@ -36,7 +36,14 @@ kubectl get all -n prometheus-system
 ```sh
 helm install raycluster kuberay/ray-cluster --version 0.4.0
 
-# Forward the port of the Prometheus metrics endpoint.
+# Check ${RAYCLUSTER_HEAD_POD}
+kubectl get pod -l ray.io/node-type=head
+
+# Example output:
+# NAME                            READY   STATUS    RESTARTS   AGE
+# raycluster-kuberay-head-btwc2   1/1     Running   0          63s
+
+# Wait until all Ray Pods are running and forward the port of the Prometheus metrics endpoint in a new terminal.
 kubectl port-forward --address 0.0.0.0 ${RAYCLUSTER_HEAD_POD} 8080:8080
 curl localhost:8080
 
