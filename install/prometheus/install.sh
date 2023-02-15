@@ -5,7 +5,7 @@ set errexit
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-helm --namespace prometheus-system install prometheus-operator prometheus-community/kube-prometheus-stack --create-namespace 
+helm --namespace prometheus-system install prometheus prometheus-community/kube-prometheus-stack --create-namespace 
 
 # set the place of monitor files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null && pwd)"
