@@ -23,7 +23,6 @@ import (
 	_ "k8s.io/api/apps/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -80,9 +79,6 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
-// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
@@ -196,12 +192,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileIngress(instance); err != nil {
-		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
-			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
-		}
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-	}
 	if err := r.reconcileServices(instance, common.HeadService); err != nil {
 		if updateErr := r.updateClusterState(instance, rayiov1alpha1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
@@ -247,41 +237,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 	}
 	r.Log.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
-}
-
-func (r *RayClusterReconciler) reconcileIngress(instance *rayiov1alpha1.RayCluster) error {
-	if instance.Spec.HeadGroupSpec.EnableIngress == nil || !*instance.Spec.HeadGroupSpec.EnableIngress {
-		return nil
-	}
-
-	headIngresses := networkingv1.IngressList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(context.TODO(), &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
-	}
-
-	if headIngresses.Items != nil && len(headIngresses.Items) == 1 {
-		r.Log.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
-		return nil
-	}
-
-	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(*instance)
-		if err != nil {
-			return err
-		}
-
-		if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-			return err
-		}
-
-		err = r.createHeadIngress(ingress, instance)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayCluster, serviceType common.ServiceType) error {
@@ -639,26 +594,6 @@ func (r *RayClusterReconciler) updateLocalWorkersToDelete(worker *rayiov1alpha1.
 	}
 
 	worker.ScaleStrategy.WorkersToDelete = actualWorkersToDelete
-}
-
-func (r *RayClusterReconciler) createHeadIngress(ingress *networkingv1.Ingress, instance *rayiov1alpha1.RayCluster) error {
-	// making sure the name is valid
-	ingress.Name = utils.CheckName(ingress.Name)
-	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-		return err
-	}
-
-	if err := r.Create(context.TODO(), ingress); err != nil {
-		if errors.IsAlreadyExists(err) {
-			r.Log.Info("Ingress already exists, no need to create")
-			return nil
-		}
-		r.Log.Error(err, "Ingress create error!", "Ingress.Error", err)
-		return err
-	}
-	r.Log.Info("Ingress created successfully", "ingress name", ingress.Name)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Created", "Created ingress %s", ingress.Name)
-	return nil
 }
 
 func (r *RayClusterReconciler) createService(raySvc *corev1.Service, instance *rayiov1alpha1.RayCluster) error {

@@ -1,8 +1,6 @@
 ## Ingress Usage
 
-* KubeRay built-in ingress support: KubeRay will help users create a Kubernetes ingress when `spec.headGroupSpec.enableIngress: true`. Currently, the built-in support only supports simple NGINX setups. Note that users still need to install ingress controller by themselves. **We do not recommend using built-in ingress support in a production environment with complex routing requirements.**
-  * [Example: NGINX Ingress on KinD (built-in ingress support)](#example-nginx-ingress-on-kind-built-in-ingress-support)
-
+* KubeRay built-in ingress support **[Deprecated]**
 
 * Manually setting up an ingress for KubeRay: **For production use-cases, we recommend taking this route.**
   * [Example: AWS Application Load Balancer (ALB) Ingress support on AWS EKS](#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
@@ -11,66 +9,6 @@
 ### Prerequisite
 
 It's user's responsibility to install ingress controller by themselves. In order to pass through the customized ingress configuration, you can annotate `RayCluster` object and the controller will pass the annotations to the ingress object.
-
-### Example: NGINX Ingress on KinD (built-in ingress support)
-```sh
-# Step 1: Create a KinD cluster with `extraPortMappings` and `node-labels`
-cat <<EOF | kind create cluster --config=-
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  kubeadmConfigPatches:
-  - |
-    kind: InitConfiguration
-    nodeRegistration:
-      kubeletExtraArgs:
-        node-labels: "ingress-ready=true"
-  extraPortMappings:
-  - containerPort: 80
-    hostPort: 80
-    protocol: TCP
-  - containerPort: 443
-    hostPort: 443
-    protocol: TCP
-EOF
-
-# Step 2: Install NGINX ingress controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-kubectl wait --namespace ingress-nginx \
-  --for=condition=ready pod \
-  --selector=app.kubernetes.io/component=controller \
-  --timeout=90s
-
-# Step 3: Install KubeRay operator
-pushd helm-chart/kuberay-operator
-helm install kuberay-operator .
-
-# Step 4: Install RayCluster with NGINX ingress. See https://github.com/ray-project/kuberay/pull/646
-#        for the explanations of `ray-cluster.ingress.yaml`. Some fields are worth to discuss further:
-#
-#        (1) metadata.annotations.kubernetes.io/ingress.class: nginx => required
-#        (2) spec.headGroupSpec.enableIngress: true => required
-#        (3) metadata.annotations.nginx.ingress.kubernetes.io/rewrite-target: /$1 => required for NGINX.
-popd
-kubectl apply -f ray-operator/config/samples/ray-cluster.ingress.yaml
-
-# Step 5: Check ingress created by Step 4.
-kubectl describe ingress raycluster-ingress-head-ingress
-
-# [Example]
-# ...
-# Rules:
-# Host        Path  Backends
-# ----        ----  --------
-# *
-#             /raycluster-ingress/(.*)   raycluster-ingress-head-svc:8265 (10.244.0.11:8265)
-# Annotations:  nginx.ingress.kubernetes.io/rewrite-target: /$1
-
-# Step 6: Check `<ip>/raycluster-ingress/` on your browser. You will see the Ray Dashboard.
-#        [Note] The forward slash at the end of the address is necessary. `<ip>/raycluster-ingress`
-#               will report "404 Not Found".
-```
 
 ### Example: AWS Application Load Balancer (ALB) Ingress support on AWS EKS
 #### Prerequisite
