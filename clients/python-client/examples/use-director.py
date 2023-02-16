@@ -64,7 +64,7 @@ def main():
 
     if kube_ray_cluster:
         print(
-            "try: kubectl -n {} get raycluster {} -oyaml".format(
+            "try: kubectl -n {} get raycluster {} -o yaml".format(
                 kube_ray_cluster["metadata"]["namespace"],
                 kube_ray_cluster["metadata"]["name"],
             )
@@ -73,6 +73,14 @@ def main():
         print("printing the raycluster JSON representation...")
         json_formatted_str = json.dumps(kube_ray_cluster, indent=2)
         print(json_formatted_str)
+
+    # waiting until the cluster is running, and has its status updated
+    is_running = my_kube_ray_api.wait_until_ray_cluster_running(
+        name=kube_ray_cluster["metadata"]["name"],
+        k8s_namespace=kube_ray_cluster["metadata"]["namespace"],
+    )
+
+    print("raycluster {} status is {}".format(kube_ray_cluster["metadata"]["name"],"Running" if is_running else "unknown"))
 
     wait(step_name="cleaning up")
     print("deleting raycluster {}.".format(kube_ray_cluster["metadata"]["name"]))

@@ -163,7 +163,6 @@ class ClusterUtils:
 
     def populate_worker_group(
         self,
-        cluster: dict,
         group_name: str,
         ray_image: str,
         ray_command: Any,
@@ -210,7 +209,7 @@ class ClusterUtils:
                     k, v
                 )
             )
-            return cluster, False
+            return None, False
 
         assert self.is_valid_name(group_name)
         assert max_replicas >= min_replicas

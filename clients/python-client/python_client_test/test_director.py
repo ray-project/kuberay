@@ -22,7 +22,7 @@ class TestDirector(unittest.TestCase):
         actual = cluster["spec"]["headGroupSpec"]["template"]["spec"]["containers"][0][
             "resources"
         ]["requests"]["cpu"]
-        expected = "1"
+        expected = "2"
         self.assertEqual(actual, expected)
 
 
@@ -41,7 +41,7 @@ class TestDirector(unittest.TestCase):
         actual = cluster["spec"]["headGroupSpec"]["template"]["spec"]["containers"][0][
             "resources"
         ]["requests"]["cpu"]
-        expected = "1"
+        expected = "2"
         self.assertEqual(actual, expected)
 
         # testing the workergroup
@@ -70,7 +70,7 @@ class TestDirector(unittest.TestCase):
         actual = cluster["spec"]["headGroupSpec"]["template"]["spec"]["containers"][0][
             "resources"
         ]["requests"]["cpu"]
-        expected = "1"
+        expected = "2"
         self.assertEqual(actual, expected)
 
         # testing the workergroup
@@ -103,7 +103,7 @@ class TestDirector(unittest.TestCase):
         actual = cluster["spec"]["headGroupSpec"]["template"]["spec"]["containers"][0][
             "resources"
         ]["requests"]["cpu"]
-        expected = "1"
+        expected = "2"
         self.assertEqual(actual, expected)
 
         # testing the workergroup

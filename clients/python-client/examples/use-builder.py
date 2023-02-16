@@ -34,7 +34,7 @@ def main():
     my_cluster_builder = kuberay_cluster_builder.ClusterBuilder()
 
     cluster1 = (
-        my_cluster_builder.build_meta(name="new-cluster1")
+        my_cluster_builder.build_meta(name="new-cluster1", labels={'demo-cluster':'yes'})
         .build_head()
         .build_worker(group_name="workers")
         .get_cluster()
@@ -48,7 +48,7 @@ def main():
     my_kuberay_api.create_ray_cluster(body=cluster1)
 
     # the rest of the code is simply to list and cleanup the created cluster
-    kube_ray_list = my_kuberay_api.list_ray_clusters(k8s_namespace="default")
+    kube_ray_list = my_kuberay_api.list_ray_clusters(k8s_namespace="default", label_selector='demo-cluster=yes')
     if "items" in kube_ray_list:
         line = "-" * 72
         print(line)

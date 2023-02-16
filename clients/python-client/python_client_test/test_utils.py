@@ -101,6 +101,20 @@ test_cluster_body: dict = {
             }
         ],
     },
+    "status": {
+        "availableWorkerReplicas": 2,
+        "desiredWorkerReplicas": 1,
+        "endpoints": {
+            "client": "10001",
+            "dashboard": "8265",
+            "gcs-server": "6379"
+        },
+        "head": {
+            "serviceIP": "10.152.183.194"
+        },
+        "lastUpdateTime": "2023-02-16T05:15:17Z",
+        "maxWorkerReplicas": 2
+    }
 }
 
 class TestUtils(unittest.TestCase):

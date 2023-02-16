@@ -24,7 +24,7 @@ cluster_body: dict = {
     "apiVersion": "ray.io/v1alpha1",
     "kind": "RayCluster",
     "metadata": {
-        "labels": {"controller-tools.k8s.io": "1.0"},
+        "labels": {"controller-tools.k8s.io": "1.0", "demo-cluster": "yes"},
         "name": "raycluster-mini-raw",
     },
     "spec": {
@@ -63,7 +63,7 @@ cluster_body2: dict = {
     "apiVersion": "ray.io/v1alpha1",
     "kind": "RayCluster",
     "metadata": {
-        "labels": {"controller-tools.k8s.io": "1.0"},
+        "labels": {"controller-tools.k8s.io": "1.0", "demo-cluster": "yes"},
         "name": "raycluster-complete-raw",
     },
     "spec": {
@@ -125,8 +125,8 @@ cluster_body2: dict = {
                                     {"mountPath": "/tmp/ray", "name": "ray-logs"}
                                 ],
                                 "resources": {
-                                    "limits": {"cpu": "1", "memory": "1G"},
-                                    "requests": {"cpu": "500m", "memory": "1G"},
+                                    "limits": {"cpu": "2", "memory": "3G"},
+                                    "requests": {"cpu": "1500m", "memory": "3G"},
                                 },
                             }
                         ],
@@ -171,12 +171,12 @@ def main():
         print(json_formatted_str)
 
     print(
-        "try: kubectl -n default get raycluster {} -oyaml".format(
+        "try: kubectl -n default get raycluster {} -o yaml".format(
             kube_ray_cluster["metadata"]["name"]
         )
     )
     # the rest of the code is simply to list and cleanup the created cluster
-    kube_ray_list = kuberay_cluster_api.list_ray_clusters(k8s_namespace="default")
+    kube_ray_list = my_kube_ray_api.list_ray_clusters(k8s_namespace="default", label_selector='demo-cluster=yes')
     if "items" in kube_ray_list:
         line = "-" * 72
         print(line)
@@ -194,7 +194,7 @@ def main():
     if "items" in kube_ray_list:
         for cluster in kube_ray_list["items"]:
             print("deleting raycluster = {}".format(cluster["metadata"]["name"]))
-            kuberay_cluster_api.delete_ray_cluster(
+            my_kube_ray_api.delete_ray_cluster(
                 name=cluster["metadata"]["name"],
                 k8s_namespace=cluster["metadata"]["namespace"],
             )

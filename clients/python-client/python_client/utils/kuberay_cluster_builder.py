@@ -83,10 +83,10 @@ class ClusterBuilder(IClusterBuilder):
         self,
         ray_image: str = "rayproject/ray:2.2.0",
         service_type: str = "ClusterIP",
-        cpu_requests: str = "1",
-        memory_requests: str = "1G",
+        cpu_requests: str = "2",
+        memory_requests: str = "3G",
         cpu_limits: str = "2",
-        memory_limits: str = "2G",
+        memory_limits: str = "3G",
         ray_start_params: dict = {
             "block": "true",
             "dashboard-host": "0.0.0.0",
@@ -172,7 +172,6 @@ class ClusterBuilder(IClusterBuilder):
             return self
 
         worker_group, self.succeeded = self.cluster_utils.populate_worker_group(
-            self.cluster,
             group_name,
             ray_image,
             ray_command,
@@ -200,7 +199,7 @@ class Director:
     def __init__(self):
         self.cluster_builder = ClusterBuilder()
 
-    def build_basic_cluster(self, name: str, k8s_namespace: str = "default") -> dict:
+    def build_basic_cluster(self, name: str, k8s_namespace: str = "default", labels: dict = None) -> dict:
         """Builds a basic cluster with the given name and k8s_namespace parameters.
 
         Parameters:
@@ -211,7 +210,7 @@ class Director:
         dict: The basic cluster as a dictionary.
         """
         cluster: dict = (
-            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace)
+            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace, labels=labels)
             .build_head()
             .get_cluster()
         )
@@ -220,7 +219,7 @@ class Director:
             return cluster
         return None
 
-    def build_small_cluster(self, name: str, k8s_namespace: str = "default") -> dict:
+    def build_small_cluster(self, name: str, k8s_namespace: str = "default", labels: str = None) -> dict:
         """Builds a small cluster with the given name and k8s_namespace parameters with 1 workergroup,
         the workgroup has 1 replica with 2 cpu and 2G memory limits
 
@@ -232,7 +231,7 @@ class Director:
         dict: The small cluster as a dictionary.
         """
         cluster: dict = (
-            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace)
+            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace, labels=labels)
             .build_head()
             .build_worker(
                 group_name="{}-workers".format(name),
@@ -251,7 +250,7 @@ class Director:
             return cluster
         return None
 
-    def build_medium_cluster(self, name: str, k8s_namespace: str = "default") -> dict:
+    def build_medium_cluster(self, name: str, k8s_namespace: str = "default", labels: str = None) -> dict:
         """Builds a medium cluster with the given name and k8s_namespace parameters with 1 workergroup,
         the workgroup has 3 replicas with 4 cpu and 4G memory limits
 
@@ -263,7 +262,7 @@ class Director:
             dict: The small cluster as a dictionary.
         """
         cluster: dict = (
-            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace)
+            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace, labels=labels)
             .build_head()
             .build_worker(
                 group_name="{}-workers".format(name),
@@ -282,7 +281,7 @@ class Director:
             return cluster
         return None
 
-    def build_large_cluster(self, name: str, k8s_namespace: str = "default") -> dict:
+    def build_large_cluster(self, name: str, k8s_namespace: str = "default", labels: dict = None) -> dict:
         """Builds a medium cluster with the given name and k8s_namespace parameters. with 1 workergroup,
         the workgroup has 6 replicas with 6 cpu and 6G memory limits
 
@@ -294,7 +293,7 @@ class Director:
             dict: The small cluster as a dictionary.
         """
         cluster: dict = (
-            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace)
+            self.cluster_builder.build_meta(name=name, k8s_namespace=k8s_namespace, labels=labels)
             .build_head()
             .build_worker(
                 group_name="{}-workers".format(name),
