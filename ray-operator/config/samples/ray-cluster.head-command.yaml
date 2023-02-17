@@ -1,0 +1,83 @@
+# This example config is used to describe how does head command work.
+# See kuberay/docs/guidance/head-command.md for more details.
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+    # An unique identifier for the head node and workers of this cluster.
+  name: raycluster-mini
+spec:
+  rayVersion: '2.2.0' # should match the Ray version in the image of the containers
+  # Ray head pod template
+  headGroupSpec:
+    serviceType: ClusterIP # optional
+    # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1' # can be auto-completed from the limits
+      block: 'true'
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.2.0
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265 # Ray dashboard
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
+          # command: ["echo 123"]
+          command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
+          
+          # The script ray_cluster_resources.sh will wait until the cluster is ready and 
+          # print the resources in the ray cluster.
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh","-c","/home/ray/samples/ray_cluster_resources.sh"]
+          volumeMounts:
+            - mountPath: /home/ray/samples
+              name: ray-example-configmap
+        volumes:
+          - name: ray-example-configmap
+            configMap:
+              name: ray-example
+              defaultMode: 0777
+              items:
+                - key: ray_cluster_resources.sh
+                  path: ray_cluster_resources.sh
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-example
+data:
+  ray_cluster_resources.sh: |
+    #!/bin/bash
+
+    # wait for ray cluster to finish initialization
+    while true; do
+        ray health-check 2>/dev/null
+        if [ "$?" = "0" ]; then
+            break
+        else
+            echo "INFO: waiting for ray head to start"
+            sleep 1
+        fi
+    done
+
+    python -c "import ray; ray.init(); print(ray.cluster_resources())"
+
+    echo "INFO: Print Ray cluster resources"
