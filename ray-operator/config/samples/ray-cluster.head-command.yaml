@@ -38,11 +38,12 @@ spec:
           - containerPort: 10001
             name: client
           # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
-          # command: ["echo 123"]
-          command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
-          
-          # The script ray_cluster_resources.sh will wait until the cluster is ready and 
-          # print the resources in the ray cluster.
+          command: ["echo 123"]
+          # The script ray_cluster_resources.sh will wait until the cluster is ready and print 
+          # the resources in the ray cluster. Users can execute the script in either (1) `command`
+          # or (2) `postStart`. 
+          # 
+          # command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
           lifecycle:
             postStart:
               exec:
@@ -78,6 +79,7 @@ data:
         fi
     done
 
+    # Print the resources in the ray cluster after the cluster is ready.
     python -c "import ray; ray.init(); print(ray.cluster_resources())"
 
     echo "INFO: Print Ray cluster resources"

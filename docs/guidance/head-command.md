@@ -30,11 +30,11 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
           command: ["echo", "123"]
 ```
 * Running head Pod
-  * `containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
-  * `containers.0.args` contains two parts:
-    * (Part 1) **user-specified command**: A string concatenates `spec.containers.0.command` from RayCluster and `spec.containers.0.args` from RayCluster together. In this example, the string will be `echo 123` because `spec.containers.0.args` is not defined here.
+  * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
+  * `spec.containers.0.args` contains two parts:
+    * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together. In this example, the string will be `echo 123` because `headGroupSpec.template.spec.containers.0.args` is not defined here.
     * (Part 2) **ray start command**: The command is created based on `rayStartParams` specified in RayCluster. The command will look like `ulimit -n 65536; ray start ...`.
-    * To summarize, `containers.0.args` will be `$(user-specified command) && $(ray start command)`.
+    * To summarize, `spec.containers.0.args` will be `$(user-specified command) && $(ray start command)`.
 
 * Example
     ```sh
@@ -54,7 +54,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
     #   -lc
     #   --
     # Args:
-    #    echo  123 && ulimit -n 65536; ray start --head  --block  --metrics-export-port=8080  --memory=2147483648  --dashboard-host=0.0.0.0  --num-cpus=1
+    #    echo 123  && ulimit -n 65536; ray start --head  --dashboard-host=0.0.0.0  --num-cpus=1  --block  --metrics-export-port=8080  --memory=2147483648
     ```
 
 
@@ -89,6 +89,7 @@ data:
         fi
     done
 
+    # Print the resources in the ray cluster after the cluster is ready.
     python -c "import ray; ray.init(); print(ray.cluster_resources())"
 
     echo "INFO: Print Ray cluster resources"
@@ -113,7 +114,7 @@ data:
     ```
 
 ### Solution 2: Container command
-As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `spec.containers.0.args` in `ray-cluster.head-command.yaml`.
+As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `headGroupSpec.template.spec.containers.0.args` in `ray-cluster.head-command.yaml`.
 
 ```yaml
 # Parentheses for the command is required.
@@ -123,7 +124,7 @@ command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
 * Example
     ```sh
     # Path: kuberay/
-    # Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"].
+    # Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"] and comment out `postStart`.
     kubectl apply -f ray-operator/config/samples/ray-cluster.head-command.yaml
 
     # Check ${RAYCLUSTER_HEAD_POD}
