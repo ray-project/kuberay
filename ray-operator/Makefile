@@ -82,7 +82,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-image: ## Build image only
-	docker build -t ${IMG} .
+	docker buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 docker-build: test docker-image ## Build docker image with the manager.
 
