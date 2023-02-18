@@ -165,7 +165,7 @@ spec:
 
 ## Step 7: Collect Custom metrics with Recording Rules
 
-[Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) allow us to precompute frequently needed or computationally expensive [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and save their result as a custom metric. Note this is different from [Custom Application-level Metrics](https://docs.ray.io/en/master/ray-observability/ray-metrics.html#application-level-metrics) which aims for the visibility of ray applications.
+[Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) allow us to precompute frequently needed or computationally expensive [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and save their result as custom metrics. Note this is different from [Custom Application-level Metrics](https://docs.ray.io/en/master/ray-observability/ray-metrics.html#application-level-metrics) which aim for the visibility of ray applications.
 
 ```yaml
 
@@ -190,8 +190,8 @@ spec:
       # https://prometheus.io/docs/practices/rules/#recording-rules
       record: ray_gcs_availability_30d
       # The PromQL expression to evaluate.
-      # The following expression will return 
-      # percentage of Ray GCS resource update requests with usage times smaller than 20ms.
+      # The following expression will return percentage of Ray GCS resource update requests with usage times smaller than 20ms.
+      # Note ray_gcs_update_resource_usage_time stores the average RTT of a UpdateResourceUsage RPC.
       expr: |
       (
         100 * (
@@ -213,13 +213,13 @@ spec:
   #     release: prometheus
   ```
 
-* PrometheusRule can be reloaded at runtime. Use `kubectl apply {modified prometheusRules.yaml}` to reconfigure the rules.
+* PrometheusRule can be reloaded at runtime. Use `kubectl apply {modified prometheusRules.yaml}` to reconfigure the rules if needed.
 
 
 ## Step 8: Define Alert Conditions with Alerting Rules
 
-An alert is the outcome of an [alerting rule](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) in Prometheus that is actively firing. Alerts are sent from Prometheus to the [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager).
-
+[Alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) allow us to define alert conditions based on [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and to send notifications about firing alerts to [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager).
+an external service. 
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -267,12 +267,18 @@ spec:
 kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-prometheus-0 -n prometheus-system 9090:9090
 ```
 
--  Go to `${YOUR_IP}:9090/targets` for the Web UI (e.g. `127.0.0.1:9090/targets`). You should be able to see `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)` and `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)` on the page.
+- Go to `${YOUR_IP}:9090/targets` for the Web UI (e.g. `127.0.0.1:9090/targets`). You should be able to see:
+  - `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)`
+  - `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)`
 ![Prometheus Web UI](../images/prometheus_web_ui.png)
 
-- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to query all [system metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#system-metrics ), [application level metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#application-level-metrics), and custom metrics defined in Recording Rules (e.g. `ray_gcs_availability_30d`).
+- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to query:
+  - [System Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#system-metrics )
+  - [Application Level Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#application-level-metrics)
+  - Custom Metrics Defined in Recording Rules (e.g. `ray_gcs_availability_30d`)
 
-- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to see all alerting Rules there (e.g. `RayGlobalControlStoreShortWindowSLO`).
+- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to see:
+  - Alerting Rules (e.g. `RayGlobalControlStoreShortWindowSLO`).
 
 ## Step 10: Access Grafana
 
