@@ -267,17 +267,17 @@ spec:
 kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-prometheus-0 -n prometheus-system 9090:9090
 ```
 
-- Go to `${YOUR_IP}:9090/targets` for the Web UI (e.g. `127.0.0.1:9090/targets`). You should be able to see:
+- Go to `${YOUR_IP}:9090/targets` (e.g. `127.0.0.1:9090/targets`). You should be able to see:
   - `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)`
   - `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)`
 ![Prometheus Web UI](../images/prometheus_web_ui.png)
 
-- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to query:
+- Go to `${YOUR_IP}:9090/targets`. You should be able to query:
   - [System Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#system-metrics )
   - [Application Level Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#application-level-metrics)
   - Custom Metrics defined in Recording Rules (e.g. `ray_gcs_availability_30d`)
 
-- Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to see:
+- Go to `${YOUR_IP}:9090/targets`. You should be able to see:
   - Alerting Rules (e.g. `RayGlobalControlStoreShortWindowSLO`).
 
 ## Step 10: Access Grafana
