@@ -201,7 +201,7 @@ spec:
         )
       )
 ```
-* The example recording rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**, Hence, no need to create anything here.
+* The recording rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**, Hence, no need to create anything here.
 
 * See [PrometheusRule official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#prometheusrule) for more details about the configurations.
 
@@ -219,7 +219,6 @@ spec:
 ## Step 8: Define Alert Conditions with Alerting Rules
 
 [Alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) allow us to define alert conditions based on [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and to send notifications about firing alerts to [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager).
-an external service. 
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -232,8 +231,9 @@ metadata:
     release: prometheus
 spec:
   groups:
-  - interval: 30s
-    name: ray-cluster-main-staging-gcs.rules
+  - name: ray-cluster-main-staging-gcs.rules
+    # How often rules in the group are evaluated.
+    interval: 30s
     rules:
       # The name of the alert.
     - alert: RayGlobalControlStoreShortWindowSLO
@@ -259,7 +259,7 @@ spec:
 ```
 * Alerting rules are configured in the same way as recording rules.
 
-* The example alerting rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**, Hence, Hence, no need to create anything here.
+* The alerting rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**, Hence, no need to create anything here.
 
 ## Step 9: Access Prometheus Web UI
 ```sh
@@ -275,7 +275,7 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 - Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to query:
   - [System Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#system-metrics )
   - [Application Level Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#application-level-metrics)
-  - Custom Metrics Defined in Recording Rules (e.g. `ray_gcs_availability_30d`)
+  - Custom Metrics defined in Recording Rules (e.g. `ray_gcs_availability_30d`)
 
 - Go to `${YOUR_IP}:9090/targets` for the Web UI. You should be able to see:
   - Alerting Rules (e.g. `RayGlobalControlStoreShortWindowSLO`).
