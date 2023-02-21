@@ -59,9 +59,40 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
 
 
 ## Timing 2: After `ray start` (RayCluster is ready)
-We have two solutions to execute commands after the RayCluster is ready.
+We have two solutions to execute commands after the RayCluster is ready. The main difference between these two solutions is users can check the logs via `kubectl logs` with Solution 1.
 
-### Solution 1: postStart hook
+### Solution 1: Container command (Recommended)
+As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `headGroupSpec.template.spec.containers.0.args` in `ray-cluster.head-command.yaml`.
+
+```yaml
+# Parentheses for the command is required.
+command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
+```
+
+* Example
+    ```sh
+    # Path: kuberay/
+    # Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"] and comment out `postStart`.
+    kubectl apply -f ray-operator/config/samples/ray-cluster.head-command.yaml
+
+    # Check ${RAYCLUSTER_HEAD_POD}
+    kubectl get pod -l ray.io/node-type=head
+
+    # Check the logs
+    kubectl logs ${RAYCLUSTER_HEAD_POD}
+
+    # INFO: waiting for ray head to start
+    # .
+    # . => Cluster initialization
+    # .
+    # 2023-02-16 18:44:43,724 INFO worker.py:1231 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
+    # 2023-02-16 18:44:43,724 INFO worker.py:1352 -- Connecting to existing Ray cluster at address: 10.244.0.26:6379...
+    # 2023-02-16 18:44:43,735 INFO worker.py:1535 -- Connected to Ray cluster. View the dashboard at http://10.244.0.26:8265
+    # {'object_store_memory': 539679129.0, 'node:10.244.0.26': 1.0, 'CPU': 1.0, 'memory': 2147483648.0}
+    # INFO: Print Ray cluster resources
+    ```
+
+### Solution 2: postStart hook
 ```yaml
 # ray-operator/config/samples/ray-cluster.head-command.yaml
 lifecycle:
@@ -112,35 +143,3 @@ data:
     # 
     # `python -c "import ray; ray.init(); print(ray.cluster_resources())"`
     ```
-
-### Solution 2: Container command
-As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `headGroupSpec.template.spec.containers.0.args` in `ray-cluster.head-command.yaml`.
-
-```yaml
-# Parentheses for the command is required.
-command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
-```
-
-* Example
-    ```sh
-    # Path: kuberay/
-    # Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"] and comment out `postStart`.
-    kubectl apply -f ray-operator/config/samples/ray-cluster.head-command.yaml
-
-    # Check ${RAYCLUSTER_HEAD_POD}
-    kubectl get pod -l ray.io/node-type=head
-
-    # Check the logs
-    kubectl logs ${RAYCLUSTER_HEAD_POD}
-
-    # INFO: waiting for ray head to start
-    # .
-    # . => Cluster initialization
-    # .
-    # 2023-02-16 18:44:43,724 INFO worker.py:1231 -- Using address 127.0.0.1:6379 set in the environment variable RAY_ADDRESS
-    # 2023-02-16 18:44:43,724 INFO worker.py:1352 -- Connecting to existing Ray cluster at address: 10.244.0.26:6379...
-    # 2023-02-16 18:44:43,735 INFO worker.py:1535 -- Connected to Ray cluster. View the dashboard at http://10.244.0.26:8265
-    # {'object_store_memory': 539679129.0, 'node:10.244.0.26': 1.0, 'CPU': 1.0, 'memory': 2147483648.0}
-    # INFO: Print Ray cluster resources
-    ```
-    * The main difference between these two solutions is users can check the logs via `kubectl logs` with Solution 2.
