@@ -1,5 +1,5 @@
 # This example config is used to describe how does head command work.
-# See kuberay/docs/guidance/head-command.md for more details.
+# See kuberay/docs/guidance/pod-command.md for more details.
 apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
