@@ -28,11 +28,12 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
             ...
           # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
           command: ["echo 123"]
+          args: ["456"]
 ```
 * Ray head Pod
   * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
   * `spec.containers.0.args` contains two parts:
-    * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together. In this example, the string will be `echo 123` because `headGroupSpec.template.spec.containers.0.args` is not defined here.
+    * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together.
     * (Part 2) **ray start command**: The command is created based on `rayStartParams` specified in RayCluster. The command will look like `ulimit -n 65536; ray start ...`.
     * To summarize, `spec.containers.0.args` will be `$(user-specified command) && $(ray start command)`.
 
@@ -54,7 +55,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
     #   -lc
     #   --
     # Args:
-    #    echo 123  && ulimit -n 65536; ray start --head  --dashboard-host=0.0.0.0  --num-cpus=1  --block  --metrics-export-port=8080  --memory=2147483648
+    #    echo 123  456  && ulimit -n 65536; ray start --head  --dashboard-host=0.0.0.0  --num-cpus=1  --block  --metrics-export-port=8080  --memory=2147483648
     ```
 
 
@@ -62,17 +63,44 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
 We have two solutions to execute commands after the RayCluster is ready. The main difference between these two solutions is users can check the logs via `kubectl logs` with Solution 1.
 
 ### Solution 1: Container command (Recommended)
-As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `headGroupSpec.template.spec.containers.0.args` in `ray-cluster.head-command.yaml`.
+As we mentioned in the section "Timing 1: Before `ray start`", user-specified command will be executed before the `ray start` command. Hence, we can execute the `ray_cluster_resources.sh` in background by updating `headGroupSpec.template.spec.containers.0.command` in `ray-cluster.head-command.yaml`.
 
 ```yaml
+# ray-operator/config/samples/ray-cluster.head-command.yaml
 # Parentheses for the command is required.
 command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
+
+# ray_cluster_resources.sh
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-example
+data:
+  ray_cluster_resources.sh: |
+    #!/bin/bash
+
+    # wait for ray cluster to finish initialization
+    while true; do
+        ray health-check 2>/dev/null
+        if [ "$?" = "0" ]; then
+            break
+        else
+            echo "INFO: waiting for ray head to start"
+            sleep 1
+        fi
+    done
+
+    # Print the resources in the ray cluster after the cluster is ready.
+    python -c "import ray; ray.init(); print(ray.cluster_resources())"
+
+    echo "INFO: Print Ray cluster resources"
 ```
 
 * Example
     ```sh
     # Path: kuberay/
-    # Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"] and comment out `postStart`.
+    # (1) Update `command` to ["(/home/ray/samples/ray_cluster_resources.sh&)"]
+    # (2) Comment out `postStart` and `args`.
     kubectl apply -f ray-operator/config/samples/ray-cluster.head-command.yaml
 
     # Check ${RAYCLUSTER_HEAD_POD}
@@ -99,31 +127,6 @@ lifecycle:
   postStart:
     exec:
       command: ["/bin/sh","-c","/home/ray/samples/ray_cluster_resources.sh"]
-
-# ray_cluster_resources.sh
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ray-example
-data:
-  ray_cluster_resources.sh: |
-    #!/bin/bash
-
-    # wait for ray cluster to finish initialization
-    while true; do
-        ray health-check 2>/dev/null
-        if [ "$?" = "0" ]; then
-            break
-        else
-            echo "INFO: waiting for ray head to start"
-            sleep 1
-        fi
-    done
-
-    # Print the resources in the ray cluster after the cluster is ready.
-    python -c "import ray; ray.init(); print(ray.cluster_resources())"
-
-    echo "INFO: Print Ray cluster resources"
 ```
 * We execute the script `ray_cluster_resources.sh` via the postStart hook. Based on [this document](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks), there is no guarantee that the hook will execute before the container ENTRYPOINT. Hence, we need to wait for RayCluster to finish initialization in `ray_cluster_resources.sh`.
 
