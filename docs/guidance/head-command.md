@@ -1,9 +1,9 @@
 # Specify container commands for head Pod
-Users want to execute some commands at two timings:
+You can execute commands on the head pod at two timings:
 
-* (1) **Before `ray start`**: Take [this slack thread](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1675378764037199) as an example, the user wants to set up some environment variables that will be used by `ray start`.
+* (1) **Before `ray start`**: As an example, you can set up some environment variables that will be used by `ray start`.
 
-* (2) **After `ray start` (RayCluster is ready)**: Take [this slack thread](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1669647595429959) as an example, the user wants to launch a Ray serve deployment when the RayCluster is ready.
+* (2) **After `ray start` (RayCluster is ready)**: As an example, you can launch a Ray serve deployment when the RayCluster is ready.
 
 ## Current KubeRay operator behavior for container commands
 * The current behavior for container commands is very weird, and **may be updated in the future**.
