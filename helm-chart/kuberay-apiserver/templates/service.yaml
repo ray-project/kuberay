@@ -9,6 +9,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app.kubernetes.io/name: {{ .Values.name }}
+    app.kubernetes.io/component: {{ include "kuberay-apiserver.name" . }}
+    app.kubernetes.io/name: {{ .Release.Name }}
   ports:
     {{- toYaml .Values.service.ports | nindent 12 }}
