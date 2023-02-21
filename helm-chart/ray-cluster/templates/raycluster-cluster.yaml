@@ -118,6 +118,12 @@ spec:
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
             {{- end }}
+            {{- if $values.command }}
+            command: {{- toYaml $values.command | nindent 14}}
+            {{- end }}
+            {{- if $values.args }}
+            args: {{- toYaml $values.args | nindent 14}}
+            {{- end }}
           {{- if $values.sidecarContainers }}
           {{- toYaml $values.sidecarContainers | nindent 10 }}
           {{- end }}
@@ -177,6 +183,12 @@ spec:
             {{- if .Values.worker.lifecycle }}
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}
+            {{- end }}
+            {{- if .Values.worker.command }}
+            command: {{- toYaml .Values.worker.command | nindent 14}}
+            {{- end }}
+            {{- if .Values.worker.args }}
+            args: {{- toYaml .Values.worker.args | nindent 14}}
             {{- end }}
           {{- if .Values.worker.sidecarContainers }}
           {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
