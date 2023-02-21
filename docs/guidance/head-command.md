@@ -6,7 +6,7 @@ You can execute commands on the head pod at two timings:
 * (2) **After `ray start` (RayCluster is ready)**: As an example, you can launch a Ray serve deployment when the RayCluster is ready.
 
 ## Current KubeRay operator behavior for container commands
-* The current behavior for container commands is very weird, and **may be updated in the future**.
+* The current behavior for container commands is not finalized, and **may be updated in the future**.
 * See [code](https://github.com/ray-project/kuberay/blob/47148921c7d14813aea26a7974abda7cf22bbc52/ray-operator/controllers/ray/common/pod.go#L301-L326) for more details.
 
 ## Timing 1: Before `ray start`
