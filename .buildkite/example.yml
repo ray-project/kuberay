@@ -1,0 +1,7 @@
+- label: Buildkite example
+  instance_size: large
+  image: golang:1.17
+  commands:
+    - ls -alp /workdir
+    - cd /workdir/kuberay/ray-operator
+    - make test
