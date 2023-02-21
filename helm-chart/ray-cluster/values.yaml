@@ -85,7 +85,7 @@ head:
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
-  # See docs/guidance/head-command.md for more details about how to specify 
+  # See docs/guidance/head-command.md for more details about how to specify
   # container command for head Pod.
   command: []
   args: []
