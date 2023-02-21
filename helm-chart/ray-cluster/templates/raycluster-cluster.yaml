@@ -52,6 +52,12 @@ spec:
             lifecycle:
             {{- toYaml .Values.head.lifecycle | nindent 14 }}
             {{- end }}
+            {{- if .Values.head.command }}
+            command: {{- toYaml .Values.head.command | nindent 14}}
+            {{- end }}
+            {{- if .Values.head.args }}
+            args: {{- toYaml .Values.head.args | nindent 14}}
+            {{- end }}
           {{- if .Values.head.sidecarContainers }}
           {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
           {{- end }}

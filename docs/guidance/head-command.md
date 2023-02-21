@@ -27,7 +27,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
           ports:
             ...
           # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
-          command: ["echo", "123"]
+          command: ["echo 123"]
 ```
 * Running head Pod
   * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
