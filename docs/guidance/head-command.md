@@ -1,5 +1,5 @@
-# Specify container commands for head Pod
-You can execute commands on the head pod at two timings:
+# Specify container commands for Ray head/worker Pods
+You can execute commands on the head/worker pods at two timings:
 
 * (1) **Before `ray start`**: As an example, you can set up some environment variables that will be used by `ray start`.
 
@@ -29,7 +29,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
           # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
           command: ["echo 123"]
 ```
-* Running head Pod
+* Ray head Pod
   * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
   * `spec.containers.0.args` contains two parts:
     * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together. In this example, the string will be `echo 123` because `headGroupSpec.template.spec.containers.0.args` is not defined here.
