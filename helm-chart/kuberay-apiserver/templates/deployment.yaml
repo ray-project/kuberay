@@ -25,6 +25,9 @@ spec:
         {{- toYaml .Values.containerPort | nindent 8 }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+      {{- if .Values.sidecarContainers }}
+      {{- toYaml .Values.sidecarContainers | nindent 6 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
