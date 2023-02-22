@@ -95,7 +95,10 @@ spec:
 * The YAML example above is [serviceMonitor.yaml](../../config/prometheus/serviceMonitor.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 * See [ServiceMonitor official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor) for more details about the configurations.
 
-* #### `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
+* `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
+
+<div id="prometheus-can-only-detect-this-label" ></div>
+
   ```sh
   helm ls -n prometheus-system
   # ($HELM_RELEASE is "prometheus".)
@@ -153,7 +156,7 @@ spec:
   podMetricsEndpoints:
   - port: metrics
 ```
-* `release: $HELM_RELEASE`: Prometheus can only detect PodMonitor with this label. See [here](#release-helm_release-prometheus-can-only-detect-servicemonitor-with-this-label ) for more details.
+* `release: $HELM_RELEASE`: Prometheus can only detect PodMonitor with this label. See [here](#prometheus-can-only-detect-this-label) for more details.
 
 * **PodMonitor** in `namespaceSelector` and `selector` are used to select Kubernetes Pods.
   ```sh
@@ -164,7 +167,7 @@ spec:
 
 * `ray.io/cluster: $RAY_CLUSTER_NAME`: We also define `metadata.labels` by manually adding `ray.io/cluster: <ray-cluster-name>` and then instructing the PodMonitors resource to add that label in the scraped metrics via `spec.podTargetLabels[0].ray.io/cluster`.
 
-## Step 7: Collect Custom metrics with Recording Rules
+## Step 7: Collect custom metrics with Recording Rules
 
 [Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) allow us to precompute frequently needed or computationally expensive [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and save their result as custom metrics. Note this is different from [Custom Application-level Metrics](https://docs.ray.io/en/master/ray-observability/ray-metrics.html#application-level-metrics) which aim for the visibility of ray applications.
 
@@ -207,7 +210,7 @@ $$\frac{ number\ of\ update\ resource\ usage\ RPCs\ that\ have\ RTT\ smaller\ th
 
 * See [PrometheusRule official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#prometheusrule) for more details about the configurations.
 
-* `release: $HELM_RELEASE`: Prometheus can only detect PrometheusRule with this label. See [here](#release-helm_release-prometheus-can-only-detect-servicemonitor-with-this-label ) for more details.
+* `release: $HELM_RELEASE`: Prometheus can only detect PrometheusRule with this label. See [here](#prometheus-can-only-detect-this-label) for more details.
 
 * PrometheusRule can be reloaded at runtime. Use `kubectl apply {modified prometheusRules.yaml}` to reconfigure the rules if needed.
 
