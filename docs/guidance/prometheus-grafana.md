@@ -179,7 +179,7 @@ metadata:
     release: prometheus
 spec:
   groups:
-- # Rules within a group are run sequentially at same evaluation interval.
+- # Rules within a group are run sequentially at the same evaluation interval.
     name: ray-cluster-main-staging-gcs.rules
     # How often rules in the group are evaluated.
     interval: 30s
@@ -246,7 +246,7 @@ spec:
       # firing alerts may not be handled in time if the setting value is too big.
       for: 5m
       # A set of additional labels to be attached to the alert.
-      # It is possible to overwrite the labels in metadata.labels, so make sure one of the labels matchs the label in ruleSelector.matchLabels.
+      # It is possible to overwrite the labels in metadata.labels, so make sure one of the labels match the label in ruleSelector.matchLabels.
       labels:
         severity: critical
 ```
