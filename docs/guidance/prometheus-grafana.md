@@ -179,8 +179,7 @@ metadata:
     release: prometheus
 spec:
   groups:
-- # Rules within a group are run sequentially at same evaluation interval,
-    # with the same evaluation time.
+- # Rules within a group are run sequentially at same evaluation interval.
     name: ray-cluster-main-staging-gcs.rules
     # How often rules in the group are evaluated.
     interval: 30s
