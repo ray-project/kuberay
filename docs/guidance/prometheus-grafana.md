@@ -175,7 +175,7 @@ metadata:
   name: ray-cluster-gcs-rules
   namespace: prometheus-system
   labels:
-    # `release: $HELM_RELEASE`: Prometheus can only detect Rule with this label.
+    # `release: $HELM_RELEASE`: Prometheus can only detect Recording Rules with this label.
     release: prometheus
 spec:
   groups:
@@ -199,7 +199,7 @@ spec:
       )
 ```
 
-* The above PromQL expression is: 
+* The PromQL expression above is: 
 $$\frac{ number\ of\ update\ resource\ usage\ RPCs\ that\ have\ RTT\ smaller\ then\ 20ms\ in\ last\ 30\ days\ }{total\ number\ of\ update\ resource\ usage\ RPCs\ in\ last\ 30\ days\ }   \times 100 $$  
 
 
@@ -223,7 +223,7 @@ metadata:
   name: ray-cluster-gcs-rules
   namespace: prometheus-system
   labels:
-    # `release: $HELM_RELEASE`: Prometheus can only detect Rule with this label.
+    # `release: $HELM_RELEASE`: Prometheus can only detect Alerting Rules with this label.
     release: prometheus
 spec:
   groups:
@@ -251,7 +251,7 @@ spec:
         severity: critical
 ```
 
-* The above PromQL expression checks if there is no time series exist for `ray_gcs_update_resource_usage_time_bucket` metric. See [absent()](https://prometheus.io/docs/prometheus/latest/querying/functions/#absent) for more detail.
+* The PromQL expression above checks if there is no time series exist for `ray_gcs_update_resource_usage_time_bucket` metric. See [absent()](https://prometheus.io/docs/prometheus/latest/querying/functions/#absent) for more detail.
 
 * The alerting rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 
