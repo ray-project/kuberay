@@ -253,9 +253,11 @@ jobs:
 
     - name: Push Operator to DockerHub
       run: |
-        docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
-        docker push kuberay/operator:nightly
+        docker buildx build --push \
+          --platform linux/amd64,linux/arm64 \
+          -t kuberay/operator:${{ steps.vars.outputs.sha_short }} \
+          -t kuberay/operator:nightly \
+          .;
 
       working-directory: ${{env.working-directory}}
       if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
