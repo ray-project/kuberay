@@ -182,7 +182,7 @@ metadata:
     release: prometheus
 spec:
   groups:
-- # Rules within a group are run sequentially at the same evaluation interval.
+- #  Rules within a group are run periodically with the same evaluation interval(30s in this example).
     name: ray-cluster-main-staging-gcs.rules
     # How often rules in the group are evaluated.
     interval: 30s
@@ -246,7 +246,7 @@ spec:
                       )
       # Time that Prometheus will wait and check if the alert continues to be active during each evaluation before firing the alert.
       # firing alerts may be due to false positives or noise if the setting value is too small.
-      # firing alerts may not be handled in time if the setting value is too big.
+      # On the other hand, if the value is too big, the alerts may not be handled in time.
       for: 5m
       # A set of additional labels to be attached to the alert.
       # It is possible to overwrite the labels in metadata.labels, so make sure one of the labels match the label in ruleSelector.matchLabels.
