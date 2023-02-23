@@ -42,7 +42,7 @@ spec:
         rayActorOptions:
           numCpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.2.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.3.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -58,7 +58,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.2.0
+              image: rayproject/ray:2.3.0
               imagePullPolicy: Always
               resources:
                 limits:
@@ -95,7 +95,7 @@ spec:
                 command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.2.0
+                image: rayproject/ray:2.3.0
                 imagePullPolicy: Always
                 lifecycle:
                   preStop:

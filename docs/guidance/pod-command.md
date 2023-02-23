@@ -21,7 +21,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           resources:
             ...
           ports:

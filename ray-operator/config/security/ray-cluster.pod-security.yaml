@@ -10,7 +10,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-pod-security
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   # Ray head pod configuration
   headGroupSpec:
     serviceType: ClusterIP # optional

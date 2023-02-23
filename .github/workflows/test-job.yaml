@@ -340,6 +340,26 @@ jobs:
         with:
           ray_version: 2.2.0
 
+  test-compatibility-2_3_0:
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
+    runs-on: ubuntu-latest
+    name: Compatibility Test - 2.3.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 2.3.0
+
   test-compatibility-nightly:
     needs:
       - build_operator

@@ -13,7 +13,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-complete
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   # Ray head pod template
   headGroupSpec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
@@ -35,7 +35,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
@@ -89,7 +89,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal

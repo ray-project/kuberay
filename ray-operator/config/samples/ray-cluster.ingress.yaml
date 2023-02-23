@@ -10,7 +10,7 @@ metadata:
     nginx.ingress.kubernetes.io/rewrite-target: /$1
   name: raycluster-ingress
 spec:
-  rayVersion: '2.2.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.3.0' # should match the Ray version in the image of the containers
   headGroupSpec:
     serviceType: NodePort
     enableIngress: true
@@ -24,7 +24,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           ports:
           - containerPort: 6379
             name: gcs-server
