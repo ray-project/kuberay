@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     rs = RuleSet([EasyJobRule(), CurlServiceRule()])
     image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.2.0'),
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.3.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
     }
     logger.info(image_dict)
