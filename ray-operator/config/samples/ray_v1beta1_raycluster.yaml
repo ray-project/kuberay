@@ -1,0 +1,6 @@
+apiVersion: ray.io/v1beta1
+kind: RayCluster
+metadata:
+  name: raycluster-sample
+spec:
+  # TODO(user): Add fields here
