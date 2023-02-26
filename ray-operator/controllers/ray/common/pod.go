@@ -321,7 +321,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
 			args = args + " && sleep infinity"
 		}
-		
+
 		pod.Spec.Containers[rayContainerIndex].Args = []string{args}
 	}
 
