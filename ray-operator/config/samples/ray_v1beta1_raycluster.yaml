@@ -1,6 +1,30 @@
 apiVersion: ray.io/v1beta1
 kind: RayCluster
 metadata:
-  name: raycluster-sample
+  name: raycluster-mini-beta
 spec:
-  # TODO(user): Add fields here
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '1'
+      block: 'true'
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.2.0
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
