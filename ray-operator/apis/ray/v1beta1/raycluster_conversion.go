@@ -1,9 +1,10 @@
 package v1beta1
 
 import (
+	"strconv"
+
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
-	"strconv"
 )
 
 // ConvertTo converts this CronJob to the Hub version (v1alpha1).

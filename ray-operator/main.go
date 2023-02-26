@@ -161,6 +161,10 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "RayJob")
 		os.Exit(1)
 	}
+	if err = (&rayv1alpha1.RayCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "RayCluster")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
