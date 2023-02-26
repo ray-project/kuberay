@@ -192,3 +192,6 @@ const (
 	RayConfigError         EventReason = "RayConfigError"
 	PodReconciliationError EventReason = "PodReconciliationError"
 )
+
+// Hub marks v1alpha1 as a conversion hub.
+func (*RayCluster) Hub() {}
