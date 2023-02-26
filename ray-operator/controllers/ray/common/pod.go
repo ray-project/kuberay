@@ -321,7 +321,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
 			args = args + " && sleep infinity"
 		}
-
+		log.Info("Hi, the final args is", "args", args)
 		pod.Spec.Containers[rayContainerIndex].Args = []string{args}
 	}
 
@@ -662,6 +662,12 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
 	}
 
+	// add --block option. See https://github.com/ray-project/kuberay/pull/675
+	if _, ok := rayStartParams["block"]; !ok {
+		rayStartParams["block"] = "true"
+	}
+	log.Info("Hi, I have make sure rayStartParams[\"block\"] is set", "rayStartParams[\"block\"]", rayStartParams["block"])
+
 	return rayStartParams
 }
 
@@ -718,11 +724,16 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
-	nonFlagParams := []string{"log-color", "include-dashboard"}
+	// NonFlagParams with a value of true or false.
+	specialNonFlagParams := []string{"log-color", "include-dashboard"}
 	for k, v := range rayStartParams {
-		if strings.ToLower(v) == "true" && !utils.Contains(nonFlagParams, k) {
-			fmt.Fprintf(flags, " --%s ", k)
+		if utils.Contains([]string{"true", "false"}, strings.ToLower(v)) && !utils.Contains(specialNonFlagParams, k) {
+			//FlagParams
+			if strings.ToLower(v) == "true" {
+				fmt.Fprintf(flags, " --%s ", k)
+			}
 		} else {
+			// nonFlagParams
 			fmt.Fprintf(flags, " --%s=%s ", k, v)
 		}
 	}
