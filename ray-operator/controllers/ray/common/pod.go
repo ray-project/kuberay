@@ -727,7 +727,7 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 	specialNonFlagParams := []string{"log-color", "include-dashboard"}
 	for k, v := range rayStartParams {
 		if utils.Contains([]string{"true", "false"}, strings.ToLower(v)) && !utils.Contains(specialNonFlagParams, k) {
-			//FlagParams
+			// FlagParams
 			if strings.ToLower(v) == "true" {
 				fmt.Fprintf(flags, " --%s ", k)
 			}
