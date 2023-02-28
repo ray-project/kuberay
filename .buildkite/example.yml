@@ -3,5 +3,5 @@
   image: golang:1.17
   commands:
     - ls -alp /workdir
-    - cd /workdir/kuberay/ray-operator
+    - cd /workdir/ray-operator
     - make test
