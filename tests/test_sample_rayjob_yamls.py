@@ -32,13 +32,8 @@ if __name__ == '__main__':
                         {'path': filepath, 'name': filename, 'cr': k8s_object}
                     )
                     break
-
-    # debug print
-    for new_cr in sample_yaml_files:
-        logger.info(new_cr['name'])
-        logger.info(new_cr['cr'])
     
-    rs = RuleSet([])
+    rs = RuleSet([EasyJobRule()])
     image_dict = {
         CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.3.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
