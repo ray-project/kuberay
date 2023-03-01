@@ -67,3 +67,23 @@ runs:
     run: |
       python tests/test_sample_raycluster_yamls.py
     shell: bash
+
+  - name: Run tests for sample RayJob YAML files with the nightly operator.
+    # Depends on the KubeRay operator image built in previous steps
+    env:
+      GITHUB_ACTIONS: true
+      RAY_IMAGE: rayproject/ray:${{ inputs.ray_version }}
+      OPERATOR_IMAGE: kuberay/operator:${{ steps.vars.outputs.sha_short }}
+    run: |
+      python tests/test_sample_rayjob_yamls.py
+    shell: bash
+
+  - name: Run tests for sample RayJob YAML files with the latest KubeRay release.
+    # Depends on latest KubeRay release.
+    env:
+      GITHUB_ACTIONS: true
+      RAY_IMAGE: rayproject/ray:${{ inputs.ray_version }}
+      OPERATOR_IMAGE: kuberay/operator:v0.4.0 # The operator image in the latest KubeRay release.
+    run: |
+      python tests/test_sample_rayjob_yamls.py
+    shell: bash
