@@ -45,7 +45,7 @@ runs:
   - name: Load KubeRay Operator Docker Image
     run: |
       docker load --input /tmp/operator.tar
-      docker images ls -a
+      docker image ls
     shell: bash
 
   - name: Run ${{ inputs.ray_version }} compatibility test
