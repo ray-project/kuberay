@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ master ]
 
+env:
+  testing-arch: amd64
+
 jobs:
   lint:
     name: Lint
@@ -234,8 +237,8 @@ jobs:
 
     - name: Build Docker Image - Operator
       run: |
-        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
-        docker save -o /tmp/operator.tar kuberay/operator:${{ steps.vars.outputs.sha_short }}
+        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-buildx
+        docker save -o /tmp/operator.tar kuberay/operator:${{ steps.vars.outputs.sha_short }}-${{env.testing-arch}}
       working-directory: ${{env.working-directory}}
 
     - name: Upload Artifact Operator
@@ -281,6 +284,7 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 1.13.0
+          testing-arch: ${{env.testing-arch}}
 
   test-compatibility-2_0_0:
     needs:
@@ -301,6 +305,7 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 2.0.0
+          testing-arch: ${{env.testing-arch}}
 
   test-compatibility-2_1_0:
     needs:
@@ -321,6 +326,7 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 2.1.0
+          testing-arch: ${{env.testing-arch}}
 
   test-compatibility-2_2_0:
     needs:
@@ -341,6 +347,7 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 2.2.0
+          testing-arch: ${{env.testing-arch}}
 
   test-compatibility-nightly:
     needs:
@@ -361,6 +368,7 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: nightly
+          testing-arch: ${{env.testing-arch}}
 
   sample-yaml-config-test-2_1_0:
     needs:
