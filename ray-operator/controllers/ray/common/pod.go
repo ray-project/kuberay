@@ -326,7 +326,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 
 	for index := range pod.Spec.InitContainers {
-		setInitContainerEnvVars(&pod.Spec.InitContainers[index], svcName)
+		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fmt.Sprintf("%s.%s.svc.cluster.local", svcName, pod.ObjectMeta.Namespace))
 	}
 
 	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
@@ -562,7 +562,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		rayIP = LOCAL_HOST
 	} else {
 		// if worker, use the service name of the head
-		rayIP = svcName
+		rayIP = fmt.Sprintf("%s.%s.svc.cluster.local", svcName, pod.ObjectMeta.Namespace)
 	}
 
 	if !envVarExists(RAY_IP, container.Env) {
