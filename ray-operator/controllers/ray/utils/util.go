@@ -121,6 +121,11 @@ func GenerateServiceName(clusterName string) string {
 	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc"))
 }
 
+// GenerateFQDNServiceName generates a Fully Qualified Domain Name.
+func GenerateFQDNServiceName(clusterName string, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", GenerateServiceName(clusterName), namespace)
+}
+
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")

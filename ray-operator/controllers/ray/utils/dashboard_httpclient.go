@@ -130,7 +130,7 @@ func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Cl
 
 func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
 	headSvc := &corev1.Service{}
-	headSvcName := CheckName(GenerateServiceName(rayCluster.Name))
+	headSvcName := GenerateServiceName(rayCluster.Name)
 	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
 		return "", err
 	}
