@@ -5,6 +5,9 @@ inputs:
   ray_version:
     description: "version of ray"
     required: true
+  testing_arch:
+    description: "architecture for operator image"
+    required: true
 
 runs:
   using: "composite"
@@ -54,6 +57,6 @@ runs:
       echo "Using Ray image ${{ inputs.ray_version }}"
       PYTHONPATH="./tests/" \
       RAY_IMAGE="rayproject/ray:${{ inputs.ray_version }}" \
-      OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}" \
+      OPERATOR_IMAGE="kuberay/operator:${{ steps.vars.outputs.sha_short }}-${{ inputs.testing_arch }}" \
       python ./tests/compatibility-test.py
     shell: bash

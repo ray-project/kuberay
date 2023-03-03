@@ -5,6 +5,9 @@ inputs:
   ray_version:
     description: "version of ray"
     required: true
+  testing_arch:
+    description: "architecture for operator image"
+    required: true
 
 runs:
   using: "composite"
@@ -53,7 +56,7 @@ runs:
     env:
       GITHUB_ACTIONS: true
       RAY_IMAGE: rayproject/ray:${{ inputs.ray_version }}
-      OPERATOR_IMAGE: kuberay/operator:${{ steps.vars.outputs.sha_short }}
+      OPERATOR_IMAGE: kuberay/operator:${{ steps.vars.outputs.sha_short }}-${{ inputs.testing_arch }}
     run: |
       python tests/test_sample_raycluster_yamls.py
     shell: bash
