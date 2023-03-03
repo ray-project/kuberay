@@ -25,7 +25,7 @@ kubectl get all -n prometheus-system
 # deployment.apps/prometheus-kube-prometheus-operator   1/1     1            1           46s
 # deployment.apps/prometheus-kube-state-metrics         1/1     1            1           46s
 ```
-* KubeRay provides an [install.sh script](../../install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor** and **PodMonitor**, in the namespace `prometheus-system` automatically.
+* KubeRay provides an [install.sh script](../../install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
 
 ## Step 3: Install a KubeRay operator
 
@@ -96,6 +96,9 @@ spec:
 * See [ServiceMonitor official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor) for more details about the configurations.
 
 * `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
+
+<div id="prometheus-can-only-detect-this-label" ></div>
+
   ```sh
   helm ls -n prometheus-system
   # ($HELM_RELEASE is "prometheus".)
@@ -103,11 +106,13 @@ spec:
   # prometheus      prometheus-system       1               2023-02-06 06:27:05.530950815 +0000 UTC deployed        kube-prometheus-stack-44.3.1    v0.62.0
 
   kubectl get prometheuses.monitoring.coreos.com -n prometheus-system -oyaml
+  # serviceMonitorSelector:
+  #   matchLabels:
+  #     release: prometheus
   # podMonitorSelector:
   #   matchLabels:
   #     release: prometheus
-  # ...
-  # serviceMonitorSelector:
+  # ruleSelector:
   #   matchLabels:
   #     release: prometheus
   ```
@@ -151,6 +156,8 @@ spec:
   podMetricsEndpoints:
   - port: metrics
 ```
+* `release: $HELM_RELEASE`: Prometheus can only detect PodMonitor with this label. See [here](#prometheus-can-only-detect-this-label) for more details.
+
 * **PodMonitor** in `namespaceSelector` and `selector` are used to select Kubernetes Pods.
   ```sh
   kubectl get pod -n default -l ray.io/node-type=worker
@@ -160,19 +167,119 @@ spec:
 
 * `ray.io/cluster: $RAY_CLUSTER_NAME`: We also define `metadata.labels` by manually adding `ray.io/cluster: <ray-cluster-name>` and then instructing the PodMonitors resource to add that label in the scraped metrics via `spec.podTargetLabels[0].ray.io/cluster`.
 
-## Step 7: Access Prometheus Web UI
+## Step 7: Collect custom metrics with Recording Rules
+
+[Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) allow us to precompute frequently needed or computationally expensive [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and save their result as custom metrics. Note this is different from [Custom Application-level Metrics](https://docs.ray.io/en/master/ray-observability/ray-metrics.html#application-level-metrics) which aim for the visibility of ray applications.
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ray-cluster-gcs-rules
+  namespace: prometheus-system
+  labels:
+    # `release: $HELM_RELEASE`: Prometheus can only detect Recording Rules with this label.
+    release: prometheus
+spec:
+  groups:
+- #  Rules within a group are run periodically with the same evaluation interval(30s in this example).
+    name: ray-cluster-main-staging-gcs.rules
+    # How often rules in the group are evaluated.
+    interval: 30s
+    rules:
+    - # The name of the custom metric.
+      # Also see best practices for naming metrics created by recording rules:
+      # https://prometheus.io/docs/practices/rules/#recording-rules
+      record: ray_gcs_availability_30d
+      # PromQL expression.
+      expr: |
+      (
+        100 * (
+          sum(rate(ray_gcs_update_resource_usage_time_bucket{container="ray-head", le="20.0"}[30d]))
+          /
+          sum(rate(ray_gcs_update_resource_usage_time_count{container="ray-head"}[30d]))
+        )
+      )
+```
+
+* The PromQL expression above is: 
+$$\frac{ number\ of\ update\ resource\ usage\ RPCs\ that\ have\ RTT\ smaller\ then\ 20ms\ in\ last\ 30\ days\ }{total\ number\ of\ update\ resource\ usage\ RPCs\ in\ last\ 30\ days\ }   \times 100 $$  
+
+
+* The recording rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
+
+* See [PrometheusRule official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#prometheusrule) for more details about the configurations.
+
+* `release: $HELM_RELEASE`: Prometheus can only detect PrometheusRule with this label. See [here](#prometheus-can-only-detect-this-label) for more details.
+
+* PrometheusRule can be reloaded at runtime. Use `kubectl apply {modified prometheusRules.yaml}` to reconfigure the rules if needed.
+
+
+## Step 8: Define Alert Conditions with Alerting Rules
+
+[Alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) allow us to define alert conditions based on [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) expressions and to send notifications about firing alerts to [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager) which adds summarization, notification rate limiting, silencing and alert dependencies on top of the simple alert definitions.
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ray-cluster-gcs-rules
+  namespace: prometheus-system
+  labels:
+    # `release: $HELM_RELEASE`: Prometheus can only detect Alerting Rules with this label.
+    release: prometheus
+spec:
+  groups:
+  - name: ray-cluster-main-staging-gcs.rules
+    # How often rules in the group are evaluated.
+    interval: 30s
+    rules:
+    - alert: MissingMetricRayGlobalControlStore
+      # A set of informational labels. Annotations can be used to store longer additional information compared to rules.0.labels.
+      annotations:
+        description: Ray GCS is not emitting any metrics for Resource Update requests
+        summary: Ray GCS is not emitting metrics anymore
+      # PromQL expression.
+      expr: |
+                      (
+                       absent(ray_gcs_update_resource_usage_time_bucket) == 1
+                      )
+      # Time that Prometheus will wait and check if the alert continues to be active during each evaluation before firing the alert.
+      # firing alerts may be due to false positives or noise if the setting value is too small.
+      # On the other hand, if the value is too big, the alerts may not be handled in time.
+      for: 5m
+      # A set of additional labels to be attached to the alert.
+      # It is possible to overwrite the labels in metadata.labels, so make sure one of the labels match the label in ruleSelector.matchLabels.
+      labels:
+        severity: critical
+```
+
+* The PromQL expression above checks if there is no time series exist for `ray_gcs_update_resource_usage_time_bucket` metric. See [absent()](https://prometheus.io/docs/prometheus/latest/querying/functions/#absent) for more detail.
+
+* The alerting rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
+
+* Alerting rules are configured in the same way as recording rules.
+
+## Step 9: Access Prometheus Web UI
 ```sh
 # Forward the port of Prometheus Web UI in the Prometheus server Pod.
 kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-prometheus-0 -n prometheus-system 9090:9090
-
-# Check ${YOUR_IP}:9090/targets for the Web UI (e.g. 127.0.0.1:9090/targets)
-# You should be able to see "podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)"
-# and "serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)" in the page.
 ```
 
+- Go to `${YOUR_IP}:9090/targets` (e.g. `127.0.0.1:9090/targets`). You should be able to see:
+  - `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)`
+  - `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)`
 ![Prometheus Web UI](../images/prometheus_web_ui.png)
 
-## Step 8: Access Grafana
+- Go to `${YOUR_IP}:9090/graph`. You should be able to query:
+  - [System Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#system-metrics)
+  - [Application Level Metrics](https://docs.ray.io/en/latest/ray-observability/ray-metrics.html#application-level-metrics)
+  - Custom Metrics defined in Recording Rules (e.g. `ray_gcs_availability_30d`)
+
+- Go to `${YOUR_IP}:9090/alerts`. You should be able to see:
+  - Alerting Rules (e.g. `MissingMetricRayGlobalControlStore`).
+
+## Step 10: Access Grafana
 
 ```sh
 # Forward the port of Grafana
@@ -193,6 +300,3 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
 
 ![Grafana Ray Dashboard](../images/grafana_ray_dashboard.png)
 
-### Custom Metrics & Alerting 
-
-We can also define custom metrics, and create alerts by using `prometheusrules.monitoring.coreos.com` CRD. Because custom metrics, and alerting is different for each team and setup, we have included an example under [config/prometheus/rules](../../config/prometheus/rules/) that you can use to build custom metrics and alerts.

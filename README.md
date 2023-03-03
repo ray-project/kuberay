@@ -83,6 +83,11 @@ kubectl get pods
 
 Please read our [CONTRIBUTING](CONTRIBUTING.md) guide before making a pull request. Refer to our [DEVELOPMENT](./ray-operator/DEVELOPMENT.md) to build and run tests locally.
 
+### Getting involved
+Kuberay has an active community of developers. Here’s how to get involved with the Kuberay community:
+
+Join our community: Join [Ray community slack](https://forms.gle/9TSdDYUgxYs8SA9e8) (search for Kuberay channel) or use our [discussion board](https://discuss.ray.io/c/ray-clusters/ray-kubernetes) to ask questions and get answers.
+
 ## Security
 
 If you discover a potential security issue in this project, or think you may

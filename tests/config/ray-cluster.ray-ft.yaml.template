@@ -74,9 +74,10 @@ spec:
   rayVersion: '$ray_version'
   headGroupSpec:
     rayStartParams:
-      dashboard-host: '0.0.0.0'
-      num-cpus: '1'
-      block: 'true'
+      dashboard-host: "0.0.0.0"
+      num-cpus: "1"
+      block: "true"
+      redis-password: "5241590000000000"
     #pod template
     template:
       metadata:

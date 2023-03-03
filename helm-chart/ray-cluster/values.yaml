@@ -85,6 +85,10 @@ head:
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+  # See docs/guidance/pod-command.md for more details about how to specify
+  # container command for head Pod.
+  command: []
+  args: []
 
 
 worker:
@@ -141,6 +145,10 @@ worker:
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+  # See docs/guidance/pod-command.md for more details about how to specify
+  # container command for worker Pod.
+  command: []
+  args: []
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
@@ -198,6 +206,10 @@ additionalWorkerGroups:
       - mountPath: /tmp/ray
         name: log-volume
     sidecarContainers: []
+    # See docs/guidance/pod-command.md for more details about how to specify
+    # container command for worker Pod.
+    command: []
+    args: []
 
 # Configuration for Head's Kubernetes Service
 service:
