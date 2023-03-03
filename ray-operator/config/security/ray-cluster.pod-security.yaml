@@ -122,7 +122,7 @@ spec:
         - name: init-myservice
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+          command: ['sh', '-c', "until nslookup $RAY_IP; do echo waiting for myservice; sleep 2; done"]
           securityContext:
             runAsUser: 1000
             allowPrivilegeEscalation: false

@@ -223,7 +223,7 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 					Command: []string{
 						"sh",
 						"-c",
-						"until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
+						"until nslookup $RAY_IP; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
 					},
 				},
 			},
