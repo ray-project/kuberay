@@ -85,7 +85,7 @@ func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, svcName string, headPort string) v1.PodTemplateSpec {
+func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -100,7 +100,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, svcName, headPort)
+	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, fqdnRayIP, headPort)
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -183,7 +183,7 @@ func autoscalerSupportIsStable(rayVersion string) bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, svcName string, headPort string) v1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -198,7 +198,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, svcName, headPort)
+	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, fqdnRayIP, headPort)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -271,7 +271,7 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, enableRayAutoscaler *bool, creator string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -326,10 +326,10 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 	}
 
 	for index := range pod.Spec.InitContainers {
-		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fmt.Sprintf("%s.%s.svc.cluster.local", svcName, pod.ObjectMeta.Namespace))
+		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, svcName, headPort, creator)
+	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, fqdnRayIP, headPort, creator)
 
 	// health check only if FT enabled
 	if podTemplateSpec.Annotations != nil {
@@ -535,20 +535,18 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	return labels
 }
 
-func setInitContainerEnvVars(container *v1.Container, svcName string) {
+func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	// RAY_IP can be used in the DNS lookup
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
 	if !envVarExists("RAY_IP", container.Env) {
-		ip := v1.EnvVar{Name: "RAY_IP"}
-		ip.Value = svcName
+		ip := v1.EnvVar{Name: "RAY_IP", Value: fqdnRayIP}
 		container.Env = append(container.Env, ip)
 	}
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, svcName string, headPort string, creator string) {
-	// set IP to local host if head, or the the svc otherwise  RAY_IP
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
 	// set the port RAY_PORT
 	// set the password?
 	container := &pod.Spec.Containers[rayContainerIndex]
@@ -556,13 +554,11 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		container.Env = []v1.EnvVar{}
 	}
 
-	var rayIP string
+	// case 1: head   => Use LOCAL_HOST
+	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
+	rayIP := fqdnRayIP
 	if rayNodeType == rayiov1alpha1.HeadNode {
-		// if head, use localhost
 		rayIP = LOCAL_HOST
-	} else {
-		// if worker, use the service name of the head
-		rayIP = fmt.Sprintf("%s.%s.svc.cluster.local", svcName, pod.ObjectMeta.Namespace)
 	}
 
 	if !envVarExists(RAY_IP, container.Env) {
@@ -636,11 +632,11 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 }
 
 // TODO auto complete params
-func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, svcName string, headPort string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, fqdnRayIP string, headPort string) (completeStartParams map[string]string) {
 	// Note: The argument headPort is unused for nodeType == rayiov1alpha1.HeadNode.
 	if nodeType == rayiov1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
-			address := fmt.Sprintf("%s:%s", svcName, headPort)
+			address := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 			rayStartParams["address"] = address
 		}
 	}

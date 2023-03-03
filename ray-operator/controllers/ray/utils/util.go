@@ -118,7 +118,7 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 
 // GenerateServiceName generates a ray head service name from cluster name
 func GenerateServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc")
+	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayiov1alpha1.HeadNode, "svc"))
 }
 
 // GenerateDashboardServiceName generates a ray head service name from cluster name
