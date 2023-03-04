@@ -97,7 +97,7 @@ spec:
         initContainers:
           - name: init
             image: {{ $values.initContainerImage | default "busybox:1.28" }}
-            command: ['sh', '-c', "until nslookup $RAY_IP; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
+            command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
             securityContext:
             {{- toYaml $values.initContainerSecurityContext | nindent 14 }}
         containers:
@@ -163,7 +163,7 @@ spec:
         initContainers:
           - name: init
             image: {{ .Values.worker.initContainerImage | default "busybox:1.28" }}
-            command: ['sh', '-c', "until nslookup $RAY_IP; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
+            command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
             securityContext:
             {{- toYaml .Values.worker.initContainerSecurityContext | nindent 14 }}
         containers:

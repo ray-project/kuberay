@@ -536,12 +536,12 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 }
 
 func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
-	// RAY_IP can be used in the DNS lookup
+	// FQ_RAY_IP can be used in the DNS lookup
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if !envVarExists("RAY_IP", container.Env) {
-		ip := v1.EnvVar{Name: "RAY_IP", Value: fqdnRayIP}
+	if !envVarExists("FQ_RAY_IP", container.Env) {
+		ip := v1.EnvVar{Name: "FQ_RAY_IP", Value: fqdnRayIP}
 		container.Env = append(container.Env, ip)
 	}
 }
@@ -556,13 +556,13 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 
 	// case 1: head   => Use LOCAL_HOST
 	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
-	rayIP := fqdnRayIP
+	ip := fqdnRayIP
 	if rayNodeType == rayiov1alpha1.HeadNode {
-		rayIP = LOCAL_HOST
+		ip = LOCAL_HOST
 	}
 
-	if !envVarExists(RAY_IP, container.Env) {
-		ipEnv := v1.EnvVar{Name: RAY_IP, Value: rayIP}
+	if !envVarExists(FQ_RAY_IP, container.Env) {
+		ipEnv := v1.EnvVar{Name: FQ_RAY_IP, Value: ip}
 		container.Env = append(container.Env, ipEnv)
 	}
 	if !envVarExists(RAY_PORT, container.Env) {
@@ -591,7 +591,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
 	if !envVarExists(RAY_ADDRESS, container.Env) {
-		rayAddress := fmt.Sprintf("%s:%s", rayIP, headPort)
+		rayAddress := fmt.Sprintf("%s:%s", ip, headPort)
 		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
 	}
