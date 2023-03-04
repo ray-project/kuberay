@@ -126,6 +126,12 @@ func GenerateFQDNServiceName(clusterName string, namespace string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", GenerateServiceName(clusterName), namespace)
 }
 
+// ExtractRayIPFromFQDN extracts the head service name (i.e., RAY_IP, deprecated) from a fully qualified
+// domain name (FQDN). This function is provided for backward compatibility purposes only.
+func ExtractRayIPFromFQDN(fqdnRayIP string) string {
+	return strings.Split(fqdnRayIP, ".")[0]
+}
+
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")

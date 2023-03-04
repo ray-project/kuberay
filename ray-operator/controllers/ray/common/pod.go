@@ -536,13 +536,15 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 }
 
 func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
-	// FQ_RAY_IP can be used in the DNS lookup
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if !envVarExists("FQ_RAY_IP", container.Env) {
-		ip := v1.EnvVar{Name: "FQ_RAY_IP", Value: fqdnRayIP}
-		container.Env = append(container.Env, ip)
+	if len(fqdnRayIP) != 0 { // Worker Pod
+		container.Env = append(container.Env,
+			v1.EnvVar{Name: FQ_RAY_IP, Value: fqdnRayIP},
+			// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
+			v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(fqdnRayIP)},
+		)
 	}
 }
 
@@ -556,15 +558,16 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 
 	// case 1: head   => Use LOCAL_HOST
 	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
-	ip := fqdnRayIP
-	if rayNodeType == rayiov1alpha1.HeadNode {
-		ip = LOCAL_HOST
+	ip := LOCAL_HOST
+	if rayNodeType == rayiov1alpha1.WorkerNode {
+		ip = fqdnRayIP
+		container.Env = append(container.Env,
+			v1.EnvVar{Name: FQ_RAY_IP, Value: ip},
+			// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
+			v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(ip)},
+		)
 	}
 
-	if !envVarExists(FQ_RAY_IP, container.Env) {
-		ipEnv := v1.EnvVar{Name: FQ_RAY_IP, Value: ip}
-		container.Env = append(container.Env, ipEnv)
-	}
 	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
