@@ -389,8 +389,10 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
 
-	// Check RAY_ADDRESS env
+	// Check environment variables
 	checkPodEnv(t, pod, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
+	checkPodEnv(t, pod, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
+	checkPodEnv(t, pod, RAY_IP, "raycluster-sample-head-svc")
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
