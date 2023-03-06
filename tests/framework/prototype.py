@@ -142,7 +142,7 @@ class CREvent:
     CREvent: Custom Resource Event can be mainly divided into 3 categories.
     (1) Add (create) CR (2) Update CR (3) Delete CR
     """
-    def __init__(self, custom_resource_object,        
+    def __init__(self, custom_resource_object,
         rulesets: List[RuleSet], timeout, namespace, filepath = None):
         self.rulesets = rulesets
         self.timeout = timeout
