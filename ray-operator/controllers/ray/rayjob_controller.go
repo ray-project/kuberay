@@ -232,7 +232,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If suspend flag is set AND
 		// the RayJob is submitted against the RayCluster created by THIS job, then
 		// try to gracefully stop the Ray job and delete (suspend) the cluster
-		if isSuspendFlagSet(rayJobInstance) && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if rayJobInstance.Spec.Suspend && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			info, err := rayDashboardClient.GetJobInfo(rayJobInstance.Status.JobId)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -324,11 +324,6 @@ func isJobSucceedOrFailed(status rayv1alpha1.JobStatus) bool {
 // isJobPendingOrRunning indicates whether the job is running.
 func isJobPendingOrRunning(status rayv1alpha1.JobStatus) bool {
 	return (status == rayv1alpha1.JobStatusPending) || (status == rayv1alpha1.JobStatusRunning)
-}
-
-// isSuspendFlagSet indicates whether the job has a suspended flag set.
-func isSuspendFlagSet(job *rayv1alpha1.RayJob) bool {
-	return job.Spec.Suspend
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -456,7 +451,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return nil, err
 		}
 		// special case: don't create a cluster instance and don't return an error if the suspend flag of the job is true
-		if isSuspendFlagSet(rayJobInstance) {
+		if rayJobInstance.Spec.Suspend {
 			return nil, nil
 		}
 
