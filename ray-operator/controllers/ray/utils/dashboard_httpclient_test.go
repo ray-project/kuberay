@@ -22,7 +22,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	var (
 		rayJob             *rayv1alpha1.RayJob
 		expectJobId        string
-		errorJobId 	       string
+		errorJobId         string
 		rayDashboardClient *RayDashboardClient
 	)
 
@@ -78,6 +78,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			func(req *http.Request) (*http.Response, error) {
 				// return a string in the body
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
+			})
 
 		jobId, err := rayDashboardClient.SubmitJob(rayJob, &ctrl.Log)
 		Expect(err).To(BeNil())
