@@ -397,7 +397,11 @@ func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1alpha1.
 	if jobInfo != nil {
 		rayJob.Status.Message = jobInfo.Message
 		rayJob.Status.StartTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.StartTime)
-		rayJob.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
+		if jobInfo.StartTime >= jobInfo.EndTime {
+			rayJob.Status.EndTime = nil
+		} else {
+			rayJob.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
+		}
 	}
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
