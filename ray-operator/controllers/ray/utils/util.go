@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -344,6 +345,11 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 				if len(container1.Resources.Requests) != len(container2.Resources.Requests) ||
 					len(container1.Resources.Limits) != len(container2.Resources.Limits) {
 					// resource entries do not match
+					return true
+				}
+				
+				if cmp.Equal(container1.VolumeMounts, container2.VolumeMounts) {
+					// volume mounts do not match
 					return true
 				}
 
