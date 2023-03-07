@@ -377,7 +377,7 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 	container := v1.Container{
 		Name:            AutoscalerContainerName,
 		Image:           autoscalerImage,
-		ImagePullPolicy: v1.PullAlways,
+		ImagePullPolicy: v1.PullIfNotPresent,
 		Env: []v1.EnvVar{
 			{
 				Name: "RAY_CLUSTER_NAME",
