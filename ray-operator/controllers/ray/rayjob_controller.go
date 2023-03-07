@@ -254,6 +254,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// Since RayCluster instance is gone, remove it status also
 			// on RayJob resource
 			rayJobInstance.Status.RayClusterStatus = rayv1alpha1.RayClusterStatus{}
+			rayJobInstance.Status.RayClusterName = ""
+			rayJobInstance.Status.DashboardURL = ""
+			rayJobInstance.Status.JobId = ""
+			rayJobInstance.Status.Message = ""
 			err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1alpha1.JobStatusStopped, rayv1alpha1.JobDeploymentStatusSuspended, nil)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
