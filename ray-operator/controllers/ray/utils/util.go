@@ -15,7 +15,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
 	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -347,9 +346,7 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 					// resource entries do not match
 					return true
 				}
-				
-				if cmp.Equal(container1.VolumeMounts, container2.VolumeMounts) {
-					// volume mounts do not match
+				if compareVolumeMounts(container1.VolumeMounts, container2.VolumeMounts) {
 					return true
 				}
 
@@ -434,4 +431,18 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	hashStr := string(base32.HexEncoding.EncodeToString(hashBytes[:]))
 
 	return hashStr, nil
+}
+
+func compareVolumeMounts(m1 []corev1.VolumeMount, m2 []corev1.VolumeMount) bool {
+	if len(m1) != len(m2) {
+		return false
+	}
+
+	for i, _ := range m1 {
+		if m1[i].Name == m2[i].Name && m1[i].MountPath == m2[i].MountPath && m1[i].ReadOnly == m2[i].ReadOnly {
+			return true
+		}
+	}
+
+	return false
 }

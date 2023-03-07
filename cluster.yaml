@@ -1,0 +1,120 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: raycluster-mini
+  namespace: default
+spec:
+  headGroupSpec:
+    rayStartParams:
+      block: "true"
+      dashboard-host: 0.0.0.0
+      num-cpus: "1"
+    serviceType: ClusterIP
+    template:
+      spec:
+        containers:
+        - image: rayproject/ray:2.2.0
+          name: ray-head
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+            protocol: TCP
+          - containerPort: 8265
+            name: dashboard
+            protocol: TCP
+          - containerPort: 10001
+            name: client
+            protocol: TCP
+          resources:
+            limits:
+              cpu: 1
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - mountPath: /var/log
+              name: log-volume
+        volumes:
+          - name: log-volume
+            emptyDir: {}
+        - resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 500m
+              memory: 512Mi
+              terminationMessagePath: /dev/termination-log
+              name: autoscaler
+              command:
+                - ray
+              env:
+                - name: RAY_CLUSTER_NAME
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: 'metadata.labels[''ray.io/cluster'']'
+                - name: RAY_CLUSTER_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.namespace
+                - name: RAY_HEAD_POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.name
+              volumeMounts:
+                - name: ray-logs
+                  mountPath: /tmp/ray
+                - name: kube-api-access-dtf74
+                  readOnly: true
+                  mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              terminationMessagePolicy: File
+              image: 'rayproject/ray:2.2.0'
+              args:
+                - kuberay-autoscaler
+                - '--cluster-name'
+                - $(RAY_CLUSTER_NAME)
+                - '--cluster-namespace'
+                - $(RAY_CLUSTER_NAMESPACE)
+  workerGroupSpecs:
+    # the pod replicas in this group typed worker
+    - groupName: cpu-group
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 5
+      rayStartParams:
+        node-ip-address: $MY_POD_IP
+        block: "true"
+        num-gpus: '0'
+      #pod template
+      template:
+        spec:
+          runtimeClassName: selinux
+          containers:
+            - name: ray # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+              # All Ray pods in the RayCluster should use the same version of Ray.
+              image: rayproject/ray:2.2.0
+              ports:
+                - containerPort: 80
+              lifecycle:
+                preStop:
+                  exec:
+                    command: ["/bin/sh", "-c", "ray stop"]
+              volumeMounts:
+                - mountPath: /var/log
+                  name: log-volume
+              resources:
+                limits:
+                  cpu: 1
+                  memory: 1Gi
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+          volumes:
+            - name: log-volume
+              emptyDir: {}
+
+  rayVersion: 2.2.0
