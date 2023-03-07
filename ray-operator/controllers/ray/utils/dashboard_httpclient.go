@@ -343,7 +343,8 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 
 	var jobInfo RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
-		return nil, err
+		// Maybe body is not valid json, raise an error with the body.
+		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
 	}
 
 	return &jobInfo, nil
