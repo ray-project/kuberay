@@ -126,6 +126,8 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	// we only care about pod events
 	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
 		!strings.Contains(event.Message, "Readiness probe failed") {
+		// This is not supposed to happen
+		r.Log.Error(fmt.Errorf("unexpected event"), "event", event)
 		return ctrl.Result{}, nil
 	}
 
@@ -156,7 +158,6 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	}
 
 	unhealthyPod = &pods.Items[0]
-
 	if unhealthyPod.Annotations == nil {
 		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
@@ -836,15 +837,17 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			builder.WithPredicates(predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
 					// get the v1.Event object
-					eventObj := e.Object.(*corev1.Event)
-					if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
-						eventObj.Reason != "Unhealthy" ||
-						!strings.Contains(eventObj.Message, "Readiness probe failed") {
-						// only care about pod unhealthy events
-						return false
-					}
+					if eventObj, ok := e.Object.(*corev1.Event); ok {
+						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
+							eventObj.Reason != "Unhealthy" ||
+							!strings.Contains(eventObj.Message, "Readiness probe failed") {
+							// only care about pod unhealthy events
+							return false
+						}
 
-					return true
+						return true
+					}
+					return false
 				},
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					return false
