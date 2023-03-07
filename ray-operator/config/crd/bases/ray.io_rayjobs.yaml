@@ -12062,7 +12062,7 @@ spec:
                 type: boolean
               suspend:
                 description: suspend specifies whether the RayJob controller should
-                  create a RayCluster instance If a job is appl
+                  create a RayCluster instance
                 type: boolean
               ttlSecondsAfterFinished:
                 description: TTLSecondsAfterFinished is the TTL to clean up RayCluster.
