@@ -77,13 +77,13 @@ type ServingClusterDeployments struct {
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
-	GetDeployments() (string, error)
-	UpdateDeployments(specs rayv1alpha1.ServeDeploymentGraphSpec) error
-	GetDeploymentsStatus() (*ServeDeploymentStatuses, error)
+	GetDeployments(context.Context) (string, error)
+	UpdateDeployments(ctx context.Context, specs rayv1alpha1.ServeDeploymentGraphSpec) error
+	GetDeploymentsStatus(context.Context) (*ServeDeploymentStatuses, error)
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
-	GetJobInfo(jobId string) (*RayJobInfo, error)
-	SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
-	StopJob(jobName string, log *logr.Logger) (err error)
+	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
+	SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
+	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -172,8 +172,8 @@ func (r *RayDashboardClient) InitClient(url string) {
 }
 
 // GetDeployments get the current deployments in the Ray cluster.
-func (r *RayDashboardClient) GetDeployments() (string, error) {
-	req, err := http.NewRequest("GET", r.dashboardURL+DeployPath, nil)
+func (r *RayDashboardClient) GetDeployments(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+DeployPath, nil)
 	if err != nil {
 		return "", err
 	}
@@ -193,7 +193,7 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
-func (r *RayDashboardClient) UpdateDeployments(spec rayv1alpha1.ServeDeploymentGraphSpec) error {
+func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error {
 	runtimeEnv := make(map[string]interface{})
 	_ = yaml.Unmarshal([]byte(spec.RuntimeEnv), &runtimeEnv)
 
@@ -209,7 +209,7 @@ func (r *RayDashboardClient) UpdateDeployments(spec rayv1alpha1.ServeDeploymentG
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(deploymentJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(deploymentJson))
 	if err != nil {
 		return err
 	}
@@ -230,8 +230,8 @@ func (r *RayDashboardClient) UpdateDeployments(spec rayv1alpha1.ServeDeploymentG
 }
 
 // GetDeploymentsStatus get the current deployment statuses in the Ray cluster.
-func (r *RayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, error) {
-	req, err := http.NewRequest("GET", r.dashboardURL+StatusPath, nil)
+func (r *RayDashboardClient) GetDeploymentsStatus(ctx context.Context) (*ServeDeploymentStatuses, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+StatusPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -327,8 +327,8 @@ type RayJobStopResponse struct {
 	Stopped bool `json:"stopped"`
 }
 
-func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
-	req, err := http.NewRequest("GET", r.dashboardURL+JobPath+jobId, nil)
+func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func (r *RayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
 	request, err := ConvertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
@@ -368,7 +368,7 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 	}
 	log.Info("Submit a ray job", "rayJob", rayJob.Name, "jobInfo", string(rayJobJson))
 
-	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
 	if err != nil {
 		return
 	}
@@ -391,10 +391,10 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 	return jobResp.JobId, nil
 }
 
-func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err error) {
+func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error) {
 	log.Info("Stop a ray job", "rayJob", jobName)
 
-	req, err := http.NewRequest(http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
 	}
@@ -414,7 +414,7 @@ func (r *RayDashboardClient) StopJob(jobName string, log *logr.Logger) (err erro
 	}
 
 	if !jobStopResp.Stopped {
-		jobInfo, err := r.GetJobInfo(jobName)
+		jobInfo, err := r.GetJobInfo(ctx, jobName)
 		if err != nil {
 			return err
 		}
