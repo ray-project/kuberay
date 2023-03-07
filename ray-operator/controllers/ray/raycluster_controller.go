@@ -8,6 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/fields"
+
+	"sigs.k8s.io/controller-runtime/pkg/event"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -23,7 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -127,20 +133,31 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
 	if err := r.List(context.TODO(), &pods,
-		client.InNamespace(event.InvolvedObject.Namespace)); err != nil {
+		client.InNamespace(event.InvolvedObject.Namespace),
+		client.MatchingFieldsSelector{
+			Selector: fields.OneTermEqualSelector(
+				"metadata.name",
+				event.InvolvedObject.Name),
+		},
+		client.MatchingLabelsSelector{
+			Selector: labels.SelectorFromSet(labels.Set{
+				common.RayNodeLabelKey: "yes",
+			}),
+		},
+	); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	for _, item := range pods.Items {
-		if item.Name == event.InvolvedObject.Name {
-			if unhealthyPod != nil {
-				return ctrl.Result{}, fmt.Errorf("duplicate pod found")
-			}
-			unhealthyPod = &item
-		}
+	if len(pods.Items) == 0 {
+		r.Log.Info("no pods found")
+		return ctrl.Result{}, nil
+	} else if len(pods.Items) > 1 {
+		return ctrl.Result{}, fmt.Errorf("multiple pods found")
 	}
 
-	if unhealthyPod == nil || unhealthyPod.Annotations == nil {
+	unhealthyPod = &pods.Items[0]
+
+	if unhealthyPod.Annotations == nil {
 		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
@@ -814,7 +831,31 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.LabelChangedPredicate{},
 			predicate.AnnotationChangedPredicate{},
 		))).
-		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
+		Watches(&source.Kind{Type: &corev1.Event{}},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					// get the v1.Event object
+					eventObj := e.Object.(*corev1.Event)
+					if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
+						eventObj.Reason != "Unhealthy" ||
+						!strings.Contains(eventObj.Message, "Readiness probe failed") {
+						// only care about pod unhealthy events
+						return false
+					}
+
+					return true
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return false
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(e event.GenericEvent) bool {
+					return false
+				},
+			})).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
