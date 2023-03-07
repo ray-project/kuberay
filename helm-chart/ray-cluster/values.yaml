@@ -25,7 +25,11 @@ head:
   # The example configuration shown below below represents the DEFAULT values.
   # autoscalerOptions:
     # upscalingMode: Default
+    # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     # idleTimeoutSeconds: 60
+    # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
+    # imagePullPolicy: IfNotPresent
+    # Optionally specify the autoscaler container's securityContext.
     # securityContext: {}
     # env: []
     # envFrom: []
