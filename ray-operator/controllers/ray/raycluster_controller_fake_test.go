@@ -476,7 +476,7 @@ func TestReconcile_UnhealthyEvent(t *testing.T) {
 	}
 
 	// add event for reconcile
-	fakeClient.Create(context.Background(), &corev1.Event{
+	err = fakeClient.Create(context.Background(), &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testPodEventName,
 			Namespace: namespaceStr,
@@ -490,6 +490,7 @@ func TestReconcile_UnhealthyEvent(t *testing.T) {
 		Type:    "Warning",
 		Message: "Readiness probe failed",
 	})
+	assert.Nil(t, err, "Fail to create event")
 
 	if _, err := testRayClusterReconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{
