@@ -7,7 +7,7 @@
 
 image:
   repository: rayproject/ray
-  tag: 2.0.0
+  tag: 2.3.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay"
