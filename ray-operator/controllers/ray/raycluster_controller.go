@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/fields"
-
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -134,19 +131,14 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	_ = r.Log.WithValues("event", request.NamespacedName)
 	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
-	if err := r.List(context.TODO(), &pods,
+	options := []client.ListOption{
+		client.MatchingFields(map[string]string{"metadata.name": event.InvolvedObject.Name}),
 		client.InNamespace(event.InvolvedObject.Namespace),
-		client.MatchingFieldsSelector{
-			Selector: fields.OneTermEqualSelector(
-				"metadata.name",
-				event.InvolvedObject.Name),
-		},
-		client.MatchingLabelsSelector{
-			Selector: labels.SelectorFromSet(labels.Set{
-				common.RayNodeLabelKey: "yes",
-			}),
-		},
-	); err != nil {
+		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
+	}
+	r.Log.Info("list pods", "options", options)
+
+	if err := r.List(context.TODO(), &pods, options...); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -154,10 +146,18 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 		r.Log.Info("no pods found")
 		return ctrl.Result{}, nil
 	} else if len(pods.Items) > 1 {
-		return ctrl.Result{}, fmt.Errorf("multiple pods found")
+		// This happens when we use fake client
+		r.Log.Info("are you running in test mode?")
+		for _, pod := range pods.Items {
+			if pod.Name == event.InvolvedObject.Name {
+				unhealthyPod = &pod
+				break
+			}
+		}
+	} else {
+		unhealthyPod = &pods.Items[0]
 	}
 
-	unhealthyPod = &pods.Items[0]
 	if unhealthyPod.Annotations == nil {
 		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
