@@ -74,6 +74,7 @@ const (
 	NAMESPACE                               = "NAMESPACE"
 	CLUSTER_NAME                            = "CLUSTER_NAME"
 	RAY_IP                                  = "RAY_IP"
+	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"

@@ -4,9 +4,9 @@ metadata:
   name: rayjob-sample
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
-    # runtimeEnv decoded to '{
-    #    "pip": [
-    #        "requests==2.26.0",
+  # runtimeEnv decoded to '{
+  #    "pip": [
+  #        "requests==2.26.0",
   #        "pendulum==2.1.2"
   #    ],
   #    "env_vars": {
@@ -65,7 +65,7 @@ spec:
         template:
           spec:
             initContainers:
-              # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+              # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
               - name: init
                 image: busybox:1.28
                 command: [ 'sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done" ]

@@ -122,7 +122,7 @@ spec:
               # For production use-cases, we recommend allocating at least 8Gb memory for each Ray container.
               memory: "1G"
         initContainers:
-        # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
         - name: init
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
