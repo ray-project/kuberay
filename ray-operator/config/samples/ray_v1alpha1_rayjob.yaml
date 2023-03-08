@@ -15,7 +15,7 @@ spec:
   #}'
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
   rayClusterSpec:
-    rayVersion: '2.2.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.3.0' # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       serviceType: ClusterIP # optional
@@ -29,7 +29,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.2.0
+              image: rayproject/ray:2.3.0
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -71,7 +71,7 @@ spec:
                 command: [ 'sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done" ]
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.2.0
+                image: rayproject/ray:2.3.0
                 lifecycle:
                   preStop:
                     exec:

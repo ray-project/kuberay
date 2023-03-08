@@ -163,7 +163,7 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
   # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE python3 tests/compatibility-test.py
   #          These 3 environment variables are optional.
   # [Example]:
-  RAY_IMAGE=rayproject/ray:2.2.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
+  RAY_IMAGE=rayproject/ray:2.3.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
   ```
 ### Running configuration tests locally.
 
@@ -173,9 +173,9 @@ and `tests/test_sample_rayservice_yamls.py`. Currently, only a few of these samp
 
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.2.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.3.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.2.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.3.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 ```
 
 See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.
