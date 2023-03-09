@@ -10,7 +10,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-pod-security
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   # Ray head pod configuration
   headGroupSpec:
     serviceType: ClusterIP # optional
@@ -118,11 +118,11 @@ spec:
             seccompProfile:
               type: RuntimeDefault
         initContainers:
-        # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
         - name: init-myservice
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
           securityContext:
             runAsUser: 1000
             allowPrivilegeEscalation: false

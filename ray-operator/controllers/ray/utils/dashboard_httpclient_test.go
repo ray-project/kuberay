@@ -22,6 +22,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	var (
 		rayJob             *rayv1alpha1.RayJob
 		expectJobId        string
+		errorJobId         string
 		rayDashboardClient *RayDashboardClient
 	)
 
@@ -73,6 +74,11 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
+		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+errorJobId,
+			func(req *http.Request) (*http.Response, error) {
+				// return a string in the body
+				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
+			})
 
 		jobId, err := rayDashboardClient.SubmitJob(rayJob, &ctrl.Log)
 		Expect(err).To(BeNil())
@@ -82,6 +88,11 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(err).To(BeNil())
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
 		Expect(rayJobInfo.JobStatus).To(Equal(rayv1alpha1.JobStatusRunning))
+
+		_, err = rayDashboardClient.GetJobInfo(errorJobId)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(ContainSubstring("GetJobInfo fail"))
+		Expect(err.Error()).To(ContainSubstring("Ray misbehaved"))
 	})
 
 	It("Test stop job", func() {

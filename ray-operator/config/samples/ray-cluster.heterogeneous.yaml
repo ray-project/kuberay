@@ -34,7 +34,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-heterogeneous
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
@@ -49,7 +49,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           volumeMounts:
           - mountPath: /opt
             name: config
@@ -81,14 +81,14 @@ spec:
     template:
       spec:
         initContainers: # to avoid worker crashing before head service is created
-        # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
         - name: init
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
@@ -125,10 +125,10 @@ spec:
         - name: init
           image: busybox:1.28
           # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup raycluster-heterogeneous-head-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
+          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
