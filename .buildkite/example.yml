@@ -3,5 +3,7 @@
   image: golang:1.17
   commands:
     - ls -alp /workdir
+    - echo $PATH
+    - which go
     - cd /workdir/ray-operator
     - make test
