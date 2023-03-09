@@ -124,7 +124,6 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
 		!strings.Contains(event.Message, "Readiness probe failed") {
 		// This is not supposed to happen
-		r.Log.Error(fmt.Errorf("unexpected event"), "event", event)
 		return ctrl.Result{}, nil
 	}
 
@@ -143,7 +142,8 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	}
 
 	if len(pods.Items) == 0 {
-		r.Log.Info("no pods found")
+		r.Log.Error(fmt.Errorf("no pod found for event"), "no pod found for event",
+			"event", event)
 		return ctrl.Result{}, nil
 	} else if len(pods.Items) > 1 {
 		// This happens when we use fake client
