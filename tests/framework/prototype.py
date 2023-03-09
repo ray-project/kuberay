@@ -218,6 +218,17 @@ class EasyJobRule(Rule):
         headpod_name = headpod.metadata.name
         pod_exec_command(headpod_name, cr_namespace,
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
+
+class RayJobSuccessRule(Rule):
+    """Check that RayJob status is SUCCEEDED."""
+    def assert_rule(self, custom_resource=None, cr_namespace='default'):
+        headpod = get_head_pod(cr_namespace)
+        headpod_name = headpod.metadata.name
+        JOB_ID = custom_resource.metadata.name
+        pod_exec_command(headpod_name, cr_namespace, f"ray job status {JOB_ID}")
+        # Check that "succeeded" is in the output of the command.
+        assert "succeeded" in shell_subprocess_run(
+            f"kubectl logs {headpod_name} -n {cr_namespace} | grep {JOB_ID}")
         
 class CurlServiceRule(Rule):
     """"Using curl to access the deployed application on Ray service"""
