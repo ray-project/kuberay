@@ -8,7 +8,8 @@ from framework.prototype import (
     RuleSet,
     GeneralTestCase,
     RayJobAddCREvent,
-    EasyJobRule
+    EasyJobRule,
+    RayJobSuccessRule
 )
 
 from framework.utils import (
@@ -33,7 +34,7 @@ if __name__ == '__main__':
                     )
                     break
     
-    rs = RuleSet([EasyJobRule()])
+    rs = RuleSet([EasyJobRule(), RayJobSuccessRule()])
     image_dict = {
         CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.3.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
