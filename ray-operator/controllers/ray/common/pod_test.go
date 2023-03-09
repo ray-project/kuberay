@@ -326,9 +326,18 @@ func checkPodEnv(t *testing.T, pod v1.Pod, envName string, expectedValue string)
 	foundEnv := false
 	for _, env := range pod.Spec.Containers[0].Env {
 		if env.Name == envName {
-			if !(env.Value == expectedValue) {
-				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
+			// env.ValueFrom is the source for the environment variable's value. It will be nil if env.Value is not empty.
+			if env.ValueFrom == nil {
+				if !(env.Value == expectedValue) {
+					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
+				}
+			} else {
+				fmt.Println(env.Name, env.Value, env.ValueFrom.FieldRef.FieldPath)
+				if !(env.ValueFrom.FieldRef.FieldPath == expectedValue) {
+					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
+				}
 			}
+
 			foundEnv = true
 			break
 		}
@@ -393,6 +402,7 @@ func TestBuildPod(t *testing.T) {
 	checkPodEnv(t, pod, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
 	checkPodEnv(t, pod, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
 	checkPodEnv(t, pod, RAY_IP, "raycluster-sample-head-svc")
+	checkPodEnv(t, pod, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
