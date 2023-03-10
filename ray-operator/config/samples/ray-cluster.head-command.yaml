@@ -8,7 +8,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '2.2.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.3.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     serviceType: ClusterIP # optional
@@ -22,7 +22,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           resources:
             limits:
               cpu: 1

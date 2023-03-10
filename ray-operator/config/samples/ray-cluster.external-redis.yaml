@@ -66,6 +66,16 @@ spec:
           configMap:
             name: redis-config
 ---
+# Redis password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-password-secret
+type: Opaque
+data:
+  # echo -n "5241590000000000" | base64
+  password: NTI0MTU5MDAwMDAwMDAwMA==
+---
 apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
@@ -87,7 +97,7 @@ spec:
       block: "true"
       # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
       # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
-      redis-password: "5241590000000000"
+      redis-password: $RAY_REDIS_PASSWORD
     #pod template
     template:
       spec:
@@ -98,6 +108,11 @@ spec:
               # RAY_REDIS_ADDRESS can force ray to use external redis
               - name: RAY_REDIS_ADDRESS
                 value: redis:6379
+              - name: RAY_REDIS_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: redis-password-secret
+                    key: password
             ports:
               - containerPort: 6379
                 name: redis
@@ -124,7 +139,7 @@ spec:
       template:
         spec:
           initContainers: # to avoid worker crashing before head service is created
-            # the env var $RAY_IP is set by the operator if missing, with the value of the head service name
+            # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
             - name: init
               image: busybox:1.28
               # Change the cluster postfix if you don't have a default setting

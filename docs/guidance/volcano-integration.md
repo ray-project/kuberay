@@ -42,7 +42,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:
@@ -52,7 +52,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           resources:
             limits:
               cpu: "1"
@@ -106,7 +106,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:
@@ -116,7 +116,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           resources:
             limits:
               cpu: "1"
@@ -135,7 +135,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.2.0
+            image: rayproject/ray:2.3.0
             resources:
               limits:
                 cpu: "1"
@@ -220,7 +220,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.2.0'
+  rayVersion: '2.3.0'
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:
@@ -230,7 +230,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.2.0
+          image: rayproject/ray:2.3.0
           resources:
             limits:
               cpu: "1"
@@ -249,7 +249,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.2.0
+            image: rayproject/ray:2.3.0
             resources:
               limits:
                 cpu: "1"
