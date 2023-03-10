@@ -137,8 +137,6 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	}
 	if dupIndex < 0 {
 		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
-	} else {
-		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
 	}
 
 	return podTemplate
@@ -217,8 +215,6 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	}
 	if dupIndex < 0 {
 		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
-	} else {
-		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
 	}
 
 	return podTemplate
