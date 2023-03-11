@@ -222,14 +222,21 @@ class EasyJobRule(Rule):
 class RayJobSuccessRule(Rule):
     """Check that RayJob status is SUCCEEDED."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
+        logger.info("Checking RayJob status")
         headpod = get_head_pod(cr_namespace)
+        logger.info(f"headpod: {headpod}")
         headpod_name = headpod.metadata.name
-        JOB_ID = custom_resource.metadata.name
+        logger.info(f"headpod_name: {headpod_name}")
+        logger.info(f"custom_resource: {custom_resource}")
+        JOB_ID = custom_resource.get("metadata", {}).get("name")
+        assert JOB_ID is not None
+        logger.info(f"JOB_ID: {JOB_ID}")
         pod_exec_command(headpod_name, cr_namespace, f"ray job status {JOB_ID}")
+        logger.info("Checking RayJob status succeeded")
         # Check that "succeeded" is in the output of the command.
         assert "succeeded" in shell_subprocess_run(
             f"kubectl logs {headpod_name} -n {cr_namespace} | grep {JOB_ID}")
-        
+       
 class CurlServiceRule(Rule):
     """"Using curl to access the deployed application on Ray service"""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
@@ -393,7 +400,7 @@ class RayJobAddCREvent(CREvent):
         #   (3) RayJob named "rayjob-sample" has status "SUCCEEDED".
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        for _ in range(self.timeout):
+        for i in range(self.timeout):
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
@@ -407,8 +414,34 @@ class RayJobAddCREvent(CREvent):
                     and rayjob.get('status') is not None
                     and rayjob.get('status').get('jobStatus') == "SUCCEEDED"):              
                 converge = True
-                logger.info("--- RayJobAddCREvent %s seconds ---", time.time() - start_time)
+                logger.info("--- RayJobAddCREvent converged in %s seconds ---", time.time() - start_time)
                 break
+            else:
+                # Print debug logs every 10 seconds.
+                if i % 10 == 0 and i != 0:
+                    logger.info("RayJobAddCREvent wait() hasn't converged yet.")
+                    # Print out the delta between expected and actual for the parts that are not
+                    # converged yet.
+                    if len(headpods.items) != expected_head_pods:
+                        logger.info("expected_head_pods: %d, actual_head_pods: %d",
+                            expected_head_pods, len(headpods.items))
+                    if len(workerpods.items) != expected_worker_pods:
+                        logger.info("expected_worker_pods: %d, actual_worker_pods: %d",
+                            expected_worker_pods, len(workerpods.items))
+                    if not check_pod_running(headpods.items):
+                        logger.info("head pods are not running yet.")
+                    if not check_pod_running(workerpods.items):
+                        logger.info("worker pods are not running yet.")
+                    if rayjob.get('status') is None:
+                        logger.info("rayjob status is None.")
+                    elif rayjob.get('status').get('jobStatus') != "SUCCEEDED":
+                        logger.info("rayjob status is not SUCCEEDED yet.")
+                        logger.info("rayjob status: %s", rayjob.get('status').get('jobStatus'))
+                
+                if rayjob.get("status") is not None and rayjob.get("status").get("jobStatus") in ["STOPPED", "FAILED"]:
+                    logger.info("Job Status: %s", rayjob.get("status").get("jobStatus"))
+                    logger.info("Job Message: %s", rayjob.get("status").get("message"))
+                    break
             time.sleep(1)
 
         if not converge:
