@@ -426,6 +426,7 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 	}
+
 	if ForcedClusterUpgrade {
 		if len(headPods.Items) == 1 {
 			// head node amount is exactly 1, but we need to check if it has been changed
