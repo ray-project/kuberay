@@ -176,6 +176,16 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"python"},
 					Args:    []string{"/opt/code.py"},
+					Env: []corev1.EnvVar{
+						{
+							Name: "MY_POD_IP",
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
+									FieldPath: "status.podIP",
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -238,6 +248,16 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
+					Env: []corev1.EnvVar{
+						{
+							Name: "MY_POD_IP",
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
+									FieldPath: "status.podIP",
+								},
+							},
+						},
+					},
 				},
 			},
 		},

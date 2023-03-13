@@ -1,24 +1,6 @@
 # Build the manager binary
 FROM golang:1.17 as builder
 
-# DELETE
-
-# Proxy Configuration
-ENV http_proxy 'http://proxy-zsgov.external.lmco.com:80'
-ENV https_proxy 'http://proxy-zsgov.external.lmco.com:80'
-ENV no_proxy '.lmco.com,.local,localhost,172.16.0.0/12,192.168.0.0/16'
-
-ENV HTTP_PROXY 'http://proxy-zsgov.external.lmco.com:80'
-ENV HTTPS_PROXY 'http://proxy-zsgov.external.lmco.com:80'
-ENV NO_PROXY '.lmco.com,.local,localhost,172.16.0.0/12,192.168.0.0/16'
-
-
-# Fetch the LM CA and install the cert
-ADD https://crl.external.lmco.com/trust/pem/combined/Combined_pem.pem /usr/local/share/ca-certificates/
-RUN mv /usr/local/share/ca-certificates/Combined_pem.pem /usr/local/share/ca-certificates/lm_ca_combined.crt && update-ca-certificates
-
-
-
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod

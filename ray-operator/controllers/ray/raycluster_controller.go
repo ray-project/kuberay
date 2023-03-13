@@ -428,8 +428,9 @@ func (r *RayClusterReconciler) reconcilePods(instance *rayiov1alpha1.RayCluster)
 			}
 		}
 	}
-
+	r.Log.Info("Check force mode")
 	if ForcedClusterUpgrade {
+		r.Log.Info("In force mode")
 		if len(headPods.Items) == 1 {
 			// head node amount is exactly 1, but we need to check if it has been changed
 			res := utils.PodNotMatchingTemplate(headPods.Items[0], instance.Spec.HeadGroupSpec.Template)
