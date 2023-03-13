@@ -14,9 +14,9 @@ For example, users may want to download their files from their S3 bucket with AW
 import boto3
 
 s3 = boto3.client('s3')
-bucket_name = ${BUCKET_NAME}
-key = ${OBJECT_KEY}
-filename = ${FILENAME}
+bucket_name = YOUR_BUCKET_NAME
+key = YOUR_OBJECT_KEY
+filename = YOUR_FILENAME
 
 s3.download_file(bucket_name, key, filename)
 ```
@@ -52,9 +52,9 @@ def assumed_role_session():
 
 session = assumed_role_session()
 s3 = session.client("s3")
-bucket_name = ${BUCKET_NAME}
-key = ${OBJECT_KEY}
-filename = ${FILENAME}
+bucket_name = YOUR_BUCKET_NAME
+key = YOUR_OBJECT_KEY
+filename = YOUR_FILENAME
 s3.download_file(bucket_name, key, filename)
 ```
 
