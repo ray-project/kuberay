@@ -191,10 +191,10 @@ var autoscalerContainer = v1.Container{
 	ImagePullPolicy: v1.PullAlways,
 	Env: []v1.EnvVar{
 		{
-			Name: "RAY_CLUSTER_NAME",
+			Name: RAY_CLUSTER_NAME,
 			ValueFrom: &v1.EnvVarSource{
 				FieldRef: &v1.ObjectFieldSelector{
-					FieldPath: "metadata.labels['ray.io/cluster']",
+					FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
 				},
 			},
 		},
