@@ -4,7 +4,5 @@
   commands:
     - ls -alp /workdir
     - export PATH=$PATH:/usr/local/go/bin
-    - echo $PATH
-    - which go
     - cd /workdir/ray-operator
     - make test
