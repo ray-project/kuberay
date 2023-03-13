@@ -7,7 +7,9 @@ Applications in a pod's containers can use an AWS SDK or the AWS CLI to make API
 
 ## Pitfall
 
-For example, users may want to download their files from their S3 bucket with AWS Python SDK (`boto3`) in Ray Pods. However, there is a pitfall in the Ray images. When you execute the **boto3_example_1.py** in a Ray Pod, you will get an error like `An error occurred (403) when calling the HeadObject operation: Forbidden`.
+* It's worth noting that this pitfall occurs in Ray images **prior to version 2.4.0**.
+
+For example, users may want to download their files from their S3 bucket with AWS Python SDK (`boto3`) in Ray Pods. However, there is a pitfall in the Ray images. When you execute the **boto3_example_1.py** in a Ray Pod, you will get an error like `An error occurred (403) when calling the HeadObject operation: Forbidden` even if your pod is attached to a service account which has an IAM role that is able to access the S3 bucket.
 
 ```python
 # boto3_example_1.py
@@ -22,7 +24,7 @@ s3.download_file(bucket_name, key, filename)
 ```
 
 The root cause is that the version of `boto3` in the Ray image is too old. To elaborate, `rayproject/ray:2.3.0` provides boto3 version 1.4.8 (Nov. 21, 2017),
-a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The boto3 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`). 
+a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`). 
 
 ```shell
 # image: rayproject/ray:2.3.0
@@ -30,6 +32,9 @@ pip freeze | grep boto
 # boto3==1.4.8
 # botocore==1.8.50
 ```
+
+Another issue that users may encounter is related to **RayService**. 
+If the `working_dir` for RayService is set to a zip file located in a private S3 bucket, it can prevent the Ray Serve application from starting. Users can confirm this by executing `serve status` in the head Pod, which will return an error like `An error occurred (AccessDenied) when calling the GetObject operation: Access Denied`. In this case, users can build their custom images with upgrading the `boto3` package (i.e. [Solution 2](#solution-2-upgrade-the-boto3-package)).
 
 ## Workaround solutions
 ### Solution 1: Setup the credentials explicitly
@@ -59,8 +64,6 @@ s3.download_file(bucket_name, key, filename)
 ```
 
 ### Solution 2: Upgrade the boto3 package
-I am not sure whether is there any functionality in Ray depends on boto3. Hence, it may break some dependencies. The progress is tracked in [rayproject/ray#33256](https://github.com/ray-project/ray/issues/33256).
-
 ```shell
 pip install --upgrade boto3
 python3 -m pip install -U pyOpenSSL cryptography
