@@ -338,8 +338,6 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 		}
 		for _, container1 := range template.Spec.Containers {
 			if container2, ok := cmap[container1.Name]; ok {
-				// container.HashContainer(container1, container2)
-
 				if container1.Image != container2.Image {
 					// image name do not match
 					return true
@@ -349,11 +347,8 @@ func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) boo
 					// resource entries do not match
 					return true
 				}
-				// if compareVolumes(container1.VolumeMounts, container2.VolumeMounts) {
-				// 	return true
-				// }
-
 				if !equality.Semantic.DeepDerivative(container1.VolumeMounts, container2.VolumeMounts) {
+					// volume mounts do not match
 					return true
 				}
 
@@ -439,24 +434,3 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 
 	return hashStr, nil
 }
-
-// func compareVolumes(m1 []corev1.VolumeMount, m2 []corev1.VolumeMount) bool {
-// 	if len(m1) != len(m2) {
-// 		return true
-// 	}
-
-// 	for i, _ := range m1 {
-// 		if m1[i].Name != m2[i].Name {
-// 			return true
-// 		}
-// 		// if reflect.DeepEqual(m1[i], m2[i]) {
-// 		// 	return true
-// 		// }
-// 	}
-// 	// for i, _ := range m1 {
-// 	// 	if m1[i].Name != m2[i].Name || m1[i].Value != m2[i].Value || m1[i].ValueFrom != m2[i].ValueFrom {
-// 	// 		return true
-// 	// 	}
-// 	// }
-// 	return false
-// }
