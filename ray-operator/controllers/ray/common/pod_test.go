@@ -326,13 +326,13 @@ func checkPodEnv(t *testing.T, pod v1.Pod, envName string, expectedValue string)
 	foundEnv := false
 	for _, env := range pod.Spec.Containers[0].Env {
 		if env.Name == envName {
-			// env.ValueFrom is the source for the environment variable's value. It will be nil if env.Value is not empty.
-			// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
-			if env.ValueFrom == nil {
+			if env.Value != "" {
 				if env.Value != expectedValue {
 					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
 				}
 			} else {
+				// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
+				// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
 				if env.ValueFrom.FieldRef.FieldPath != expectedValue {
 					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
 				}

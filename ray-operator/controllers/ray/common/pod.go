@@ -549,6 +549,7 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 }
 
 func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
+	// TODO: Audit all environment variables to identify which should not be modified by users.
 	// set the port RAY_PORT
 	// set the password?
 	container := &pod.Spec.Containers[rayContainerIndex]
@@ -568,13 +569,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		)
 	}
 
-	if !envVarExists(RAY_PORT, container.Env) {
-		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
-		container.Env = append(container.Env, portEnv)
-	}
-
-	// The RAY_CLUSTER_NAME environment variable is managed by KubeRay and should not be modified by users.
-	// TODO: Audit all environment variables to identify which should not be modified by users.
+	// The RAY_CLUSTER_NAME environment variable is managed by KubeRay and should not be set by the user.
 	clusterNameEnv := v1.EnvVar{
 		Name: RAY_CLUSTER_NAME,
 		ValueFrom: &v1.EnvVarSource{
@@ -584,6 +579,11 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		},
 	}
 	container.Env = append(container.Env, clusterNameEnv)
+
+	if !envVarExists(RAY_PORT, container.Env) {
+		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
+		container.Env = append(container.Env, portEnv)
+	}
 
 	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
