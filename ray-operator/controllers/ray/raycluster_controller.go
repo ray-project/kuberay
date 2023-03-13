@@ -92,8 +92,6 @@ type RayClusterReconciler struct {
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error
 
-	r.Log.Info("Hello world")
-
 	// Try to fetch the Event instance
 	event := &corev1.Event{}
 	if err = r.Get(context.TODO(), request.NamespacedName, event); err == nil {
