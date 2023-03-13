@@ -380,7 +380,7 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 		ImagePullPolicy: v1.PullAlways,
 		Env: []v1.EnvVar{
 			{
-				Name: "RAY_CLUSTER_NAME",
+				Name: RAY_CLUSTER_NAME,
 				ValueFrom: &v1.EnvVarSource{
 					FieldRef: &v1.ObjectFieldSelector{
 						FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
@@ -573,17 +573,17 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		container.Env = append(container.Env, portEnv)
 	}
 
-	if !envVarExists(RAY_CLUSTER_NAME, container.Env) {
-		clusterNameEnv := v1.EnvVar{
-			Name: RAY_CLUSTER_NAME,
-			ValueFrom: &v1.EnvVarSource{
-				FieldRef: &v1.ObjectFieldSelector{
-					FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
-				},
+	// The RAY_CLUSTER_NAME environment variable is managed by KubeRay and should not be modified by users.
+	// TODO: Audit all environment variables to identify which should not be modified by users.
+	clusterNameEnv := v1.EnvVar{
+		Name: RAY_CLUSTER_NAME,
+		ValueFrom: &v1.EnvVarSource{
+			FieldRef: &v1.ObjectFieldSelector{
+				FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
 			},
-		}
-		container.Env = append(container.Env, clusterNameEnv)
+		},
 	}
+	container.Env = append(container.Env, clusterNameEnv)
 
 	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
