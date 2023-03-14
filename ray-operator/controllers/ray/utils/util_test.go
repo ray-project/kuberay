@@ -298,6 +298,73 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "MY_VOLUME_MOUNT",
+							MountPath: "/test1/",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	pod = corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod1",
+			Namespace: namespaceStr,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    "ray-worker",
+					Image:   "rayproject/autoscaler",
+					Command: []string{"echo"},
+					Args:    []string{"Hello Ray"},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "MY_VOLUME_MOUNT",
+							MountPath: "/test2/",
+						},
+					},
+				},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching volumeMount paths")
+
+	workerTemplate = corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    "ray-worker",
+					Image:   "rayproject/autoscaler",
+					Command: []string{"echo"},
+					Args:    []string{"Hello Ray"},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						},
+					},
 				},
 			},
 		},
