@@ -171,6 +171,11 @@ func getServicePorts(cluster rayiov1alpha1.RayCluster) map[string]int32 {
 		}
 	}
 
+	// check if metrics port is defined. If not, add default value for it.
+	if _, metricsDefined := ports[DefaultMetricsName]; !metricsDefined {
+		ports[DefaultMetricsName] = DefaultMetricsPort
+	}
+
 	return ports
 }
 
