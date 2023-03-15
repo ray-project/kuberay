@@ -123,19 +123,19 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	// add metrics port for exposing to the promethues stack.
-	metricsPort := v1.ContainerPort{
-		Name:          "metrics",
-		ContainerPort: int32(DefaultMetricsPort),
-	}
-	dupIndex := -1
-	for i, port := range podTemplate.Spec.Containers[0].Ports {
-		if port.Name == metricsPort.Name {
-			dupIndex = i
+	isMetricsPortExists := false
+	for _, port := range podTemplate.Spec.Containers[0].Ports {
+		if port.Name == DefaultMetricsName {
+			isMetricsPortExists = true
 			break
 		}
 	}
-	if dupIndex < 0 {
+	if !isMetricsPortExists {
+		// add metrics port for exposing to the promethues stack.
+		metricsPort := v1.ContainerPort{
+			Name:          DefaultMetricsName,
+			ContainerPort: int32(DefaultMetricsPort),
+		}
 		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
 	}
 
@@ -201,19 +201,19 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	initTemplateAnnotations(instance, &podTemplate)
 
-	// add metrics port for exposing to the promethues stack.
-	metricsPort := v1.ContainerPort{
-		Name:          "metrics",
-		ContainerPort: int32(DefaultMetricsPort),
-	}
-	dupIndex := -1
-	for i, port := range podTemplate.Spec.Containers[0].Ports {
-		if port.Name == metricsPort.Name {
-			dupIndex = i
+	isMetricsPortExists := false
+	for _, port := range podTemplate.Spec.Containers[0].Ports {
+		if port.Name == DefaultMetricsName {
+			isMetricsPortExists = true
 			break
 		}
 	}
-	if dupIndex < 0 {
+	if !isMetricsPortExists {
+		// add metrics port for exposing to the promethues stack.
+		metricsPort := v1.ContainerPort{
+			Name:          DefaultMetricsName,
+			ContainerPort: int32(DefaultMetricsPort),
+		}
 		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
 	}
 
