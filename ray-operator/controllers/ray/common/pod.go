@@ -723,11 +723,11 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
-	// specialParameterOption's arguments can be true or false.
+	// specialParameterOptions' arguments can be true or false.
 	// For example, --log-color can be auto | false | true.
-	specialParameterOption := []string{"log-color", "include-dashboard"}
+	specialParameterOptions := []string{"log-color", "include-dashboard"}
 	for option, argument := range rayStartParams {
-		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOption, option) {
+		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
 			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
 			if strings.ToLower(argument) == "true" {
 				fmt.Fprintf(flags, " --%s ", option)
