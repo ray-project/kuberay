@@ -135,7 +135,6 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 		client.InNamespace(event.InvolvedObject.Namespace),
 		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
 	}
-	r.Log.Info("list pods", "options", options)
 
 	if err := r.List(context.TODO(), &pods, options...); err != nil {
 		return ctrl.Result{}, err
@@ -844,7 +843,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 							// only care about pod unhealthy events
 							return false
 						}
-
 						return true
 					}
 					return false
