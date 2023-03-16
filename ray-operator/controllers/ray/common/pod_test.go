@@ -740,3 +740,57 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
 	assert.Equal(t, worker, expectedWorker)
 }
+
+func containerPortExists(ports []v1.ContainerPort, name string, containerPort int32) error {
+	for _, port := range ports {
+		if port.Name == name {
+			if port.ContainerPort != containerPort {
+				return fmt.Errorf("expected `%v` but got `%v` for `%v` port", containerPort, port.ContainerPort, name)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("couldn't find `%v` port", name)
+}
+
+func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
+	cluster := instance.DeepCopy()
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	// verify the default metrics port exists
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, DefaultMetricsPort); err != nil {
+		t.Fatal(err)
+	}
+	metricsPort := v1.ContainerPort{
+		Name:          DefaultMetricsName,
+		ContainerPort: 9091,
+	}
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	//  verify the custom metrics port exists
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, 9091); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
+	cluster := instance.DeepCopy()
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	// verify the default metrics port exists
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, DefaultMetricsPort); err != nil {
+		t.Fatal(err)
+	}
+	metricsPort := v1.ContainerPort{
+		Name:          DefaultMetricsName,
+		ContainerPort: 9091,
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	// verify the custom metrics port exists
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, 9091); err != nil {
+		t.Fatal(err)
+	}
+}
