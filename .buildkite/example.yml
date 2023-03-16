@@ -23,6 +23,7 @@
     - export GOPATH=$HOME/go
     - export PATH=$PATH:$GOPATH/bin
     - echo "Try to get go version"
+    - echo $PATH
     - go version
     # Run unit tests 
     - pushd /workdir/ray-operator
