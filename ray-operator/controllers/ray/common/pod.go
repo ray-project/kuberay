@@ -662,6 +662,11 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
 	}
 
+	// add --block option. See https://github.com/ray-project/kuberay/pull/675
+	if _, ok := rayStartParams["block"]; !ok {
+		rayStartParams["block"] = "true"
+	}
+
 	return rayStartParams
 }
 
@@ -718,12 +723,18 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
-	nonFlagParams := []string{"log-color", "include-dashboard"}
-	for k, v := range rayStartParams {
-		if strings.ToLower(v) == "true" && !utils.Contains(nonFlagParams, k) {
-			fmt.Fprintf(flags, " --%s ", k)
+	// specialParameterOptions' arguments can be true or false.
+	// For example, --log-color can be auto | false | true.
+	specialParameterOptions := []string{"log-color", "include-dashboard"}
+	for option, argument := range rayStartParams {
+		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
+			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
+			if strings.ToLower(argument) == "true" {
+				fmt.Fprintf(flags, " --%s ", option)
+			}
 		} else {
-			fmt.Fprintf(flags, " --%s=%s ", k, v)
+			// parameterOption: require arguments to be provided along with the option.
+			fmt.Fprintf(flags, " --%s=%s ", option, argument)
 		}
 	}
 	return flags.String()

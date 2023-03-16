@@ -355,14 +355,22 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
 
-	// Check RAY_ADDRESS env.
+	// Check environment variables
 	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
-	// Check usage stats env.
 	checkPodEnv(t, pod, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
+	checkPodEnv(t, pod, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+
+	// Check RayStartParams
+	expectedResult := "true"
+	actualResult := cluster.Spec.HeadGroupSpec.RayStartParams["block"]
+
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
 
 	// Check labels.
-	actualResult := pod.Labels[RayClusterLabelKey]
-	expectedResult := cluster.Name
+	actualResult = pod.Labels[RayClusterLabelKey]
+	expectedResult = cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -407,6 +415,13 @@ func TestBuildPod(t *testing.T) {
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
+
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	expectedResult = "true"
+	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["block"]
 
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
