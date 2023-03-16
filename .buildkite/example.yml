@@ -1,8 +1,42 @@
-- label: Buildkite example
+# - label: Buildkite example
+#   instance_size: large
+#   image: golang:1.17
+#   commands:
+#     - ls -alp /workdir
+#     - export PATH=$PATH:/usr/local/go/bin
+#     - cd /workdir/ray-operator
+#     - make test
+
+- label: Compatibility test - Ray 2.1.0
   instance_size: large
-  image: golang:1.17
+  image: ubuntu:focal
   commands:
-    - ls -alp /workdir
+    - pwd
+    - ls -alp
+    # Install dependencies
+    - apt-get update
+    - apt-get install -y curl wget build-essential
+    # Install go 1.17.6
+    - wget https://golang.org/dl/go1.17.6.linux-amd64.tar.gz
+    - tar -C /usr/local -xzf go1.17.6.linux-amd64.tar.gz
     - export PATH=$PATH:/usr/local/go/bin
-    - cd /workdir/ray-operator
+    - export GOPATH=$HOME/go
+    - export PATH=$PATH:$GOPATH/bin
+    - go version
+    # Run unit tests 
+    - pushd /workdir/ray-operator
     - make test
+    # Install Docker
+    - curl -fsSL https://get.docker.com -o get-docker.sh
+    - sh get-docker.sh
+    - docker version
+
+
+    # - apt-get install -y ca-certificates gnupg lsb-release
+    # - mkdir -m 0755 -p /etc/apt/keyrings
+    # - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    # - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    # - apt-get update # Update the `apt` package index after the repository setup.
+    # - apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    # # Build KubeRay operator Docker image
+    # - IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
