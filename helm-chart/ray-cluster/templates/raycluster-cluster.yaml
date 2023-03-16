@@ -32,6 +32,7 @@ spec:
     template:
       spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
+        serviceAccount: {{ .Values.raycluster.serviceAccount }}
         containers:
           - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             name: ray-head
@@ -100,6 +101,7 @@ spec:
             command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
             securityContext:
             {{- toYaml $values.initContainerSecurityContext | nindent 14 }}
+        serviceAccount: {{ .Values.raycluster.serviceAccount }}
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
             name: ray-worker
@@ -166,6 +168,7 @@ spec:
             command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
             securityContext:
             {{- toYaml .Values.worker.initContainerSecurityContext | nindent 14 }}
+        serviceAccount: {{ .Values.raycluster.serviceAccount }}
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
             name: ray-worker
