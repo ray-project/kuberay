@@ -9,7 +9,7 @@
 
 - label: Compatibility test - Ray 2.1.0
   instance_size: large
-  image: ubuntu:focal
+  # image: ubuntu:focal
   commands:
     - pwd
     - ls -alp
