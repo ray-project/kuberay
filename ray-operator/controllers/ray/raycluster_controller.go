@@ -835,7 +835,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
-					// get the v1.Event object
 					if eventObj, ok := e.Object.(*corev1.Event); ok {
 						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
 							eventObj.Reason != "Unhealthy" ||
