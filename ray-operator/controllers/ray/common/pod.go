@@ -189,6 +189,18 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
+	// The Ray worker should only start once the GCS server is ready.
+	initContainer := v1.Container{
+		Name:            "wait-gcs-ready",
+		Image:           podTemplate.Spec.Containers[0].Image,
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command:         []string{"/bin/bash", "-lc", "--"},
+		Args: []string{
+			fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
+		},
+	}
+	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
+
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""

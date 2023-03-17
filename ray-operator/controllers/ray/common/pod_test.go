@@ -800,3 +800,17 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDefaultInitContainer(t *testing.T) {
+	// A default init container to check the health of GCS is expected to be added.
+	cluster := instance.DeepCopy()
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	expectedResult := len(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.InitContainers) + 1
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	actualResult := len(podTemplateSpec.Spec.InitContainers)
+	assert.Equal(t, expectedResult, actualResult, "A default init container is expected to be added.")
+}
