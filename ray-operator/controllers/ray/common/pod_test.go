@@ -759,7 +759,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
-	// verify the default metrics port exists.
+	// Verify the default metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
@@ -770,7 +770,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	//  verify the custom metrics port exists.
+	// Verify the custom metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
@@ -784,7 +784,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
 	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
-	// verify the default metrics port exists.
+	// Verify the default metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +795,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	}
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	// verify the custom metrics port exists.
+	// Verify the custom metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
