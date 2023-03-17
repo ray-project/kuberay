@@ -59,7 +59,6 @@ spec:
           containers:
             - name: ray-head
               image: rayproject/ray:2.3.0
-              imagePullPolicy: Always
               resources:
                 limits:
                   cpu: 2
@@ -96,7 +95,6 @@ spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
                 image: rayproject/ray:2.3.0
-                imagePullPolicy: Always
                 lifecycle:
                   preStop:
                     exec:
