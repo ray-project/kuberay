@@ -179,7 +179,7 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 
 	// Test case 2: Only a random port is specified by the user.
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
-		corev1.ContainerPort{
+		{
 			Name:          "random",
 			ContainerPort: 1234,
 		},
@@ -202,5 +202,4 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	if ports[DefaultMetricsName] != customMetricsPort {
 		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsName])
 	}
-
 }
