@@ -5978,7 +5978,7 @@ spec:
                     type: object
                   rayVersion:
                     description: RayVersion is the version of ray being used. this
-                      affects the command used to start ray
+                      determines the autoscaler's image version.
                     type: string
                   workerGroupSpecs:
                     description: WorkerGroupSpecs are the specs for the worker pods
