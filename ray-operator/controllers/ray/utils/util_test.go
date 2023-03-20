@@ -11,6 +11,34 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+func TestGetClusterDomainName(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want string
+	}{{
+		name: "all good from env",
+		env:  "abc.com",
+		want: "abc.com",
+	}, {
+		name: "No env set",
+		env:  "",
+		want: DefaultDomainName,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if len(tt.env) > 0 {
+				t.Setenv(ClusterDomainEnvKey, tt.env)
+			}
+			got := GetClusterDomainName()
+			if got != tt.want {
+				t.Errorf("Test %s failed expected: %s but got: %s", tt.name, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestBefore(t *testing.T) {
 	if Before("a", "b") != "" {
 		t.Fail()

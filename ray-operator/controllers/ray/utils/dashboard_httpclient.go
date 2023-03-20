@@ -120,9 +120,11 @@ func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Cl
 		return "", fmtErrors.Errorf("dashboard port not found")
 	}
 
-	dashboardAgentURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
+	domainName := GetClusterDomainName()
+	dashboardAgentURL := fmt.Sprintf("%s.%s.svc.%s:%v",
 		dashboardAgentService.Name,
 		dashboardAgentService.Namespace,
+		domainName,
 		dashboardPort)
 	log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardAgentURL)
 	return dashboardAgentURL, nil
@@ -150,9 +152,11 @@ func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client,
 		return "", fmtErrors.Errorf("dashboard port not found")
 	}
 
-	dashboardURL := fmt.Sprintf("%s.%s.svc.cluster.local:%v",
+	domainName := GetClusterDomainName()
+	dashboardURL := fmt.Sprintf("%s.%s.svc.%s:%v",
 		headSvc.Name,
 		headSvc.Namespace,
+		domainName,
 		dashboardPort)
 	log.V(1).Info("fetchDashboardURL ", "dashboardURL", dashboardURL)
 	return dashboardURL, nil
