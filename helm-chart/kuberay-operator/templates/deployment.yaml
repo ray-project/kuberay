@@ -57,7 +57,8 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-          env: []
+          env: 
+          {{- toYaml .Values.env | nindent 12}}
           livenessProbe:
             httpGet:
               path: /metrics
