@@ -189,6 +189,20 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
+	// The Ray worker should only start once the GCS server is ready.
+	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+	initContainer := v1.Container{
+		Name:            "wait-gcs-ready",
+		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command:         []string{"/bin/bash", "-lc", "--"},
+		Args: []string{
+			fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
+		},
+		SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
+	}
+	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
+
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""
@@ -202,7 +216,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	initTemplateAnnotations(instance, &podTemplate)
 
 	isMetricsPortExists := false
-	for _, port := range podTemplate.Spec.Containers[0].Ports {
+	for _, port := range podTemplate.Spec.Containers[rayContainerIndex].Ports {
 		if port.Name == DefaultMetricsName {
 			isMetricsPortExists = true
 			break
@@ -214,7 +228,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 			Name:          DefaultMetricsName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
-		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
+		podTemplate.Spec.Containers[rayContainerIndex].Ports = append(podTemplate.Spec.Containers[rayContainerIndex].Ports, metricsPort)
 	}
 
 	return podTemplate
