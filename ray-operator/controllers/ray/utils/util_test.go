@@ -159,12 +159,6 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 							},
 						},
 					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "MY_VOLUME_MOUNT",
-							MountPath: "/test/",
-						},
-					},
 				},
 			},
 		},
@@ -182,16 +176,6 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"python"},
 					Args:    []string{"/opt/code.py"},
-					Env: []corev1.EnvVar{
-						{
-							Name: "MY_POD_IP",
-							ValueFrom: &corev1.EnvVarSource{
-								FieldRef: &corev1.ObjectFieldSelector{
-									FieldPath: "status.podIP",
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -227,22 +211,6 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
-					Env: []corev1.EnvVar{
-						{
-							Name: "MY_POD_IP",
-							ValueFrom: &corev1.EnvVarSource{
-								FieldRef: &corev1.ObjectFieldSelector{
-									FieldPath: "status.podIP",
-								},
-							},
-						},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "MY_VOLUME_MOUNT",
-							MountPath: "/test/",
-						},
-					},
 				},
 			},
 		},
@@ -260,16 +228,6 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
-					Env: []corev1.EnvVar{
-						{
-							Name: "MY_POD_IP",
-							ValueFrom: &corev1.EnvVarSource{
-								FieldRef: &corev1.ObjectFieldSelector{
-									FieldPath: "status.podIP",
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -301,7 +259,7 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "MY_VOLUME_MOUNT",
-							MountPath: "/test1/",
+							MountPath: "/test/",
 						},
 					},
 				},
@@ -334,7 +292,11 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "MY_VOLUME_MOUNT",
-							MountPath: "/test2/",
+							MountPath: "/test/",
+						},
+						{
+							Name:      "shared-mem",
+							MountPath: "/dev/shm",
 						},
 					},
 				},
@@ -345,7 +307,9 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching volumeMount paths")
+	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching volumeMounts")
+	pod.Spec.Containers[0].VolumeMounts[0].MountPath = "/test1/"
+	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching volumeMounts")
 
 	workerTemplate = corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
