@@ -17,8 +17,8 @@ imagePullSecrets: []
   # - name: an-existing-secret
 
 head:
-  # rayVersion should match the Ray version in the image of the containers.
-  # RayVersion determines the autoscaler's image version.
+  # rayVersion determines the autoscaler's image version.
+  # It should match the Ray version in the image of the containers.
   # rayVersion: 2.3.0
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0

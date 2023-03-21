@@ -5963,7 +5963,7 @@ spec:
                       type: string
                     type: object
                   rayVersion:
-                    description: RayVersion is the version of ray being used. this
+                    description: RayVersion is the version of ray being used. This
                       determines the autoscaler's image version.
                     type: string
                   workerGroupSpecs:
