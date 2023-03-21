@@ -43,6 +43,7 @@ head:
     #     cpu: "500m"
     #     memory: "512Mi"
   labels: {}
+  serviceAccountName: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
@@ -102,6 +103,7 @@ worker:
   groupName: workergroup
   replicas: 1
   labels: {}
+  serviceAccountName: ""
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
@@ -165,6 +167,7 @@ additionalWorkerGroups:
     minReplicas: 1
     maxReplicas: 3
     labels: {}
+    serviceAccountName: ""
     rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
