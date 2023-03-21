@@ -46,10 +46,20 @@ var (
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
 	EnableBatchScheduler      bool
+
+	// Definition of a index field for pod name
+	podUIDIndexField = "metadata.uid"
 )
 
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
+		pod := rawObj.(*corev1.Pod)
+		return []string{string(pod.UID)}
+	}); err != nil {
+		panic(err)
+	}
+
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -123,7 +133,9 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	// we only care about pod events
 	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
 		!strings.Contains(event.Message, "Readiness probe failed") {
-		// This is not supposed to happen
+		// This is not supposed to happen since we already filter events in the watch
+		msg := fmt.Sprintf("unexpected event, we should have already filtered these conditions: %v", event)
+		r.Log.Error(fmt.Errorf(msg), msg, "event", event)
 		return ctrl.Result{}, nil
 	}
 
@@ -131,7 +143,7 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
 	options := []client.ListOption{
-		client.MatchingFields(map[string]string{"metadata.name": event.InvolvedObject.Name}),
+		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
 		client.InNamespace(event.InvolvedObject.Namespace),
 		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
 	}
@@ -158,7 +170,7 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	}
 
 	if unhealthyPod.Annotations == nil {
-		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
+		r.Log.Info("unhealthy pod not found", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
 
