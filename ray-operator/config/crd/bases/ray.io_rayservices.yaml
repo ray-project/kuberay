@@ -11910,6 +11910,11 @@ spec:
                       type: object
                     type: array
                 type: object
+              observedGeneration:
+                description: observedGeneration is the most recent generation observed
+                  for this RayService.
+                format: int64
+                type: integer
               pendingServiceStatus:
                 description: Pending Service Status indicates a RayCluster will be
                   created or is being created.

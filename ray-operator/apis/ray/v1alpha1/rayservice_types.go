@@ -95,6 +95,10 @@ type RayServiceStatuses struct {
 	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
 	// ServiceStatus indicates the current RayService status.
 	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
+	// RayService's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 type RayServiceStatus struct {

@@ -39,8 +39,6 @@ import (
 
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
-	var workerPods corev1.PodList
-
 	myRayJob := &rayiov1alpha1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayjob-test",
@@ -176,19 +174,6 @@ var _ = Context("Inside the default namespace", func() {
 		},
 	}
 
-	myRayCluster := &rayiov1alpha1.RayCluster{}
-
-	myRayJobWithClusterSelector := &rayiov1alpha1.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rayjob-test-2",
-			Namespace: "default",
-		},
-		Spec: rayiov1alpha1.RayJobSpec{
-			Entrypoint:      "sleep 999",
-			ClusterSelector: map[string]string{},
-		},
-	}
-
 	Describe("When creating a rayjob", func() {
 		It("should create a rayjob object", func() {
 			err := k8sClient.Create(ctx, myRayJob)
@@ -205,7 +190,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-
+			myRayCluster := &rayiov1alpha1.RayCluster{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -213,6 +198,7 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should create more than 1 worker", func() {
 			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayJob.Status.RayClusterName, common.RayNodeGroupLabelKey: "small-group"}
+			workerPods := corev1.PodList{}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -231,7 +217,16 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-
+			myRayJobWithClusterSelector := &rayiov1alpha1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "rayjob-test-2",
+					Namespace: "default",
+				},
+				Spec: rayiov1alpha1.RayJobSpec{
+					Entrypoint:      "sleep 999",
+					ClusterSelector: map[string]string{},
+				},
+			}
 			myRayJobWithClusterSelector.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey] = myRayJob.Status.RayClusterName
 
 			err := k8sClient.Create(ctx, myRayJobWithClusterSelector)
