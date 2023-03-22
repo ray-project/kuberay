@@ -967,14 +967,14 @@ func TestGetHeadServiceIP(t *testing.T) {
 	}
 }
 
-func TestUpdateStatus(t *testing.T) {
+func TestUpdateStatusObservedGeneration(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	rayiov1alpha1.AddToScheme(newScheme)
-	corev1.AddToScheme(newScheme)
+	_ = rayiov1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
 
 	// To update the status of RayCluster with `r.Status().Update()`,
 	// initialize the runtimeObjects with appropriate context. In KubeRay, the `ClusterIP`
