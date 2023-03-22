@@ -11277,6 +11277,11 @@ spec:
                   each node group.
                 format: int32
                 type: integer
+              observedGeneration:
+                description: observedGeneration is the most recent generation observed
+                  for this RayCluster.
+                format: int64
+                type: integer
               reason:
                 description: Reason provides more information about current State
                 type: string

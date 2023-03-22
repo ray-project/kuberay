@@ -126,6 +126,10 @@ type RayClusterStatus struct {
 	Head HeadInfo `json:"head,omitempty"`
 	// Reason provides more information about current State
 	Reason string `json:"reason,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
+	// RayCluster's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // HeadInfo gives info about head

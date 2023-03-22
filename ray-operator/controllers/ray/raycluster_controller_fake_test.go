@@ -966,3 +966,48 @@ func TestGetHeadServiceIP(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateStatus(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	// Create a scheme with CRDs and Pod schemes
+	newScheme := runtime.NewScheme()
+	rayiov1alpha1.AddToScheme(newScheme)
+	corev1.AddToScheme(newScheme)
+
+	// Initialize a fake client
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headNodeIP
+	for i, port := range headService.Spec.Ports {
+		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
+	}
+
+	runtimeObjects := append(testPods, headService, testRayCluster)
+	testRayCluster.Status.ObservedGeneration = -1
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	namespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+	cluster := rayiov1alpha1.RayCluster{}
+	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	err = testRayClusterReconciler.updateStatus(testRayCluster)
+	assert.Nil(t, err)
+
+	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err)
+	assert.Equal(t, cluster.ObjectMeta.Generation, cluster.Status.ObservedGeneration)
+}
