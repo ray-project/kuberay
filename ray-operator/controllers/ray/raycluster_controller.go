@@ -140,7 +140,6 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	}
 
 	_ = r.Log.WithValues("event", request.NamespacedName)
-	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
 	options := []client.ListOption{
 		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
@@ -153,8 +152,7 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	}
 
 	if len(pods.Items) == 0 {
-		r.Log.Error(fmt.Errorf("no pod found for event"), "no pod found for event",
-			"event", event)
+		r.Log.Info("no ray node pod found for event", "event", event)
 		return ctrl.Result{}, nil
 	} else if len(pods.Items) > 1 {
 		// This happens when we use fake client
@@ -166,11 +164,12 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 			}
 		}
 	} else {
+		r.Log.Info("found unhealthy ray node", "pod name", event.InvolvedObject.Name)
 		unhealthyPod = &pods.Items[0]
 	}
 
 	if unhealthyPod.Annotations == nil {
-		r.Log.Info("unhealthy pod not found", "pod name", event.InvolvedObject.Name)
+		r.Log.Info("The unhealthy ray node not found", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -849,8 +848,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 				CreateFunc: func(e event.CreateEvent) bool {
 					if eventObj, ok := e.Object.(*corev1.Event); ok {
 						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
-							eventObj.Reason != "Unhealthy" ||
-							!strings.Contains(eventObj.Message, "Readiness probe failed") {
+							eventObj.Reason != "Unhealthy" || !strings.Contains(eventObj.Message, "Readiness probe failed") {
 							// only care about pod unhealthy events
 							return false
 						}
@@ -867,7 +865,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 				GenericFunc: func(e event.GenericEvent) bool {
 					return false
 				},
-			})).
+			}),
+		).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
