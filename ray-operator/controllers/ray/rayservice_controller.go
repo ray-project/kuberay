@@ -109,7 +109,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	r.cleanUpServeConfigCache(rayServiceInstance)
 
-	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 
 	logger.Info("Reconciling the cluster component.")
