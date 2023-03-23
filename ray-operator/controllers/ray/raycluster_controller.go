@@ -827,7 +827,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 }
 
 func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) error {
-	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	instance.Status.ObservedGeneration = instance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
