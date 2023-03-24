@@ -80,6 +80,10 @@ type RayJobStatus struct {
 	// Represents time when the job was ended.
 	EndTime          *metav1.Time     `json:"endTime,omitempty"`
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
+	// RayJob's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true

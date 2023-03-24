@@ -11872,6 +11872,11 @@ spec:
                           of each node group.
                         format: int32
                         type: integer
+                      observedGeneration:
+                        description: observedGeneration is the most recent generation
+                          observed for this RayCluster.
+                        format: int64
+                        type: integer
                       reason:
                         description: Reason provides more information about current
                           State
@@ -11905,6 +11910,11 @@ spec:
                       type: object
                     type: array
                 type: object
+              observedGeneration:
+                description: observedGeneration is the most recent generation observed
+                  for this RayService.
+                format: int64
+                type: integer
               pendingServiceStatus:
                 description: Pending Service Status indicates a RayCluster will be
                   created or is being created.
@@ -11982,6 +11992,11 @@ spec:
                         description: MinWorkerReplicas indicates sum of minimum replicas
                           of each node group.
                         format: int32
+                        type: integer
+                      observedGeneration:
+                        description: observedGeneration is the most recent generation
+                          observed for this RayCluster.
+                        format: int64
                         type: integer
                       reason:
                         description: Reason provides more information about current

@@ -966,3 +966,58 @@ func TestGetHeadServiceIP(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateStatusObservedGeneration(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayiov1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// To update the status of RayCluster with `r.Status().Update()`,
+	// initialize the runtimeObjects with appropriate context. In KubeRay, the `ClusterIP`
+	// and `TargetPort` fields are typically set by the cluster's control plane.
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headNodeIP
+	for i, port := range headService.Spec.Ports {
+		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
+	}
+	runtimeObjects := append(testPods, headService, testRayCluster)
+
+	// To facilitate testing, we set an impossible value for ObservedGeneration.
+	// Note that ObjectMeta's `Generation` and `ResourceVersion` don't behave properly in the fake client.
+	// [Ref] https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.5/pkg/client/fake
+	testRayCluster.Status.ObservedGeneration = -1
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Verify the initial values of `Generation` and `ObservedGeneration`.
+	namespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+	cluster := rayiov1alpha1.RayCluster{}
+	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
+	assert.Equal(t, int64(0), cluster.ObjectMeta.Generation)
+
+	// Initialize RayCluster reconciler.
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
+	err = testRayClusterReconciler.updateStatus(testRayCluster)
+	assert.Nil(t, err)
+	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
+	assert.Nil(t, err)
+	assert.Equal(t, cluster.ObjectMeta.Generation, cluster.Status.ObservedGeneration)
+}

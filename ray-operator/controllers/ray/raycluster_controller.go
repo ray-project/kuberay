@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -25,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -828,31 +827,19 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 }
 
 func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) error {
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
+	instance.Status.ObservedGeneration = instance.ObjectMeta.Generation
+
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	count := utils.CalculateAvailableReplicas(runtimePods)
-	if instance.Status.AvailableWorkerReplicas != count {
-		instance.Status.AvailableWorkerReplicas = count
-	}
-
-	count = utils.CalculateDesiredReplicas(instance)
-	if instance.Status.DesiredWorkerReplicas != count {
-		instance.Status.DesiredWorkerReplicas = count
-	}
-
-	count = utils.CalculateMinReplicas(instance)
-	if instance.Status.MinWorkerReplicas != count {
-		instance.Status.MinWorkerReplicas = count
-	}
-
-	count = utils.CalculateMaxReplicas(instance)
-	if instance.Status.MaxWorkerReplicas != count {
-		instance.Status.MaxWorkerReplicas = count
-	}
+	instance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	instance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(instance)
+	instance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(instance)
+	instance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(instance)
 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)

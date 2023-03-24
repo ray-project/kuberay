@@ -346,6 +346,9 @@ func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1alpha1.
 		rayJob.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
 	}
 
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
+	rayJob.Status.ObservedGeneration = rayJob.ObjectMeta.Generation
+
 	if errStatus := r.Status().Update(ctx, rayJob); errStatus != nil {
 		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
 	}

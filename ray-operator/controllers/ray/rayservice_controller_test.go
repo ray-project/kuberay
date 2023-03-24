@@ -45,10 +45,8 @@ var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 
-	var numReplicas int32
-	var numCpus float64
-	numReplicas = 1
-	numCpus = 0.1
+	var numReplicas int32 = 1
+	var numCpus float64 = 0.1
 
 	myRayService := &rayiov1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
