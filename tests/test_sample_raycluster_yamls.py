@@ -32,7 +32,6 @@ if __name__ == '__main__':
     # See https://github.com/ray-project/kuberay/issues/695.
     GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
     github_action_tests = {
-        "ray-cluster.getting-started.yaml",
         "ray-cluster.ingress.yaml",
         "ray-cluster.mini.yaml",
         "ray-cluster.external-redis.yaml"
