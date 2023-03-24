@@ -9,7 +9,7 @@ import time
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from typing import Any, Dict, List, Optional
-import constants
+from python_client import constants
 
 
 log = logging.getLogger(__name__)

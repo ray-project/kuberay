@@ -20,9 +20,9 @@ for sibling_dir in sibling_dirs:
     sys.path.append(os.path.join(parent_dir, sibling_dir))
 """
 
-import kuberay_cluster_api
+from python_client import kuberay_cluster_api
 
-from utils import kuberay_cluster_utils, kuberay_cluster_builder
+from python_client.utils import kuberay_cluster_utils, kuberay_cluster_builder
 
 
 def main():

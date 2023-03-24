@@ -18,7 +18,7 @@ sibling_dirs = [
 for sibling_dir in sibling_dirs:
     sys.path.append(os.path.join(parent_dir, sibling_dir))
 """
-import kuberay_cluster_api
+from python_client import kuberay_cluster_api
 
 cluster_body: dict = {
     "apiVersion": "ray.io/v1alpha1",
@@ -169,6 +169,9 @@ def main():
         print("printing the raycluster json representation...")
         json_formatted_str = json.dumps(kube_ray_cluster, indent=2)
         print(json_formatted_str)
+    else:
+        print("Unable to fetch cluster {}".format(cluster_body["metadata"]["name"]))
+        return
 
     print(
         "try: kubectl -n default get raycluster {} -o yaml".format(

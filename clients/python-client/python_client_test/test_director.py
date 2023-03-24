@@ -1,5 +1,5 @@
 import unittest
-from utils import kuberay_cluster_builder
+from python_client.utils import kuberay_cluster_builder
 
 
 class TestDirector(unittest.TestCase):
