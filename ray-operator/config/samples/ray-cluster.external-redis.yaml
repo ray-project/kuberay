@@ -97,7 +97,7 @@ spec:
       block: "true"
       # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
       # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
-      redis-password: $RAY_REDIS_PASSWORD
+      redis-password: $REDIS_PASSWORD
     #pod template
     template:
       spec:
@@ -108,7 +108,7 @@ spec:
               # RAY_REDIS_ADDRESS can force ray to use external redis
               - name: RAY_REDIS_ADDRESS
                 value: redis:6379
-              - name: RAY_REDIS_PASSWORD
+              - name: REDIS_PASSWORD
                 valueFrom:
                   secretKeyRef:
                     name: redis-password-secret
