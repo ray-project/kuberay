@@ -2,11 +2,11 @@
 Set of helper methods to manage rayclusters. Requires Python 3.6 and higher
 """
 
-import constants
 import logging
 import copy
 import re
 from typing import Any, Tuple
+from python_client import constants
 
 
 log = logging.getLogger(__name__)

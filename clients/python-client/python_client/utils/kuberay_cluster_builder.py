@@ -2,13 +2,13 @@
 Set of helper methods to manage rayclusters. Requires Python 3.9 and higher
 """
 
-import constants
 import copy
 import logging
 import math
 from typing import Any
 from abc import ABCMeta, abstractmethod
-from utils import kuberay_cluster_utils
+from python_client.utils import kuberay_cluster_utils
+from python_client import constants
 
 
 log = logging.getLogger(__name__)
