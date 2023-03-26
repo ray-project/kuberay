@@ -322,9 +322,9 @@ func TestGetHeadPort(t *testing.T) {
 	}
 }
 
-func checkPodEnv(t *testing.T, pod v1.Pod, envName string, expectedValue string) {
+func checkContainerEnv(t *testing.T, container v1.Container, envName string, expectedValue string) {
 	foundEnv := false
-	for _, env := range pod.Spec.Containers[0].Env {
+	for _, env := range container.Env {
 		if env.Name == envName {
 			if env.Value != "" {
 				if env.Value != expectedValue {
@@ -356,9 +356,16 @@ func TestBuildPod(t *testing.T) {
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
 
 	// Check environment variables
-	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
-	checkPodEnv(t, pod, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
-	checkPodEnv(t, pod, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	rayContainer := pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "127.0.0.1:6379")
+	checkContainerEnv(t, rayContainer, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
+	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+
+	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
+	for _, initContainer := range pod.Spec.InitContainers {
+		checkContainerEnv(t, initContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
+		checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
+	}
 
 	// Check RayStartParams
 	expectedResult := "true"
@@ -407,10 +414,11 @@ func TestBuildPod(t *testing.T) {
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
 
 	// Check environment variables
-	checkPodEnv(t, pod, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
-	checkPodEnv(t, pod, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
-	checkPodEnv(t, pod, RAY_IP, "raycluster-sample-head-svc")
-	checkPodEnv(t, pod, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	rayContainer = pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
+	checkContainerEnv(t, rayContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
+	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
+	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
@@ -434,7 +442,8 @@ func TestBuildPod(t *testing.T) {
 	}
 
 	// Check Envs
-	checkPodEnv(t, pod, "TEST_ENV_NAME", "TEST_ENV_VALUE")
+	rayContainer = pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -811,6 +820,20 @@ func TestDefaultInitContainer(t *testing.T) {
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
 	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
-	actualResult := len(podTemplateSpec.Spec.InitContainers)
-	assert.Equal(t, expectedResult, actualResult, "A default init container is expected to be added.")
+	numInitContainers := len(podTemplateSpec.Spec.InitContainers)
+	assert.Equal(t, expectedResult, numInitContainers, "A default init container is expected to be added.")
+
+	// This health-check init container requires certain environment variables to establish a secure connection
+	// with the Ray head using TLS authentication. Currently, we simply copied all environment variables from
+	// Ray container to the init container. This may be changed in the future.
+	healthCheckContainer := podTemplateSpec.Spec.InitContainers[numInitContainers-1]
+	rayContainer := worker.Template.Spec.Containers[getRayContainerIndex(worker.Template.Spec)]
+	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
+	for _, env := range rayContainer.Env {
+		if env.Value != "" {
+			checkContainerEnv(t, healthCheckContainer, env.Name, env.Value)
+		} else {
+			checkContainerEnv(t, healthCheckContainer, env.Name, env.ValueFrom.FieldRef.FieldPath)
+		}
+	}
 }
