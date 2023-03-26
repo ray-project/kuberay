@@ -263,7 +263,7 @@ data:
     L = San Fransisco
     O = test
     OU = test
-    CN = *.test.com
+    CN = *.kuberay.com
 
     [ req_ext ]
     subjectAltName = @alt_names
@@ -323,7 +323,7 @@ data:
     L = San Fransisco
     O = test
     OU = test
-    CN = *.test.com
+    CN = *.kuberay.com
 
     [ req_ext ]
     subjectAltName = @alt_names
