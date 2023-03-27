@@ -200,6 +200,11 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 			fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
 		},
 		SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
+		// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
+		// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
+		// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
+		Env:          podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().Env,
+		VolumeMounts: podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().VolumeMounts,
 	}
 	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 
@@ -549,19 +554,18 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if len(fqdnRayIP) != 0 { // Worker Pod
-		container.Env = append(container.Env,
-			v1.EnvVar{Name: FQ_RAY_IP, Value: fqdnRayIP},
-			// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
-			v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(fqdnRayIP)},
-		)
-	}
+	// Init containers in both head and worker require FQ_RAY_IP.
+	// (1) The head needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
+	// (2) The worker needs FQ_RAY_IP to establish a connection with the Ray head.
+	container.Env = append(container.Env,
+		v1.EnvVar{Name: FQ_RAY_IP, Value: fqdnRayIP},
+		// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
+		v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(fqdnRayIP)},
+	)
 }
 
 func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
-	// set the port RAY_PORT
-	// set the password?
 	container := &pod.Spec.Containers[rayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}

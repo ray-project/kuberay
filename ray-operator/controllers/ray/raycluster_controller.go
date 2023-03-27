@@ -756,14 +756,15 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
-	podName = utils.CheckName(podName) // making sure the name is valid
+	podName = utils.CheckName(podName)                                            // making sure the name is valid
+	fqdnRayIP := utils.GenerateFQDNServiceName(instance.Name, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, "")
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
