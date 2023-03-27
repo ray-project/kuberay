@@ -91,7 +91,9 @@ certificate across different Pods.
 
 In the YAML file, you'll find a ConfigMap named `tls` that contains two shell scripts: 
 `gencert_head.sh` and `gencert_worker.sh`. These scripts are used to generate the private key 
-and self-signed certificate files (`tls.key` and `tls.crt`) for the Ray head and worker Pods. 
+and self-signed certificate files (`tls.key` and `tls.crt`) for the Ray head and worker Pods.
+An alternative approach for users is to prebake the shell scripts directly into the docker image that's utilized
+by the init containers, rather than relying on a ConfigMap.
 
 Please find below a brief explanation of what happens in each of these scripts:
 1. A 2048-bit RSA private key is generated and saved as `/etc/ray/tls/tls.key`.
