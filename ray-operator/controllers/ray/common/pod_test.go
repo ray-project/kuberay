@@ -830,6 +830,7 @@ func TestDefaultInitContainer(t *testing.T) {
 	rayContainer := worker.Template.Spec.Containers[getRayContainerIndex(worker.Template.Spec)]
 	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
 	for _, env := range rayContainer.Env {
+		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
 		if env.Value != "" {
 			checkContainerEnv(t, healthCheckContainer, env.Name, env.Value)
 		} else {
