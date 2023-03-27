@@ -30,6 +30,9 @@ This [YouTube video](https://youtu.be/T4Df5_cojAs) is a good start.
 
 > Please note that this document is designed to support KubeRay version 0.5.0 or later. If you are using an older version of KubeRay, some of the instructions or configurations may not apply or may require additional modifications.
 
+> Warning: Please note that the `ray-cluster.tls.yaml` file is intended for demo purposes only. It is crucial that you **do not** store
+your CA private key in a Kubernetes Secret in your production environment.
+
 ```sh
 # Install v0.5.0 KubeRay operator
 # Create a RayCluster with TLS authentication (path: kuberay/)
@@ -52,9 +55,13 @@ openssl req -x509 \
             -newkey rsa:2048 \
             -subj "/CN=*.kuberay.com/C=US/L=San Francisco" \
             -keyout ca.key -out ca.crt
-
-# Step 1-2: Use `cat $FILENAME | base64` to encode `ca.key` and `ca.crt`.
+# Step 1-2
+# Method 1: Use `cat $FILENAME | base64` to encode `ca.key` and `ca.crt`.
 #           Then, paste the encoding strings to the Kubernetes Secret in `ray-cluster.tls.yaml`.
+
+# Method 2: Use kubectl to encode the certifcate as Kubernetes Secret automatically.
+#           (Note: You should comment out the Kubernetes Secret in `ray-cluster.tls.yaml`.)
+kubectl create secret generic ca-tls --from-file=ca.key --from-file=ca.crt
 ```
 * `ca.key`: CA's private key
 * `ca.crt`: CA's self-signed certificate 
