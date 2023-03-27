@@ -35,13 +35,21 @@ your CA private key in a Kubernetes Secret in your production environment.
 
 ```sh
 # Install v0.5.0 KubeRay operator
-# Create a RayCluster with TLS authentication (path: kuberay/)
+# `ray-cluster.tls.yaml` will cover from Step 1 to Step 3 (path: kuberay/)
 kubectl apply -f ray-operator/config/samples/ray-cluster.tls.yaml
 
 # Jump to Step 4 "Verify TLS authentication" to verify the connection.
 ```
 
-# Step 1 (Optional): Generate a private key and self-signed certificate for CA
+`ray-cluster.tls.yaml` will create:
+* A Kubernetes Secret containing the CA's private key (`ca.key`) and self-signed certificate (`ca.crt`) (**Step 1**)
+* A Kubernetes ConfigMap containing the scripts `gencert_head.sh` and `gencert_worker.sh`, which allow Ray Pods to generate private keys 
+(`tls.key`) and self-signed certificates (`tls.crt`) (**Step 2**)
+* A RayCluster with proper TLS environment variables configurations (**Step 3**)
+
+The certificate (`tls.crt`) for a Ray Pod is encrypted using the CA's private key (`ca.key`). Additionally, all Ray Pods have the CA's public key included in `ca.crt`, which allows them to decrypt certificates from other Ray Pods.
+ 
+# Step 1: Generate a private key and self-signed certificate for CA
 
 In this document, a self-signed certificate is used, but users also have the
 option to choose a publicly trusted certificate authority (CA) for their TLS
@@ -55,7 +63,11 @@ openssl req -x509 \
             -newkey rsa:2048 \
             -subj "/CN=*.kuberay.com/C=US/L=San Francisco" \
             -keyout ca.key -out ca.crt
-# Step 1-2
+
+# Step 1-2: Check the CA's public key from the self-signed certificate.
+openssl x509 -in ca.crt -noout -text
+
+# Step 1-3
 # Method 1: Use `cat $FILENAME | base64` to encode `ca.key` and `ca.crt`.
 #           Then, paste the encoding strings to the Kubernetes Secret in `ray-cluster.tls.yaml`.
 
@@ -69,7 +81,7 @@ kubectl create secret generic ca-tls --from-file=ca.key --from-file=ca.crt
 This step is optional because the `ca.key` and `ca.crt` files have
 already been included in the Kubernetes Secret specified in [ray-cluster.tls.yaml](../../ray-operator/config/samples/ray-cluster.tls.yaml).
 
-# Step 2 (Optional): Create separate private key and self-signed certificate for Ray Pods
+# Step 2: Create separate private key and self-signed certificate for Ray Pods
 
 In [ray-cluster.tls.yaml](../../ray-operator/config/samples/ray-cluster.tls.yaml), each Ray
 Pod (both head and workers) generates its own private key file (`tls.key`) and self-signed
@@ -111,7 +123,7 @@ IP.2 = $POD_IP
 
 In [Kubernetes networking model](https://github.com/kubernetes/design-proposals-archive/blob/main/network/networking.md#pod-to-pod), the IP that a Pod sees itself as is the same IP that others see it as. That's why Ray Pods can self-register for the certificates.
 
-# Step 3 (Optional): Configure environment variables for Ray TLS authentication
+# Step 3: Configure environment variables for Ray TLS authentication
 
 To enable TLS authentication in your Ray cluster, set the following environment variables:
 
