@@ -2,6 +2,8 @@
 
 # Kubeflow: an interactive development solution
 
+The [Kubeflow](https://www.kubeflow.org/) project is dedicated to making deployments of machine learning (ML) workflows on Kubernetes simple, portable and scalable.
+
 # Requirements
 * Dependencies
     * `kustomize`: v3.2.0 (Kubeflow manifest is sensitive to `kustomize` version.)
