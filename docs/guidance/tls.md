@@ -5,8 +5,8 @@ connecting to the Ray client on the head node will require an appropriate
 set of credentials and also that data exchanged between various processes 
 (client, head, workers) will be encrypted ([Ray's document](https://docs.ray.io/en/latest/ray-core/configure.html?highlight=tls#tls-authentication)).
 
-This document provides detailed instructions from generating public-private
-key pair and CA certificate to configuring KubeRay.
+This document provides detailed instructions for generating a public-private
+key pair and CA certificate for configuring KubeRay.
 
 > Warning: Enabling TLS will cause a performance hit due to the extra
 overhead of mutual authentication and encryption. Testing has shown that 
