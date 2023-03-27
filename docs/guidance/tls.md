@@ -102,6 +102,8 @@ IP.1 = 127.0.0.1
 IP.2 = $POD_IP
 ```
 
+In [Kubernetes networking model](https://github.com/kubernetes/design-proposals-archive/blob/main/network/networking.md#pod-to-pod), the IP that a Pod sees itself as is the same IP that others see it as. That's why Ray Pods can self-register for the certificates.
+
 # Step 3 (Optional): Configure environment variables for Ray TLS authentication
 
 To enable TLS authentication in your Ray cluster, set the following environment variables:
