@@ -1,6 +1,6 @@
 # TLS Authentication
 
-Ray can be configured to use TLS on it’s gRPC channels. This means that 
+Ray can be configured to use TLS on its gRPC channels. This means that 
 connecting to the Ray client on the head node will require an appropriate 
 set of credentials and also that data exchanged between various processes 
 (client, head, workers) will be encrypted ([Ray's document](https://docs.ray.io/en/latest/ray-core/configure.html?highlight=tls#tls-authentication)).
