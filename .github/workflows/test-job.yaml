@@ -403,7 +403,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install package and run unittest for Python client
-        working-directory: ./ray-operator/clients/python-client
+        working-directory: ./clients/python-client
         run: |
           pip install -r requirements.txt
           pip install -e .
