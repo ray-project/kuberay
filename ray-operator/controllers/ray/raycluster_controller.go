@@ -46,15 +46,19 @@ var (
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
 	EnableBatchScheduler      bool
-
-	// Definition of a index field for pod name
-	podUIDIndexField = "metadata.uid"
+	PodUIDIndexField          = "metadata.uid"
 )
 
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
+	// Create a local cache to enable users to lookup `Pod` by a referenced `Pod` UID efficiently.
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, PodUIDIndexField, func(rawObj client.Object) []string {
 		pod := rawObj.(*corev1.Pod)
+		owner := metav1.GetControllerOf(pod)
+		if owner == nil || owner.APIVersion != rayiov1alpha1.GroupVersion.String() || owner.Kind != "RayCluster" {
+			// Only index `Pod`s that are owned by `RayCluster`.
+			return nil
+		}
 		return []string{string(pod.UID)}
 	}); err != nil {
 		panic(err)
@@ -142,7 +146,7 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	_ = r.Log.WithValues("event", request.NamespacedName)
 
 	options := []client.ListOption{
-		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
+		client.MatchingFields(map[string]string{PodUIDIndexField: string(event.InvolvedObject.UID)}),
 		client.InNamespace(event.InvolvedObject.Namespace),
 		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
 	}
@@ -155,8 +159,9 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 		r.Log.Info("no ray node pod found for event", "event", event)
 		return ctrl.Result{}, nil
 	} else if len(pods.Items) > 1 {
-		// This happens when we use fake client
-		r.Log.Info("are you running in test mode?")
+		r.Log.Info("This should only happen when using a fake client in test mode. The fake client included " +
+			"in controller-runtime does not support the use of `client.MatchingFields` with ListOptions. " +
+			"For more details, see https://github.com/kubernetes-sigs/controller-runtime/issues/866.")
 		for _, pod := range pods.Items {
 			if pod.Name == event.InvolvedObject.Name {
 				unhealthyPod = &pod
