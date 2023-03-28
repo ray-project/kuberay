@@ -31,8 +31,8 @@ spec:
     # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will default to the same image as
     # the ray container. For older Ray versions, the autoscaler will default to using the Ray 2.0.0 image.
     ## image: "my-repo/my-custom-autoscaler-image:tag"
-    # imagePullPolicy optionally overrides the autoscaler container's image pull policy.
-    imagePullPolicy: Always
+    # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
+    imagePullPolicy: IfNotPresent
     # Optionally specify the autoscaler container's securityContext.
     securityContext: {}
     env: []
@@ -66,7 +66,6 @@ spec:
         # The Ray head container
         - name: ray-head
           image: rayproject/ray:2.3.0
-          imagePullPolicy: Always
           ports:
           - containerPort: 6379
             name: gcs

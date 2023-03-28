@@ -69,32 +69,34 @@ if succeeded:
 Finally, the cluster_api is the one you always use to implement your cluster change in k8s. You can use it with raw `JSON` if you wish. The director/cluster_builder/cluster_utils are just tools to shield the user from using raw `JSON`.
 
 ## Code Organization
-
+```
 clients/
 └── python-client
+    ├── LICENSE
     ├── README.md
     ├── examples
     │   ├── complete-example.py
     │   ├── use-builder.py
     │   ├── use-director.py
+    │   ├── use-raw-config_map_with-api.py
     │   ├── use-raw-with-api.py
     │   └── use-utils.py
+    ├── pyproject.toml
     ├── python_client
-    │   ├── LICENSE
     │   ├── __init__.py
     │   ├── constants.py
     │   ├── kuberay_cluster_api.py
-    │   ├── pyproject.toml
-    │   ├── setup.cfg
     │   └── utils
     │       ├── __init__.py
     │       ├── kuberay_cluster_builder.py
     │       └── kuberay_cluster_utils.py
-    └── python_client_test
-        ├── README.md
-        ├── test_director.py
-        └── test_utils.py
-
+    ├── python_client_test
+    │   ├── README.md
+    │   ├── test_api.py
+    │   ├── test_director.py
+    │   └── test_utils.py
+    └── setup.cfg
+```
 ## For developers
 
 make sure you have installed setuptool
@@ -103,7 +105,7 @@ make sure you have installed setuptool
 
 #### run the pip command
 
-from the directory `path/to/kuberay/clients/python-client/python_client`
+from the directory `path/to/kuberay/clients/python-client`
 
 `pip install -e .`
 
@@ -113,4 +115,4 @@ from the directory `path/to/kuberay/clients/python-client/python_client`
 
 ### For testing run
 
- `python -m unittest discover 'path/to/kuberay/clients/python_client_test/'`
+ `python -m unittest discover 'path/to/kuberay/clients/python-client/python_client_test/'`

@@ -63,7 +63,6 @@ spec:
           containers:
             - name: ray-head
               image: $ray_image
-              imagePullPolicy: Always
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -104,7 +103,6 @@ spec:
             containers:
               - name: ray-worker
                 image: $ray_image
-                imagePullPolicy: Always
                 lifecycle:
                   preStop:
                     exec:

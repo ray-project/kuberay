@@ -188,13 +188,13 @@ var volumeMountsWithAutoscaler = []v1.VolumeMount{
 var autoscalerContainer = v1.Container{
 	Name:            "autoscaler",
 	Image:           "repo/image:custom",
-	ImagePullPolicy: v1.PullAlways,
+	ImagePullPolicy: v1.PullIfNotPresent,
 	Env: []v1.EnvVar{
 		{
-			Name: "RAY_CLUSTER_NAME",
+			Name: RAY_CLUSTER_NAME,
 			ValueFrom: &v1.EnvVarSource{
 				FieldRef: &v1.ObjectFieldSelector{
-					FieldPath: "metadata.labels['ray.io/cluster']",
+					FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
 				},
 			},
 		},
@@ -322,13 +322,22 @@ func TestGetHeadPort(t *testing.T) {
 	}
 }
 
-func checkPodEnv(t *testing.T, pod v1.Pod, envName string, expectedValue string) {
+func checkContainerEnv(t *testing.T, container v1.Container, envName string, expectedValue string) {
 	foundEnv := false
-	for _, env := range pod.Spec.Containers[0].Env {
+	for _, env := range container.Env {
 		if env.Name == envName {
-			if !(env.Value == expectedValue) {
-				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
+			if env.Value != "" {
+				if env.Value != expectedValue {
+					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
+				}
+			} else {
+				// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
+				// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
+				if env.ValueFrom.FieldRef.FieldPath != expectedValue {
+					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
+				}
 			}
+
 			foundEnv = true
 			break
 		}
@@ -346,14 +355,29 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
 
-	// Check RAY_ADDRESS env.
-	checkPodEnv(t, pod, RAY_ADDRESS, "127.0.0.1:6379")
-	// Check usage stats env.
-	checkPodEnv(t, pod, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
+	// Check environment variables
+	rayContainer := pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "127.0.0.1:6379")
+	checkContainerEnv(t, rayContainer, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
+	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+
+	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
+	for _, initContainer := range pod.Spec.InitContainers {
+		checkContainerEnv(t, initContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
+		checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
+	}
+
+	// Check RayStartParams
+	expectedResult := "true"
+	actualResult := cluster.Spec.HeadGroupSpec.RayStartParams["block"]
+
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
 
 	// Check labels.
-	actualResult := pod.Labels[RayClusterLabelKey]
-	expectedResult := cluster.Name
+	actualResult = pod.Labels[RayClusterLabelKey]
+	expectedResult = cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -390,13 +414,22 @@ func TestBuildPod(t *testing.T) {
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
 
 	// Check environment variables
-	checkPodEnv(t, pod, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
-	checkPodEnv(t, pod, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
-	checkPodEnv(t, pod, RAY_IP, "raycluster-sample-head-svc")
+	rayContainer = pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
+	checkContainerEnv(t, rayContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
+	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
+	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 
 	// Check RayStartParams
 	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
 	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
+
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	expectedResult = "true"
+	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["block"]
 
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -409,7 +442,8 @@ func TestBuildPod(t *testing.T) {
 	}
 
 	// Check Envs
-	checkPodEnv(t, pod, "TEST_ENV_NAME", "TEST_ENV_VALUE")
+	rayContainer = pod.Spec.Containers[getRayContainerIndex(pod.Spec)]
+	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -714,4 +748,93 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
 	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
 	assert.Equal(t, worker, expectedWorker)
+}
+
+func containerPortExists(ports []v1.ContainerPort, name string, containerPort int32) error {
+	for _, port := range ports {
+		if port.Name == name {
+			if port.ContainerPort != containerPort {
+				return fmt.Errorf("expected `%v` but got `%v` for `%v` port", containerPort, port.ContainerPort, name)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("couldn't find `%v` port", name)
+}
+
+func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{}
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
+	// Verify the default metrics port exists.
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
+		t.Fatal(err)
+	}
+	customMetricsPort := int32(DefaultMetricsPort) + 1
+	metricsPort := v1.ContainerPort{
+		Name:          DefaultMetricsName,
+		ContainerPort: customMetricsPort,
+	}
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	// Verify the custom metrics port exists.
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{}
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
+	// Verify the default metrics port exists.
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
+		t.Fatal(err)
+	}
+	customMetricsPort := int32(DefaultMetricsPort) + 1
+	metricsPort := v1.ContainerPort{
+		Name:          DefaultMetricsName,
+		ContainerPort: customMetricsPort,
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	// Verify the custom metrics port exists.
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDefaultInitContainer(t *testing.T) {
+	// A default init container to check the health of GCS is expected to be added.
+	cluster := instance.DeepCopy()
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	expectedResult := len(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.InitContainers) + 1
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	numInitContainers := len(podTemplateSpec.Spec.InitContainers)
+	assert.Equal(t, expectedResult, numInitContainers, "A default init container is expected to be added.")
+
+	// This health-check init container requires certain environment variables to establish a secure connection
+	// with the Ray head using TLS authentication. Currently, we simply copied all environment variables from
+	// Ray container to the init container. This may be changed in the future.
+	healthCheckContainer := podTemplateSpec.Spec.InitContainers[numInitContainers-1]
+	rayContainer := worker.Template.Spec.Containers[getRayContainerIndex(worker.Template.Spec)]
+	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
+	for _, env := range rayContainer.Env {
+		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
+		if env.Value != "" {
+			checkContainerEnv(t, healthCheckContainer, env.Name, env.Value)
+		} else {
+			checkContainerEnv(t, healthCheckContainer, env.Name, env.ValueFrom.FieldRef.FieldPath)
+		}
+	}
 }

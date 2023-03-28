@@ -123,22 +123,20 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	// add metrics port for exposing to the promethues stack.
-	metricsPort := v1.ContainerPort{
-		Name:          "metrics",
-		ContainerPort: int32(DefaultMetricsPort),
-	}
-	dupIndex := -1
-	for i, port := range podTemplate.Spec.Containers[0].Ports {
-		if port.Name == metricsPort.Name {
-			dupIndex = i
+	isMetricsPortExists := false
+	for _, port := range podTemplate.Spec.Containers[0].Ports {
+		if port.Name == DefaultMetricsName {
+			isMetricsPortExists = true
 			break
 		}
 	}
-	if dupIndex < 0 {
+	if !isMetricsPortExists {
+		// add metrics port for exposing to the promethues stack.
+		metricsPort := v1.ContainerPort{
+			Name:          DefaultMetricsName,
+			ContainerPort: int32(DefaultMetricsPort),
+		}
 		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
-	} else {
-		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
 	}
 
 	return podTemplate
@@ -191,6 +189,25 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
 
+	// The Ray worker should only start once the GCS server is ready.
+	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+	initContainer := v1.Container{
+		Name:            "wait-gcs-ready",
+		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command:         []string{"/bin/bash", "-lc", "--"},
+		Args: []string{
+			fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
+		},
+		SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
+		// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
+		// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
+		// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
+		Env:          podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().Env,
+		VolumeMounts: podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().VolumeMounts,
+	}
+	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
+
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""
@@ -203,22 +220,20 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	initTemplateAnnotations(instance, &podTemplate)
 
-	// add metrics port for exposing to the promethues stack.
-	metricsPort := v1.ContainerPort{
-		Name:          "metrics",
-		ContainerPort: int32(DefaultMetricsPort),
-	}
-	dupIndex := -1
-	for i, port := range podTemplate.Spec.Containers[0].Ports {
-		if port.Name == metricsPort.Name {
-			dupIndex = i
+	isMetricsPortExists := false
+	for _, port := range podTemplate.Spec.Containers[rayContainerIndex].Ports {
+		if port.Name == DefaultMetricsName {
+			isMetricsPortExists = true
 			break
 		}
 	}
-	if dupIndex < 0 {
-		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
-	} else {
-		podTemplate.Spec.Containers[0].Ports[dupIndex] = metricsPort
+	if !isMetricsPortExists {
+		// add metrics port for exposing to the promethues stack.
+		metricsPort := v1.ContainerPort{
+			Name:          DefaultMetricsName,
+			ContainerPort: int32(DefaultMetricsPort),
+		}
+		podTemplate.Spec.Containers[rayContainerIndex].Ports = append(podTemplate.Spec.Containers[rayContainerIndex].Ports, metricsPort)
 	}
 
 	return podTemplate
@@ -377,13 +392,13 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 	container := v1.Container{
 		Name:            AutoscalerContainerName,
 		Image:           autoscalerImage,
-		ImagePullPolicy: v1.PullAlways,
+		ImagePullPolicy: v1.PullIfNotPresent,
 		Env: []v1.EnvVar{
 			{
-				Name: "RAY_CLUSTER_NAME",
+				Name: RAY_CLUSTER_NAME,
 				ValueFrom: &v1.EnvVarSource{
 					FieldRef: &v1.ObjectFieldSelector{
-						FieldPath: "metadata.labels['ray.io/cluster']",
+						FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
 					},
 				},
 			},
@@ -539,18 +554,18 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
-	if len(fqdnRayIP) != 0 { // Worker Pod
-		container.Env = append(container.Env,
-			v1.EnvVar{Name: FQ_RAY_IP, Value: fqdnRayIP},
-			// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
-			v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(fqdnRayIP)},
-		)
-	}
+	// Init containers in both head and worker require FQ_RAY_IP.
+	// (1) The head needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
+	// (2) The worker needs FQ_RAY_IP to establish a connection with the Ray head.
+	container.Env = append(container.Env,
+		v1.EnvVar{Name: FQ_RAY_IP, Value: fqdnRayIP},
+		// RAY_IP is deprecated and should be kept for backward compatibility purposes only.
+		v1.EnvVar{Name: RAY_IP, Value: utils.ExtractRayIPFromFQDN(fqdnRayIP)},
+	)
 }
 
 func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
-	// set the port RAY_PORT
-	// set the password?
+	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[rayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
@@ -568,10 +583,22 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 		)
 	}
 
+	// The RAY_CLUSTER_NAME environment variable is managed by KubeRay and should not be set by the user.
+	clusterNameEnv := v1.EnvVar{
+		Name: RAY_CLUSTER_NAME,
+		ValueFrom: &v1.EnvVarSource{
+			FieldRef: &v1.ObjectFieldSelector{
+				FieldPath: fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey),
+			},
+		},
+	}
+	container.Env = append(container.Env, clusterNameEnv)
+
 	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
 	}
+
 	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
 		if !envVarExists(RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
@@ -649,6 +676,11 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
 	}
 
+	// add --block option. See https://github.com/ray-project/kuberay/pull/675
+	if _, ok := rayStartParams["block"]; !ok {
+		rayStartParams["block"] = "true"
+	}
+
 	return rayStartParams
 }
 
@@ -705,12 +737,18 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	flags := new(bytes.Buffer)
-	nonFlagParams := []string{"log-color", "include-dashboard"}
-	for k, v := range rayStartParams {
-		if strings.ToLower(v) == "true" && !utils.Contains(nonFlagParams, k) {
-			fmt.Fprintf(flags, " --%s ", k)
+	// specialParameterOptions' arguments can be true or false.
+	// For example, --log-color can be auto | false | true.
+	specialParameterOptions := []string{"log-color", "include-dashboard"}
+	for option, argument := range rayStartParams {
+		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
+			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
+			if strings.ToLower(argument) == "true" {
+				fmt.Fprintf(flags, " --%s ", option)
+			}
 		} else {
-			fmt.Fprintf(flags, " --%s=%s ", k, v)
+			// parameterOption: require arguments to be provided along with the option.
+			fmt.Fprintf(flags, " --%s=%s ", option, argument)
 		}
 	}
 	return flags.String()

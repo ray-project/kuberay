@@ -59,8 +59,8 @@ kubectl get service
 # raycluster-kuberay-head-svc   ClusterIP   10.96.201.142   <none>        6379/TCP,8265/TCP,8080/TCP,8000/TCP,10001/TCP   106m
 ```
 
-* Based on [kuberay/#230](https://github.com/ray-project/kuberay/pull/230), KubeRay will expose a Prometheus metrics endpoint in port **8080** via a built-in exporter by default. Hence, we do not need to install any external exporter.
-* If you want to configure the metrics endpoint to a different port, also see [kuberay/#230](https://github.com/ray-project/kuberay/pull/230) for more details.
+* KubeRay will expose a Prometheus metrics endpoint in port **8080** via a built-in exporter by default. Hence, we do not need to install any external exporter.
+* If you want to configure the metrics endpoint to a different port, see [kuberay/#954](https://github.com/ray-project/kuberay/pull/954) for more details.
 * Prometheus metrics format:
   * `# HELP`: Describe the meaning of this metric.
   * `# TYPE`: See [this document](https://prometheus.io/docs/concepts/metric_types/) for more details.

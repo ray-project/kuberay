@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/event"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
@@ -44,10 +46,20 @@ var (
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
 	EnableBatchScheduler      bool
+
+	// Definition of a index field for pod name
+	podUIDIndexField = "metadata.uid"
 )
 
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
+		pod := rawObj.(*corev1.Pod)
+		return []string{string(pod.UID)}
+	}); err != nil {
+		panic(err)
+	}
+
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -121,28 +133,43 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	// we only care about pod events
 	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
 		!strings.Contains(event.Message, "Readiness probe failed") {
+		// This is not supposed to happen since we already filter events in the watch
+		msg := fmt.Sprintf("unexpected event, we should have already filtered these conditions: %v", event)
+		r.Log.Error(fmt.Errorf(msg), msg, "event", event)
 		return ctrl.Result{}, nil
 	}
 
 	_ = r.Log.WithValues("event", request.NamespacedName)
-	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
-	if err := r.List(context.TODO(), &pods,
-		client.InNamespace(event.InvolvedObject.Namespace)); err != nil {
+	options := []client.ListOption{
+		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
+		client.InNamespace(event.InvolvedObject.Namespace),
+		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
+	}
+
+	if err := r.List(context.TODO(), &pods, options...); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	for _, item := range pods.Items {
-		if item.Name == event.InvolvedObject.Name {
-			if unhealthyPod != nil {
-				return ctrl.Result{}, fmt.Errorf("duplicate pod found")
+	if len(pods.Items) == 0 {
+		r.Log.Info("no ray node pod found for event", "event", event)
+		return ctrl.Result{}, nil
+	} else if len(pods.Items) > 1 {
+		// This happens when we use fake client
+		r.Log.Info("are you running in test mode?")
+		for _, pod := range pods.Items {
+			if pod.Name == event.InvolvedObject.Name {
+				unhealthyPod = &pod
+				break
 			}
-			unhealthyPod = &item
 		}
+	} else {
+		r.Log.Info("found unhealthy ray node", "pod name", event.InvolvedObject.Name)
+		unhealthyPod = &pods.Items[0]
 	}
 
-	if unhealthyPod == nil || unhealthyPod.Annotations == nil {
-		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
+	if unhealthyPod.Annotations == nil {
+		r.Log.Info("The unhealthy ray node not found", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -757,14 +784,15 @@ func (r *RayClusterReconciler) createWorkerPod(instance rayiov1alpha1.RayCluster
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(instance rayiov1alpha1.RayCluster) corev1.Pod {
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayiov1alpha1.HeadNode) + common.DashSymbol)
-	podName = utils.CheckName(podName) // making sure the name is valid
+	podName = utils.CheckName(podName)                                            // making sure the name is valid
+	fqdnRayIP := utils.GenerateFQDNServiceName(instance.Name, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, "")
+	pod := common.BuildPod(podConf, rayiov1alpha1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -814,7 +842,31 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.LabelChangedPredicate{},
 			predicate.AnnotationChangedPredicate{},
 		))).
-		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
+		Watches(&source.Kind{Type: &corev1.Event{}},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					if eventObj, ok := e.Object.(*corev1.Event); ok {
+						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
+							eventObj.Reason != "Unhealthy" || !strings.Contains(eventObj.Message, "Readiness probe failed") {
+							// only care about pod unhealthy events
+							return false
+						}
+						return true
+					}
+					return false
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return false
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(e event.GenericEvent) bool {
+					return false
+				},
+			}),
+		).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
@@ -828,31 +880,19 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 }
 
 func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) error {
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
+	instance.Status.ObservedGeneration = instance.ObjectMeta.Generation
+
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(context.TODO(), &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	count := utils.CalculateAvailableReplicas(runtimePods)
-	if instance.Status.AvailableWorkerReplicas != count {
-		instance.Status.AvailableWorkerReplicas = count
-	}
-
-	count = utils.CalculateDesiredReplicas(instance)
-	if instance.Status.DesiredWorkerReplicas != count {
-		instance.Status.DesiredWorkerReplicas = count
-	}
-
-	count = utils.CalculateMinReplicas(instance)
-	if instance.Status.MinWorkerReplicas != count {
-		instance.Status.MinWorkerReplicas = count
-	}
-
-	count = utils.CalculateMaxReplicas(instance)
-	if instance.Status.MaxWorkerReplicas != count {
-		instance.Status.MaxWorkerReplicas = count
-	}
+	instance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	instance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(instance)
+	instance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(instance)
+	instance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(instance)
 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)

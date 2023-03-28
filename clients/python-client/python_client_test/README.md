@@ -9,7 +9,7 @@ make sure you have installed setuptool
 **run the pip command**
 
 
-from the directory `path/to/kuberay/clients/python-client/python_client`
+from the directory `path/to/kuberay/clients/python-client`
 
 `pip install -e .`
 
@@ -19,7 +19,7 @@ from the directory `path/to/kuberay/clients/python-client/python_client`
 
 ## For testing run
 
-`python -m unittest discover 'path/to/kuberay/clients/python_client_test/'`
+`python -m unittest discover 'path/to/kuberay/clients/python-client/python_client_test/'`
 
 ### Coverage report
 

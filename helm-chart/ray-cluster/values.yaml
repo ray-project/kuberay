@@ -7,7 +7,7 @@
 
 image:
   repository: rayproject/ray
-  tag: 2.0.0
+  tag: 2.3.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay"
@@ -17,6 +17,9 @@ imagePullSecrets: []
   # - name: an-existing-secret
 
 head:
+  # rayVersion determines the autoscaler's image version.
+  # It should match the Ray version in the image of the containers.
+  # rayVersion: 2.3.0
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -25,7 +28,11 @@ head:
   # The example configuration shown below below represents the DEFAULT values.
   # autoscalerOptions:
     # upscalingMode: Default
+    # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     # idleTimeoutSeconds: 60
+    # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
+    # imagePullPolicy: IfNotPresent
+    # Optionally specify the autoscaler container's securityContext.
     # securityContext: {}
     # env: []
     # envFrom: []
@@ -39,6 +46,7 @@ head:
     #     cpu: "500m"
     #     memory: "512Mi"
   labels: {}
+  serviceAccountName: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'
     block: 'true'
@@ -98,6 +106,7 @@ worker:
   groupName: workergroup
   replicas: 1
   labels: {}
+  serviceAccountName: ""
   rayStartParams:
     block: 'true'
   initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
@@ -161,6 +170,7 @@ additionalWorkerGroups:
     minReplicas: 1
     maxReplicas: 3
     labels: {}
+    serviceAccountName: ""
     rayStartParams:
       block: 'true'
     initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.

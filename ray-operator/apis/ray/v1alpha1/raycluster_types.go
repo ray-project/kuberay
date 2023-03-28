@@ -16,7 +16,7 @@ type RayClusterSpec struct {
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
-	// RayVersion is the version of ray being used. this affects the command used to start ray
+	// RayVersion is the version of ray being used. This determines the autoscaler's image version.
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
@@ -126,6 +126,10 @@ type RayClusterStatus struct {
 	Head HeadInfo `json:"head,omitempty"`
 	// Reason provides more information about current State
 	Reason string `json:"reason,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
+	// RayCluster's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // HeadInfo gives info about head

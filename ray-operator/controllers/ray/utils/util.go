@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -24,10 +25,22 @@ import (
 )
 
 const (
-	RayClusterSuffix = "-raycluster-"
-	DashboardName    = "dashboard"
-	ServeName        = "serve"
+	RayClusterSuffix    = "-raycluster-"
+	DashboardName       = "dashboard"
+	ServeName           = "serve"
+	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
+	DefaultDomainName   = "cluster.local"
 )
+
+// GetClusterDomainName returns cluster's domain name
+func GetClusterDomainName() string {
+	if domain := os.Getenv(ClusterDomainEnvKey); len(domain) > 0 {
+		return domain
+	}
+
+	// Return default domain name.
+	return DefaultDomainName
+}
 
 // IsCreated returns true if pod has been created and is maintained by the API server
 func IsCreated(pod *corev1.Pod) bool {
@@ -123,7 +136,7 @@ func GenerateServiceName(clusterName string) string {
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
 func GenerateFQDNServiceName(clusterName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", GenerateServiceName(clusterName), namespace)
+	return fmt.Sprintf("%s.%s.svc.%s", GenerateServiceName(clusterName), namespace, GetClusterDomainName())
 }
 
 // ExtractRayIPFromFQDN extracts the head service name (i.e., RAY_IP, deprecated) from a fully qualified

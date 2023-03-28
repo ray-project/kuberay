@@ -1,7 +1,7 @@
 import unittest
 import copy
 import re
-from utils import kuberay_cluster_utils, kuberay_cluster_builder
+from python_client.utils import kuberay_cluster_utils, kuberay_cluster_builder
 
 
 
@@ -13,7 +13,7 @@ test_cluster_body: dict = {
         "name": "raycluster-complete-raw",
     },
     "spec": {
-        "rayVersion": "2.2.0",
+        "rayVersion": "2.3.0",
         "headGroupSpec": {
             "serviceType": "ClusterIP",
             "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
@@ -23,7 +23,7 @@ test_cluster_body: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.2.0",
+                            "image": "rayproject/ray:2.3.0",
                             "ports": [
                                 {"containerPort": 6379, "name": "gcs"},
                                 {"containerPort": 8265, "name": "dashboard"},
@@ -59,7 +59,7 @@ test_cluster_body: dict = {
                         "containers": [
                             {
                                 "name": "ray-worker",
-                                "image": "rayproject/ray:2.2.0",
+                                "image": "rayproject/ray:2.3.0",
                                 "lifecycle": {
                                     "preStop": {
                                         "exec": {
@@ -77,7 +77,7 @@ test_cluster_body: dict = {
                             },
                             {
                                 "name": "side-car",
-                                "image": "rayproject/ray:2.2.0",
+                                "image": "rayproject/ray:2.3.0",
                                 "resources": {
                                     "limits": {"cpu": "1", "memory": "1G"},
                                     "requests": {"cpu": "500m", "memory": "1G"},

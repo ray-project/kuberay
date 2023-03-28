@@ -65,3 +65,8 @@ singleNamespaceInstall: false
 # this option has no effect if singleNamespaceInstall is true, because we assume there are no
 # permissions outside of the current namespace
 # watchNamespace: ray-user-namespace
+
+# Environment variables
+env: []
+# - name: EXAMPLE_ENV
+#   value: "1"

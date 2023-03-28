@@ -22,7 +22,7 @@ sibling_dirs = [
 for sibling_dir in sibling_dirs:
     sys.path.append(os.path.join(parent_dir, sibling_dir))
 """
-import kuberay_cluster_api
+from python_client import kuberay_cluster_api
 
 
 configmap_body: dict = {
@@ -47,7 +47,7 @@ cluster_body: dict = {
     "name": "raycluster-getting-started"
   },
   "spec": {
-    "rayVersion": "2.2.0",
+    "rayVersion": "2.3.0",
     "headGroupSpec": {
       "rayStartParams": {
         "dashboard-host": "0.0.0.0",
@@ -59,7 +59,7 @@ cluster_body: dict = {
           "containers": [
             {
               "name": "ray-head",
-              "image": "rayproject/ray:2.2.0",
+              "image": "rayproject/ray:2.3.0",
               "volumeMounts": [
                 {
                   "mountPath": "/opt",
@@ -134,6 +134,9 @@ def main():
         print("printing the raycluster json representation...")
         json_formatted_str = json.dumps(kube_ray_cluster, indent=2)
         print(json_formatted_str)
+    else:
+        print("Unable to fetch cluster {}".format(cluster_body["metadata"]["name"]))
+        return
 
     print(
         "try: kubectl -n default get raycluster {} -o yaml".format(
