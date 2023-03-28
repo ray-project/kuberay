@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ray-tls
+  namespace: default
+spec:
+  containers:
+  - name: client
+    image: rayproject/ray:2.3.0
+    args: [/bin/sh, -c, 'python -c "import ray; ray.init(\"ray://raycluster-tls-head-svc.default.svc.cluster.local:10001\"); print(ray.cluster_resources())"']
+    env:
+    - name: RAY_USE_TLS
+      value: "1"
+    - name: RAY_TLS_SERVER_CERT
+      value: "/etc/ray/tls/tls.crt"
+    - name: RAY_TLS_SERVER_KEY
+      value: "/etc/ray/tls/tls.key"
+    - name: RAY_TLS_CA_CERT
+      value: "/etc/ca/tls/ca.crt"
+    volumeMounts:
+      - mountPath: /etc/ca/tls
+        name: ca-tls
+        readOnly: true
+      - mountPath: /etc/ray/tls
+        name: ray-tls
+      - mountPath: /etc/gen/tls
+        name: gen-tls-script
+  initContainers:
+  - name: gen-cert
+    image: rayproject/ray:2.3.0
+    args: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
+    volumeMounts:
+      - mountPath: /etc/ca/tls
+        name: ca-tls
+        readOnly: true
+      - mountPath: /etc/ray/tls
+        name: ray-tls
+      - mountPath: /etc/gen/tls
+        name: gen-tls-script
+    env:
+      - name: POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: FQ_RAY_IP
+        value: raycluster-tls-head-svc.default.svc.cluster.local
+  volumes:
+  - name: gen-tls-script
+    configMap:
+      name: tls
+      defaultMode: 0777
+      items:
+      - key: gencert_head.sh
+        path: gencert_head.sh
+  - name: ca-tls
+    secret:
+      secretName: ca-tls
+  - name: ray-tls
+    emptyDir: {}
