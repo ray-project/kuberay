@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/event"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -23,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,10 +46,20 @@ var (
 	PrioritizeWorkersToDelete bool
 	ForcedClusterUpgrade      bool
 	EnableBatchScheduler      bool
+
+	// Definition of a index field for pod name
+	podUIDIndexField = "metadata.uid"
 )
 
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
+		pod := rawObj.(*corev1.Pod)
+		return []string{string(pod.UID)}
+	}); err != nil {
+		panic(err)
+	}
+
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -120,28 +133,43 @@ func (r *RayClusterReconciler) eventReconcile(request ctrl.Request, event *corev
 	// we only care about pod events
 	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
 		!strings.Contains(event.Message, "Readiness probe failed") {
+		// This is not supposed to happen since we already filter events in the watch
+		msg := fmt.Sprintf("unexpected event, we should have already filtered these conditions: %v", event)
+		r.Log.Error(fmt.Errorf(msg), msg, "event", event)
 		return ctrl.Result{}, nil
 	}
 
 	_ = r.Log.WithValues("event", request.NamespacedName)
-	r.Log.Info("reconcile RayCluster Event", "event name", request.Name)
 
-	if err := r.List(context.TODO(), &pods,
-		client.InNamespace(event.InvolvedObject.Namespace)); err != nil {
+	options := []client.ListOption{
+		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
+		client.InNamespace(event.InvolvedObject.Namespace),
+		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
+	}
+
+	if err := r.List(context.TODO(), &pods, options...); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	for _, item := range pods.Items {
-		if item.Name == event.InvolvedObject.Name {
-			if unhealthyPod != nil {
-				return ctrl.Result{}, fmt.Errorf("duplicate pod found")
+	if len(pods.Items) == 0 {
+		r.Log.Info("no ray node pod found for event", "event", event)
+		return ctrl.Result{}, nil
+	} else if len(pods.Items) > 1 {
+		// This happens when we use fake client
+		r.Log.Info("are you running in test mode?")
+		for _, pod := range pods.Items {
+			if pod.Name == event.InvolvedObject.Name {
+				unhealthyPod = &pod
+				break
 			}
-			unhealthyPod = &item
 		}
+	} else {
+		r.Log.Info("found unhealthy ray node", "pod name", event.InvolvedObject.Name)
+		unhealthyPod = &pods.Items[0]
 	}
 
-	if unhealthyPod == nil || unhealthyPod.Annotations == nil {
-		r.Log.Info("pod not found or no valid annotations", "pod name", event.InvolvedObject.Name)
+	if unhealthyPod.Annotations == nil {
+		r.Log.Info("The unhealthy ray node not found", "pod name", event.InvolvedObject.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -814,7 +842,31 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.LabelChangedPredicate{},
 			predicate.AnnotationChangedPredicate{},
 		))).
-		Watches(&source.Kind{Type: &corev1.Event{}}, &handler.EnqueueRequestForObject{}).
+		Watches(&source.Kind{Type: &corev1.Event{}},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					if eventObj, ok := e.Object.(*corev1.Event); ok {
+						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
+							eventObj.Reason != "Unhealthy" || !strings.Contains(eventObj.Message, "Readiness probe failed") {
+							// only care about pod unhealthy events
+							return false
+						}
+						return true
+					}
+					return false
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return false
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(e event.GenericEvent) bool {
+					return false
+				},
+			}),
+		).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
