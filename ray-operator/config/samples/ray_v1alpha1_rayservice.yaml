@@ -106,6 +106,3 @@ spec:
                   requests:
                     cpu: "500m"
                     memory: "2Gi"
-    headServiceAnnotations: {}
-      # annotations passed on for the Head Service
-      # service_key: "service_value"
