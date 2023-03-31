@@ -201,3 +201,12 @@ kubectl describe ingress raycluster-ingress-head-ingress
 #        [Note] The forward slash at the end of the address is necessary. `<ip>/raycluster-ingress`
 #               will report "404 Not Found".
 ```
+
+If you see the following error: 
+
+```
+Error from server (InternalError): error when creating "ray-operator/config/samples/ray-cluster.separate-ingress.yaml": Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "https://ingress-nginx-controller-admission.ingress-nginx.svc:443/networking/v1/ingresses?timeout=10s": dial tcp 10.96.74.247:443: connect: connection refused
+Error from server (NotFound): ingresses.networking.k8s.io "raycluster-ingress-head-ingress" not found
+```
+
+Please wait for a while and try again starting from Step 4. You may have to try a few times.
