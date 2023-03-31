@@ -164,7 +164,7 @@ func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client,
 
 func (r *RayDashboardClient) InitClient(url string) {
 	r.client = http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 120 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
 }
@@ -381,7 +381,8 @@ func (r *RayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Log
 
 	var jobResp RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
-		return
+		// Maybe body is not valid json, raise an error with the body.
+		return "", fmt.Errorf("SubmitJob fail: %s", string(body))
 	}
 
 	return jobResp.JobId, nil
