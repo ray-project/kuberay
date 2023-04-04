@@ -96,10 +96,6 @@ spec:
         #pod template
         template:
           spec:
-            initContainers:
-              - name: init
-                image: busybox:1.28
-                command: ['sh', '-c', "until nslookup $$FQ_RAY_IP; do echo waiting for K8s Service $$FQ_RAY_IP; sleep 2; done"]
             containers:
               - name: ray-worker
                 image: $ray_image

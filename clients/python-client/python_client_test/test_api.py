@@ -85,17 +85,6 @@ test_cluster_body: dict = {
                                 },
                             }
                         ],
-                        "initContainers": [
-                            {
-                                "name": "init",
-                                "image": "busybox:1.28",
-                                "command": [
-                                    "sh",
-                                    "-c",
-                                    "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
-                                ],
-                            }
-                        ],
                         "volumes": [{"name": "ray-logs", "emptyDir": {}}],
                     }
                 },

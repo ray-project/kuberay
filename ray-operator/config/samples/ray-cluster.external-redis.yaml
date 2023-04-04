@@ -138,12 +138,6 @@ spec:
       #pod template
       template:
         spec:
-          initContainers: # to avoid worker crashing before head service is created
-            # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
-            - name: init
-              image: busybox:1.28
-              # Change the cluster postfix if you don't have a default setting
-              command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
           containers:
             - name: ray-worker
               image: rayproject/ray:2.3.0
