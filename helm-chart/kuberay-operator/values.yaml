@@ -4,7 +4,7 @@
 
 image:
   repository: kuberay/operator
-  tag: v0.5.0-rc.0
+  tag: v0.5.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay-operator"
