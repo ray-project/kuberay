@@ -405,6 +405,5 @@ jobs:
       - name: Install package and run unittest for Python client
         working-directory: ./clients/python-client
         run: |
-          pip install -r requirements.txt
           pip install -e .
           python3 -m unittest discover 'python_client_test/'
