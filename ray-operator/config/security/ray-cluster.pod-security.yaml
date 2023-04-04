@@ -10,7 +10,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-pod-security
 spec:
-  rayVersion: '2.3.0'
+  rayVersion: '2.2.0'
   # Ray head pod configuration
   headGroupSpec:
     serviceType: ClusterIP # optional
@@ -26,7 +26,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray-ml:2.3.0
+          image: rayproject/ray-ml:2.2.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -91,7 +91,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray-ml:latest
+          image: rayproject/ray-ml:2
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           lifecycle:
