@@ -247,17 +247,6 @@ class ClusterUtils:
                             ],
                         }
                     ],
-                    "initContainers": [
-                        {
-                            "command": [
-                                "sh",
-                                "-c",
-                                "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
-                            ],
-                            "image": init_image,
-                            "name": "init",
-                        }
-                    ],
                     "volumes": [{"emptyDir": {}, "name": "ray-logs"}],
                 }
             },
