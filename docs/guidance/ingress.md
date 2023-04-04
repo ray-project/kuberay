@@ -100,7 +100,7 @@ EOF
 
 # Step 2: Install NGINX ingress controller
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-sleep 10
+sleep 10 # Wait for the Kubernetes API Server to create the related resources
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
