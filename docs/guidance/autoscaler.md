@@ -7,16 +7,13 @@ See the [official Ray documentation](https://docs.ray.io/en/latest/cluster/kuber
 
 ### Prerequisite
 
-Start by deploying the latest stable version of the KubeRay operator:
-```
-kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=90s"
-```
+* Follow this [document](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
 ### Deploy a cluster with autoscaling enabled
 
 Next, to deploy a sample autoscaling Ray cluster, run
 ```
-kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/release-0.3/ray-operator/config/samples/ray-cluster.autoscaler.yaml
+kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/release-0.5/ray-operator/config/samples/ray-cluster.autoscaler.yaml
 ```
 
 See the above config file for details on autoscaling configuration.
@@ -28,7 +25,7 @@ See the above config file for details on autoscaling configuration.
     each Ray pod should be sized to take up its entire K8s node. We don't recommend
     allocating less than 8 gigabytes of memory for Ray containers running in production.
     For an autoscaling configuration more suitable for production, see
-    [ray-cluster.autoscaler.large.yaml](https://raw.githubusercontent.com/ray-project/kuberay/release-0.3/ray-operator/config/samples/ray-cluster.autoscaler.large.yaml).
+    [ray-cluster.autoscaler.large.yaml](https://raw.githubusercontent.com/ray-project/kuberay/release-0.5/ray-operator/config/samples/ray-cluster.autoscaler.large.yaml).
 
 The output of `kubectl get pods` should indicate the presence of
 a Ray head pod with two containers,
@@ -95,18 +92,11 @@ Demands:
 
 ### Test autoscaling
 
-Let's now try out the autoscaler. We can run the following command to get a Python interpreter in the head pod:
+Let's now try out the autoscaler. Run the following commands to scale up the cluster:
 
 ```
-kubectl exec `kubectl get pods -o custom-columns=POD:metadata.name | grep raycluster-autoscaler-head` -it -c ray-head -- python
-```
-
-In the Python interpreter, run the following snippet to scale up the cluster:
-
-```
-import ray
-ray.init()
-ray.autoscaler.sdk.request_resources(num_cpus=4)
+export HEAD_POD=$(kubectl get pods -o custom-columns=POD:metadata.name | grep raycluster-autoscaler-head)
+kubectl exec $HEAD_POD -it -c ray-head -- python -c "import ray;ray.init();ray.autoscaler.sdk.request_resources(num_cpus=4)"
 ```
 
 You should then see two extra Ray nodes (pods) scale up to satisfy the 4 CPU demand.

@@ -16,15 +16,15 @@ kind create cluster
 # Step 2: Register a Helm chart repo
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-# Step 3: Install both CRDs and KubeRay operator v0.4.0.
-helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
+# Step 3: Install both CRDs and KubeRay operator v0.5.0.
+helm install kuberay-operator kuberay/kuberay-operator --version 0.5.0
 
 # Step 4: Install a RayCluster custom resource
 # (For x86_64 users)
-helm install raycluster kuberay/ray-cluster --version 0.4.0
+helm install raycluster kuberay/ray-cluster --version 0.5.0
 # (For arm64 users, e.g. Mac M1)
 # See here for all available arm64 images: https://hub.docker.com/r/rayproject/ray/tags?page=1&name=aarch64
-helm install raycluster kuberay/ray-cluster --version 0.4.0 --set image.tag=nightly-aarch64
+helm install raycluster kuberay/ray-cluster --version 0.5.0 --set image.tag=nightly-aarch64
 
 # Step 5: Verify the installation of KubeRay operator and RayCluster 
 kubectl get pods
