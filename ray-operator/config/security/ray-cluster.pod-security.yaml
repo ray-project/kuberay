@@ -91,7 +91,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray-ml:2
+          image: rayproject/ray-ml:2.2.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           lifecycle:
