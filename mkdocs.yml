@@ -57,7 +57,7 @@ nav:
     - Developer Guide: development/development.md
     - Release Process: development/release.md
     - Helm Chart: release/helm-chart.md
-    - Changelog: release/changelog.md
+    - Changelog: CHANGELOG.md
 
 # Customization
 extra:
