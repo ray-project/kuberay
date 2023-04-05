@@ -35,8 +35,14 @@ nav:
     - Autoscaling: guidance/autoscaler.md
     - Ingress: guidance/ingress.md
     - Observability: guidance/observability.md
+    - IAM roles on AWS EKS: guidance/aws-eks-iam.md
     - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
     - KubeRay with Volcano: guidance/volcano-integration.md
+    - KubeFlow integration: guidance/kubeflow-integration.md
+    - Executing commands: guidance/pod-command.md 
+    - Pod Security: guidance/pod-security.md
+    - Prometheus and Grafana: guidance/prometheus-grafana.md
+    - TLS: guidance/tls.md
   - Best Practice:
     - Worker reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting:
