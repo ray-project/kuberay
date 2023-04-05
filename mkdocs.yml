@@ -56,9 +56,10 @@ nav:
     - Core API and Backend Service: design/protobuf-grpc-service.md
   - Development:
     - Developer Guide: development/development.md
-    - Release Process: development/release.md
-    - Helm Chart: release/helm-chart.md
-    - Changelog: CHANGELOG.md
+    - Release Process:
+      - Overview: development/release.md
+      - Generating the Changelog: release/changelog.md
+      - Releasing the Helm Chart: release/helm-chart.md
 
 # Customization
 extra:
