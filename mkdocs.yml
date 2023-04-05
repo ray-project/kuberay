@@ -47,7 +47,7 @@ nav:
           - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
           - KubeRay with Volcano: guidance/volcano-integration.md
           - Kubeflow Integration: guidance/kubeflow-integration.md
-      - Advanced Usage and Best Practices:
+      - Best Practices:
           - Executing Commands: guidance/pod-command.md
           - Worker Reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting: troubleshooting.md
