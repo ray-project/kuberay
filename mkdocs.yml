@@ -18,13 +18,14 @@ theme:
 
 # Navigation
 nav:
-  - Home: index.md
-  - Getting Started:
-    - Installation:
-      - YAML: deploy/installation.md
-      - Helm: deploy/helm.md
-      - Helm (Cluster): deploy/helm-cluster.md
-    - Docker Images: deploy/docker.md
+  - Home:
+    - Welcome: index.md
+    - Getting Started:
+      - Installation:
+        - YAML: deploy/installation.md
+        - Helm: deploy/helm.md
+        - Helm (Cluster): deploy/helm-cluster.md
+      - Docker Images: deploy/docker.md
   - Components:
     - KubeRay Operator: components/operator.md
     - KubeRay API Server: components/apiserver.md
