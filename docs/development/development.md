@@ -1,6 +1,7 @@
 # KubeRay Development Guide
 
 This guide provides an overview of the different components in the KubeRay project and instructions for developing and testing each component.
+Most developers will be concerned with the KubeRay Operator; the other components are optional.
 
 ## KubeRay Operator
 
