@@ -216,17 +216,6 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 			Annotations: buildNodeGroupAnnotations(computeRuntime, spec.Image),
 		},
 		Spec: v1.PodSpec{
-			InitContainers: []v1.Container{
-				{
-					Name:  "init",
-					Image: "busybox:1.28",
-					Command: []string{
-						"sh",
-						"-c",
-						"until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done",
-					},
-				},
-			},
 			Containers: []v1.Container{
 				{
 					Name:  "ray-worker",

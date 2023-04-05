@@ -97,12 +97,6 @@ spec:
     template:
       spec:
         imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
-        initContainers:
-          - name: init
-            image: {{ $values.initContainerImage | default "busybox:1.28" }}
-            command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
-            securityContext:
-            {{- toYaml $values.initContainerSecurityContext | nindent 14 }}
         {{- if $values.serviceAccountName }}
         serviceAccountName: {{ $values.serviceAccountName }}
         {{- end }}
@@ -166,12 +160,6 @@ spec:
     template:
       spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
-        initContainers:
-          - name: init
-            image: {{ .Values.worker.initContainerImage | default "busybox:1.28" }}
-            command: ['sh', '-c', "until nslookup $FQ_RAY_IP; do echo waiting for K8s Service $FQ_RAY_IP; sleep 2; done"]
-            securityContext:
-            {{- toYaml .Values.worker.initContainerSecurityContext | nindent 14 }}
         {{- if .Values.worker.serviceAccountName }}
         serviceAccountName: {{ .Values.worker.serviceAccountName }}
         {{- end }}
