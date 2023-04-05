@@ -20,45 +20,44 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Installation:
-          - YAML: deploy/installation.md
-          - Helm: deploy/helm.md
-          - Helm (Cluster): deploy/helm-cluster.md
-      - Docker Images: deploy/docker.md
+    - Installation:
+      - YAML: deploy/installation.md
+      - Helm: deploy/helm.md
+      - Helm (Cluster): deploy/helm-cluster.md
+    - Docker Images: deploy/docker.md
   - Components:
-      - KubeRay Operator: components/operator.md
-      - KubeRay API Server: components/apiserver.md
-      - KubeRay CLI: components/cli.md
+    - KubeRay Operator: components/operator.md
+    - KubeRay API Server: components/apiserver.md
+    - KubeRay CLI: components/cli.md
   - Features:
-      - RayService: guidance/rayservice.md
-      - RayJob: guidance/rayjob.md
-      - Ray GCS Fault Tolerance: guidance/gcs-ft.md
-      - Autoscaling: guidance/autoscaler.md
-      - Networking:
-          - Ingress: guidance/ingress.md
-          - TLS: guidance/tls.md
-      - Monitoring and Observability:
-          - Observability: guidance/observability.md
-          - Prometheus and Grafana: guidance/prometheus-grafana.md
-      - Security:
-          - IAM Roles (AWS EKS): guidance/aws-eks-iam.md
-          - Pod Security: guidance/pod-security.md
-      - Integrations:
-          - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
-          - KubeRay with Volcano: guidance/volcano-integration.md
-          - Kubeflow Integration: guidance/kubeflow-integration.md
-      - Best Practices:
-          - Executing Commands: guidance/pod-command.md
-          - Worker Reconnection: best-practice/worker-head-reconnection.md
+    - RayService: guidance/rayservice.md
+    - RayJob: guidance/rayjob.md
+    - Ray GCS Fault Tolerance: guidance/gcs-ft.md
+    - Autoscaling: guidance/autoscaler.md
+    - Networking:
+      - Ingress: guidance/ingress.md
+      - TLS: guidance/tls.md
+    - Monitoring and Observability:
+      - Observability: guidance/observability.md
+      - Prometheus and Grafana: guidance/prometheus-grafana.md
+    - Security:
+      - IAM Roles (AWS EKS): guidance/aws-eks-iam.md
+      - Pod Security: guidance/pod-security.md
+    - Integrations:
+      - KubeRay with MCAD: guidance/kuberay-with-MCAD.md
+      - KubeRay with Volcano: guidance/volcano-integration.md
+      - Kubeflow Integration: guidance/kubeflow-integration.md
+    - Best Practices:
+      - Executing Commands: guidance/pod-command.md
+      - Worker Reconnection: best-practice/worker-head-reconnection.md
   - Troubleshooting: troubleshooting.md
   - Design:
-      - Core API and Backend Service: design/protobuf-grpc-service.md
+    - Core API and Backend Service: design/protobuf-grpc-service.md
   - Development:
-      - Developer Guide: development/development.md
-      - Release Process: development/release.md
-      - Helm Chart: release/helm-chart.md
-      - Changelog: release/changelog.md
-
+    - Developer Guide: development/development.md
+    - Release Process: development/release.md
+    - Helm Chart: release/helm-chart.md
+    - Changelog: release/changelog.md
 
 # Customization
 extra:
