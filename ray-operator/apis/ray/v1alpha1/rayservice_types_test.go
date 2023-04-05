@@ -72,8 +72,7 @@ var myRayService = &RayService{
 		RayClusterSpec: RayClusterSpec{
 			RayVersion: "1.12.1",
 			HeadGroupSpec: HeadGroupSpec{
-				ServiceType: corev1.ServiceTypeClusterIP,
-				Replicas:    pointer.Int32Ptr(1),
+				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                        "6379",
 					"object-store-memory":         "100000000",
@@ -241,7 +240,6 @@ var expected = `{
       },
       "rayClusterConfig":{
          "headGroupSpec":{
-            "serviceType":"ClusterIP",
             "replicas":1,
             "rayStartParams":{
                "block":"true",
