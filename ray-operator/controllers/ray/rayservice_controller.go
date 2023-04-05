@@ -545,9 +545,6 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
 		shouldUpdate = true
 		reason = fmt.Sprintf("Current Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-	} else if len(serveStatus.ServeStatuses) == 0 {
-		shouldUpdate = true
-		reason = fmt.Sprintf("No Serve deployments have started deploying for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 	}
 
 	r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
