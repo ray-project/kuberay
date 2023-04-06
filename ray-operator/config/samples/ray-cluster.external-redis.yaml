@@ -89,7 +89,6 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP # optional
     replicas: 1
     rayStartParams:
       dashboard-host: "0.0.0.0"

@@ -254,8 +254,7 @@ func setupTest(t *testing.T) {
 			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
-				ServiceType: "ClusterIP",
-				Replicas:    pointer.Int32Ptr(1),
+				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",

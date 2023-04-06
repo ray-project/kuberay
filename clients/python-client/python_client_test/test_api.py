@@ -16,7 +16,6 @@ test_cluster_body: dict = {
     "spec": {
         "rayVersion": "2.3.0",
         "headGroupSpec": {
-            "serviceType": "ClusterIP",
             "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
             "template": {
                 "metadata": {"labels": {}},

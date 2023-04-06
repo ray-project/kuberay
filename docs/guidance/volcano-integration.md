@@ -44,7 +44,6 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
     rayStartParams:
       block: 'true'
     replicas: 1
@@ -108,7 +107,6 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
     rayStartParams:
       block: 'true'
     replicas: 1
@@ -222,7 +220,6 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
     rayStartParams:
       block: 'true'
     replicas: 1
