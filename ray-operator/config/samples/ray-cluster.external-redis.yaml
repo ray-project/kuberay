@@ -93,7 +93,6 @@ spec:
     rayStartParams:
       dashboard-host: "0.0.0.0"
       num-cpus: "1" # can be auto-completed from the limits
-      block: "true"
       # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
       # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
       redis-password: $REDIS_PASSWORD
@@ -132,8 +131,7 @@ spec:
       maxReplicas: 2
       # logical group name, for this called small-group, also can be functional
       groupName: small-group
-      rayStartParams:
-        block: 'true'
+      rayStartParams: {}
       #pod template
       template:
         spec:

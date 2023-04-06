@@ -61,7 +61,6 @@ spec:
     rayStartParams:
       # Flag "no-monitor" will be automatically set when autoscaling is enabled.
       dashboard-host: '0.0.0.0'
-      block: 'true'
       # num-cpus: '14' # can be auto-completed from the limits
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
@@ -114,8 +113,7 @@ spec:
     #  - raycluster-complete-worker-large-group-hv457
     #  - raycluster-complete-worker-large-group-k8tj7
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       metadata:

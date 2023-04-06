@@ -42,7 +42,6 @@ spec:
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from Ray container resource limits
-      block: 'true'
     #pod template
     template:
       spec:
@@ -74,8 +73,7 @@ spec:
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
     # the following params are used to complete the ray start: ray start --block ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
@@ -109,8 +107,7 @@ spec:
       #- raycluster-heterogeneous-worker-medium-group-7bv5h
     #  - worker-4k2ih 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
-    rayStartParams:
-      block: "true"
+    rayStartParams: {}
     #pod template
     template:
       spec:

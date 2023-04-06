@@ -14,7 +14,6 @@ spec:
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1'
-      block: 'true'
     #pod template
     template:
       metadata:
@@ -51,7 +50,6 @@ spec:
       groupName: small-group
       # the following params are used to complete the ray start: ray start --num-cpus=1 --block
       rayStartParams:
-        block: 'true'
         num-cpus: '1'
       #pod template
       template:
