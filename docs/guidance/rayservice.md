@@ -24,7 +24,7 @@ A RayService manages 2 things:
 ### Deploy the Operator
 
 ```
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=90s"
+$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.5.0&timeout=90s"
 ```
 
 Check that the controller is running.

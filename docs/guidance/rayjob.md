@@ -5,7 +5,7 @@
 ### Prerequisites
 
 * Ray 1.10 or higher
-* KubeRay v0.3.0+. (v0.4.0 is recommended)
+* KubeRay v0.3.0+. (v0.5.0+ is recommended)
 
 ### What is a RayJob?
 
@@ -21,7 +21,7 @@ A RayJob manages 2 things:
 ### Deploy KubeRay
 
 Make sure your KubeRay operator version is at least v0.3.0.
-The latest released KubeRay version (v0.4.0) is recommended.
+The latest released KubeRay version is recommended.
 For installation instructions, please follow [the documentation](../deploy/installation.md).
 
 ### Run an example Job
