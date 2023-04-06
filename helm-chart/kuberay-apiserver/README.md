@@ -16,8 +16,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install the KubeRay API Server at Version v0.4.0.
-  helm install kuberay-apiserver kuberay/kuberay-apiserver --version 0.4.0
+  # Install the KubeRay API Server at Version v0.5.0.
+  helm install kuberay-apiserver kuberay/kuberay-apiserver --version 0.5.0
 
   # Check that the KubeRay API Server is running in the "default" namespaces.
   kubectl get pods
@@ -42,7 +42,7 @@ To list the `kuberay-apiserver` release:
 ```sh
 helm ls
 # NAME                      NAMESPACE       REVISION        UPDATED                                    STATUS         CHART
-# kuberay-apiserver         default         1               2022-12-02 02:13:37.514445313 +0000 UTC    deployed       kuberay-apiserver-0.4.0
+# kuberay-apiserver         default         1               2022-12-02 02:13:37.514445313 +0000 UTC    deployed       kuberay-apiserver-0.5.0
 ```
 
 ## Uninstall the Chart
