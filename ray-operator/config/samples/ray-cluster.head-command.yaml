@@ -15,7 +15,6 @@ spec:
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
-      block: 'true'
     #pod template
     template:
       spec:

@@ -19,7 +19,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      block: 'true'
     # pod template
     template:
       metadata:
@@ -82,8 +81,7 @@ spec:
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
     # the following params are used to complete the ray start: ray start --block
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:

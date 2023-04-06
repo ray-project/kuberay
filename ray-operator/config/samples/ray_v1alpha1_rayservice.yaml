@@ -51,7 +51,6 @@ spec:
         port: '6379' # should match container port named gcs-server
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        block: 'true'
       #pod template
       template:
         spec:
@@ -81,8 +80,7 @@ spec:
         maxReplicas: 5
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
-        rayStartParams:
-          block: 'true'
+        rayStartParams: {}
         #pod template
         template:
           spec:

@@ -96,8 +96,7 @@ spec:
     minReplicas: 1
     maxReplicas: 10
     groupName: small-group
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:

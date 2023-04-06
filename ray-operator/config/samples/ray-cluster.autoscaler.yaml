@@ -52,7 +52,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      block: 'true'
       # num-cpus: '1' # can be auto-completed from the limits
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
@@ -114,8 +113,7 @@ spec:
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
     # the following params are used to complete the ray start: ray start --block ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
