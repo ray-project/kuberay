@@ -25,7 +25,6 @@ spec:
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      block: 'true'
     # pod template
     template:
       metadata:
@@ -82,8 +81,7 @@ spec:
     #  - raycluster-complete-worker-large-group-hv457
     #  - raycluster-complete-worker-large-group-k8tj7
     # the following params are used to complete the ray start: ray start --block ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
@@ -110,12 +108,6 @@ spec:
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
-        initContainers:
-        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
-        - name: init
-          image: busybox:1.28
-          # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:

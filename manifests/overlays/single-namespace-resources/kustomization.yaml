@@ -4,4 +4,4 @@ kind: Kustomization
 namespace: ${KUBERAY_NAMESPACE}
 
 resources:
-- ../../cluster-scope-resources/
+- ../../../ray-operator/config/crd

@@ -14,7 +14,6 @@ spec:
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1'
-      block: 'true'
     #pod template
     template:
       metadata:
@@ -51,16 +50,10 @@ spec:
       groupName: small-group
       # the following params are used to complete the ray start: ray start --num-cpus=1 --block
       rayStartParams:
-        block: 'true'
         num-cpus: '1'
       #pod template
       template:
         spec:
-          initContainers: # to avoid worker crashing before head service is created
-          - name: init
-            image: busybox:1.28
-            # Change the cluster postfix if you don't have a default setting
-            command: ['sh', '-c', "until nslookup $$FQ_RAY_IP; do echo waiting for K8s Service $$FQ_RAY_IP; sleep 2; done"]
           containers:
           - name: ray-worker
             image: $ray_image

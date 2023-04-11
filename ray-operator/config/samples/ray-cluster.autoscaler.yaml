@@ -49,11 +49,9 @@ spec:
         memory: "512Mi"
   # Ray head pod template
   headGroupSpec:
-    serviceType: ClusterIP # optional
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      block: 'true'
       # num-cpus: '1' # can be auto-completed from the limits
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
@@ -115,16 +113,10 @@ spec:
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
     # the following params are used to complete the ray start: ray start --block ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
-        initContainers:
-        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
-        - name: init
-          image: busybox:1.28
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker
           image: rayproject/ray:2.3.0

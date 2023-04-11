@@ -10,23 +10,21 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-pod-security
 spec:
-  rayVersion: '2.3.0'
+  rayVersion: '2.2.0'
   # Ray head pod configuration
   headGroupSpec:
-    serviceType: ClusterIP # optional
     # for the head group, replicas should always be 1.
     # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
     replicas: 1
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      block: 'true'
     #pod template
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray-ml:2.3.0
+          image: rayproject/ray-ml:2.2.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -84,14 +82,13 @@ spec:
     #  - raycluster-complete-worker-large-group-hv457
     #  - raycluster-complete-worker-large-group-k8tj7 
     # the following params are used to complete the ray start: ray start --block
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray-ml:2.3.0
+          image: rayproject/ray-ml:2.2.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           lifecycle:
@@ -111,20 +108,6 @@ spec:
               cpu: 1
               memory: 2Gi
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-            runAsNonRoot: true
-            seccompProfile:
-              type: RuntimeDefault
-        initContainers:
-        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
-        - name: init-myservice
-          image: busybox:1.28
-          # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
-          securityContext:
-            runAsUser: 1000
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]

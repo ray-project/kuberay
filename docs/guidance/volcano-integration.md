@@ -44,9 +44,7 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     replicas: 1
     template:
       spec:
@@ -108,9 +106,7 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     replicas: 1
     template:
       spec:
@@ -126,8 +122,7 @@ spec:
               memory: "2Gi"
   workerGroupSpecs:
     - groupName: worker
-      rayStartParams:
-        block: 'true'
+      rayStartParams: {}
       replicas: 2
       minReplicas: 2
       maxReplicas: 2
@@ -222,9 +217,7 @@ metadata:
 spec:
   rayVersion: '2.3.0'
   headGroupSpec:
-    serviceType: ClusterIP
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     replicas: 1
     template:
       spec:
@@ -240,8 +233,7 @@ spec:
               memory: "2Gi"
   workerGroupSpecs:
     - groupName: worker
-      rayStartParams:
-        block: 'true'
+      rayStartParams: {}
       replicas: 2
       minReplicas: 2
       maxReplicas: 2

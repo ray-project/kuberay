@@ -50,7 +50,6 @@ spec:
         # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
         num-cpus: '2' # can be auto-completed from the limits
-        block: 'true'
         num-cpus: "1000"
       #pod template
       template:
@@ -91,15 +90,10 @@ spec:
         # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
         rayStartParams:
           node-ip-address: $$MY_POD_IP
-          block: 'true'
           num-cpus: "1000"
         #pod template
         template:
           spec:
-            initContainers:
-              - name: init
-                image: busybox:1.28
-                command: ['sh', '-c', "until nslookup $$FQ_RAY_IP; do echo waiting for K8s Service $$FQ_RAY_IP; sleep 2; done"]
             containers:
               - name: ray-worker
                 image: $ray_image

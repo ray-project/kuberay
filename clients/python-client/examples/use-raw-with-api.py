@@ -69,7 +69,6 @@ cluster_body2: dict = {
     "spec": {
         "rayVersion": "2.3.0",
         "headGroupSpec": {
-            "serviceType": "ClusterIP",
             "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
             "template": {
                 "metadata": {"labels": {}},
@@ -128,17 +127,6 @@ cluster_body2: dict = {
                                     "limits": {"cpu": "2", "memory": "3G"},
                                     "requests": {"cpu": "1500m", "memory": "3G"},
                                 },
-                            }
-                        ],
-                        "initContainers": [
-                            {
-                                "name": "init",
-                                "image": "busybox:1.28",
-                                "command": [
-                                    "sh",
-                                    "-c",
-                                    "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done",
-                                ],
                             }
                         ],
                         "volumes": [{"name": "ray-logs", "emptyDir": {}}],

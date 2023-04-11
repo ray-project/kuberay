@@ -16,8 +16,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both CRDs and KubeRay operator v0.4.0.
-  helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0
+  # Install both CRDs and KubeRay operator v0.5.0.
+  helm install kuberay-operator kuberay/kuberay-operator --version 0.5.0
 
   # Check the KubeRay operator Pod in `default` namespace
   kubectl get pods
@@ -40,10 +40,10 @@ helm version
   * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
-  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.4.0&timeout=90s"
+  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v0.5.0&timeout=90s"
 
   # Step 2: Install KubeRay operator only. (for developer)
-  helm install kuberay-operator kuberay/kuberay-operator --version 0.4.0 --skip-crds
+  helm install kuberay-operator kuberay/kuberay-operator --version 0.5.0 --skip-crds
   ``` 
 
 ## List the chart
@@ -53,7 +53,7 @@ To list the `my-release` deployment:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                   STATUS          CHART                   # APP VERSION
-# kuberay-operator        default         1               2022-12-02 02:13:37.514445313 +0000 UTC   deployed        kuberay-operator-0.4.0  1.0
+# kuberay-operator        default         1               2022-12-02 02:13:37.514445313 +0000 UTC   deployed        kuberay-operator-0.5.0  1.0
 ```
 
 ## Uninstall the Chart
@@ -83,7 +83,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v0.4.0
+    targetRevision: v0.5.0
     path: helm-chart/kuberay-operator/crds
   destination:
     server: https://kubernetes.default.svc
@@ -103,7 +103,7 @@ metadata:
 spec:
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v0.4.0
+    targetRevision: v0.5.0
     path: helm-chart/kuberay-operator
     helm:
       skipCrds: true

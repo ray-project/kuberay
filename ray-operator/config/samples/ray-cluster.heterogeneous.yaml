@@ -38,12 +38,10 @@ spec:
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
-    serviceType: ClusterIP # optional
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from Ray container resource limits
-      block: 'true'
     #pod template
     template:
       spec:
@@ -75,17 +73,10 @@ spec:
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
     # the following params are used to complete the ray start: ray start --block ...
-    rayStartParams:
-      block: 'true'
+    rayStartParams: {}
     #pod template
     template:
       spec:
-        initContainers: # to avoid worker crashing before head service is created
-        # the env var $FQ_RAY_IP is set by the operator if missing, with the value of the head service name
-        - name: init
-          image: busybox:1.28
-          # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
           image: rayproject/ray:2.3.0
@@ -116,16 +107,10 @@ spec:
       #- raycluster-heterogeneous-worker-medium-group-7bv5h
     #  - worker-4k2ih 
     # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
-    rayStartParams:
-      block: "true"
+    rayStartParams: {}
     #pod template
     template:
       spec:
-        initContainers:
-        - name: init
-          image: busybox:1.28
-          # Change the cluster postfix if you don't have a default setting
-          command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
           image: rayproject/ray:2.3.0

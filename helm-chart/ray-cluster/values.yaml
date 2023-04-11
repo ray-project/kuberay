@@ -49,7 +49,6 @@ head:
   serviceAccountName: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'
-    block: 'true'
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -107,11 +106,7 @@ worker:
   replicas: 1
   labels: {}
   serviceAccountName: ""
-  rayStartParams:
-    block: 'true'
-  initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
-  # Security context for the init container.
-  initContainerSecurityContext: {}
+  rayStartParams: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -171,11 +166,7 @@ additionalWorkerGroups:
     maxReplicas: 3
     labels: {}
     serviceAccountName: ""
-    rayStartParams:
-      block: 'true'
-    initContainerImage: 'busybox:1.28'  # Enable users to specify the image for init container. Users can pull the busybox image from their private repositories.
-    # Security context for the init container.
-    initContainerSecurityContext: {}
+    rayStartParams: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
     containerEnv: []

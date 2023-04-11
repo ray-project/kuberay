@@ -13,12 +13,10 @@ spec:
   rayVersion: '2.3.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
-    serviceType: ClusterIP # optional
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
       dashboard-host: '0.0.0.0'
       num-cpus: '1' # can be auto-completed from the limits
-      block: 'true'
     #pod template
     template:
       spec:

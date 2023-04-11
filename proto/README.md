@@ -1,52 +1,50 @@
-# ProtoBuf Definitions
+# Protocol Buffer API Definitions
 
-This folder contains api definition written in protocol buffer. The api will be used for building services.
+This directory contains API definitions written in Protocol Buffers. These definitions will be used for building services.
 
-## Prerequisite
+## Prerequisites
 
-In order to run generation commands successfully, please make sure you have following tools installed in your environment. 
+To successfully run the generation commands, ensure the following tools are installed in your environment:
 
 - [Make](https://man7.org/linux/man-pages/man1/make.1.html)
 - [Docker](https://www.docker.com/)
 
-Run following command to build proto-generator image. We will use it to generate apis.
+Run the following command to build the proto-generator image. This image will be used for generating APIs:
 
-> Note: you can actually skip this step, and it will download a prebuilt image instead.
+> Note: You can actually skip this step, and a prebuilt image will be downloaded instead.
 
-```
+```bash
 make build-image
 ```
 
-## Auto Generation
+## Automatic Generation
 
 ### Go Client and Swagger
 
-```
+```bash
 make generate
 ```
 
 ### Clients
 
-We postpone the client generation until there's external service needs for communication. 
+We postpone the client generation until there is a need for external service communication.
 
-### API reference documentation
+### API Reference Documentation
 
-Use the tools [bootprint-openapi](https://github.com/bootprint/bootprint-monorepo/tree/master/packages/bootprint-openapi) 
-and [html-inline](https://github.com/substack/html-inline) to generate the API reference from the swagger files.
-Refer to [design doc](../docs/design/protobuf-grpc-service.md) for more details of the API and architecture.
+Use the tools [bootprint-openapi](https://github.com/bootprint/bootprint-monorepo/tree/master/packages/bootprint-openapi) and [html-inline](https://github.com/substack/html-inline) to generate API reference documentation from the Swagger files. For more information on the API and architecture, refer to the [design document](../docs/design/protobuf-grpc-service.md).
 
-### Third Party Protos
+### Third-Party Protos
 
-Third party proto dependencies are sync back to `proto/third_party` for easy development (IDE friendly).
-Actually, we should specify the directory in which to search for imports instead.
+Third-party proto dependencies are synchronized back to `proto/third_party` for easier development (IDE friendly). Ideally, the directory for searching imports should be specified instead.
 
-```
+```bash
 protoc -I. 
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/ \
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger/options/ \
-``` 
+```
 
-Source: 
+Sources:
+
 - [googleapis](https://github.com/googleapis/googleapis/tree/master/google/api)
 - [protoc-gen-openapiv2](https://github.com/grpc-ecosystem/grpc-gateway/tree/master/protoc-gen-openapiv2/options)

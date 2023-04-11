@@ -29,8 +29,7 @@ var instance = rayiov1alpha1.RayCluster{
 	Spec: rayiov1alpha1.RayClusterSpec{
 		RayVersion: "2.0.0",
 		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
-			ServiceType: "ClusterIP",
-			Replicas:    pointer.Int32Ptr(1),
+			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
 				"port":                "6379",
 				"object-manager-port": "12345",

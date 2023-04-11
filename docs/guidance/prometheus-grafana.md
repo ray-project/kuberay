@@ -34,7 +34,7 @@ kubectl get all -n prometheus-system
 ## Step 4: Install a RayCluster
 
 ```sh
-helm install raycluster kuberay/ray-cluster --version 0.4.0
+helm install raycluster kuberay/ray-cluster --version 0.5.0
 
 # Check ${RAYCLUSTER_HEAD_POD}
 kubectl get pod -l ray.io/node-type=head
