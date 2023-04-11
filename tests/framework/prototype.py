@@ -234,7 +234,7 @@ class RayJobSuccessRule(Rule):
         pod_exec_command(headpod_name, cr_namespace, f"ray job status {JOB_ID}")
         logger.info("Checking RayJob status succeeded")
         # Check that "succeeded" is in the output of the command.
-        assert "succeeded" in shell_subprocess_run(
+        assert "succeeded" in shell_subprocess_check_output(
             f"kubectl logs {headpod_name} -n {cr_namespace} | grep {JOB_ID}")
        
 class CurlServiceRule(Rule):

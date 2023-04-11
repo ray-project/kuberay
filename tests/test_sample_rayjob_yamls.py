@@ -9,6 +9,7 @@ from framework.prototype import (
     GeneralTestCase,
     RayJobAddCREvent,
     EasyJobRule,
+    RayJobSuccessRule
 )
 
 from framework.utils import (
@@ -32,10 +33,7 @@ if __name__ == '__main__':
                         {'path': filepath, 'name': filename, 'cr': k8s_object}
                     )
                     break
-    # TODO(architkulkarni): Add RayJobSuccessRule. Currently fails with the following error:
-    # Failed to start Job Supervisor actor: The name _ray_internal_job_actor_rayjob-sample-8tzrb
-    # (namespace=SUPERVISOR_ACTOR_RAY_NAMESPACE) is already taken.
-    rs = RuleSet([EasyJobRule()])
+    rs = RuleSet([EasyJobRule(), RayJobSuccessRule()])
     image_dict = {
         CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.3.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
