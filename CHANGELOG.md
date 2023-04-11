@@ -5,6 +5,132 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## v0.5.0 (2023-04-11)
+
+### Highlights
+
+The KubeRay 0.5.0 release includes the following improvements.
+
+* Interact with KubeRay via a [Python client](https://github.com/ray-project/kuberay/tree/master/clients/python-client)
+* Integrate KubeRay with Kubeflow to provide an interactive development environment ([link](https://github.com/ray-project/kuberay/blob/master/docs/guidance/kubeflow-integration.md)).
+* Integrate KubeRay with Ray [TLS authentication](https://github.com/ray-project/kuberay/blob/master/docs/guidance/tls.md)
+* Improve the user experience for KubeRay on AWS EKS ([link](https://github.com/ray-project/kuberay/blob/master/docs/guidance/aws-eks-iam.md))
+* Fix some Kubernetes networking issues
+* Fix some stability bugs in RayJob and RayService
+
+### Contributors
+
+The following individuals contributed to KubeRay 0.5.0. This list is alphabetical and incomplete.
+
+@akanso @alex-treebeard @architkulkarni @cadedaniel @cskornel-doordash @davidxia @Dmitrigekhtman @ducviet00 @gvspraveen @harryge00 @jasoonn @Jeffwan @kevin85421 @psschwei @scarlet25151 @sihanwang41 @wilsonwang371 @Yicheng-lu-llll
+
+### Python client (alpha)(New!)
+* Alkanso/python client ([#901](https://github.com/ray-project/kuberay/pull/901), @akanso)
+* Reorganize python client library ([#984](https://github.com/ray-project/kuberay/pull/984), @jasoonn)
+
+### Kubeflow (New!)
+* [Feature][Doc] Kubeflow integration ([#937](https://github.com/ray-project/kuberay/pull/937), @kevin85421)
+* [Feature] Ray restricted podsecuritystandards for enterprise security and Kubeflow integration ([#750](https://github.com/ray-project/kuberay/pull/750), @kevin85421)
+
+### TLS authentication (New!)
+* [Feature] TLS authentication ([#989](https://github.com/ray-project/kuberay/pull/989), @kevin85421)
+
+### AWS EKS (New!)
+* [Feature][Doc] Access S3 bucket from Pods in EKS ([#958](https://github.com/ray-project/kuberay/pull/958), @kevin85421)
+
+### Kubernetes networking (New!)
+* Read cluster domain from resolv.conf or env ([#951](https://github.com/ray-project/kuberay/pull/951), @harryge00)
+* [Feature] Replace service name with Fully Qualified Domain Name  ([#938](https://github.com/ray-project/kuberay/pull/938), @kevin85421)
+* [Feature] Add default init container in workers to wait for GCS to be ready ([#973](https://github.com/ray-project/kuberay/pull/973), @kevin85421)
+
+### Observability
+* Fix issue with head pod not monitered by Prometheus under certain condition ([#963](https://github.com/ray-project/kuberay/pull/963), @Yicheng-Lu-llll)
+* [Feature] Improve and fix Prometheus & Grafana integrations ([#895](https://github.com/ray-project/kuberay/pull/895), @kevin85421)
+* Add example and tutorial to explain how to create custom metrics for Prometheus ([#914](https://github.com/ray-project/kuberay/pull/914), @Yicheng-Lu-llll)
+* feat: enrich `kubectl get` output ([#878](https://github.com/ray-project/kuberay/pull/878), @davidxia)
+
+### RayCluster
+* Fix issue with operator OOM restart ([#946](https://github.com/ray-project/kuberay/pull/946), @wilsonwang371)
+* [Feature][Hotfix] Add observedGeneration to the status of CRDs ([#979](https://github.com/ray-project/kuberay/pull/979), @kevin85421)
+* Customize the Prometheus export port ([#954](https://github.com/ray-project/kuberay/pull/954), @Yicheng-Lu-llll)
+* [Feature] The default ImagePullPolicy should be IfNotPresent ([#947](https://github.com/ray-project/kuberay/pull/947), @kevin85421)
+*  Inject the --block option to ray start command automatically ([#932](https://github.com/ray-project/kuberay/pull/932), @Yicheng-Lu-llll)
+* Inject cluster name as an environment variable into head and worker pods ([#934](https://github.com/ray-project/kuberay/pull/934), @Yicheng-Lu-llll)
+* Ensure container ports without names are also included in the head node service ([#891](https://github.com/ray-project/kuberay/pull/891), @Yicheng-Lu-llll)
+* fix: `.status.availableWorkerReplicas` ([#887](https://github.com/ray-project/kuberay/pull/887), @davidxia)
+* fix: only filter RayCluster events for reconciliation ([#882](https://github.com/ray-project/kuberay/pull/882), @davidxia)
+* refactor: remove redundant import in `raycluster_controller.go` ([#884](https://github.com/ray-project/kuberay/pull/884), @davidxia)
+* refactor: use equivalent, shorter `Builder.Owns()` method ([#881](https://github.com/ray-project/kuberay/pull/881), @davidxia)
+* [RayCluster controller] [Bug] Unconditionally reconcile RayCluster every 60s instead of only upon change ([#850](https://github.com/ray-project/kuberay/pull/850), @architkulkarni)
+* [Feature] Make head serviceType optional ([#851](https://github.com/ray-project/kuberay/pull/851), @kevin85421)
+* [RayCluster controller] Add headServiceAnnotations field to RayCluster CR ([#841](https://github.com/ray-project/kuberay/pull/841), @cskornel-doordash)
+
+### RayJob (alpha)
+* [Hotfix][release blocker][RayJob] HTTP client from submitting jobs before dashboard initialization completes ([#1000](https://github.com/ray-project/kuberay/pull/1000), @kevin85421)
+* [RayJob] Propagate error traceback string when GetJobInfo doesn't return valid JSON ([#943](https://github.com/ray-project/kuberay/pull/943), @architkulkarni)
+* [RayJob][Doc] Fix RayJob sample config. ([#807](https://github.com/ray-project/kuberay/pull/807), @DmitriGekhtman)
+
+### RayService (alpha)
+* [RayService] Skip update events without change ([#811](https://github.com/ray-project/kuberay/pull/811), @sihanwang41)
+
+### Helm
+* Add rayVersion in the RayCluster chart ([#975](https://github.com/ray-project/kuberay/pull/975), @Yicheng-Lu-llll)
+* [Feature] Support environment variables for KubeRay operator chart ([#978](https://github.com/ray-project/kuberay/pull/978), @kevin85421)
+* [Feature] Add service account section in helm chart ([#969](https://github.com/ray-project/kuberay/pull/969), @ducviet00)
+* Update apiserver chart location in readme ([#896](https://github.com/ray-project/kuberay/pull/896), @psschwei)
+* add sidecar container option ([#920](https://github.com/ray-project/kuberay/pull/920), @akihikokuroda)
+* match selector of service to pod labels ([#918](https://github.com/ray-project/kuberay/pull/918), @akihikokuroda)
+* [Feature] Nodeselector/Affinity/Tolerations value to kuberay-apiserver chart ([#879](https://github.com/ray-project/kuberay/pull/879), @alex-treebeard)
+* [Feature] Enable namespaced installs via helm chart ([#860](https://github.com/ray-project/kuberay/pull/860), @alex-treebeard)
+* Remove unused fields from KubeRay operator and RayCluster charts ([#839](https://github.com/ray-project/kuberay/pull/839), @kevin85421)
+* [Bug] Remove an unused field (ingress.enabled) from KubeRay operator chart ([#812](https://github.com/ray-project/kuberay/pull/812), @kevin85421)
+* [helm] Add memory limits and resource documentation. ([#789](https://github.com/ray-project/kuberay/pull/789), @DmitriGekhtman)
+
+### CI
+* [Feature] Add python client test to action ([#993](https://github.com/ray-project/kuberay/pull/993), @jasoonn)
+* [CI][Buildkite] Fix the PATH issue ([#952](https://github.com/ray-project/kuberay/pull/952), @kevin85421)
+* [CI][Buildkite] An example test for Buildkite ([#919](https://github.com/ray-project/kuberay/pull/919), @kevin85421)
+* refactor: Fix flaky tests by using RetryOnConflict ([#904](https://github.com/ray-project/kuberay/pull/904), @Yicheng-Lu-llll)
+* Use k8sClient from client.New in controller test ([#898](https://github.com/ray-project/kuberay/pull/898), @Yicheng-Lu-llll)
+* [Bug] Fix flaky test: should be able to update all Pods to Running ([#893](https://github.com/ray-project/kuberay/pull/893), @kevin85421)
+* Enable test framework to install operator with custom config and put operator in a namespace with enforced PSS in security testing ([#876](https://github.com/ray-project/kuberay/pull/876), @Yicheng-Lu-llll)
+* Ensure all temp files are deleted after the compatibility test ([#886](https://github.com/ray-project/kuberay/pull/886), @Yicheng-Lu-llll)
+* Adding a test for the document for the Pod security standard ([#866](https://github.com/ray-project/kuberay/pull/866), @Yicheng-Lu-llll)
+* [Feature] Run config tests with the latest release of KubeRay operator ([#858](https://github.com/ray-project/kuberay/pull/858), @kevin85421)
+* [Feature] Define a general-purpose cleanup method for CREvent ([#849](https://github.com/ray-project/kuberay/pull/849), @kevin85421)
+* [Feature] Remove Docker container and NodePort from compatibility test ([#844](https://github.com/ray-project/kuberay/pull/844), @kevin85421)
+* Remove Docker from BasicRayTestCase ([#840](https://github.com/ray-project/kuberay/pull/840), @kevin85421)
+* [Feature] Move some functions from prototype test framework to a new utils file ([#837](https://github.com/ray-project/kuberay/pull/837), @kevin85421)
+* [CI] Add workflow to manually trigger release image push ([#801](https://github.com/ray-project/kuberay/pull/801), @DmitriGekhtman)
+* [CI] Pin go version in CRD consistency check ([#794](https://github.com/ray-project/kuberay/pull/794), @DmitriGekhtman)
+* [Feature] Improve the observability of integration tests ([#775](https://github.com/ray-project/kuberay/pull/775), @jasoonn)
+
+### Sample YAML files
+* Improve ray-cluster.external-redis.yaml ([#986](https://github.com/ray-project/kuberay/pull/986), @Yicheng-Lu-llll)
+* remove ray-cluster.getting-started.yaml ([#987](https://github.com/ray-project/kuberay/pull/987), @Yicheng-Lu-llll)
+* [Feature] Read Redis password from Kubernetes Secret ([#950](https://github.com/ray-project/kuberay/pull/950), @kevin85421)
+* [Ray 2.3.0] Update --redis-password for RayCluster ([#929](https://github.com/ray-project/kuberay/pull/929), @kevin85421)
+* [Bug] KubeRay does not work on M1 macs. ([#869](https://github.com/ray-project/kuberay/pull/869), @kevin85421)
+* [Post Ray 2.3 Release] Update Ray versions to Ray 2.3.0 ([#925](https://github.com/ray-project/kuberay/pull/925), @cadedaniel)
+* [Post Ray 2.2.0 Release] Update Ray versions to Ray 2.2.0 ([#822](https://github.com/ray-project/kuberay/pull/822), @DmitriGekhtman)
+
+### Documentation
+* Update contribution doc to show users how to reach out via slack ([#936](https://github.com/ray-project/kuberay/pull/936), @gvspraveen)
+* [Feature][Docs] Explain how to specify container command for head pod ([#912](https://github.com/ray-project/kuberay/pull/912), @kevin85421)
+* [post-0.4.0 KubeRay release] update proto version to 0.4.0 ([#830](https://github.com/ray-project/kuberay/pull/830), @scarlet25151)
+* [0.4.0 release] Update changelog for KubeRay 0.4.0 ([#836](https://github.com/ray-project/kuberay/pull/836), @DmitriGekhtman)
+* [Docs] Revise release note docs ([#835](https://github.com/ray-project/kuberay/pull/835), @DmitriGekhtman)
+* [release] Add release command and guidance for KubeRay cli ([#834](https://github.com/ray-project/kuberay/pull/834), @Jeffwan)
+* [Release] Add tools and docs for changelog generator ([#833](https://github.com/ray-project/kuberay/pull/833), @Jeffwan)
+* [Bug] error: git cmd when following docs ([#831](https://github.com/ray-project/kuberay/pull/831), @kevin85421)
+* [post-0.4.0 KubeRay release] Update KubeRay versions  ([#821](https://github.com/ray-project/kuberay/pull/821), @DmitriGekhtman)
+* [Feature][Doc] End-to-end KubeRay operator development process on Kind ([#826](https://github.com/ray-project/kuberay/pull/826), @kevin85421)
+* [Release][Docs] Update release instructions ([#819](https://github.com/ray-project/kuberay/pull/819), @DmitriGekhtman)
+* [docs] Tweaks to main README, add basic API Server README. ([#809](https://github.com/ray-project/kuberay/pull/809), @DmitriGekhtman)
+* update docs for release v0.4.0 ([#778](https://github.com/ray-project/kuberay/pull/778), @scarlet25151)
+* [docs] Update KubeRay operator README.  ([#808](https://github.com/ray-project/kuberay/pull/808), @DmitriGekhtman)
+* [Release] Update docs for release v0.4.0 ([#779](https://github.com/ray-project/kuberay/pull/779), @kevin85421)
+
 ## v0.4.0 (2022-12-12)
 
 ### Highlights
