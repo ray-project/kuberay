@@ -90,9 +90,13 @@ You will prompted for a commit reference and an image tag. The commit reference 
 
 * Create a final release (i.e. v0.5.0) by repeating step 4 once more using the tag of the release (`vX.Y.Z`) with no `-rc` suffix.
 
-#### Step 6. Merge open PRs in step 1
+#### Step 6. Merge open PRs in step 1 and post-release PRs
 
-* Now, we have the Docker images and Helm charts for v0.5.0. Merge the pull requests in Step 1 (i.e. [#997](https://github.com/ray-project/kuberay/pull/997), [#999](https://github.com/ray-project/kuberay/pull/999), [#1004](https://github.com/ray-project/kuberay/pull/1004), [#1012](https://github.com/ray-project/kuberay/pull/1012))
+* Now, we have the Docker images and Helm charts for v0.5.0. 
+  * Merge the pull requests in Step 1 (i.e. [#997](https://github.com/ray-project/kuberay/pull/997), [#999](https://github.com/ray-project/kuberay/pull/999), [#1004](https://github.com/ray-project/kuberay/pull/1004), [#1012](https://github.com/ray-project/kuberay/pull/1012))
+  * Merge post-release pull requests (example: [#1010](https://github.com/ray-project/kuberay/pull/1010)). See [here](https://github.com/ray-project/kuberay/issues/940) to understand the definition of "post-release" and the compatibility philosophy for KubeRay.
+
+
 
 #### Step 7. Update KubeRay documentation in Ray repository.
 
