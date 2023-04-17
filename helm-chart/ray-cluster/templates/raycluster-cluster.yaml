@@ -20,14 +20,18 @@ spec:
   headGroupSpec:
     serviceType: {{ .Values.service.type }}
     rayStartParams:
-    {{- range $key, $val := .Values.head.rayStartParams }}
-      {{ $key }}: {{ $val | quote }}
-    {{- end }}
-    {{- /*
-    initArgs is a deprecated alias for rayStartParams.
-    */}}
-    {{- range $key, $val := .Values.head.initArgs }}
-      {{ $key }}: {{ $val | quote }}
+    {{- if and (not .Values.head.rayStartParams) (not .Values.head.initArgs) }}
+      {}
+    {{- else }}
+      {{- range $key, $val := .Values.head.rayStartParams }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
+      {{- /*
+      initArgs is a deprecated alias for rayStartParams.
+      */}}
+      {{- range $key, $val := .Values.head.initArgs }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
     {{- end }}
     template:
       spec:
@@ -81,14 +85,18 @@ spec:
   {{- range $groupName, $values := .Values.additionalWorkerGroups }}
   {{- if ne $values.disabled true }}
   - rayStartParams:
-    {{- range $key, $val := $values.rayStartParams }}
-      {{ $key }}: {{ $val | quote }}
-    {{- end }}
-    {{- /*
-    initArgs is a deprecated alias for rayStartParams.
-    */}}
-    {{- range $key, $val := $values.initArgs }}
-      {{ $key }}: {{ $val | quote }}
+    {{- if and (not $values.rayStartParams) (not $values.head.initArgs) }}
+      {}
+    {{- else }}
+      {{- range $key, $val := $values.rayStartParams }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
+      {{- /*
+      initArgs is a deprecated alias for rayStartParams.
+      */}}
+      {{- range $key, $val := $values.initArgs }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
     {{- end }}
     replicas: {{ $values.replicas }}
     minReplicas: {{ $values.minReplicas | default (default 1 $values.miniReplicas) }}
@@ -144,14 +152,18 @@ spec:
   {{- end }}
   {{- if ne (.Values.worker.disabled | default false) true }}
   - rayStartParams:
-    {{- range $key, $val := .Values.worker.rayStartParams }}
-      {{ $key }}: {{ $val | quote }}
-    {{- end }}
-    {{- /*
-    initArgs is a deprecated alias for rayStartParams.
-    */}}
-    {{- range $key, $val := .Values.worker.initArgs }}
-      {{ $key }}: {{ $val | quote }}
+    {{- if and (not .Values.worker.rayStartParams) (not .Values.worker.initArgs) }}
+      {}
+    {{- else }}
+      {{- range $key, $val := .Values.worker.rayStartParams }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
+      {{- /*
+      initArgs is a deprecated alias for rayStartParams.
+      */}}
+      {{- range $key, $val := .Values.worker.initArgs }}
+        {{ $key }}: {{ $val | quote }}
+      {{- end }}
     {{- end }}
     replicas: {{ .Values.worker.replicas }}
     minReplicas: {{ .Values.worker.minReplicas | default (default 1 .Values.worker.miniReplicas) }}
