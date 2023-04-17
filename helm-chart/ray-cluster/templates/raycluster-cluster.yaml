@@ -85,7 +85,7 @@ spec:
   {{- range $groupName, $values := .Values.additionalWorkerGroups }}
   {{- if ne $values.disabled true }}
   - rayStartParams:
-    {{- if and (not $values.rayStartParams) (not $values.head.initArgs) }}
+    {{- if and (not $values.rayStartParams) (not $values.initArgs) }}
       {}
     {{- else }}
       {{- range $key, $val := $values.rayStartParams }}
