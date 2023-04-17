@@ -54,6 +54,10 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		},
 	}
 
+    if cluster.Spec.HeadGroupSpec.LoadBalancerIP != "" {
+        service.Spec.LoadBalancerIP = cluster.Spec.HeadGroupSpec.LoadBalancerIP
+    }
+
 	ports := getServicePorts(cluster)
 	defaultAppProtocol := DefaultServiceAppProtocol
 	for name, port := range ports {
@@ -105,6 +109,7 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 			Selector: selectorLabels,
 			Ports:    []corev1.ServicePort{},
 			Type:     rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType,
+			LoadBalancerIP: rayService.Spec.RayClusterSpec.HeadGroupSpec.LoadBalancerIP,
 		},
 	}
 
@@ -139,6 +144,7 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 			Selector: selectorLabels,
 			Ports:    []corev1.ServicePort{},
 			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+			LoadBalancerIP: cluster.Spec.HeadGroupSpec.LoadBalancerIP,
 		},
 	}
 

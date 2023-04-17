@@ -29,6 +29,8 @@ type RayClusterSpec struct {
 type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
 	ServiceType v1.ServiceType `json:"serviceType,omitempty"`
+	// LoadBalancerIP is the IP address to assign to the head service. This is only valid when ServiceType is LoadBalancer.
+	LoadBalancerIP string `json:"loadBalancerIP,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// HeadGroupSpec.Replicas is deprecated and ignored; there can only be one head pod per Ray cluster.

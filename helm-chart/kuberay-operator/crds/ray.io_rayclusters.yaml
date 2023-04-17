@@ -353,6 +353,10 @@ spec:
                     description: EnableIngress indicates whether operator should create
                       ingress object for head service or not.
                     type: boolean
+                  loadBalancerIP:
+                    description: LoadBalancerIP is the IP address to assign to the
+                      head service.
+                    type: string
                   rayStartParams:
                     additionalProperties:
                       type: string

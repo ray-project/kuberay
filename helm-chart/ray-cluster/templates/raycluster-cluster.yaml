@@ -19,6 +19,9 @@ spec:
   {{- end }}
   headGroupSpec:
     serviceType: {{ .Values.service.type }}
+    {{- if .Values.headGroupSpec.loadBalancerIP }}
+    loadBalancerIP: {{ .Values.headGroupSpec.loadBalancerIP }}
+    {{- end }}    
     rayStartParams:
     {{- range $key, $val := .Values.head.rayStartParams }}
       {{ $key }}: {{ $val | quote }}

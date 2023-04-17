@@ -353,6 +353,11 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			for k, v := range instance.Spec.HeadServiceAnnotations {
 				annotations[k] = v
 			}
+			loadBalancerIP := instance.Spec.HeadGroupSpec.LoadBalancerIP
+			if loadBalancerIP != "" && instance.Spec.HeadGroupSpec.ServiceType != "LoadBalancer" {
+				r.Log.Info("reconcileServices ", "LoadBalancerIP is set but service type is not LoadBalancer", loadBalancerIP)
+				return nil
+			}
 			raySvc, err = common.BuildServiceForHeadPod(*instance, labels, annotations)
 		} else if serviceType == common.AgentService {
 			raySvc, err = common.BuildDashboardService(*instance)
