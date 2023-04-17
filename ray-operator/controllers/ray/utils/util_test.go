@@ -216,6 +216,29 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 		},
 	}
 
+	workerTemplate = corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    "ray-worker",
+					Image:   "rayproject/autoscaler",
+					Command: []string{"echo"},
+					Args:    []string{"Hello Ray"},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						},
+					},
+				},
+			},
+		},
+	}
+
 	pod = corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod1",
@@ -228,6 +251,16 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 					Image:   "rayproject/autoscaler",
 					Command: []string{"echo"},
 					Args:    []string{"Hello Ray"},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("256m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						},
+					},
 				},
 			},
 		},
@@ -238,6 +271,17 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching")
 
+	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("50m")
+
+	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
+
+	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("500m")
+	pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("250m")
+
+	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
+}
+
+func TestReconcile_CheckNeedRemoveOldPodVolumeMounts(t *testing.T) {
 	workerTemplate = corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -310,70 +354,6 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching volumeMounts")
 	pod.Spec.Containers[0].VolumeMounts[0].MountPath = "/test1/"
 	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching volumeMounts")
-
-	workerTemplate = corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "ray-worker",
-					Image:   "rayproject/autoscaler",
-					Command: []string{"echo"},
-					Args:    []string{"Hello Ray"},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("256m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	pod = corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pod1",
-			Namespace: namespaceStr,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "ray-worker",
-					Image:   "rayproject/autoscaler",
-					Command: []string{"echo"},
-					Args:    []string{"Hello Ray"},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("256m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-					},
-				},
-			},
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-		},
-	}
-
-	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), false, "expect template & pod matching")
-
-	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("50m")
-
-	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
-
-	pod.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("500m")
-	pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("250m")
-
-	assert.Equal(t, PodNotMatchingTemplate(pod, workerTemplate), true, "expect template & pod not matching")
 }
 
 func TestCalculateAvailableReplicas(t *testing.T) {
