@@ -210,7 +210,9 @@ def create_custom_object(namespace, cr_object):
             group = 'ray.io', version = 'v1alpha1', namespace = namespace,
             plural = 'rayservices', body = cr_object)
     elif crd == CONST.RAY_JOB_CRD:
-        raise NotImplementedError
+        k8s_cr_api.create_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayjobs', body = cr_object)
 
 def delete_custom_object(crd, namespace, cr_name):
     """Delete the given `cr_name` custom resource in the given `namespace`."""
@@ -224,4 +226,22 @@ def delete_custom_object(crd, namespace, cr_name):
             group = 'ray.io', version = 'v1alpha1', namespace = namespace,
             plural = 'rayservices', name = cr_name)
     elif crd == CONST.RAY_JOB_CRD:
-        raise NotImplementedError
+        k8s_cr_api.delete_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayjobs', name = cr_name)
+
+def get_custom_object(crd, namespace, cr_name):
+    """Get the given `cr_name` custom resource in the given `namespace`."""
+    k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+    if crd == CONST.RAY_CLUSTER_CRD:
+        return k8s_cr_api.get_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayclusters', name = cr_name)
+    elif crd == CONST.RAY_SERVICE_CRD:
+        return k8s_cr_api.get_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayservices', name = cr_name)
+    elif crd == CONST.RAY_JOB_CRD:
+        return k8s_cr_api.get_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
+            plural = 'rayjobs', name = cr_name)

@@ -7,6 +7,7 @@ import jsonpatch
 from framework.utils import (
     create_custom_object,
     delete_custom_object,
+    get_custom_object,
     get_head_pod,
     logger,
     pod_exec_command,
@@ -367,6 +368,103 @@ class RayServiceAddCREvent(CREvent):
             logger.info("expected_head_pods: 0, expected_worker_pods: 0")
             show_cluster_info(self.namespace)
             raise Exception("RayServiceAddCREvent clean_up() timeout")
+
+class RayJobAddCREvent(CREvent):
+    """CREvent for RayJob addition"""
+    def wait(self):
+        """Wait for RayJob to converge"""
+        start_time = time.time()
+        expected_head_pods = get_expected_head_pods(self.custom_resource_object)
+        expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
+        # Wait until:
+        #   (1) The number of head pods and worker pods are as expected.
+        #   (2) All head pods and worker pods are "Running".
+        #   (3) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        converge = False
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        for i in range(self.timeout):
+            headpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector='ray.io/node-type=head')
+            workerpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector='ray.io/node-type=worker')
+            rayjob = get_custom_object(CONST.RAY_JOB_CRD, self.namespace,
+                self.custom_resource_object['metadata']['name'])
+
+            if (len(headpods.items) == expected_head_pods
+                    and len(workerpods.items) == expected_worker_pods
+                    and check_pod_running(headpods.items) and check_pod_running(workerpods.items)
+                    and rayjob.get('status') is not None
+                    and rayjob.get('status').get('jobStatus') == "SUCCEEDED"):
+                converge = True
+                logger.info("--- RayJobAddCREvent converged in %s seconds ---",
+                            time.time() - start_time)
+                break
+            else:
+                # Print debug logs every 10 seconds.
+                if i % 10 == 0 and i != 0:
+                    logger.info("RayJobAddCREvent wait() hasn't converged yet.")
+                    # Print out the delta between expected and actual for the parts that are not
+                    # converged yet.
+                    if len(headpods.items) != expected_head_pods:
+                        logger.info("expected_head_pods: %d, actual_head_pods: %d",
+                            expected_head_pods, len(headpods.items))
+                    if len(workerpods.items) != expected_worker_pods:
+                        logger.info("expected_worker_pods: %d, actual_worker_pods: %d",
+                            expected_worker_pods, len(workerpods.items))
+                    if not check_pod_running(headpods.items):
+                        logger.info("head pods are not running yet.")
+                    if not check_pod_running(workerpods.items):
+                        logger.info("worker pods are not running yet.")
+                    if rayjob.get('status') is None:
+                        logger.info("rayjob status is None.")
+                    elif rayjob.get('status').get('jobStatus') != "SUCCEEDED":
+                        logger.info("rayjob status is not SUCCEEDED yet.")
+                        logger.info("rayjob status: %s", rayjob.get('status').get('jobStatus'))
+
+                if (rayjob.get("status") is not None and
+                    rayjob.get("status").get("jobStatus") in ["STOPPED", "FAILED"]):
+                    logger.info("Job Status: %s", rayjob.get("status").get("jobStatus"))
+                    logger.info("Job Message: %s", rayjob.get("status").get("message"))
+                    break
+            time.sleep(1)
+
+        if not converge:
+            logger.info("RayJobAddCREvent wait() failed to converge in %d seconds.",
+                self.timeout)
+            logger.info("expected_head_pods: %d, expected_worker_pods: %d",
+                expected_head_pods, expected_worker_pods)
+            logger.info("rayjob: %s", rayjob)
+            show_cluster_info(self.namespace)
+            raise Exception("RayJobAddCREvent wait() timeout")
+
+    def clean_up(self):
+        """Delete added RayJob"""
+        if not self.filepath:
+            delete_custom_object(CONST.RAY_JOB_CRD,
+                self.namespace, self.custom_resource_object['metadata']['name'])
+        else:
+            shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath}")
+        # Wait for pods to be deleted
+        converge = False
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        start_time = time.time()
+        for _ in range(self.timeout):
+            headpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector = 'ray.io/node-type=head')
+            workerpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector = 'ray.io/node-type=worker')
+            if (len(headpods.items) == 0 and len(workerpods.items) == 0):
+                converge = True
+                logger.info("--- Cleanup RayJob %s seconds ---", time.time() - start_time)
+                break
+            time.sleep(1)
+
+        if not converge:
+            logger.info("RayJobAddCREvent clean_up() failed to converge in %d seconds.",
+                self.timeout)
+            logger.info("expected_head_pods: 0, expected_worker_pods: 0")
+            show_cluster_info(self.namespace)
+            raise Exception("RayJobAddCREvent clean_up() timeout")
 
 class GeneralTestCase(unittest.TestCase):
     """TestSuite"""
