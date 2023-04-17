@@ -282,7 +282,8 @@ func TestReconcile_CheckNeedRemoveOldPod(t *testing.T) {
 }
 
 func TestReconcile_CheckNeedRemoveOldPodVolumeMounts(t *testing.T) {
-	workerTemplate = corev1.PodTemplateSpec{
+	namespaceStr := "default"
+	workerTemplate := corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -311,7 +312,7 @@ func TestReconcile_CheckNeedRemoveOldPodVolumeMounts(t *testing.T) {
 		},
 	}
 
-	pod = corev1.Pod{
+	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod1",
 			Namespace: namespaceStr,
