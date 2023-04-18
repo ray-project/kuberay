@@ -37,8 +37,7 @@ var expectedRayJob = RayJob{
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							"rayCluster": "raycluster-sample",
-							"groupName":  "headgroup",
+							"groupName": "headgroup",
 						},
 						Annotations: map[string]string{
 							"key": "value",
@@ -102,8 +101,7 @@ var expectedRayJob = RayJob{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Labels: map[string]string{
-								"rayCluster": "raycluster-sample",
-								"groupName":  "small-group",
+								"groupName": "small-group",
 							},
 						},
 						Spec: corev1.PodSpec{
@@ -162,8 +160,7 @@ var testRayJobJSON = `{
                     "metadata": {
                         "creationTimestamp": null,
                         "labels": {
-                            "groupName": "headgroup",
-                            "rayCluster": "raycluster-sample"
+                            "groupName": "headgroup"
                         },
                         "annotations": {
                             "key": "value"
@@ -228,8 +225,7 @@ var testRayJobJSON = `{
                             "namespace": "default",
                             "creationTimestamp": null,
                             "labels": {
-                                "groupName": "small-group",
-                                "rayCluster": "raycluster-sample"
+                                "groupName": "small-group"
                             }
                         },
                         "spec": {
