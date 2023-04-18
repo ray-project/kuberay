@@ -40,6 +40,29 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		annotations = make(map[string]string)
 	}
 
+	serviceSpec := cluster.Spec.HeadGroupSpec.HeadServiceSpec
+
+	// For backward compatibility, use ServiceType if provided in HeadServiceSpec.
+	if cluster.Spec.HeadGroupSpec.ServiceType != "" {
+		serviceSpec.Type = cluster.Spec.HeadGroupSpec.ServiceType
+	}
+
+	// Use default labels if serviceSpec.Selector is not provided in HeadServiceSpec.
+	if serviceSpec.Selector == nil {
+		serviceSpec.Selector = labels
+	}
+
+	// Generate ports for service if Ports is not provided in HeadServiceSpec.
+	if serviceSpec.Ports == nil {
+		serviceSpec.Ports = []corev1.ServicePort{}
+		ports := getServicePorts(cluster)
+		defaultAppProtocol := DefaultServiceAppProtocol
+		for name, port := range ports {
+			svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
+			serviceSpec.Ports = append(serviceSpec.Ports, svcPort)
+		}
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        utils.GenerateServiceName(cluster.Name),
@@ -47,18 +70,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: corev1.ServiceSpec{
-			Selector: labels,
-			Ports:    []corev1.ServicePort{},
-			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
-		},
-	}
-
-	ports := getServicePorts(cluster)
-	defaultAppProtocol := DefaultServiceAppProtocol
-	for name, port := range ports {
-		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
-		service.Spec.Ports = append(service.Spec.Ports, svcPort)
+		Spec: serviceSpec,
 	}
 
 	return service, nil

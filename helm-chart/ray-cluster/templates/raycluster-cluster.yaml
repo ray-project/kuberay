@@ -19,6 +19,9 @@ spec:
   {{- end }}
   headGroupSpec:
     serviceType: {{ .Values.service.type }}
+    {{- if .Values.service.headServiceSpec }}
+    headServiceSpec: {{- toYaml .Values.service.headServiceSpec | nindent 6 }}
+    {{- end }}
     rayStartParams:
     {{- range $key, $val := .Values.head.rayStartParams }}
       {{ $key }}: {{ $val | quote }}

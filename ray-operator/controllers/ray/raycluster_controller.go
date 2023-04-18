@@ -353,13 +353,18 @@ func (r *RayClusterReconciler) reconcileServices(instance *rayiov1alpha1.RayClus
 			for k, v := range instance.Spec.HeadServiceAnnotations {
 				annotations[k] = v
 			}
+			userServiceType := instance.Spec.HeadGroupSpec.ServiceType
+			userServiceSpecType := instance.Spec.HeadGroupSpec.HeadServiceSpec.Type
+			if userServiceType != "" {
+				r.Log.Info("reconcileServices ", "HeadGroupSpec.ServiceType ", userServiceType, "will take precedence over HeadGroupSpec.ServiceSpec.Type", userServiceSpecType)
+			}
 			raySvc, err = common.BuildServiceForHeadPod(*instance, labels, annotations)
 		} else if serviceType == common.AgentService {
 			raySvc, err = common.BuildDashboardService(*instance)
 		}
 
 		if raySvc == nil {
-			r.Log.Info("reconcileServices ", "Cannot create un-support service type ", serviceType)
+			r.Log.Info("reconcileServices ", "Cannot create unsupported service type ", serviceType)
 			return nil
 		}
 		if len(raySvc.Spec.Ports) == 0 {
