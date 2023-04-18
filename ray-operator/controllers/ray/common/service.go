@@ -42,7 +42,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 	serviceSpec := cluster.Spec.HeadGroupSpec.HeadServiceSpec
 
-	// For backward compatibility, use ServiceType if provided in HeadServiceSpec.
+	// For backward compatibility, use ServiceType if provided in HeadGroupSpec.
 	if cluster.Spec.HeadGroupSpec.ServiceType != "" {
 		serviceSpec.Type = cluster.Spec.HeadGroupSpec.ServiceType
 	}
