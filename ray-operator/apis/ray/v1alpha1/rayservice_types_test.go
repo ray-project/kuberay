@@ -241,6 +241,7 @@ var expected = `{
       "rayClusterConfig":{
          "headGroupSpec":{
             "replicas":1,
+            "headServiceSpec":{},
             "rayStartParams":{
                "block":"true",
                "dashboard-agent-listen-port":"52365",
