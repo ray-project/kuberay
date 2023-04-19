@@ -138,9 +138,6 @@ spec:
           containers:
             - name: ray-worker
               image: rayproject/ray:2.3.0
-              env: 
-                - name: RAY_gcs_rpc_server_reconnect_timeout_s
-                  value: "120"
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs

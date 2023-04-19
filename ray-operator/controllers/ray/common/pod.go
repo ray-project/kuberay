@@ -646,13 +646,18 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			}
 		}
 	}
+	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayiov1alpha1.WorkerNode {
+		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
+		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s.
+		// See https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md for more details.
+		if ftEnabled := pod.Annotations[RayFTEnabledAnnotationKey] == "true"; ftEnabled {
+			gcsTimeout := v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: DefaultWorkerRayGcsReconnectTimeoutS}
+			container.Env = append(container.Env, gcsTimeout)
+		}
+	}
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
-	if len(envVars) == 0 {
-		return false
-	}
-
 	for _, env := range envVars {
 		if env.Name == envName {
 			return true
