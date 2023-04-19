@@ -552,9 +552,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	}
 
 	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the head group spec.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env =
-		append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env,
-			v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env,
+		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
 	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
 	rayContainer = pod.Spec.Containers[rayContainerIndex]
@@ -586,9 +585,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	}
 
 	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the worker group spec.
-	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env =
-		append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env,
-			v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env = append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env,
+		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
 	worker = cluster.Spec.WorkerGroupSpecs[0]
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
