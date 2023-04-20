@@ -294,16 +294,12 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
-			// adding a scale strategy
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 
-				podToDelete := workerPods.Items[0]
-				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
-				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
-
+				myRayService.Spec.RayClusterSpec.RayVersion = "2.100.0"
 				return k8sClient.Update(ctx, myRayService)
 			})
 
