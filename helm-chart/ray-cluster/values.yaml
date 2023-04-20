@@ -216,3 +216,4 @@ additionalWorkerGroups:
 service:
   # This is optional, and the default is ClusterIP.
   type: ClusterIP
+  headService: {}

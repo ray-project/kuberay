@@ -18,6 +18,9 @@ spec:
   autoscalerOptions: {{- toYaml .Values.head.autoscalerOptions | nindent 4 }}
   {{- end }}
   headGroupSpec:
+    {{- if .Values.head.headService }}
+    headService: {{- toYaml .Values.head.headService | nindent 6 }}
+    {{- end }}
     serviceType: {{ .Values.service.type }}
     rayStartParams:
     {{- range $key, $val := .Values.head.rayStartParams }}

@@ -40,6 +40,24 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		annotations = make(map[string]string)
 	}
 
+	if cluster.Spec.HeadGroupSpec.HeadService != nil {
+		// Use the provided HeadService
+		// Priority: HeadService > HeadGroupSpec.PodTemplateSpec > default labels
+		for k, v := range labels {
+			if _, ok := cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Labels[k]; !ok {
+				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Labels[k] = v
+			}
+		}
+		// Priority: HeadService > RayClusterSpec.HeadServiceAnnotations
+		for k, v := range annotations {
+			if _, ok := cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k]; !ok {
+				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k] = v
+			}
+		}
+
+		return cluster.Spec.HeadGroupSpec.HeadService, nil
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        utils.GenerateServiceName(cluster.Name),
