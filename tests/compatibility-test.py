@@ -135,8 +135,9 @@ class RayFTTestCase(unittest.TestCase):
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
-        # node pod will be terminated.
+        # Kill the gcs_server process on head node. The head node will crash after 20 seconds
+        # because the value of `RAY_gcs_rpc_server_reconnect_timeout_s` is "20" in the
+        # `ray-cluster.ray-ft.yaml.template` file.
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
@@ -182,8 +183,9 @@ class RayFTTestCase(unittest.TestCase):
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
-        # Kill the gcs_server process on head node. If fate sharing is enabled, the whole head
-        # node pod will be terminated.
+        # Kill the gcs_server process on head node. The head node will crash after 20 seconds
+        # because the value of `RAY_gcs_rpc_server_reconnect_timeout_s` is "20" in the
+        # `ray-cluster.ray-ft.yaml.template` file.
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.

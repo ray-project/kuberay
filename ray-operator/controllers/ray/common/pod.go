@@ -648,7 +648,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 	}
 	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayiov1alpha1.WorkerNode {
 		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
-		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s.
+		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
+		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
+		// crash if the GCS server is down for more than 60s. Typically, the new GCS server will be available
+		// in 120 seconds, so we set the timeout to 600s to avoid the worker nodes crashing.
 		if ftEnabled := pod.Annotations[RayFTEnabledAnnotationKey] == "true"; ftEnabled {
 			gcsTimeout := v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: DefaultWorkerRayGcsReconnectTimeoutS}
 			container.Env = append(container.Env, gcsTimeout)
