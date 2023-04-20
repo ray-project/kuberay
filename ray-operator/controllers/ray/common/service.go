@@ -40,6 +40,8 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		annotations = make(map[string]string)
 	}
 
+	defaultAppProtocol := DefaultServiceAppProtocol
+	ports := getServicePorts(cluster)
 	if cluster.Spec.HeadGroupSpec.HeadService != nil {
 		// Use the provided HeadService
 		// Priority: HeadService > HeadGroupSpec.PodTemplateSpec > default labels
@@ -48,10 +50,26 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Labels[k] = v
 			}
 		}
+
 		// Priority: HeadService > RayClusterSpec.HeadServiceAnnotations
 		for k, v := range annotations {
 			if _, ok := cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k]; !ok {
 				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k] = v
+			}
+		}
+
+		// Priority: HeadService > default ports
+		for name, port := range ports {
+			exists := false
+			for _, svcPort := range cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports {
+				if svcPort.Name == name {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
+				cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports = append(cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports, svcPort)
 			}
 		}
 
@@ -72,8 +90,6 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		},
 	}
 
-	ports := getServicePorts(cluster)
-	defaultAppProtocol := DefaultServiceAppProtocol
 	for name, port := range ports {
 		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
 		service.Spec.Ports = append(service.Spec.Ports, svcPort)
