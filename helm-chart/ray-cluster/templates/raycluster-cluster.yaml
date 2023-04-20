@@ -118,9 +118,9 @@ spec:
             {{- toYaml $values.securityContext | nindent 14 }}
             env:
             {{- toYaml $values.containerEnv | nindent 14}}
-            {{- with $values.envFrom }}
-            envFrom: {{- toYaml $ | nindent 14}}
-            {{- end }}
+            {{ - if $values.envFrom }}
+            envFrom: {{ - toYaml $values.envFrom | nindent 14 }}
+            {{ - end }}
             ports: {{- toYaml $values.ports | nindent 14}}
             {{- if $values.lifecycle }}
             lifecycle:
