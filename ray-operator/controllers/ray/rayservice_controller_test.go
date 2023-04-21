@@ -315,6 +315,30 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 		})
 
+		It("Autoscaler updates RayCluster and should not switch to a new RayCluster", func() {
+			// Simulate autoscaler by updating the RayCluster directly. Note that the autoscaler
+			// will not update the RayService directly.
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: initialClusterName, Namespace: "default"}, myRayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "Active RayCluster = %v", myRayCluster.Name)
+				podToDelete := workerPods.Items[0]
+				*myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
+				return k8sClient.Update(ctx, myRayCluster)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster")
+
+			// Confirm not switch to a new RayCluster
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+		})
+
 		It("should detect unhealthy status and try to switch to new RayCluster.", func() {
 			// Set deployment statuses to UNHEALTHY
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
