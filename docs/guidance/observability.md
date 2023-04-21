@@ -6,6 +6,7 @@
 In the RayCluster resource definition, we use `State` to represent the current status of the Ray cluster.
 
 For now, there are three types of the status exposed by the RayCluster's status.state: `ready`, `unhealthy` and `failed`.
+
 | State     | Description                                                                                     |
 | --------- | ----------------------------------------------------------------------------------------------- |
 | ready     | The Ray cluster is ready for use.                                                               |

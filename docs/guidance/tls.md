@@ -42,6 +42,7 @@ kubectl apply -f ray-operator/config/samples/ray-cluster.tls.yaml
 ```
 
 `ray-cluster.tls.yaml` will create:
+
 * A Kubernetes Secret containing the CA's private key (`ca.key`) and self-signed certificate (`ca.crt`) (**Step 1**)
 * A Kubernetes ConfigMap containing the scripts `gencert_head.sh` and `gencert_worker.sh`, which allow Ray Pods to generate private keys 
 (`tls.key`) and self-signed certificates (`tls.crt`) (**Step 2**)
@@ -75,6 +76,7 @@ openssl x509 -in ca.crt -noout -text
 #           (Note: You should comment out the Kubernetes Secret in `ray-cluster.tls.yaml`.)
 kubectl create secret generic ca-tls --from-file=ca.key --from-file=ca.crt
 ```
+
 * `ca.key`: CA's private key
 * `ca.crt`: CA's self-signed certificate 
 
