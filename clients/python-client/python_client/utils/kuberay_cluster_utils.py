@@ -6,7 +6,11 @@ import logging
 import copy
 import re
 from typing import Any, Tuple
+import os
+import subprocess
+import time
 from python_client import constants
+from kubernetes import client, config
 
 
 log = logging.getLogger(__name__)
@@ -28,6 +32,17 @@ class ClusterUtils:
     - populate_worker_group(cluster: dict, group_name: str, ray_image: str, ray_command: Any, init_image: str, cpu_requests: str, memory_requests: str, cpu_limits: str, memory_limits: str, replicas: int, min_replicas: int, max_replicas: int, ray_start_params: dict) -> Tuple[dict, bool]:
     - update_worker_group_replicas(cluster: dict, group_name: str, max_replicas: int, min_replicas: int, replicas: int) -> Tuple[dict, bool]:
     """
+
+    # initial config to setup the kube client
+    def __init__(self):
+        # loading the config
+        self.kube_config = config.load_kube_config()
+        self.api = client.CustomObjectsApi()
+        self.core_v1_api = client.CoreV1Api()
+
+    def __del__(self):
+        self.api = None
+        self.kube_config = None
 
     def populate_meta(
         self,
@@ -458,6 +473,91 @@ class ClusterUtils:
             f"error removing worker group, no match was found for {group_name}"
         )
         return cluster, False
+
+    def exec_command(
+        self,
+        command,
+        cluster_name,
+        cluster_namespace = "default", 
+    ) -> str:
+        """Execute command in the cluster
+
+        Parameters:
+        - command (str): The command which will be executed in the head pod of the ray cluster.
+        - cluster_name (str): The name of the ray cluster where the python file will be executed.
+        - cluster_name (str): The name of the namespace which the ray cluster is in.
+
+        Returns:
+        - Tuple (str, bool): execution ouput of the python file, and a boolean indicating whether the update was successful.
+        """
+        head_pod = self.get_head_pod(cluster_name, cluster_namespace)
+        if head_pod == "":
+            return "", False
+        exec_command = f"kubectl exec {head_pod} -- {command} 2>&1"
+        result = subprocess.run(exec_command, shell=True, stdout=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            log.error(
+                f"error while exec command {exec_command} in {cluster_name}:\n {result.stdout}"
+            )
+            return "", False       
+        return result.stdout, True
+
+    def exec_file(
+        self,
+        file_path,
+        cluster_name,
+        cluster_namespace = "default",
+    ) -> str:
+        """Execute Python file in the cluster.
+
+        Parameters:
+        - file_path (str): The file path for the python file which will be executed in the ray cluster.
+        - cluster_name (str): The name of the ray cluster where the python file will be executed.
+        - cluster_name (str): The name of the namespace which the ray cluster is in.
+
+        Returns:
+        - Tuple (str, bool): execution ouput of the python file, and a boolean indicating whether the update was successful.
+        """
+        head_pod = self.get_head_pod(cluster_name, cluster_namespace)
+        if len(head_pod) == 0:
+            return "", False
+        if not os.path.isfile(file_path):
+            log.error(
+                f"file not found: {file_path}"
+            )
+            return "", False
+
+        target_path = "/tmp/" +  str(time.time()) + os.path.basename(file_path)
+        copy_command = f"kubectl cp {file_path} {head_pod}:{target_path}"
+        result = subprocess.run(copy_command, shell=True, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            log.error(
+                f"Error when copy file into ray cluster {result.stderr}"
+            )
+            return "", False
+
+        exec_command = f"python {target_path}"
+        result = self.exec_command(exec_command, cluster_name, cluster_namespace)
+
+        delete_command = f"kubectl exec {head_pod} -- rm {target_path}"
+        subprocess.run(delete_command, shell=True)
+        return result
+    
+    def get_head_pod(
+        self,
+        cluster_name,
+        cluster_namespace = "default"
+    ) -> str:
+        label_selector = f"ray.io/identifier={cluster_name}-head"
+        pods = self.core_v1_api.list_namespaced_pod(
+            namespace = cluster_namespace, label_selector = label_selector
+        )
+        if len(pods.items) != 1:
+            log.error(
+                f"error cannot find the head pod with the select {label_selector}"
+            )
+            return ""
+        return pods.items[0].metadata.name
 
     def is_valid_name(self, name: str) -> bool:
         msg = "The name must be 63 characters or less, begin and end with an alphanumeric character, and contain only dashes, dots, and alphanumerics."

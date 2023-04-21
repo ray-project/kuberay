@@ -177,8 +177,7 @@ class RayClusterApi:
                 else:
                     log.error("error fetching custom resource: {}".format(e))
                     return None
-            
-            if resource["status"]:
+            if "status" in resource and resource["status"]:
                     return resource["status"]
             else:
                 log.info("raycluster {} status not set yet, waiting...".format(name))
