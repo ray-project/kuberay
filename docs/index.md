@@ -43,10 +43,14 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * **KubeRay CLI**: KubeRay CLI provides the ability to manage KubeRay resources through command-line interface.
 
-## Kubernetes ecosystem integration
+## KubeRay ecosystem
 
-
-
+* [AWS Application Load Balancer](guidance/ingress/#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
+* [Nginx](guidance/ingress/#example-manually-setting-up-nginx-ingress-on-kind)
+* [Prometheus and Grafana](guidance/prometheus-grafana/) 
+* [Volcano](guidance/volcano-integration/)
+* [MCAD](guidance/kuberay-with-MCAD/)
+* [Kubeflow](guidance/kubeflow-integration/)
 
 ## Security
 
