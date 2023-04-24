@@ -43,25 +43,28 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 	defaultAppProtocol := DefaultServiceAppProtocol
 	ports := getServicePorts(cluster)
 	if cluster.Spec.HeadGroupSpec.HeadService != nil {
-		// Use the provided HeadService
-		// Priority: HeadService > HeadGroupSpec.PodTemplateSpec > default labels
+		// Use the provided HeadService.
+		// Deep copy the HeadService to avoid modifying the original object
+		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
+
+		// Update labels and annotations with provided ones, if not already set
 		for k, v := range labels {
-			if _, ok := cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Labels[k]; !ok {
-				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Labels[k] = v
+			if _, ok := headService.ObjectMeta.Labels[k]; !ok {
+				headService.ObjectMeta.Labels[k] = v
 			}
 		}
 
 		// Priority: HeadService > RayClusterSpec.HeadServiceAnnotations
 		for k, v := range annotations {
-			if _, ok := cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k]; !ok {
-				cluster.Spec.HeadGroupSpec.HeadService.ObjectMeta.Annotations[k] = v
+			if _, ok := headService.ObjectMeta.Annotations[k]; !ok {
+				headService.ObjectMeta.Annotations[k] = v
 			}
 		}
 
 		// Priority: HeadService > default ports
 		for name, port := range ports {
 			exists := false
-			for _, svcPort := range cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports {
+			for _, svcPort := range headService.Spec.Ports {
 				if svcPort.Name == name {
 					exists = true
 					break
@@ -69,11 +72,11 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			}
 			if !exists {
 				svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
-				cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports = append(cluster.Spec.HeadGroupSpec.HeadService.Spec.Ports, svcPort)
+				headService.Spec.Ports = append(headService.Spec.Ports, svcPort)
 			}
 		}
 
-		return cluster.Spec.HeadGroupSpec.HeadService, nil
+		return headService, nil
 	}
 
 	service := &corev1.Service{
