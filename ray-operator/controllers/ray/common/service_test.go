@@ -256,4 +256,12 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 			t.Errorf("User port not found: %v", p)
 		}
 	}
+
+	// Test name and namespace are generated if not specified
+	if headService.ObjectMeta.Name == "" {
+		t.Errorf("Generated head service name is empty")
+	}
+	if headService.ObjectMeta.Namespace == "" {
+		t.Errorf("Generated head service namespace is empty")
+	}
 }

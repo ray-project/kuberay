@@ -40,6 +40,9 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		annotations = make(map[string]string)
 	}
 
+	default_name := utils.GenerateServiceName(cluster.Name)
+	default_namespace := cluster.Namespace
+
 	defaultAppProtocol := DefaultServiceAppProtocol
 	ports := getServicePorts(cluster)
 	if cluster.Spec.HeadGroupSpec.HeadService != nil {
@@ -76,13 +79,23 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			}
 		}
 
+		// If the user has not specified a name, generate one
+		if headService.ObjectMeta.Name == "" {
+			headService.ObjectMeta.Name = default_name
+		}
+
+		// If the user has not specified a namespace, use the cluster's namespace
+		if headService.ObjectMeta.Namespace == "" {
+			headService.ObjectMeta.Namespace = default_namespace
+		}
+
 		return headService, nil
 	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateServiceName(cluster.Name),
-			Namespace:   cluster.Namespace,
+			Name:        default_name,
+			Namespace:   default_namespace,
 			Labels:      labels,
 			Annotations: annotations,
 		},
