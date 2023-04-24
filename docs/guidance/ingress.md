@@ -1,6 +1,7 @@
 ## Ingress Usage
 
 Here we provide some examples to show how to use ingress to access your Ray cluster.
+
   * [Example: AWS Application Load Balancer (ALB) Ingress support on AWS EKS](#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
   * [Example: Manually setting up NGINX Ingress on KinD](#example-manually-setting-up-nginx-ingress-on-kind)
 
