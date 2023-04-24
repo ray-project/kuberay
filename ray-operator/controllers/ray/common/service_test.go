@@ -203,3 +203,57 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsName])
 	}
 }
+
+func TestUserSpecifiedHeadService(t *testing.T) {
+	// Use any RayCluster instance as a base for the test.
+	testRayClusterWithHeadService := instanceWithWrongSvc.DeepCopy()
+
+	// Set user-specified head service with user-specified labels, annotations, and ports.
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue"}
+	userPort := corev1.ServicePort{Name: "userPort", Port: 12345}
+	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
+	userPorts := []corev1.ServicePort{userPort, userPortOverride}
+	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      userLabels,
+			Annotations: userAnnotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: userPorts,
+		},
+	}
+
+	headService, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, nil, nil)
+	if err != nil {
+		t.Errorf("failed to build head service: %v", err)
+	}
+
+	// Test merged labels. The user-defined head service should have priority.
+	for k, v := range userLabels {
+		if headService.ObjectMeta.Labels[k] != v {
+			t.Errorf("User label not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Labels[k])
+		}
+	}
+
+	// Test merged annotations
+	for k, v := range userAnnotations {
+		if headService.ObjectMeta.Annotations[k] != v {
+			t.Errorf("User annotation not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Annotations[k])
+		}
+	}
+
+	// Test merged ports
+	for _, p := range userPorts {
+		found := false
+		for _, hp := range headService.Spec.Ports {
+			if p.Name == hp.Name && p.Port == hp.Port {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("User port not found: %v", p)
+		}
+	}
+}

@@ -48,22 +48,21 @@ import (
 )
 
 var (
-	namespaceStr                  string
-	instanceName                  string
-	enableInTreeAutoscaling       bool
-	headGroupNameStr              string
-	headGroupServiceAccount       string
-	groupNameStr                  string
-	expectReplicaNum              int32
-	testPods                      []runtime.Object
-	testPodsNoHeadIP              []runtime.Object
-	testRayCluster                *rayiov1alpha1.RayCluster
-	testRayClusterWithHeadService *rayiov1alpha1.RayCluster
-	headSelector                  labels.Selector
-	headNodeIP                    string
-	testServices                  []runtime.Object
-	workerSelector                labels.Selector
-	workersToDelete               []string
+	namespaceStr            string
+	instanceName            string
+	enableInTreeAutoscaling bool
+	headGroupNameStr        string
+	headGroupServiceAccount string
+	groupNameStr            string
+	expectReplicaNum        int32
+	testPods                []runtime.Object
+	testPodsNoHeadIP        []runtime.Object
+	testRayCluster          *rayiov1alpha1.RayCluster
+	headSelector            labels.Selector
+	headNodeIP              string
+	testServices            []runtime.Object
+	workerSelector          labels.Selector
+	workersToDelete         []string
 )
 
 func setupTest(t *testing.T) {
@@ -1180,59 +1179,4 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
 	assert.Nil(t, err)
 	assert.Equal(t, cluster.ObjectMeta.Generation, cluster.Status.ObservedGeneration)
-}
-
-func TestUserSpecifiedHeadService(t *testing.T) {
-	setupTest(t)
-	defer tearDown(t)
-
-	// testRayClusterWithHeadService is a copy of testRayCluster with a user-defined head service.
-	testRayClusterWithHeadService := testRayCluster.DeepCopy()
-	userLabels := map[string]string{"userLabelKey": "userLabelValue", common.RayClusterLabelKey: "userClusterName"} // Override default cluster name
-	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue"}
-	userPort := corev1.ServicePort{Name: "userPort", Port: 12345}
-	userPortOverride := corev1.ServicePort{Name: common.DefaultClientPortName, Port: 98765} // Override default client port (10001)
-	userPorts := []corev1.ServicePort{userPort, userPortOverride}
-	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:      userLabels,
-			Annotations: userAnnotations,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: userPorts,
-		},
-	}
-
-	headService, err := common.BuildServiceForHeadPod(*testRayClusterWithHeadService, nil, nil)
-	if err != nil {
-		t.Errorf("failed to build head service: %v", err)
-	}
-
-	// Test merged labels. The user-defined head service should have priority.
-	for k, v := range userLabels {
-		if headService.ObjectMeta.Labels[k] != v {
-			t.Errorf("User label not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Labels[k])
-		}
-	}
-
-	// Test merged annotations
-	for k, v := range userAnnotations {
-		if headService.ObjectMeta.Annotations[k] != v {
-			t.Errorf("User annotation not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Annotations[k])
-		}
-	}
-
-	// Test merged ports
-	for _, p := range userPorts {
-		found := false
-		for _, hp := range headService.Spec.Ports {
-			if p.Name == hp.Name && p.Port == hp.Port {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("User port not found: %v", p)
-		}
-	}
 }
