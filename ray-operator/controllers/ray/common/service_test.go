@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -229,19 +230,29 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		t.Errorf("failed to build head service: %v", err)
 	}
 
-	// Test merged labels. The user-defined head service should have priority.
+	// Test merged labels. In the case of overlap (RayClusterLabelKey) the user label should be ignored.
 	for k, v := range userLabels {
-		if headService.ObjectMeta.Labels[k] != v {
+		if headService.ObjectMeta.Labels[k] != v && k != RayClusterLabelKey {
 			t.Errorf("User label not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Labels[k])
 		}
 	}
-
+	if headService.ObjectMeta.Labels[RayClusterLabelKey] != testRayClusterWithHeadService.ObjectMeta.Name {
+		t.Errorf("User cluster name label not found or incorrect value: key=%s, expected value=%s, actual value=%s", RayClusterLabelKey, testRayClusterWithHeadService.ObjectMeta.Name, headService.ObjectMeta.Labels[RayClusterLabelKey])
+	}
 	// Test merged annotations
 	for k, v := range userAnnotations {
 		if headService.ObjectMeta.Annotations[k] != v {
 			t.Errorf("User annotation not found or incorrect value: key=%s, expected value=%s, actual value=%s", k, v, headService.ObjectMeta.Annotations[k])
 		}
 	}
+
+	// Test merged ports. In the case of overlap (DefaultClientPortName) the user port should be ignored.
+	// DEBUG: Print out the entire head service to help with debugging.
+	headServiceJSON, err := json.MarshalIndent(headService, "", "  ")
+	if err != nil {
+		t.Errorf("failed to marshal head service: %v", err)
+	}
+	t.Logf("head service: %s", string(headServiceJSON))
 
 	// Test merged ports
 	for _, p := range userPorts {

@@ -30,6 +30,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 	default_labels := HeadServiceLabels(cluster)
 
+	// Priority: provided labels > default labels
 	for k, v := range default_labels {
 		if _, ok := labels[k]; !ok {
 			labels[k] = v
@@ -42,42 +43,37 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 	default_name := utils.GenerateServiceName(cluster.Name)
 	default_namespace := cluster.Namespace
+	default_type := cluster.Spec.HeadGroupSpec.ServiceType
 
 	defaultAppProtocol := DefaultServiceAppProtocol
-	ports := getServicePorts(cluster)
+	ports_int := getServicePorts(cluster)
+	ports := []corev1.ServicePort{}
+	for name, port := range ports_int {
+		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
+		ports = append(ports, svcPort)
+	}
 	if cluster.Spec.HeadGroupSpec.HeadService != nil {
-		// Use the provided HeadService.
+		// Use the provided "custom" HeadService.
 		// Deep copy the HeadService to avoid modifying the original object
 		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
 
-		// Update labels and annotations with provided ones, if not already set
+		// Merge labels with custom HeadService labels. If there are overlaps,
+		// ignore the custom HeadService labels.
 		for k, v := range labels {
-			if _, ok := headService.ObjectMeta.Labels[k]; !ok {
-				headService.ObjectMeta.Labels[k] = v
-			}
+			headService.ObjectMeta.Labels[k] = v
 		}
 
-		// Priority: HeadService > RayClusterSpec.HeadServiceAnnotations
+		// For the selector, use labels ignore any custom HeadService selectors or labels.
+		headService.Spec.Selector = labels
+
+		// Merge annotations with custom HeadService annotations. If there are overlaps,
+		// ignore the custom HeadService annotations.
 		for k, v := range annotations {
-			if _, ok := headService.ObjectMeta.Annotations[k]; !ok {
-				headService.ObjectMeta.Annotations[k] = v
-			}
+			headService.ObjectMeta.Annotations[k] = v
 		}
 
-		// Priority: HeadService > default ports
-		for name, port := range ports {
-			exists := false
-			for _, svcPort := range headService.Spec.Ports {
-				if svcPort.Name == name {
-					exists = true
-					break
-				}
-			}
-			if !exists {
-				svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
-				headService.Spec.Ports = append(headService.Spec.Ports, svcPort)
-			}
-		}
+		// Append default ports.
+		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
 
 		// If the user has not specified a name, generate one
 		if headService.ObjectMeta.Name == "" {
@@ -87,6 +83,11 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// If the user has not specified a namespace, use the cluster's namespace
 		if headService.ObjectMeta.Namespace == "" {
 			headService.ObjectMeta.Namespace = default_namespace
+		}
+
+		// If the user has not specified a service type, use the cluster's service type
+		if headService.Spec.Type == "" {
+			headService.Spec.Type = default_type
 		}
 
 		return headService, nil
@@ -101,14 +102,9 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
-			Ports:    []corev1.ServicePort{},
-			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+			Ports:    ports,
+			Type:     default_type,
 		},
-	}
-
-	for name, port := range ports {
-		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
-		service.Spec.Ports = append(service.Spec.Ports, svcPort)
 	}
 
 	return service, nil
