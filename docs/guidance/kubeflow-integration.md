@@ -45,6 +45,7 @@ kubectl get pod -l ray.io/cluster=raycluster-kuberay
 # raycluster-kuberay-head-bz77b                 1/1     Running   0          64s
 # raycluster-kuberay-worker-workergroup-8gr5q   1/1     Running   0          63s
 ```
+
 * This step uses `rayproject/ray:2.2.0-py38-cpu` as its image. Ray is very sensitive to the Python versions and Ray versions between the server (RayCluster) and client (JupyterLab) sides. This image uses:
     * Python 3.8.13
     * Ray 2.2.0

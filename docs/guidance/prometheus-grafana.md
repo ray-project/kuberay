@@ -25,6 +25,7 @@ kubectl get all -n prometheus-system
 # deployment.apps/prometheus-kube-prometheus-operator   1/1     1            1           46s
 # deployment.apps/prometheus-kube-state-metrics         1/1     1            1           46s
 ```
+
 * KubeRay provides an [install.sh script](../../install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
 
 ## Step 3: Install a KubeRay operator
@@ -92,9 +93,9 @@ spec:
   targetLabels:
   - ray.io/cluster
 ```
+
 * The YAML example above is [serviceMonitor.yaml](../../config/prometheus/serviceMonitor.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 * See [ServiceMonitor official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor) for more details about the configurations.
-
 * `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
 
 <div id="prometheus-can-only-detect-this-label" ></div>
@@ -156,6 +157,7 @@ spec:
   podMetricsEndpoints:
   - port: metrics
 ```
+
 * `release: $HELM_RELEASE`: Prometheus can only detect PodMonitor with this label. See [here](#prometheus-can-only-detect-this-label) for more details.
 
 * **PodMonitor** in `namespaceSelector` and `selector` are used to select Kubernetes Pods.
