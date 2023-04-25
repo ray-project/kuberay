@@ -24,16 +24,16 @@ s3.download_file(bucket_name, key, filename)
 ```
 
 The root cause is that the version of `boto3` in the Ray image is too old. To elaborate, `rayproject/ray:2.3.0` provides boto3 version 1.4.8 (Nov. 21, 2017),
-a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`). 
+a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`).
 
 ```shell
-# image: rayproject/ray:2.3.0
+# image: rayproject/ray:2.4.0
 pip freeze | grep boto
 # boto3==1.4.8
 # botocore==1.8.50
 ```
 
-Another issue that users may encounter is related to **RayService**. 
+Another issue that users may encounter is related to **RayService**.
 If the `working_dir` for RayService is set to a zip file located in a private S3 bucket, it can prevent the Ray Serve application from starting. Users can confirm this by executing `serve status` in the head Pod, which will return an error like `An error occurred (AccessDenied) when calling the GetObject operation: Access Denied`. In this case, users can build their custom images with upgrading the `boto3` package (i.e. [Solution 2](#solution-2-upgrade-the-boto3-package)).
 
 ## Workaround solutions

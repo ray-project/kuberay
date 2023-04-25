@@ -52,7 +52,7 @@ helm version
   # Step3: Install KubeRay APIServer
   helm install kuberay-apiserver .
   ```
-  
+
 ### List the chart
 
 To list the `my-release` deployment:
@@ -76,11 +76,11 @@ kubectl get pods
 
 ## Usage
 
-After the deployment we may use the `{{baseUrl}}` to access the 
+After the deployment we may use the `{{baseUrl}}` to access the
 
 - (default) for nodeport access, we provide the default http port `31888` for connection and you can connect it using.
 
-- for ingress access, you will need to create your own ingress 
+- for ingress access, you will need to create your own ingress
 
 The requests parameters detail can be seen in [KubeRay swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger), here we only present some basic example:
 
@@ -124,7 +124,7 @@ nodes:
 EOF
 ```
 
-1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator 
+1. Deploy the KubeRay APIServer within the same cluster of KubeRay operator
 
 ```bash
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
@@ -194,19 +194,19 @@ curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.3.0",
+      "image": "rayproject/ray:2.4.0",
       "serviceType": "NodePort",
       "rayStartParams": {
             "dashboard-host": "0.0.0.0",
             "metrics-export-port": "8080"
         },
-       "volumes": [] 
+       "volumes": []
     },
     "workerGroupSpec": [
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.3.0",
+        "image": "rayproject/ray:2.4.0",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,
@@ -224,8 +224,8 @@ The Ray resource will then be created in your Kubernetes cluster.
 
 ### Compute Template
 
-For the purpose to simplify the setting of resource, we abstract the resource 
-of the pods template resource to the `compute template` for usage, you can 
+For the purpose to simplify the setting of resource, we abstract the resource
+of the pods template resource to the `compute template` for usage, you can
 define the resource in the `compute template` and then choose the appropriate
 template for your `head` and `workergroup` when you are creating the real objects of `RayCluster`, `RayJobs` or `RayService`.
 

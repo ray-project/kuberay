@@ -192,7 +192,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.3.0",
+						Image:   "rayproject/ray:2.4.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -216,7 +216,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.3.0",
+						Image:   "rayproject/ray:2.4.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -268,7 +268,7 @@ func setupTest(t *testing.T) {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/ray:2.3.0",
+								Image:   "rayproject/ray:2.4.0",
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -301,7 +301,7 @@ func setupTest(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.3.0",
+									Image:   "rayproject/ray:2.4.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{

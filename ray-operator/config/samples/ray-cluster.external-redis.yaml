@@ -87,7 +87,7 @@ metadata:
   # An unique identifier for the head node and workers of this cluster.
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.3.0'
+  rayVersion: '2.4.0'
   headGroupSpec:
     replicas: 1
     rayStartParams:
@@ -101,7 +101,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.3.0
+            image: rayproject/ray:2.4.0
             env:
               # RAY_REDIS_ADDRESS can force ray to use external redis
               - name: RAY_REDIS_ADDRESS
@@ -137,7 +137,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.3.0
+              image: rayproject/ray:2.4.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
