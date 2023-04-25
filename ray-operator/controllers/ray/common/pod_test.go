@@ -827,6 +827,8 @@ func TestDefaultInitContainer(t *testing.T) {
 	// Ray container to the init container. This may be changed in the future.
 	healthCheckContainer := podTemplateSpec.Spec.InitContainers[numInitContainers-1]
 	rayContainer := worker.Template.Spec.Containers[getRayContainerIndex(worker.Template.Spec)]
+
+	assert.NotEqual(t, len(rayContainer.Env), 0, "The test only makes sense if the Ray container has environment variables.")
 	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
 	for _, env := range rayContainer.Env {
 		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
@@ -836,4 +838,8 @@ func TestDefaultInitContainer(t *testing.T) {
 			checkContainerEnv(t, healthCheckContainer, env.Name, env.ValueFrom.FieldRef.FieldPath)
 		}
 	}
+
+	// The values of `Resources` should be the same in both Ray container and health-check container.
+	assert.NotEmpty(t, rayContainer.Resources, "The test only makes sense if the Ray container has resource limit/request.")
+	assert.Equal(t, rayContainer.Resources, healthCheckContainer.Resources)
 }

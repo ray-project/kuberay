@@ -191,6 +191,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+	// Do not modify `deepCopyRayContainer` anywhere.
+	deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
 	initContainer := v1.Container{
 		Name:            "wait-gcs-ready",
 		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
@@ -203,8 +205,10 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
 		// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
 		// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
-		Env:          podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().Env,
-		VolumeMounts: podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().VolumeMounts,
+		Env:          deepCopyRayContainer.Env,
+		VolumeMounts: deepCopyRayContainer.VolumeMounts,
+		// If users specify ResourceQuota for the namespace, the init container need to specify resource explicitly.
+		Resources: deepCopyRayContainer.Resources,
 	}
 	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 
