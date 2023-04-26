@@ -73,7 +73,7 @@ Sample  | Description
 [ray-cluster.complete.yaml](config/samples/ray-cluster.complete.yaml)  | Shows all available custom resource properties.
 [ray-cluster.autoscaler.yaml](config/samples/ray-cluster.autoscaler.yaml)  | Shows all available custom resource properties and demonstrates autoscaling.
 [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml)  | Demonstrates resource configuration for production use-cases.
-[ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml)  | Demonstrates resource configuration for autoscaling Ray clusters in production.
+[ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.large.yaml)  | Demonstrates resource configuration for autoscaling Ray clusters in production.
 
 !!! note
 
@@ -82,7 +82,7 @@ Sample  | Description
     running in production. Always set limits for memory and CPU. When possible, set requests equal to limits.
     See the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources) for further guidance.
     See [ray-cluster.complete.large.yaml](config/samples/ray-cluster.complete.large.yaml) and
-    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.yaml) for examples of RayCluster
+    [ray-cluster.autoscaler.large.yaml](config/samples/ray-cluster.autoscaler.large.yaml) for examples of RayCluster
     resource configurations suitable for production.
     The rest of the sample configs above are meant only for experimentation in local kind or minikube environments.
 
