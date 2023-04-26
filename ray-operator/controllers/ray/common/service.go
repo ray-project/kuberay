@@ -80,8 +80,19 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			headService.ObjectMeta.Name = default_name
 		}
 
-		// If the user has not specified a namespace, use the cluster's namespace
-		if headService.ObjectMeta.Namespace == "" {
+		// // If the user has not specified a namespace, use the cluster's namespace
+		// if headService.ObjectMeta.Namespace == "" {
+		// 	headService.ObjectMeta.Namespace = default_namespace
+		// }
+
+		// If the user has specified a namespace, ignore it and raise a warning
+		if headService.ObjectMeta.Namespace != "" && headService.ObjectMeta.Namespace != default_namespace {
+			fmt.Printf("Warning: Ignoring namespace %s provided in HeadGroupSpec.HeadService "+
+				"for head service %s. Using namespace %s instead to allow workers to "+
+				"connect to the head pod.\n",
+				headService.ObjectMeta.Namespace,
+				headService.ObjectMeta.Name,
+				default_namespace)
 			headService.ObjectMeta.Namespace = default_namespace
 		}
 
