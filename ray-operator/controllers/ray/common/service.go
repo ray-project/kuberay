@@ -93,8 +93,8 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 				headService.ObjectMeta.Namespace,
 				headService.ObjectMeta.Name,
 				default_namespace)
-			headService.ObjectMeta.Namespace = default_namespace
 		}
+		headService.ObjectMeta.Namespace = default_namespace
 
 		// If the user has not specified a service type, use the cluster's service type
 		if headService.Spec.Type == "" {
