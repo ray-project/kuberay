@@ -8,7 +8,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '2.3.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.4.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
@@ -20,7 +20,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: rayproject/ray:2.4.0
           resources:
             limits:
               cpu: 1
@@ -38,10 +38,10 @@ spec:
           # `command` and `args` will become a part of `spec.containers.0.args` in the head Pod.
           command: ["echo 123"]
           args: ["456"]
-          # The script ray_cluster_resources.sh will wait until the cluster is ready and print 
+          # The script ray_cluster_resources.sh will wait until the cluster is ready and print
           # the resources in the ray cluster. Users can execute the script in either (1) `command`
-          # or (2) `postStart`. 
-          # 
+          # or (2) `postStart`.
+          #
           # command: ["(/home/ray/samples/ray_cluster_resources.sh&)"]
           lifecycle:
             postStart:

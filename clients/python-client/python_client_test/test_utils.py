@@ -13,7 +13,7 @@ test_cluster_body: dict = {
         "name": "raycluster-complete-raw",
     },
     "spec": {
-        "rayVersion": "2.3.0",
+        "rayVersion": "2.4.0",
         "headGroupSpec": {
             "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
             "template": {
@@ -22,7 +22,7 @@ test_cluster_body: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.3.0",
+                            "image": "rayproject/ray:2.4.0",
                             "ports": [
                                 {"containerPort": 6379, "name": "gcs"},
                                 {"containerPort": 8265, "name": "dashboard"},
@@ -58,7 +58,7 @@ test_cluster_body: dict = {
                         "containers": [
                             {
                                 "name": "ray-worker",
-                                "image": "rayproject/ray:2.3.0",
+                                "image": "rayproject/ray:2.4.0",
                                 "lifecycle": {
                                     "preStop": {
                                         "exec": {
@@ -76,7 +76,7 @@ test_cluster_body: dict = {
                             },
                             {
                                 "name": "side-car",
-                                "image": "rayproject/ray:2.3.0",
+                                "image": "rayproject/ray:2.4.0",
                                 "resources": {
                                     "limits": {"cpu": "1", "memory": "1G"},
                                     "requests": {"cpu": "500m", "memory": "1G"},
@@ -154,12 +154,12 @@ class TestUtils(unittest.TestCase):
             memory_requests = "5G",
             cpu_limits = "5",
             memory_limits = "10G",
-            container_name = "unspecified", 
+            container_name = "unspecified",
         )
         self.assertEqual(succeeded, True)
         self.assertEqual(cluster["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"], "3")
         self.assertEqual(cluster["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"][1]["resources"]["requests"]["cpu"], "500m")
-        
+
         cluster, succeeded = self.utils.update_worker_group_resources(
             cluster,
             group_name="small-group",
@@ -167,11 +167,11 @@ class TestUtils(unittest.TestCase):
             memory_requests = "5G",
             cpu_limits = "5",
             memory_limits = "10G",
-            container_name = "side-car", 
+            container_name = "side-car",
         )
         self.assertEqual(succeeded, True)
         self.assertEqual(cluster["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"][1]["resources"]["requests"]["cpu"], "4")
-        
+
 
         cluster, succeeded = self.utils.update_worker_group_resources(
             cluster,
@@ -180,11 +180,11 @@ class TestUtils(unittest.TestCase):
             memory_requests = "15G",
             cpu_limits = "5",
             memory_limits = "25G",
-            container_name = "all_containers", 
+            container_name = "all_containers",
         )
         self.assertEqual(succeeded, True)
         self.assertEqual(cluster["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"][1]["resources"]["requests"]["memory"], "15G")
-        
+
         cluster, succeeded = self.utils.update_worker_group_resources(
             cluster,
             group_name="small-group",
@@ -192,7 +192,7 @@ class TestUtils(unittest.TestCase):
             memory_requests = "15G",
             cpu_limits = "5",
             memory_limits = "25G",
-            container_name = "wrong_name", 
+            container_name = "wrong_name",
         )
         self.assertEqual(succeeded, False)
 
@@ -201,7 +201,7 @@ class TestUtils(unittest.TestCase):
             cluster, succeeded = self.utils.update_worker_group_resources(
             cluster,
             group_name="small-group",
-            cpu_requests = "4", 
+            cpu_requests = "4",
         )
 
     def test_duplicate_worker_group(self):
@@ -213,7 +213,7 @@ class TestUtils(unittest.TestCase):
         cluster, succeeded = self.utils.duplicate_worker_group(
             cluster,
             group_name="small-cluster-workers",
-            new_group_name="new-small-group-workers", 
+            new_group_name="new-small-group-workers",
         )
         self.assertEqual(succeeded, True)
         self.assertEqual(cluster["spec"]["workerGroupSpecs"][1]["groupName"], "new-small-group-workers")
@@ -223,9 +223,9 @@ class TestUtils(unittest.TestCase):
         with self.assertRaises(TypeError):
             cluster, succeeded = self.utils.duplicate_worker_group(
             cluster,
-            group_name="small-cluster-workers", 
+            group_name="small-cluster-workers",
         )
-        
+
 
     def test_delete_worker_group(self):
         cluster = self.director.build_small_cluster(name="small-cluster")
