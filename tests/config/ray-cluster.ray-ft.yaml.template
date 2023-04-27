@@ -193,15 +193,28 @@ data:
 
   test_ray_serve_2.py: |
     import requests
+    import time
 
-    try:
-        response = requests.get('http://127.0.0.1:8000', timeout=90)
+    def retry_with_timeout(func, timeout=90):
+        err = None
+        for i in range(timeout):
+            try:
+                print(f"retry iter: {i}")
+                return func()
+            except BaseException as e:
+                err = e
+            finally:
+                time.sleep(1)
+        raise err
+
+    def send_req():
+        response = requests.get('http://127.0.0.1:8000', timeout=60)
         print('Response status code:', response.status_code)
         print('Response headers:', response.headers)
         print('Response content:', response.text)
-        assert(response.text == 'Hello world!')
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
+        assert(response.text == "Hello world!")
+
+    retry_with_timeout(send_req)
 
   test_detached_actor_1.py: |
     import ray
