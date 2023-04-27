@@ -148,7 +148,7 @@ class RayFTTestCase(unittest.TestCase):
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
-            f" python samples/test_ray_serve_2.py {ray_namespace}",
+            "python samples/test_ray_serve_2.py",
             check = False
         )
 

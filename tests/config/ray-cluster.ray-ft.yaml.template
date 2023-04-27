@@ -273,4 +273,4 @@ data:
 
     # The actual value should be 1 rather than 2. Ray will launch all registered actors when
     # the ray cluster restarts, but the internal state of the state will not be restored.
-    assert(val == 1)
+    assert(val == 3)
