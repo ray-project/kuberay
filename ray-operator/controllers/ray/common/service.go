@@ -62,8 +62,8 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		service.Spec.Ports = append(service.Spec.Ports, svcPort)
 	}
 
-	// ensuring that ports order is maintained
-	// sorting the ports based on their name
+	// this change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
+	// sorting the ServicePorts on their name
 	if len(service.Spec.Ports) > 1 {
 		sort.SliceStable(service.Spec.Ports, func(i, j int) bool {
 			return service.Spec.Ports[i].Name < service.Spec.Ports[j].Name
