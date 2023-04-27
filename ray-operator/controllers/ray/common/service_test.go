@@ -35,8 +35,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
-						"rayCluster": "raycluster-sample",
-						"groupName":  "headgroup",
+						"groupName": "headgroup",
 					},
 				},
 				Spec: corev1.PodSpec{

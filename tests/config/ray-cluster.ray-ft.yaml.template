@@ -92,6 +92,8 @@ spec:
               # RAY_REDIS_ADDRESS can force ray to use external redis
               - name: RAY_REDIS_ADDRESS
                 value: redis:6379
+              - name: RAY_gcs_rpc_server_reconnect_timeout_s
+                value: "20"
             ports:
               - containerPort: 6379
                 name: redis
@@ -140,6 +142,9 @@ spec:
           containers:
             - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
               image: $ray_image
+              env:
+                - name: RAY_gcs_rpc_server_reconnect_timeout_s
+                  value: "120"
               resources:
                 limits:
                   cpu: "1"
