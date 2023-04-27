@@ -63,7 +63,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			headService.ObjectMeta.Labels[k] = v
 		}
 
-		// For the selector, use labels ignore any custom HeadService selectors or labels.
+		// For the selector, use labels and ignore any custom HeadService selectors or labels.
 		headService.Spec.Selector = labels
 
 		// Merge annotations with custom HeadService annotations. If there are overlaps,
