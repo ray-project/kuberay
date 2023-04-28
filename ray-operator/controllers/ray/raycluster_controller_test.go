@@ -199,7 +199,6 @@ var _ = Context("Inside the default namespace", func() {
 			// The annotations in headService should be ovewritten by the annotations in the RayCluster HeadServiceAnnotations
 			Expect(svc.Annotations["key"]).ShouldNot(Equal("user-headService-value"))
 			Expect(svc.Annotations["key"]).Should(Equal("headServiceAnnotations-value"))
-
 		})
 
 		It("should create 3 workers", func() {
