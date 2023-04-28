@@ -80,8 +80,8 @@ var _ = Context("Inside the default namespace", func() {
 							},
 						},
 						Selector: map[string]string{
-							"rayCluster": "raycluster-sample",
-							"groupName":  "headgroup",
+							"rayCluster": "user-selector-rayCluster",
+							"groupName":  "user-selector-headgroup",
 						},
 					},
 				},
@@ -167,9 +167,21 @@ var _ = Context("Inside the default namespace", func() {
 				// The user-provided namespace should be ignored, but the name should be respected
 				getResourceFunc(ctx, client.ObjectKey{Name: "user-custom-name", Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
+			// If we try to get the service with the user-provided namespace, it should not exist
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: "user-custom-name", Namespace: "user-custom-namespace"}, svc),
+				time.Second*3, time.Millisecond*500).ShouldNot(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
+			// The user provided selector should be ignored
+			Expect(svc.Spec.Selector["rayCluster"]).ShouldNot(Equal("user-selector-rayCluster"))
 			// The user-provided labels should be merged with the default labels
 			Expect(svc.Labels["rayCluster"]).Should(Equal("user-headService-rayCluster"))
+			// The user-provided port should appear somewhere in the ports
+			Expect(svc.Spec.Ports[0].Name).Should(Equal("user-port"))
+			Expect(svc.Spec.Ports[0].Port).Should(Equal(int32(12345)))
+			// The user-provided annotations should be merged with the default annotations
+			Expect(svc.Annotations["key"]).Should(Equal("user-headService-value"))
+
 		})
 
 		It("should create 3 workers", func() {
