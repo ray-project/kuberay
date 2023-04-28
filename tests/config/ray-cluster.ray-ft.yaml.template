@@ -183,7 +183,7 @@ data:
         def __call__(self):
             return self._msg
 
-    ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1])
+    ray.init(namespace=sys.argv[1])
     # 2: Deploy the model.
     handle = serve.run(MyModelDeployment.bind(msg="Hello world!"))
     # 3: Query the deployment and print the result.
@@ -214,13 +214,13 @@ data:
         print('Response content:', response.text)
         assert(response.text == "Hello world!")
 
-    retry_with_timeout(send_req)
+    retry_with_timeout(send_req, 180)
 
   test_detached_actor_1.py: |
     import ray
     import sys
 
-    ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1])
+    ray.init(namespace=sys.argv[1])
 
     @ray.remote
     class TestCounter:
@@ -261,7 +261,7 @@ data:
 
     # Try to connect to Ray cluster.
     print("Try to connect to Ray cluster.")
-    retry_with_timeout(lambda: ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1]), timeout = 180)
+    retry_with_timeout(lambda: ray.init(namespace=sys.argv[1]), timeout = 180)
 
     # Get TestCounter actor
     print("Get TestCounter actor.")
