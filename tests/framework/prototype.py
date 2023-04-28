@@ -46,6 +46,9 @@ def check_pod_running(pods) -> bool:
     for pod in pods:
         if pod.status.phase != 'Running':
             return False
+        for container in pod.status.container_statuses:
+            if not container.ready:
+                return False
     return True
 
 def get_expected_head_pods(custom_resource):

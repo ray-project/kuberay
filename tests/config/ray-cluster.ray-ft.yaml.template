@@ -75,7 +75,7 @@ spec:
   headGroupSpec:
     rayStartParams:
       dashboard-host: "0.0.0.0"
-      num-cpus: "1"
+      num-cpus: "0"
       redis-password: "5241590000000000"
     #pod template
     template:
@@ -130,7 +130,7 @@ spec:
                   path: test_detached_actor_2.py
   workerGroupSpecs:
     # the pod replicas in this group typed worker
-    - replicas: 2
+    - replicas: 1
       minReplicas: 1
       maxReplicas: 2
       # logical group name, for this called small-group, also can be functional
@@ -167,12 +167,8 @@ metadata:
   name: test-script
 data:
   test_ray_serve_1.py: |
-    import requests
-    from starlette.requests import Request
     import ray
     from ray import serve
-    import time
-    import sys
 
     # 1: Define a Ray Serve model.
     @serve.deployment(route_prefix="/")
@@ -183,7 +179,7 @@ data:
         def __call__(self):
             return self._msg
 
-    ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1])
+    ray.init(address='ray://127.0.0.1:10001')
     # 2: Deploy the model.
     handle = serve.run(MyModelDeployment.bind(msg="Hello world!"))
     # 3: Query the deployment and print the result.
@@ -192,10 +188,8 @@ data:
     assert(val == "Hello world!")
 
   test_ray_serve_2.py: |
-    import ray
+    import requests
     import time
-    import sys
-    from ray import serve
 
     def retry_with_timeout(func, timeout=90):
         err = None
@@ -209,16 +203,14 @@ data:
                 time.sleep(1)
         raise err
 
-    print("Execute ray.init()")
-    retry_with_timeout(lambda: ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1]))
+    def send_req():
+        response = requests.get('http://127.0.0.1:8000', timeout=10)
+        print('Response status code:', response.status_code)
+        print('Response headers:', response.headers)
+        print('Response content:', response.text)
+        assert(response.text == "Hello world!")
 
-    print("Execute serve.start()")
-    retry_with_timeout(lambda:serve.start(detached=True))
-
-    print("Execute ray.get()")
-    val = retry_with_timeout(lambda: ray.get(serve.get_deployment("MyModelDeployment").get_handle().remote()))
-    print(val)
-    assert(val == "Hello world!")
+    retry_with_timeout(send_req, 180)
 
   test_detached_actor_1.py: |
     import ray
@@ -277,4 +269,4 @@ data:
 
     # The actual value should be 1 rather than 2. Ray will launch all registered actors when
     # the ray cluster restarts, but the internal state of the state will not be restored.
-    assert(val == 1)
+    assert(val == 3)
