@@ -324,11 +324,34 @@ var _ = Context("Inside the default namespace", func() {
 					getResourceFunc(ctx, client.ObjectKey{Name: initialClusterName, Namespace: "default"}, myRayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "Active RayCluster = %v", myRayCluster.Name)
 				podToDelete := workerPods.Items[0]
-				*myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
-				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
+				*myRayCluster.Spec.WorkerGroupSpecs[0].Replicas++
+				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
 				return k8sClient.Update(ctx, myRayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster")
+
+			// Confirm not switch to a new RayCluster
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+		})
+
+		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
+			// Certain field updates should not trigger new RayCluster preparation, such as updates
+			// to `Replicas` and `WorkersToDelete` triggered by the autoscaler during scaling up/down.
+			// See the function `generateRayClusterJsonHash` for more details.
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+				*myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 
 			// Confirm not switch to a new RayCluster
 			Consistently(
