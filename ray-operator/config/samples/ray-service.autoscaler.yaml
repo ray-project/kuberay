@@ -81,7 +81,7 @@ spec:
                   name: serve
     workerGroupSpecs:
       # the pod replicas in this group typed worker
-      - replicas: 3
+      - replicas: 1
         minReplicas: 1
         maxReplicas: 5
         # logical group name, for this called small-group, also can be functional

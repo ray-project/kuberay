@@ -19,7 +19,7 @@ spec:
         userConfig: |
           price: 3
         rayActorOptions:
-          numCpus: 1
+          numCpus: 0.1
       - name: OrangeStand
         numReplicas: 1
         userConfig: |
@@ -43,21 +43,14 @@ spec:
           numCpus: 0.1
   rayClusterConfig:
     rayVersion: '2.4.0' # should match the Ray version in the image of the containers
-    ## raycluster autoscaling config
-    enableInTreeAutoscaling: true
-    autoscalerOptions:
-      upscalingMode: Default
-      resources:
-        limits:
-          cpu: "1"
-          memory: "1000Mi"
-        requests:
-          cpu: "1"
-          memory: "1000Mi"
     ######################headGroupSpecs#################################
+    # Ray head pod template.
     headGroupSpec:
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
-      rayStartParams: {"num-cpus": "0"}
+      rayStartParams:
+        port: '6379' # should match container port named gcs-server
+        dashboard-host: '0.0.0.0'
+        num-cpus: '2' # can be auto-completed from the limits
       #pod template
       template:
         spec:
@@ -66,10 +59,10 @@ spec:
               image: rayproject/ray:2.4.0
               resources:
                 limits:
-                  cpu: 200m
+                  cpu: 2
                   memory: 2Gi
                 requests:
-                  cpu: 200m
+                  cpu: 2
                   memory: 2Gi
               ports:
                 - containerPort: 6379
@@ -103,5 +96,5 @@ spec:
                     cpu: "1"
                     memory: "2Gi"
                   requests:
-                    cpu: "1"
+                    cpu: "500m"
                     memory: "2Gi"
