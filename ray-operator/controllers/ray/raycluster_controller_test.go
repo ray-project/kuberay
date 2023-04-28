@@ -53,6 +53,9 @@ var _ = Context("Inside the default namespace", func() {
 		Spec: rayiov1alpha1.RayClusterSpec{
 			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
+			HeadServiceAnnotations: map[string]string{
+				"key": "headServiceAnnotations-value",
+			},
 			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 				RayStartParams: map[string]string{
 					"port":                "6379",
@@ -105,6 +108,12 @@ var _ = Context("Inside the default namespace", func() {
 									},
 								},
 							},
+						},
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"rayCluster": "user-label-PodTemplate",
+							"newLabel":   "newLabel-value",
 						},
 					},
 				},
@@ -171,16 +180,25 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: "user-custom-name", Namespace: "user-custom-namespace"}, svc),
 				time.Second*3, time.Millisecond*500).ShouldNot(BeNil(), "My head service = %v", svc)
+			// The selector should consist of the default labels. Just check the Ray ID label for now.
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
 			// The user provided selector should be ignored
 			Expect(svc.Spec.Selector["rayCluster"]).ShouldNot(Equal("user-selector-rayCluster"))
+			// The user provided HeadService label should not be used in the selector
+			Expect(svc.Spec.Selector["rayCluster"]).ShouldNot(Equal("user-headService-rayCluster"))
+			// New keys in the user-provided PodTemplate label should not appear in Selector
+			Expect(svc.Spec.Selector).ShouldNot(HaveKey("newLabel"))
+
 			// The user-provided labels should be merged with the default labels
 			Expect(svc.Labels["rayCluster"]).Should(Equal("user-headService-rayCluster"))
+			// Labels provided in PodTemplate should be ignored if they are new keys (not in default labels)
+			Expect(svc.Labels).ShouldNot(HaveKey("newLabel"))
 			// The user-provided port should appear somewhere in the ports
 			Expect(svc.Spec.Ports[0].Name).Should(Equal("user-port"))
 			Expect(svc.Spec.Ports[0].Port).Should(Equal(int32(12345)))
-			// The user-provided annotations should be merged with the default annotations
-			Expect(svc.Annotations["key"]).Should(Equal("user-headService-value"))
+			// The annotations in headService should be ovewritten by the annotations in the RayCluster HeadServiceAnnotations
+			Expect(svc.Annotations["key"]).ShouldNot(Equal("user-headService-value"))
+			Expect(svc.Annotations["key"]).Should(Equal("headServiceAnnotations-value"))
 
 		})
 
