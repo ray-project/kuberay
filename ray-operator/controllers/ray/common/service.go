@@ -30,12 +30,15 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 	default_labels := HeadServiceLabels(cluster)
 
-	// Priority: provided labels > default labels
-	for k, v := range default_labels {
-		if _, ok := labels[k]; !ok {
-			labels[k] = v
+	// selector consists of *only* the keys in default_labels, updated with the values in labels if they exist
+	selector := default_labels
+	for k := range default_labels {
+		if _, ok := labels[k]; ok {
+			selector[k] = labels[k]
 		}
 	}
+
+	labels_for_service := selector
 
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -57,14 +60,14 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// Deep copy the HeadService to avoid modifying the original object
 		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
 
-		// Merge labels with custom HeadService labels. If there are overlaps,
-		// ignore the custom HeadService labels.
-		for k, v := range labels {
+		// For the Labels field, merge labels_for_service with custom HeadService labels.
+		// If there are overlaps, ignore the custom HeadService labels.
+		for k, v := range labels_for_service {
 			headService.ObjectMeta.Labels[k] = v
 		}
 
-		// For the selector, use labels and ignore any custom HeadService selectors or labels.
-		headService.Spec.Selector = labels
+		// For the selector, ignore any custom HeadService selectors or labels.
+		headService.Spec.Selector = selector
 
 		// Merge annotations with custom HeadService annotations. If there are overlaps,
 		// ignore the custom HeadService annotations.
@@ -99,21 +102,21 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		return headService, nil
 	}
 
-	service := &corev1.Service{
+	headService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        default_name,
 			Namespace:   default_namespace,
-			Labels:      labels,
+			Labels:      labels_for_service,
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: labels,
+			Selector: selector,
 			Ports:    ports,
 			Type:     default_type,
 		},
 	}
 
-	return service, nil
+	return headService, nil
 }
 
 // BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows

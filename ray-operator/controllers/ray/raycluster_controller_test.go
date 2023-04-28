@@ -60,6 +60,31 @@ var _ = Context("Inside the default namespace", func() {
 					"node-manager-port":   "12346",
 					"num-cpus":            "1",
 				},
+				HeadService: &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-custom-name",
+						Namespace: "user-custom-namespace",
+						Labels: map[string]string{
+							"rayCluster": "user-headService-rayCluster",
+							"groupName":  "user-headService-headgroup",
+						},
+						Annotations: map[string]string{
+							"key": "user-headService-value",
+						},
+					},
+					Spec: corev1.ServiceSpec{
+						Ports: []corev1.ServicePort{
+							{
+								Name: "user-port",
+								Port: 12345,
+							},
+						},
+						Selector: map[string]string{
+							"rayCluster": "raycluster-sample",
+							"groupName":  "headgroup",
+						},
+					},
+				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						ServiceAccountName: "head-service-account",
@@ -139,9 +164,12 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: "raycluster-sample-head-svc", Namespace: "default"}, svc),
+				// The user-provided namespace should be ignored, but the name should be respected
+				getResourceFunc(ctx, client.ObjectKey{Name: "user-custom-name", Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
+			// The user-provided labels should be merged with the default labels
+			Expect(svc.Labels["rayCluster"]).Should(Equal("user-headService-rayCluster"))
 		})
 
 		It("should create 3 workers", func() {
