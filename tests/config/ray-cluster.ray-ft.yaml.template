@@ -167,12 +167,8 @@ metadata:
   name: test-script
 data:
   test_ray_serve_1.py: |
-    import requests
-    from starlette.requests import Request
     import ray
     from ray import serve
-    import time
-    import sys
 
     # 1: Define a Ray Serve model.
     @serve.deployment(route_prefix="/")
@@ -183,7 +179,7 @@ data:
         def __call__(self):
             return self._msg
 
-    ray.init(namespace=sys.argv[1])
+    ray.init()
     # 2: Deploy the model.
     handle = serve.run(MyModelDeployment.bind(msg="Hello world!"))
     # 3: Query the deployment and print the result.
@@ -194,6 +190,7 @@ data:
   test_ray_serve_2.py: |
     import requests
     import time
+    import json
 
     def retry_with_timeout(func, timeout=90):
         err = None
@@ -214,7 +211,19 @@ data:
         print('Response content:', response.text)
         assert(response.text == "Hello world!")
 
-    retry_with_timeout(send_req, 180)
+    def check_status():
+        headers = {
+            'Accept': 'application/json',
+        }
+        url = 'http://localhost:52365/api/serve/deployments/status'
+        response = requests.get(url, headers=headers)
+        status_json = json.loads(response.text)
+        print("Serve status:", status_json)
+        # Application "RUNNING": all deployments are healthy.
+        assert(status_json['app_status']['status'] == 'RUNNING')
+
+    retry_with_timeout(check_status, 240)
+    retry_with_timeout(send_req, 5)
 
   test_detached_actor_1.py: |
     import ray

@@ -115,13 +115,9 @@ class RayFTTestCase(unittest.TestCase):
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
 
-        # RAY_NAMESPACE is an abstraction in Ray. It is not a Kubernetes namespace.
-        ray_namespace = ''.join(random.choices(string.ascii_lowercase, k=10))
-        logger.info('Ray namespace: %s', ray_namespace)
-
         # Deploy a Ray Serve model.
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
-            f" python samples/test_ray_serve_1.py {ray_namespace}",
+            "python samples/test_ray_serve_1.py",
             check = False
         )
 
