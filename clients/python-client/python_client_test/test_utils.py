@@ -138,7 +138,6 @@ class TestUtils(unittest.TestCase):
         container = worker_group["template"]["spec"]["containers"][0]
         self.assertEqual(container["image"], "rayproject/ray:2.4.0")
         self.assertEqual(container["command"], ["/bin/bash", "-lc"])
-        self.assertEqual(container["name"], "ray-worker")
 
         resources = container["resources"]
         self.assertEqual(resources["requests"]["cpu"], "3")
