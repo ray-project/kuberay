@@ -15,7 +15,7 @@ test_cluster_body: dict = {
     "spec": {
         "rayVersion": "2.4.0",
         "headGroupSpec": {
-            "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
+            "rayStartParams": {"dashboard-host": "0.0.0.0"},
             "template": {
                 "metadata": {"labels": {}},
                 "spec": {
@@ -52,7 +52,7 @@ test_cluster_body: dict = {
                 "minReplicas": 1,
                 "maxReplicas": 10,
                 "groupName": "small-group",
-                "rayStartParams": {"block": "true"},
+                "rayStartParams": {},
                 "template": {
                     "spec": {
                         "containers": [
@@ -111,6 +111,60 @@ class TestUtils(unittest.TestCase):
         self.director = kuberay_cluster_builder.Director()
         self.utils = kuberay_cluster_utils.ClusterUtils()
 
+
+    def test_populate_worker_group(self):
+        worker_group, succeeded = self.utils.populate_worker_group(
+            group_name="small-group",
+            ray_image="rayproject/ray:2.4.0",
+            ray_command=["/bin/bash", "-lc"],
+            cpu_requests="3",
+            memory_requests="1G",
+            cpu_limits="5",
+            memory_limits="10G",
+            replicas=1,
+            min_replicas=1,
+            max_replicas=3,
+            ray_start_params={"block": "True"},
+        )
+        self.assertIsNotNone(worker_group)
+        self.assertEqual(succeeded, True)
+
+        self.assertEqual(worker_group["groupName"], "small-group")
+        self.assertEqual(worker_group["maxReplicas"], 3)
+        self.assertEqual(worker_group["minReplicas"], 1)
+        self.assertEqual(worker_group["rayStartParams"], {"block": "True"})
+        self.assertEqual(worker_group["replicas"], 1)
+
+        container = worker_group["template"]["spec"]["containers"][0]
+        self.assertEqual(container["image"], "rayproject/ray:2.4.0")
+        self.assertEqual(container["command"], ["/bin/bash", "-lc"])
+        self.assertEqual(container["name"], "ray-worker")
+
+        resources = container["resources"]
+        self.assertEqual(resources["requests"]["cpu"], "3")
+        self.assertEqual(resources["requests"]["memory"], "1G")
+        self.assertEqual(resources["limits"]["cpu"], "5")
+        self.assertEqual(resources["limits"]["memory"], "10G")
+
+        # min_replicas can be 0 and ray_start_params can be an empty dict.
+        worker_group, succeeded = self.utils.populate_worker_group(
+            group_name="small-group",
+            ray_image="rayproject/ray:2.3.0",
+            ray_command=["/bin/bash", "-lc"],
+            cpu_requests="3",
+            memory_requests="1G",
+            cpu_limits="5",
+            memory_limits="10G",
+            replicas=1,
+            min_replicas= 0,
+            max_replicas=3,
+            ray_start_params={},
+        )
+        self.assertIsNotNone(worker_group)
+        self.assertEqual(succeeded, True)
+        self.assertEqual(worker_group["rayStartParams"], {})
+        self.assertEqual(worker_group["minReplicas"], 0)
+
     def test_update_worker_group_replicas(self):
         cluster = self.director.build_small_cluster(name="small-cluster")
 
@@ -149,7 +203,7 @@ class TestUtils(unittest.TestCase):
 
         cluster, succeeded = self.utils.update_worker_group_resources(
             cluster,
-            group_name="small-group",
+            group_name = "small-group",
             cpu_requests = "3",
             memory_requests = "5G",
             cpu_limits = "5",

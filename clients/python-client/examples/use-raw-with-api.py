@@ -33,7 +33,6 @@ cluster_body: dict = {
             "rayStartParams": {
                 "dashboard-host": "0.0.0.0",
                 "num-cpus": "1",
-                "block": "true",
             },
             "template": {
                 "spec": {
@@ -69,7 +68,7 @@ cluster_body2: dict = {
     "spec": {
         "rayVersion": "2.4.0",
         "headGroupSpec": {
-            "rayStartParams": {"dashboard-host": "0.0.0.0", "block": "true"},
+            "rayStartParams": {"dashboard-host": "0.0.0.0"},
             "template": {
                 "metadata": {"labels": {}},
                 "spec": {
@@ -106,7 +105,7 @@ cluster_body2: dict = {
                 "minReplicas": 1,
                 "maxReplicas": 10,
                 "groupName": "small-group",
-                "rayStartParams": {"block": "true"},
+                "rayStartParams": {},
                 "template": {
                     "spec": {
                         "containers": [
