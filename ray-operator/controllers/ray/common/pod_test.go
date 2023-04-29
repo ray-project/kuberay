@@ -90,7 +90,6 @@ var instance = rayiov1alpha1.RayCluster{
 				RayStartParams: map[string]string{
 					"port":     "6379",
 					"num-cpus": "1",
-					"block":    "true",
 				},
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -366,17 +365,9 @@ func TestBuildPod(t *testing.T) {
 		checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	}
 
-	// Check RayStartParams
-	expectedResult := "true"
-	actualResult := cluster.Spec.HeadGroupSpec.RayStartParams["block"]
-
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-
 	// Check labels.
-	actualResult = pod.Labels[RayClusterLabelKey]
-	expectedResult = cluster.Name
+	actualResult := pod.Labels[RayClusterLabelKey]
+	expectedResult := cluster.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -418,21 +409,6 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
 	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
-
-	// Check RayStartParams
-	expectedResult = fmt.Sprintf("%s:6379", fqdnRayIP)
-	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["address"]
-
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-
-	expectedResult = "true"
-	actualResult = cluster.Spec.WorkerGroupSpecs[0].RayStartParams["block"]
-
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
@@ -912,4 +888,94 @@ func TestDefaultInitContainer(t *testing.T) {
 	// The values of `Resources` should be the same in both Ray container and health-check container.
 	assert.NotEmpty(t, rayContainer.Resources, "The test only makes sense if the Ray container has resource limit/request.")
 	assert.Equal(t, rayContainer.Resources, healthCheckContainer.Resources)
+}
+
+func TestSetMissingRayStartParamsAddress(t *testing.T) {
+	// The address option is automatically injected into RayStartParams with a default value of <Fully Qualified Domain Name (FQDN)>:<headPort> for workers only, which is used to connect to the Ray cluster.
+	// The head should not include the address option in RayStartParams, as it can access the GCS server, which also runs on the head, via localhost.
+	// Although not recommended, users can manually set the address option for both head and workers.
+
+	headPort := "6379"
+	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+	customAddress := "custom-address:1234"
+
+	// Case 1: Head node with no address option set.
+	rayStartParams := map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.NotContains(t, rayStartParams, "address", "Head node should not have an address option set by default.")
+
+	// Case 2: Head node with custom address option set.
+	rayStartParams = map[string]string{"address": customAddress}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+
+	// Case 3: Worker node with no address option set.
+	rayStartParams = map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
+	assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
+
+	// Case 4: Worker node with custom address option set.
+	rayStartParams = map[string]string{"address": customAddress}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+}
+
+func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
+	// The metrics-export-port option is automatically injected into RayStartParams with a default value of DefaultMetricsPort for both head and workers.
+	// Users can manually set the metrics-export-port option to customize the metrics export port and scrape Ray’s metrics using Prometheus via <ip>:<custom metrics export port>.
+	// See https://github.com/ray-project/kuberay/pull/954 for more details.
+
+	headPort := "6379"
+	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+	customMetricsPort := DefaultMetricsPort + 1
+
+	// Case 1: Head node with no metrics-export-port option set.
+	rayStartParams := map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+
+	// Case 2: Head node with custom metrics-export-port option set.
+	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+
+	// Case 3: Worker node with no metrics-export-port option set.
+	rayStartParams = map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+
+	// Case 4: Worker node with custom metrics-export-port option set.
+	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+}
+
+func TestSetMissingRayStartParamsBlock(t *testing.T) {
+	// The --block option is automatically injected into RayStartParams with a default value of true for both head and workers.
+	// Although not recommended, users can manually set the --block option.
+	// See https://github.com/ray-project/kuberay/pull/675 for more details.
+
+	headPort := "6379"
+	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+
+	// Case 1: Head node with no --block option set.
+	rayStartParams := map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+
+	// Case 2: Head node with --block option set to false.
+	rayStartParams = map[string]string{"block": "false"}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+
+	// Case 3: Worker node with no --block option set.
+	rayStartParams = map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+
+	// Case 4: Worker node with --block option set to false.
+	rayStartParams = map[string]string{"block": "false"}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
