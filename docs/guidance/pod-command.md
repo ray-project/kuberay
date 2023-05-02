@@ -21,7 +21,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: rayproject/ray:2.4.0
           resources:
             ...
           ports:
@@ -30,12 +30,13 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
           command: ["echo 123"]
           args: ["456"]
 ```
+
 * Ray head Pod
-  * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
-  * `spec.containers.0.args` contains two parts:
-    * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together.
-    * (Part 2) **ray start command**: The command is created based on `rayStartParams` specified in RayCluster. The command will look like `ulimit -n 65536; ray start ...`.
-    * To summarize, `spec.containers.0.args` will be `$(user-specified command) && $(ray start command)`.
+    * `spec.containers.0.command` is hardcoded with `["/bin/bash", "-lc", "--"]`.
+    * `spec.containers.0.args` contains two parts:
+        * (Part 1) **user-specified command**: A string concatenates `headGroupSpec.template.spec.containers.0.command` from RayCluster and `headGroupSpec.template.spec.containers.0.args` from RayCluster together.
+        * (Part 2) **ray start command**: The command is created based on `rayStartParams` specified in RayCluster. The command will look like `ulimit -n 65536; ray start ...`.
+        * To summarize, `spec.containers.0.args` will be `$(user-specified command) && $(ray start command)`.
 
 * Example
     ```sh
@@ -128,6 +129,7 @@ lifecycle:
     exec:
       command: ["/bin/sh","-c","/home/ray/samples/ray_cluster_resources.sh"]
 ```
+
 * We execute the script `ray_cluster_resources.sh` via the postStart hook. Based on [this document](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks), there is no guarantee that the hook will execute before the container ENTRYPOINT. Hence, we need to wait for RayCluster to finish initialization in `ray_cluster_resources.sh`.
 
 * Example
@@ -143,6 +145,6 @@ lifecycle:
 
     # Open the browser and check the Dashboard (${YOUR_IP}:8265/#/job).
     # You shold see a SUCCEEDED job with the following Entrypoint:
-    # 
+    #
     # `python -c "import ray; ray.init(); print(ray.cluster_resources())"`
     ```

@@ -79,6 +79,7 @@ const (
 	RAY_ADDRESS                             = "RAY_ADDRESS"
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
+	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
@@ -88,7 +89,8 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 
 	// Ray core default configurations
-	DefaultRedisPassword = "5241590000000000"
+	DefaultRedisPassword                 = "5241590000000000"
+	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
 	LOCAL_HOST = "127.0.0.1"
 	// Ray FT default readiness probe values

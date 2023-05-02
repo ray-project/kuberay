@@ -100,8 +100,7 @@ var _ = Context("Inside the default namespace", func() {
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"rayCluster": "raycluster-sample",
-								"groupName":  "headgroup",
+								"groupName": "headgroup",
 							},
 							Annotations: map[string]string{
 								"key": "value",
@@ -111,7 +110,7 @@ var _ = Context("Inside the default namespace", func() {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.3.0",
+									Image: "rayproject/ray:2.4.0",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -178,15 +177,14 @@ var _ = Context("Inside the default namespace", func() {
 							ObjectMeta: metav1.ObjectMeta{
 								Namespace: "default",
 								Labels: map[string]string{
-									"rayCluster": "raycluster-sample",
-									"groupName":  "small-group",
+									"groupName": "small-group",
 								},
 							},
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.3.0",
+										Image:   "rayproject/ray:2.4.0",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{

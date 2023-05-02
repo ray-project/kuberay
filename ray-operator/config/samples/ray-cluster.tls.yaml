@@ -5,7 +5,7 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: raycluster-tls
 spec:
-  rayVersion: '2.3.0'
+  rayVersion: '2.4.0'
   # Ray head pod configuration
   headGroupSpec:
     rayStartParams:
@@ -18,7 +18,7 @@ spec:
         initContainers:
           # Generate head's private key and certificate before `ray start`.
           - name: ray-head-tls
-            image: rayproject/ray:2.3.0
+            image: rayproject/ray:2.4.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -35,7 +35,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: rayproject/ray:2.4.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -63,7 +63,7 @@ spec:
               cpu: "500m"
               memory: "2G"
           env:
-            # Environment variables for Ray TLS authentication. 
+            # Environment variables for Ray TLS authentication.
             # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
             - name: RAY_USE_TLS
               value: "1"
@@ -103,7 +103,7 @@ spec:
         initContainers:
           # Generate worker's private key and certificate before `ray start`.
           - name: ray-worker-tls
-            image: rayproject/ray:2.3.0
+            image: rayproject/ray:2.4.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -120,7 +120,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.3.0
+          image: rayproject/ray:2.4.0
           lifecycle:
             preStop:
               exec:
@@ -143,7 +143,7 @@ spec:
               cpu: "500m"
               memory: "1G"
           env:
-            # Environment variables for Ray TLS authentication. 
+            # Environment variables for Ray TLS authentication.
             # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
             - name: RAY_USE_TLS
               value: "1"
@@ -238,7 +238,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: tls
-data: 
+data:
   gencert_head.sh: |
     #!/bin/sh
     ## Create tls.key

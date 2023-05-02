@@ -191,6 +191,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+	// Do not modify `deepCopyRayContainer` anywhere.
+	deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
 	initContainer := v1.Container{
 		Name:            "wait-gcs-ready",
 		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
@@ -203,8 +205,10 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
 		// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
 		// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
-		Env:          podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().Env,
-		VolumeMounts: podTemplate.Spec.Containers[rayContainerIndex].DeepCopy().VolumeMounts,
+		Env:          deepCopyRayContainer.Env,
+		VolumeMounts: deepCopyRayContainer.VolumeMounts,
+		// If users specify ResourceQuota for the namespace, the init container need to specify resource explicitly.
+		Resources: deepCopyRayContainer.Resources,
 	}
 	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 
@@ -646,13 +650,20 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			}
 		}
 	}
+	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayiov1alpha1.WorkerNode {
+		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
+		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
+		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
+		// crash if the GCS server is down for more than 60s. Typically, the new GCS server will be available
+		// in 120 seconds, so we set the timeout to 600s to avoid the worker nodes crashing.
+		if ftEnabled := pod.Annotations[RayFTEnabledAnnotationKey] == "true"; ftEnabled {
+			gcsTimeout := v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: DefaultWorkerRayGcsReconnectTimeoutS}
+			container.Env = append(container.Env, gcsTimeout)
+		}
+	}
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
-	if len(envVars) == 0 {
-		return false
-	}
-
 	for _, env := range envVars {
 		if env.Name == envName {
 			return true

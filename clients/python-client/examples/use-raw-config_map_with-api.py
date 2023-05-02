@@ -8,8 +8,8 @@ from kubernetes import client
 from kubernetes.stream import stream
 
 
-""" 
-in case you are working directly with the source, and don't wish to 
+"""
+in case you are working directly with the source, and don't wish to
 install the module with pip install, you can directly import the packages by uncommenting the following code.
 """
 
@@ -47,7 +47,7 @@ cluster_body: dict = {
     "name": "raycluster-getting-started"
   },
   "spec": {
-    "rayVersion": "2.3.0",
+    "rayVersion": "2.4.0",
     "headGroupSpec": {
       "rayStartParams": {
         "dashboard-host": "0.0.0.0",
@@ -59,7 +59,7 @@ cluster_body: dict = {
           "containers": [
             {
               "name": "ray-head",
-              "image": "rayproject/ray:2.3.0",
+              "image": "rayproject/ray:2.4.0",
               "volumeMounts": [
                 {
                   "mountPath": "/opt",
@@ -119,7 +119,7 @@ def main():
 
 
 
-   
+
     # waiting for the configmap tp be created
     time.sleep(3)
 
@@ -156,9 +156,9 @@ def main():
                         'python',
                         '/opt/sample_code.py'
                         ]
-                    
+
                     print("executing a Python command in the raycluster: {}".format(exec_command))
-                    # executing a ray command in the head pod 
+                    # executing a ray command in the head pod
                     resp = stream( my_kube_ray_api.core_v1_api.connect_get_namespaced_pod_exec,
                                 pod.metadata.name,
                                 'default',
@@ -177,7 +177,7 @@ def main():
                     print('An exception has ocurred in reading the logs {}'.format(e))
     except ApiException as e:
                     print('An exception has ocurred in listing pods the logs'.format(e))
-        
+
     kube_ray_list = my_kube_ray_api.list_ray_clusters(k8s_namespace="default", label_selector='demo-cluster=yes')
 
     if "items" in kube_ray_list:
@@ -187,15 +187,15 @@ def main():
                 name=cluster["metadata"]["name"],
                 k8s_namespace=cluster["metadata"]["namespace"],
             ) # deleting the cluster
-    
+
     try:
        my_kube_ray_api.core_v1_api.delete_namespaced_config_map(configmap_body["metadata"]["name"], "default") # deleting the configmap
-       print("deleting configmap: {}".format(configmap_body["metadata"]["name"]))    
+       print("deleting configmap: {}".format(configmap_body["metadata"]["name"]))
     except ApiException as e:
         if e.status == 404:
             print("configmap  = {}, does not exist moving on...".format(configmap_body["metadata"]["name"], e))
         else:
-            print("error deleting configmap: {}".format(e))    
+            print("error deleting configmap: {}".format(e))
 
 if __name__ == "__main__":
     main()

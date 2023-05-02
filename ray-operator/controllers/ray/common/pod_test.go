@@ -526,6 +526,76 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	assert.True(t, hasCorrectDeathEnv)
 }
 
+func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
+	// Test 1
+	cluster := instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		RayFTEnabledAnnotationKey: "true",
+	}
+
+	// Build a head Pod.
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayiov1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+
+	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
+	rayContainerIndex := getRayContainerIndex(pod.Spec)
+	rayContainer := pod.Spec.Containers[rayContainerIndex]
+
+	// "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" should not be set on the head Pod by default
+	assert.True(t, !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
+
+	// Test 2
+	cluster = instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		RayFTEnabledAnnotationKey: "true",
+	}
+
+	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the head group spec.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayContainerIndex].Env,
+		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	rayContainer = pod.Spec.Containers[rayContainerIndex]
+
+	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
+	checkContainerEnv(t, rayContainer, RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "60")
+
+	// Test 3
+	cluster = instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		RayFTEnabledAnnotationKey: "true",
+	}
+
+	// Build a worker pod
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+
+	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
+	rayContainer = pod.Spec.Containers[rayContainerIndex]
+	checkContainerEnv(t, rayContainer, RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, DefaultWorkerRayGcsReconnectTimeoutS)
+
+	// Test 4
+	cluster = instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		RayFTEnabledAnnotationKey: "true",
+	}
+
+	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the worker group spec.
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env = append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[rayContainerIndex].Env,
+		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
+	worker = cluster.Spec.WorkerGroupSpecs[0]
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(podTemplateSpec, rayiov1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+
+	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
+	rayContainer = pod.Spec.Containers[rayContainerIndex]
+	checkContainerEnv(t, rayContainer, RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "120")
+}
+
 // Check that autoscaler container overrides work as expected.
 func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	cluster := instance.DeepCopy()
@@ -827,6 +897,8 @@ func TestDefaultInitContainer(t *testing.T) {
 	// Ray container to the init container. This may be changed in the future.
 	healthCheckContainer := podTemplateSpec.Spec.InitContainers[numInitContainers-1]
 	rayContainer := worker.Template.Spec.Containers[getRayContainerIndex(worker.Template.Spec)]
+
+	assert.NotEqual(t, len(rayContainer.Env), 0, "The test only makes sense if the Ray container has environment variables.")
 	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
 	for _, env := range rayContainer.Env {
 		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
@@ -836,4 +908,8 @@ func TestDefaultInitContainer(t *testing.T) {
 			checkContainerEnv(t, healthCheckContainer, env.Name, env.ValueFrom.FieldRef.FieldPath)
 		}
 	}
+
+	// The values of `Resources` should be the same in both Ray container and health-check container.
+	assert.NotEmpty(t, rayContainer.Resources, "The test only makes sense if the Ray container has resource limit/request.")
+	assert.Equal(t, rayContainer.Resources, healthCheckContainer.Resources)
 }

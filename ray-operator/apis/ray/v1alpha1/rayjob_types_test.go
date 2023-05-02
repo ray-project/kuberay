@@ -37,8 +37,7 @@ var expectedRayJob = RayJob{
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							"rayCluster": "raycluster-sample",
-							"groupName":  "headgroup",
+							"groupName": "headgroup",
 						},
 						Annotations: map[string]string{
 							"key": "value",
@@ -48,7 +47,7 @@ var expectedRayJob = RayJob{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.3.0",
+								Image: "rayproject/ray:2.4.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -102,15 +101,14 @@ var expectedRayJob = RayJob{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Labels: map[string]string{
-								"rayCluster": "raycluster-sample",
-								"groupName":  "small-group",
+								"groupName": "small-group",
 							},
 						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.3.0",
+									Image:   "rayproject/ray:2.4.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -162,8 +160,7 @@ var testRayJobJSON = `{
                     "metadata": {
                         "creationTimestamp": null,
                         "labels": {
-                            "groupName": "headgroup",
-                            "rayCluster": "raycluster-sample"
+                            "groupName": "headgroup"
                         },
                         "annotations": {
                             "key": "value"
@@ -173,7 +170,7 @@ var testRayJobJSON = `{
                         "containers": [
                             {
                                 "name": "ray-head",
-                                "image": "rayproject/ray:2.3.0",
+                                "image": "rayproject/ray:2.4.0",
                                 "ports": [
                                     {
                                         "name": "gcs-server",
@@ -228,15 +225,14 @@ var testRayJobJSON = `{
                             "namespace": "default",
                             "creationTimestamp": null,
                             "labels": {
-                                "groupName": "small-group",
-                                "rayCluster": "raycluster-sample"
+                                "groupName": "small-group"
                             }
                         },
                         "spec": {
                             "containers": [
                                 {
                                     "name": "ray-worker",
-                                    "image": "rayproject/ray:2.3.0",
+                                    "image": "rayproject/ray:2.4.0",
                                     "command": [
                                         "echo"
                                     ],
