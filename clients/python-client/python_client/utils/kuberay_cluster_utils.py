@@ -37,12 +37,7 @@ class ClusterUtils:
     def __init__(self):
         # loading the config
         self.kube_config = config.load_kube_config()
-        self.api = client.CustomObjectsApi()
         self.core_v1_api = client.CoreV1Api()
-
-    def __del__(self):
-        self.api = None
-        self.kube_config = None
 
     def populate_meta(
         self,
