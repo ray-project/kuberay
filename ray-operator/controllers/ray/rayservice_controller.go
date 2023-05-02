@@ -124,6 +124,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Check if we need to create pending RayCluster.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName != "" && pendingRayClusterInstance == nil {
 		// Update RayService Status since reconcileRayCluster may mark RayCluster restart.
+		r.Log.Info("r.Status().Update() Update RayService Status since reconcileRayCluster may mark RayCluster restart.")
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Fail to update status of RayService after RayCluster changes", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -212,6 +213,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Final status update for any CR modification.
+	r.Log.Info("r.Status().Update() Final status update for any CR modification.")
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 		logger.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -249,6 +251,7 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 
 func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, status rayv1alpha1.ServiceStatus, err error) error {
 	rayServiceInstance.Status.ServiceStatus = status
+	r.Log.Info("r.Status().Update() updateState", "error", err)
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
 	}
@@ -877,6 +880,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
 	} else if isHealthy && !isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.WaitForServeDeploymentReady
+		r.Log.Info("r.Status().Update() isHealthy && !isReady")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, true, false, err
 		}
@@ -885,6 +889,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
 		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
+		r.Log.Info("r.Status().Update() !isHealthy")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
