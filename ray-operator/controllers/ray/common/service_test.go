@@ -202,3 +202,20 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsName])
 	}
 }
+
+func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
+	svc1, err1 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	svc2, err2 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	assert.Nil(t, err1)
+	assert.Nil(t, err2)
+
+	ports1 := svc1.Spec.Ports
+	ports2 := svc2.Spec.Ports
+
+	// length should be same
+	assert.Equal(t, len(ports1), len(ports2))
+	for i := 0; i < len(ports1); i++ {
+		// name should be same
+		assert.Equal(t, ports1[i].Name, ports2[i].Name)
+	}
+}
