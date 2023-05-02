@@ -382,7 +382,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			return true
 		}
 		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.RayServiceClusterHashKey]
-		goalClusterHash, err := r.generateRayClusterJsonHash(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, err := generateRayClusterJsonHash(rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
 			errContext := "Failed to serialize new RayCluster config. " +
 				"Manual config updates will NOT be tracked accurately. " +
@@ -413,12 +413,16 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 		return nil, nil
 	}
 
-	var err error
 	// Create a new RayCluster if:
 	// 1. No RayCluster pending.
 	// 2. Config update for the pending cluster.
+	equal, err := compareRayClusterJsonHash(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
+	if err != nil {
+		r.Log.Error(err, "Fail to generate hash for RayClusterSpec")
+		return nil, err
+	}
 
-	if pendingRayCluster == nil || !r.compareRayClusterJsonHash(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec) {
+	if pendingRayCluster == nil || !equal {
 		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 		if err != nil {
 			return nil, err
@@ -490,7 +494,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		rayClusterAnnotations[k] = v
 	}
 	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
-	rayClusterAnnotations[common.RayServiceClusterHashKey], err = r.generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
+	rayClusterAnnotations[common.RayServiceClusterHashKey], err = generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		errContext := "Failed to serialize RayCluster config. " +
 			"Manual config updates will NOT be tracked accurately. " +
@@ -928,7 +932,7 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	return nil
 }
 
-func (r *RayServiceReconciler) generateRayClusterJsonHash(rayClusterSpec rayv1alpha1.RayClusterSpec) (string, error) {
+func generateRayClusterJsonHash(rayClusterSpec rayv1alpha1.RayClusterSpec) (string, error) {
 	// Mute all fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
 	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
@@ -941,17 +945,15 @@ func (r *RayServiceReconciler) generateRayClusterJsonHash(rayClusterSpec rayv1al
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
-func (r *RayServiceReconciler) compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alpha1.RayClusterSpec) bool {
-	hash1, err1 := r.generateRayClusterJsonHash(spec1)
+func compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alpha1.RayClusterSpec) (bool, error) {
+	hash1, err1 := generateRayClusterJsonHash(spec1)
 	if err1 != nil {
-		r.Log.Error(err1, "Fail to generate hash for RayClusterSpec", "RayClusterSpec", spec1)
-		return false
+		return false, err1
 	}
 
-	hash2, err2 := r.generateRayClusterJsonHash(spec2)
+	hash2, err2 := generateRayClusterJsonHash(spec2)
 	if err2 != nil {
-		r.Log.Error(err2, "Fail to generate hash for RayClusterSpec", "RayClusterSpec", spec2)
-		return false
+		return false, err2
 	}
-	return hash1 == hash2
+	return hash1 == hash2, nil
 }
