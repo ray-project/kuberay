@@ -474,6 +474,34 @@ class ClusterUtils:
         )
         return cluster, False
 
+    def exec_command(
+        self,
+        command,
+        cluster_name,
+        cluster_namespace = "default", 
+    ) -> str:
+        """Execute command in the cluster
+
+        Parameters:
+        - command (str): The command which will be executed in the head pod of the ray cluster.
+        - cluster_name (str): The name of the ray cluster where the python file will be executed.
+        - cluster_name (str): The name of the namespace which the ray cluster is in.
+
+        Returns:
+        - Tuple (str, bool): execution ouput of the python file, and a boolean indicating whether the update was successful.
+        """
+        head_pod = self.get_head_pod(cluster_name, cluster_namespace)
+        if head_pod == "":
+            return "", False
+        exec_command = f"kubectl exec {head_pod} -- {command} 2>&1"
+        result = subprocess.run(exec_command, shell=True, stdout=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            log.error(
+                f"error while exec command {exec_command} in {cluster_name}:\n {result.stdout}"
+            )
+            return "", False       
+        return result.stdout, True
+
     def exec_file(
         self,
         file_path,
