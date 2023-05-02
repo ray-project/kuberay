@@ -202,13 +202,15 @@ class RayClusterApi:
             Bool: True if the raycluster status is Running, False otherwise.
 
         """
-        status = self.get_ray_cluster_status(name, k8s_namespace, timeout, delay_between_attempts)
+        start_time = time.time()
+        while time.time()-start_time < timeout:
+            status = self.get_ray_cluster_status(name, k8s_namespace, timeout, delay_between_attempts)
+            if status and "state" in status and status["state"]=="ready":
+                return True
+            log.info("raycluster {} status.state is not ready, waiting...".format(name))
+            time.sleep(delay_between_attempts)
 
-        #TODO: once we add State to Status, we should check for that as well  <if status and status["state"] == "Running":>
-        if status and status["head"] and status["head"]["serviceIP"]:
-            return True
- 
-        log.info("raycluster {} status is not running yet, current status is {}".format(name, status["state"] if status else "unknown"))
+        log.info("raycluster {} status.state is not ready yet, current status is {}".format(name, status["state"] if status else "unknown"))
         return False
 
 

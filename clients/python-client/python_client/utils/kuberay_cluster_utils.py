@@ -474,34 +474,6 @@ class ClusterUtils:
         )
         return cluster, False
 
-    def exec_command(
-        self,
-        command,
-        cluster_name,
-        cluster_namespace = "default", 
-    ) -> str:
-        """Execute command in the cluster
-
-        Parameters:
-        - command (str): The command which will be executed in the head pod of the ray cluster.
-        - cluster_name (str): The name of the ray cluster where the python file will be executed.
-        - cluster_name (str): The name of the namespace which the ray cluster is in.
-
-        Returns:
-        - Tuple (str, bool): execution ouput of the python file, and a boolean indicating whether the update was successful.
-        """
-        head_pod = self.get_head_pod(cluster_name, cluster_namespace)
-        if head_pod == "":
-            return "", False
-        exec_command = f"kubectl exec {head_pod} -- {command} 2>&1"
-        result = subprocess.run(exec_command, shell=True, stdout=subprocess.PIPE, text=True)
-        if result.returncode != 0:
-            log.error(
-                f"error while exec command {exec_command} in {cluster_name}:\n {result.stdout}"
-            )
-            return "", False       
-        return result.stdout, True
-
     def exec_file(
         self,
         file_path,
@@ -528,19 +500,36 @@ class ClusterUtils:
             return "", False
 
         target_path = "/tmp/" +  str(time.time()) + os.path.basename(file_path)
+
         copy_command = f"kubectl cp {file_path} {head_pod}:{target_path}"
-        result = subprocess.run(copy_command, shell=True, stderr=subprocess.PIPE, text=True)
+        result = self.shell_subprocess_run(copy_command, "copy file into ray cluster")
         if result.returncode != 0:
-            log.error(
-                f"Error when copy file into ray cluster {result.stderr}"
-            )
             return "", False
 
-        exec_command = f"python {target_path}"
-        result = self.exec_command(exec_command, cluster_name, cluster_namespace)
+        exec_command = f"kubectl exec {head_pod} -- python {target_path}"
+        result = self.shell_subprocess_run(exec_command, "exec file in ray cluster")
+        if result.returncode != 0:
+            return "", False
+        output = result.stdout
 
         delete_command = f"kubectl exec {head_pod} -- rm {target_path}"
-        subprocess.run(delete_command, shell=True)
+        result = self.shell_subprocess_run(delete_command, "delete file in ray cluster")
+        if result.returncode != 0:
+            return "", False
+        
+        return output, True
+
+    def shell_subprocess_run(self, command, debug_msg=""):
+        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            if debug_msg == "":
+                log.error(
+                    f"error exec command: \"{command}\"\nError message: {result.stderr}"
+                )
+            else:
+                log.error(
+                    f"Error when {debug_msg}. Command:\"{command}\"\nError message: {result.stderr}"
+                )
         return result
     
     def get_head_pod(
