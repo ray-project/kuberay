@@ -102,7 +102,8 @@ test_cluster_body: dict = {
             "serviceIP": "10.152.183.194"
         },
         "lastUpdateTime": "2023-02-16T05:15:17Z",
-        "maxWorkerReplicas": 2
+        "maxWorkerReplicas": 2,
+        "state": "ready"
     }
 }
 
