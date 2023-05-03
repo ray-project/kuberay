@@ -42,7 +42,7 @@ spec:
         rayActorOptions:
           numCpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.100.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.4.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
     enableInTreeAutoscaling: true
     autoscalerOptions:
