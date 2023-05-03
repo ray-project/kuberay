@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -51,7 +52,7 @@ var _ = Context("Inside the default namespace", func() {
 			Suspend:    true,
 			Entrypoint: "sleep 999",
 			RayClusterSpec: &rayiov1alpha1.RayClusterSpec{
-				RayVersion: "1.12.1",
+				RayVersion: "2.4.0",
 				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
 					Replicas:    pointer.Int32(1),
@@ -204,8 +205,11 @@ var _ = Context("Inside the default namespace", func() {
 			// However the actual cluster instance and underlying resources should not be created while suspend == true
 			Eventually(
 				// k8sClient client throws error if resource not found
-				getResourceFunc(ctx, client.ObjectKey{Name: mySuspendedRayJob.Status.RayClusterName, Namespace: "default"}, mySuspendedRayCluster),
-				time.Second*10, time.Millisecond*500).Should(Not(BeNil()))
+				func() bool {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: mySuspendedRayJob.Status.RayClusterName, Namespace: "default"}, mySuspendedRayCluster)()
+					return errors.IsNotFound(err)
+				},
+				time.Second*10, time.Millisecond*500).Should(BeTrue())
 		})
 
 		It("should unsuspend a rayjob object", func() {

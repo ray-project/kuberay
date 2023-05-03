@@ -243,10 +243,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
-			err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1alpha1.JobStatusStopped, rayJobInstance.Status.JobDeploymentStatus, nil)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			if info.JobStatus != rayv1alpha1.JobStatusStopped {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
+
 			_, err = r.deleteCluster(ctx, rayJobInstance)
 			if err != nil && !errors.IsNotFound(err) {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil

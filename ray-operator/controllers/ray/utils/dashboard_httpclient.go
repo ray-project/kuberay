@@ -78,7 +78,7 @@ type ServingClusterDeployments struct {
 type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments(context.Context) (string, error)
-	UpdateDeployments(ctx context.Context, specs rayv1alpha1.ServeDeploymentGraphSpec) error
+	UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error
 	GetDeploymentsStatus(context.Context) (*ServeDeploymentStatuses, error)
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
