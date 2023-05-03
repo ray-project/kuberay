@@ -353,7 +353,7 @@ var _ = Context("Inside the default namespace", func() {
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "New pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 			initialPendingClusterName, _ := getPreparingRayClusterNameFunc(ctx, myRayService)()
-			fmt.Printf("initialPendingClusterName: %v\n", initialPendingClusterName)
+
 			// Simulate that the pending RayCluster is updated by the autoscaler.
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
