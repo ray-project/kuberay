@@ -44,13 +44,7 @@ spec:
     headGroupSpec:
       # the following params are used to complete the ray start: ray start --head --block ...
       rayStartParams:
-        port: '6379' # should match container port named gcs-server
-        #include_webui: 'true'
-        object-store-memory: '100000000'
-        # webui_host: "10.1.2.60"
         dashboard-host: '0.0.0.0'
-        num-cpus: '2' # can be auto-completed from the limits
-        num-cpus: "1000"
       #pod template
       template:
         metadata:
@@ -88,9 +82,7 @@ spec:
         #  - raycluster-complete-worker-small-group-hv457
         #  - raycluster-complete-worker-small-group-k8tj7
         # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
-        rayStartParams:
-          node-ip-address: $$MY_POD_IP
-          num-cpus: "1000"
+        rayStartParams: {}
         #pod template
         template:
           spec:

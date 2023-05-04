@@ -36,8 +36,7 @@ var instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Labels: map[string]string{
-						"rayCluster": "raycluster-sample",
-						"groupName":  "headgroup",
+						"groupName": "headgroup",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -274,5 +273,22 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 	if headService.ObjectMeta.Namespace == "" {
 		t.Errorf("Generated head service namespace is empty")
+	}
+}
+
+func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
+	svc1, err1 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	svc2, err2 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	assert.Nil(t, err1)
+	assert.Nil(t, err2)
+
+	ports1 := svc1.Spec.Ports
+	ports2 := svc2.Spec.Ports
+
+	// length should be same
+	assert.Equal(t, len(ports1), len(ports2))
+	for i := 0; i < len(ports1); i++ {
+		// name should be same
+		assert.Equal(t, ports1[i].Name, ports2[i].Name)
 	}
 }

@@ -21,7 +21,7 @@ Currently, for timing (1), we can set the container's `Command` and `Args` in Ra
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: rayproject/ray:2.4.0
           resources:
             ...
           ports:
@@ -145,6 +145,6 @@ lifecycle:
 
     # Open the browser and check the Dashboard (${YOUR_IP}:8265/#/job).
     # You shold see a SUCCEEDED job with the following Entrypoint:
-    # 
+    #
     # `python -c "import ray; ray.init(); print(ray.cluster_resources())"`
     ```

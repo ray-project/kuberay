@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,6 +121,14 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 			Ports:    ports,
 			Type:     default_type,
 		},
+	}
+
+	// This change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
+	// sorting the ServicePorts on their name
+	if len(headService.Spec.Ports) > 1 {
+		sort.SliceStable(headService.Spec.Ports, func(i, j int) bool {
+			return headService.Spec.Ports[i].Name < headService.Spec.Ports[j].Name
+		})
 	}
 
 	return headService, nil
