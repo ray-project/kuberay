@@ -31,14 +31,20 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 	default_labels := HeadServiceLabels(cluster)
 
 	// selector consists of *only* the keys in default_labels, updated with the values in labels if they exist
-	selector := default_labels
+	selector := make(map[string]string)
 	for k := range default_labels {
 		if _, ok := labels[k]; ok {
 			selector[k] = labels[k]
+		} else {
+			selector[k] = default_labels[k]
 		}
 	}
 
-	labels_for_service := selector
+	// Deep copy the selector to avoid modifying the original object
+	labels_for_service := make(map[string]string)
+	for k, v := range selector {
+		labels_for_service[k] = v
+	}
 
 	if annotations == nil {
 		annotations = make(map[string]string)
