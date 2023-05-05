@@ -266,12 +266,12 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatuses(oldStatus rayv1alp
 	}
 
 	if r.inconsistentRayServiceStatus(oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ActiveServiceStatus changed"))
+		r.Log.Info("inconsistentRayServiceStatus RayService ActiveServiceStatus changed")
 		return true
 	}
 
 	if r.inconsistentRayServiceStatus(oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService PendingServiceStatus changed"))
+		r.Log.Info("inconsistentRayServiceStatus RayService PendingServiceStatus changed")
 		return true
 	}
 
