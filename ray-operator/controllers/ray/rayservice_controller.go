@@ -107,6 +107,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
@@ -124,6 +125,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Check if we need to create pending RayCluster.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName != "" && pendingRayClusterInstance == nil {
 		// Update RayService Status since reconcileRayCluster may mark RayCluster restart.
+		r.Log.Info("r.Status().Update() Update RayService Status since reconcileRayCluster may mark RayCluster restart.")
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Fail to update status of RayService after RayCluster changes", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -212,12 +214,68 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Final status update for any CR modification.
-	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		logger.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
+		r.Log.Info("r.Status().Update() Final status update for any CR modification.")
+		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
+			logger.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
 	}
 
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha1.RayServiceStatus, newStatus rayv1alpha1.RayServiceStatus) bool {
+	if oldStatus.RayClusterName != newStatus.RayClusterName {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService RayClusterName changed from %s to %s", oldStatus.RayClusterName, newStatus.RayClusterName))
+		return true
+	}
+
+	if oldStatus.DashboardStatus.IsHealthy != newStatus.DashboardStatus.IsHealthy {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DashboardStatus changed from %v to %v", oldStatus.DashboardStatus, newStatus.DashboardStatus))
+		return true
+	}
+
+	if oldStatus.ApplicationStatus.Status != newStatus.ApplicationStatus.Status ||
+		oldStatus.ApplicationStatus.Message != newStatus.ApplicationStatus.Message {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldStatus.ApplicationStatus, newStatus.ApplicationStatus))
+		return true
+	}
+
+	if len(oldStatus.ServeStatuses) != len(newStatus.ServeStatuses) {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService number of ServeStatus changed from %v to %v", len(oldStatus.ServeStatuses), len(newStatus.ServeStatuses)))
+		return true
+	}
+
+	for i := 0; i < len(oldStatus.ServeStatuses); i++ {
+		if oldStatus.ServeStatuses[i].Name != newStatus.ServeStatuses[i].Name ||
+			oldStatus.ServeStatuses[i].Status != newStatus.ServeStatuses[i].Status ||
+			oldStatus.ServeStatuses[i].Message != newStatus.ServeStatuses[i].Message {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServeDeploymentStatus changed from %v to %v", oldStatus.ServeStatuses[i], newStatus.ServeStatuses[i]))
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *RayServiceReconciler) inconsistentRayServiceStatuses(oldStatus rayv1alpha1.RayServiceStatuses, newStatus rayv1alpha1.RayServiceStatuses) bool {
+	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServiceStatus changed from %s to %s", oldStatus.ServiceStatus, newStatus.ServiceStatus))
+		return true
+	}
+
+	if r.inconsistentRayServiceStatus(oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ActiveServiceStatus changed"))
+		return true
+	}
+
+	if r.inconsistentRayServiceStatus(oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService PendingServiceStatus changed"))
+		return true
+	}
+
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -249,6 +307,7 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 
 func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, status rayv1alpha1.ServiceStatus, err error) error {
 	rayServiceInstance.Status.ServiceStatus = status
+	r.Log.Info("r.Status().Update() updateState", "error", err)
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
 	}
@@ -882,6 +941,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
 	} else if isHealthy && !isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.WaitForServeDeploymentReady
+		r.Log.Info("r.Status().Update() isHealthy && !isReady")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, true, false, err
 		}
@@ -890,6 +950,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
 		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
+		r.Log.Info("r.Status().Update() !isHealthy")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
