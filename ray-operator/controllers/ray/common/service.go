@@ -81,11 +81,10 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		for k, v := range annotations {
 			// if the key is present, log a warning message
 			if _, ok := headService.ObjectMeta.Annotations[k]; ok {
-				log.Info("Overwriting annotation %s provided in HeadGroupSpec.HeadService "+
-					"for head service %s with value %s from the HeadServiceAnnotations field.\n",
-					k,
-					headService.ObjectMeta.Name,
-					v)
+				log.Info("Overwriting annotation provided in HeadGroupSpec.HeadService with value from HeadServiceAnnotations",
+					"annotation_key", k,
+					"headService_name", headService.ObjectMeta.Name,
+					"annotation_value", v)
 			}
 			headService.ObjectMeta.Annotations[k] = v
 		}
@@ -96,37 +95,32 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// If the user has not specified a name, generate one
 		if headService.ObjectMeta.Name == "" {
 			headService.ObjectMeta.Name = default_name
-			log.Info("Using default name %s for head service.\n", default_name)
+			log.Info("Using default name for head service.", "default_name", default_name)
 		} else {
-			log.Info("Overriding default name %s for head service with %s "+
-				"provided in HeadGroupSpec.HeadService.\n",
-				default_name,
-				headService.ObjectMeta.Name)
+			log.Info("Overriding default name for head service with provided name in HeadGroupSpec.HeadService",
+				"default_name", default_name,
+				"provided_name", headService.ObjectMeta.Name)
 		}
-
 		// If the user has specified a namespace, ignore it and raise a warning
 		if headService.ObjectMeta.Namespace != "" && headService.ObjectMeta.Namespace != default_namespace {
-			log.Info("Ignoring namespace %s provided in HeadGroupSpec.HeadService "+
-				"for head service %s. Using namespace %s instead to allow workers to "+
-				"connect to the head pod.\n",
-				headService.ObjectMeta.Namespace,
-				headService.ObjectMeta.Name,
-				default_namespace)
+			log.Info("Ignoring namespace provided in HeadGroupSpec.HeadService",
+				"provided_namespace", headService.ObjectMeta.Namespace,
+				"headService_name", headService.ObjectMeta.Name,
+				"default_namespace", default_namespace)
 		}
 		headService.ObjectMeta.Namespace = default_namespace
 
 		// If the user has not specified a service type, use the cluster's service type
 		if headService.Spec.Type == "" {
 			headService.Spec.Type = default_type
-			log.Info("Using default service type %s for head service %s.\n",
-				default_type,
-				headService.ObjectMeta.Name)
+			log.Info("Using default service type for head service",
+				"default_type", default_type,
+				"headService_name", headService.ObjectMeta.Name)
 		} else {
-			log.Info("Overriding default service type %s for head service %s with %s "+
-				"provided in HeadGroupSpec.HeadService.\n",
-				default_type,
-				headService.ObjectMeta.Name,
-				headService.Spec.Type)
+			log.Info("Overriding default service type for head service with provided type in HeadGroupSpec.HeadService",
+				"default_type", default_type,
+				"headService_name", headService.ObjectMeta.Name,
+				"provided_type", headService.Spec.Type)
 		}
 
 		return headService, nil
