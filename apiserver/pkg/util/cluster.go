@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"encoding/json"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -32,6 +33,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 	return &RayCluster{rayCluster}
 }
 
+// Build cluster labels
 func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 	labels := map[string]string{}
 	labels[RayClusterNameLabelKey] = cluster.Name
@@ -43,6 +45,7 @@ func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 	return labels
 }
 
+// Bukild cluster annotations
 func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 	annotations := map[string]string{}
 	// TODO: Add optional annotations
@@ -94,6 +97,7 @@ func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpe
 	return rayClusterSpec
 }
 
+// Annotations common to both head and worker nodes
 func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image string) map[string]string {
 	annotations := map[string]string{}
 	annotations[RayClusterComputeTemplateAnnotationKey] = computeTemplate.Name
@@ -101,6 +105,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
+// Build head node template
 func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
@@ -118,8 +123,10 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: buildNodeGroupAnnotations(computeRuntime, spec.Image),
+			Labels: map[string]string{},
 		},
 		Spec: v1.PodSpec{
+			Tolerations: []v1.Toleration{} ,
 			Containers: []v1.Container{
 				{
 					Name:  "ray-head",
@@ -188,13 +195,67 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 			Name: k, Value: v,
 		})
 	}
+
+	// Add specific environments
+	if spec.Environment != nil {
+		for _, kv := range spec.Environment{
+			podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+				Name: kv.Key, Value: kv.Value,
+			})
+		}
+	}
+
+	// Add specific annotations
+	if spec.Annotations != nil {
+		for k, v := range spec.Annotations{
+			podTemplateSpec.ObjectMeta.Annotations[k] = v
+		}
+	}
+
+	// Add specific labels
+	if spec.Labels != nil {
+		for k, v := range spec.Labels{
+			podTemplateSpec.ObjectMeta.Labels[k] = v
+		}
+	}
+
+	// Add specific tollerations
+	if computeRuntime.Tolerations != nil {
+		for _, t := range computeRuntime.Tolerations{
+			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, v1.Toleration{
+				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
+			})		
+		}
+	}
+
 	return podTemplateSpec
 }
 
+// Convert Toleration operator from string
+func convertTolerationOperator(val string) v1.TolerationOperator {
+	if val == "Exists" {
+		return v1.TolerationOpExists
+	}
+	return v1.TolerationOpEqual
+}
+
+// Convert taint effect from string
+func convertTaintEffect(val string) v1.TaintEffect {
+	if val == "NoExecute" {
+		return v1.TaintEffectNoExecute
+	}
+	if val == "NoSchedule" {
+		return v1.TaintEffectNoSchedule
+	}
+	return v1.TaintEffectPreferNoSchedule
+}
+
+// Construct Ray image
 func constructRayImage(containerImage string, version string) string {
 	return fmt.Sprintf("%s:%s", containerImage, version)
 }
 
+// Build worker pod template
 func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
@@ -214,8 +275,10 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: buildNodeGroupAnnotations(computeRuntime, spec.Image),
+			Labels: map[string]string{},
 		},
 		Spec: v1.PodSpec{
+			Tolerations: []v1.Toleration{} ,
 			Containers: []v1.Container{
 				{
 					Name:  "ray-worker",
@@ -330,9 +393,43 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 			Name: k, Value: v,
 		})
 	}
+
+	// Add specific environments
+	if spec.Environment != nil {
+		for _, kv := range spec.Environment{
+			podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
+				Name: kv.Key, Value: kv.Value,
+			})
+		}
+	}
+
+	// Add specific annotations
+	if spec.Annotations != nil {
+		for k, v := range spec.Annotations{
+			podTemplateSpec.ObjectMeta.Annotations[k] = v
+		}
+	}
+
+	// Add specific labels
+	if spec.Labels != nil {
+		for k, v := range spec.Labels{
+			podTemplateSpec.ObjectMeta.Labels[k] = v
+		}
+	}
+
+	// Add specific tollerations
+	if computeRuntime.Tolerations != nil {
+		for _, t := range computeRuntime.Tolerations{
+			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, v1.Toleration{
+				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
+			})		
+		}
+	}
+
 	return podTemplateSpec
 }
 
+// Build Volume mounts
 func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
 	var (
 		volMounts       []v1.VolumeMount
@@ -356,12 +453,14 @@ func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
 	return volMounts
 }
 
+// Build host path
 func newHostPathType(pathType string) *v1.HostPathType {
 	hostPathType := new(v1.HostPathType)
 	*hostPathType = v1.HostPathType(pathType)
 	return hostPathType
 }
 
+// Build volumes
 func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 	var vols []v1.Volume
 	for _, rayVol := range apiVolumes {
@@ -390,6 +489,7 @@ func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 	return vols
 }
 
+// Init pointer
 func intPointer(value int32) *int32 {
 	return &value
 }
@@ -404,7 +504,23 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 	// TODO: reserved for common parameters.
 }
 
+// Build compute template
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
+	// Create data map
+	dmap := map[string]string{
+		"name":            runtime.Name,
+		"namespace":       runtime.Namespace,
+		"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
+		"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
+		"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
+		"gpu_accelerator": runtime.GpuAccelerator,
+	}
+	// Add tolerations in defined
+	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
+		t,  _ := json.Marshal(runtime.Tolerations)
+		dmap["tolerations"]	= string(t)
+	}
+
 	config := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runtime.Name,
@@ -414,14 +530,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 				"ray.io/compute-template": runtime.Name,
 			},
 		},
-		Data: map[string]string{
-			"name":            runtime.Name,
-			"namespace":       runtime.Namespace,
-			"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
-			"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
-			"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
-			"gpu_accelerator": runtime.GpuAccelerator,
-		},
+		Data: dmap,
 	}
 
 	return config, nil

@@ -279,8 +279,43 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to head pod"
+        },
+        "environment": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoKeyValue"
+          },
+          "title": "Optional. Environment variables for head pod"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations for the head pod"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Labels for the head pod"
         }
       }
+    },
+    "protoKeyValue": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "title": "Key"
+        },
+        "value": {
+          "type": "string",
+          "title": "Value"
+        }
+      },
+      "title": "Standard representation used for Environment variables"
     },
     "protoListAllRayJobsResponse": {
       "type": "object",
@@ -452,6 +487,27 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        },
+        "environment": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoKeyValue"
+          },
+          "title": "Optional. Environment variables for worker pod"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations for the worker pod"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Labels for the worker pod"
         }
       }
     },
