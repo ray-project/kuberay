@@ -25,7 +25,7 @@ class ClusterUtils:
     Methods:
     - populate_meta(cluster: dict, name: str, k8s_namespace: str, labels: dict, ray_version: str) -> dict:
     - populate_ray_head(cluster: dict, ray_image: str,service_type: str, cpu_requests: str, memory_requests: str, cpu_limits: str, memory_limits: str, ray_start_params: dict) -> Tuple[dict, bool]:
-    - populate_worker_group(cluster: dict, group_name: str, ray_image: str, ray_command: Any, cpu_requests: str, memory_requests: str, cpu_limits: str, memory_limits: str, replicas: int, min_replicas: int, max_replicas: int, ray_start_params: dict) -> Tuple[dict, bool]:
+    - populate_worker_group(cluster: dict, group_name: str, ray_image: str, ray_command: Any, init_image: str, cpu_requests: str, memory_requests: str, cpu_limits: str, memory_limits: str, replicas: int, min_replicas: int, max_replicas: int, ray_start_params: dict) -> Tuple[dict, bool]:
     - update_worker_group_replicas(cluster: dict, group_name: str, max_replicas: int, min_replicas: int, replicas: int) -> Tuple[dict, bool]:
     """
 
@@ -166,6 +166,7 @@ class ClusterUtils:
         group_name: str,
         ray_image: str,
         ray_command: Any,
+        init_image: str,
         cpu_requests: str,
         memory_requests: str,
         cpu_limits: str,
@@ -182,6 +183,7 @@ class ClusterUtils:
         - group_name (str): The name of the worker group.
         - ray_image (str): The image to use for the Ray worker containers.
         - ray_command (Any): The command to run in the Ray worker containers.
+        - init_image (str): The init container image to use.
         - cpu_requests (str): The requested CPU resources for the worker containers.
         - memory_requests (str): The requested memory resources for the worker containers.
         - cpu_limits (str): The limit on CPU resources for the worker containers.

@@ -120,6 +120,7 @@ class ClusterBuilder(IClusterBuilder):
         group_name: str,
         ray_image: str = "rayproject/ray:2.4.0",
         ray_command: Any = ["/bin/bash", "-lc"],
+        init_image: str = "busybox:1.28",
         cpu_requests: str = "1",
         memory_requests: str = "1G",
         cpu_limits: str = "2",
@@ -137,6 +138,7 @@ class ClusterBuilder(IClusterBuilder):
         - group_name (str): name of the worker group.
         - ray_image (str, optional): Docker image for the Ray process. Default is "rayproject/ray:2.4.0".
         - ray_command (Any, optional): Command to run in the Docker container. Default is ["/bin/bash", "-lc"].
+        - init_image (str, optional): Docker image for the init container. Default is "busybox:1.28".
         - cpu_requests (str, optional): CPU requests for the worker pods. Default is "1".
         - memory_requests (str, optional): Memory requests for the worker pods. Default is "1G".
         - cpu_limits (str, optional): CPU limits for the worker pods. Default is "2".
@@ -170,6 +172,7 @@ class ClusterBuilder(IClusterBuilder):
             group_name,
             ray_image,
             ray_command,
+            init_image,
             cpu_requests,
             memory_requests,
             cpu_limits,
