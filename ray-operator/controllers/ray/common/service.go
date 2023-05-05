@@ -79,6 +79,14 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// Merge annotations with custom HeadService annotations. If there are overlaps,
 		// ignore the custom HeadService annotations.
 		for k, v := range annotations {
+			// if the key is present, log a warning message
+			if _, ok := headService.ObjectMeta.Annotations[k]; ok {
+				log.Info("Overwriting annotation %s provided in HeadGroupSpec.HeadService "+
+					"for head service %s with value %s from the HeadServiceAnnotations field.\n",
+					k,
+					headService.ObjectMeta.Name,
+					v)
+			}
 			headService.ObjectMeta.Annotations[k] = v
 		}
 
@@ -92,7 +100,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 		// If the user has specified a namespace, ignore it and raise a warning
 		if headService.ObjectMeta.Namespace != "" && headService.ObjectMeta.Namespace != default_namespace {
-			fmt.Printf("Warning: Ignoring namespace %s provided in HeadGroupSpec.HeadService "+
+			log.Info("Ignoring namespace %s provided in HeadGroupSpec.HeadService "+
 				"for head service %s. Using namespace %s instead to allow workers to "+
 				"connect to the head pod.\n",
 				headService.ObjectMeta.Namespace,
