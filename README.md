@@ -13,7 +13,7 @@ KubeRay is a powerful, open-source Kubernetes operator that simplifies the deplo
 
 * **RayService**: RayService is made up of two parts: a RayCluster and a Ray Serve deployment graph. RayService offers zero-downtime upgrades for RayCluster and high availability.
 
-**Comminity-managed components (optional)**: Some components are maintained by the KubeRay community.
+**Community-managed components (optional)**: Some components are maintained by the KubeRay community.
 
 * **KubeRay APIServer**: It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
 by some organizations to back user interfaces for KubeRay resource management.
