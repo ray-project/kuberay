@@ -112,6 +112,13 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// If the user has not specified a service type, use the cluster's service type
 		if headService.Spec.Type == "" {
 			headService.Spec.Type = default_type
+			log.Info("Using default service type %s for head service %s.\n",)
+		} else {
+			log.Info("Overriding default service type %s for head service %s with %s "+
+				"provided in HeadGroupSpec.HeadService.\n",
+				default_type,
+				headService.ObjectMeta.Name,
+				headService.Spec.Type)
 		}
 
 		return headService, nil
