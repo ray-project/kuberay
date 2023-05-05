@@ -96,6 +96,12 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// If the user has not specified a name, generate one
 		if headService.ObjectMeta.Name == "" {
 			headService.ObjectMeta.Name = default_name
+			log.Info("Using default name %s for head service.\n", default_name)
+		} else {
+			log.Info("Overriding default name %s for head service with %s "+
+				"provided in HeadGroupSpec.HeadService.\n",
+				default_name,
+				headService.ObjectMeta.Name)
 		}
 
 		// If the user has specified a namespace, ignore it and raise a warning
