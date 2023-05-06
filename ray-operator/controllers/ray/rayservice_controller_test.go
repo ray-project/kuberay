@@ -398,7 +398,6 @@ var _ = Context("Inside the default namespace", func() {
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
 			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
 			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
-			fmt.Printf("!!!!!!oldTime = %v, newTime = %v\n", oldTime, newTime)
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "UNHEALTHY"))
 
 			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
