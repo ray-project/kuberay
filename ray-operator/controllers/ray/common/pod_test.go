@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -978,4 +979,9 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+func TestGetCustomWorkerInitImage(t *testing.T) {
+	defaultImage := "repo/image:latest"
+	assert.Equal(t, "repo/image:latest", getCustomWorkerInitImage(defaultImage))
+	os.Setenv("CUSTOM_WORKER_INIT_IMAGE", "repo/custom-image:nightly")
+	assert.Equal(t, "repo/custom-image:nightly", getCustomWorkerInitImage(defaultImage))
 }

@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,9 @@ const (
 	ObjectStoreMemoryKey        = "object-store-memory"
 	// TODO (davidxia): should be a const in upstream ray-project/ray
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
+	// Set this if you want to use a custom image for init container image
+	// The image needs to have `ray` in $PATH
+	CustomWorkerInitImageEnvKey = "CUSTOM_WORKER_INIT_IMAGE"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -180,6 +184,16 @@ func autoscalerSupportIsStable(rayVersion string) bool {
 	}
 }
 
+// getCustomWorkerInitImage tries to get the image from env var CUSTOM_WORKER_INIT_IMAGE first
+// if not found, fall back to the default image
+func getCustomWorkerInitImage(defaultImage string) string {
+	if image := os.Getenv(CustomWorkerInitImageEnvKey); len(image) > 0 {
+		return image
+	}
+
+	return defaultImage
+}
+
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -191,11 +205,14 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
+
+	initImage := getCustomWorkerInitImage(podTemplate.Spec.Containers[rayContainerIndex].Image)
+
 	// Do not modify `deepCopyRayContainer` anywhere.
 	deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
 	initContainer := v1.Container{
 		Name:            "wait-gcs-ready",
-		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
+		Image:           initImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command:         []string{"/bin/bash", "-lc", "--"},
 		Args: []string{
