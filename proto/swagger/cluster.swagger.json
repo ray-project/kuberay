@@ -398,6 +398,27 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to head pod"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Environment variables for head pod"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations for the head pod"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Labels for the head pod"
         }
       }
     },
@@ -494,6 +515,27 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Environment variables for worker pod"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations for the worker pod"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Labels for the worker pod"
         }
       }
     },
