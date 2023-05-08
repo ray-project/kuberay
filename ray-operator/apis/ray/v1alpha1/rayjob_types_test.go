@@ -32,7 +32,6 @@ var expectedRayJob = RayJob{
 					"dashboard-host":      "0.0.0.0",
 					"num-cpus":            "1",
 					"node-ip-address":     "127.0.0.1",
-					"block":               "true",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -149,7 +148,6 @@ var testRayJobJSON = `{
             "headGroupSpec": {
                 "replicas": 1,
                 "rayStartParams": {
-                    "block": "true",
                     "dashboard-host": "0.0.0.0",
                     "node-ip-address": "127.0.0.1",
                     "num-cpus": "1",

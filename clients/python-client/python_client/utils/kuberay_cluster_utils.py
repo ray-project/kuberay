@@ -201,7 +201,7 @@ class ClusterUtils:
         try:
             arguments = locals()
             for k, v in arguments.items():
-                if k != "min_replicas":
+                if k != "min_replicas" and k != "ray_start_params":
                     assert v
         except AssertionError as e:
             log.error(

@@ -56,7 +56,6 @@ var _ = Context("Inside the default namespace", func() {
 						"dashboard-host":              "0.0.0.0",
 						"num-cpus":                    "1",
 						"node-ip-address":             "127.0.0.1",
-						"block":                       "true",
 						"dashboard-agent-listen-port": "52365",
 					},
 					Template: corev1.PodTemplateSpec{

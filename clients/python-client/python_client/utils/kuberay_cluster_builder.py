@@ -88,7 +88,6 @@ class ClusterBuilder(IClusterBuilder):
         cpu_limits: str = "2",
         memory_limits: str = "3G",
         ray_start_params: dict = {
-            "block": "true",
             "dashboard-host": "0.0.0.0",
         },
     ):
@@ -102,7 +101,7 @@ class ClusterBuilder(IClusterBuilder):
         - cpu_limits (str): CPU limits for the head node. Default value is "2".
         - memory_limits (str): Memory limits for the head node. Default value is "3G".
         - ray_start_params (dict): Dictionary of start parameters for the head node.
-        Default values are "block": "true" and "dashboard-host": "0.0.0.0".
+        Default values is "dashboard-host": "0.0.0.0".
         """
         self.cluster, self.succeeded = self.cluster_utils.populate_ray_head(
             self.cluster,
@@ -129,9 +128,7 @@ class ClusterBuilder(IClusterBuilder):
         replicas: int = 1,
         min_replicas: int = -1,
         max_replicas: int = -1,
-        ray_start_params: dict = {
-            "block": "true",
-        },
+        ray_start_params: dict = {},
     ):
         """Build worker specifications of the cluster.
 
@@ -149,7 +146,7 @@ class ClusterBuilder(IClusterBuilder):
         - replicas (int, optional): Number of worker pods to run. Default is 1.
         - min_replicas (int, optional): Minimum number of worker pods to run. Default is -1.
         - max_replicas (int, optional): Maximum number of worker pods to run. Default is -1.
-        - ray_start_params (dict, optional): Additional parameters to pass to the ray start command. Default is {"block": "true"}.
+        - ray_start_params (dict, optional): Additional parameters to pass to the ray start command. Default is {}.
         """
         if min_replicas < 0:
             min_replicas = int(math.ceil(replicas / 2))

@@ -52,7 +52,6 @@ cluster_body: dict = {
       "rayStartParams": {
         "dashboard-host": "0.0.0.0",
         "num-cpus": "2",
-        "block": "true"
       },
       "template": {
         "spec": {
