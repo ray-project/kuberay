@@ -203,6 +203,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 
+	// only inject init container only when ENABLE_INIT_CONTAINER_INJECTION is true
 	enableInitContainerInjection := getEnableInitContainerInjection()
 
 	if enableInitContainerInjection == true {
