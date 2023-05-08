@@ -223,6 +223,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
+// Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
+// If the only differences between the old and new status are the LastUpdateTime and HealthLastUpdateTime fields,
+// the status update will not be triggered.
+// The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
 func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha1.RayServiceStatus, newStatus rayv1alpha1.RayServiceStatus) bool {
 	if oldStatus.RayClusterName != newStatus.RayClusterName {
 		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService RayClusterName changed from %s to %s", oldStatus.RayClusterName, newStatus.RayClusterName))
