@@ -980,8 +980,23 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 func TestGetCustomWorkerInitImage(t *testing.T) {
-	defaultImage := "repo/image:latest"
-	assert.Equal(t, "repo/image:latest", getCustomWorkerInitImage(defaultImage))
-	os.Setenv("CUSTOM_WORKER_INIT_IMAGE", "repo/custom-image:nightly")
-	assert.Equal(t, "repo/custom-image:nightly", getCustomWorkerInitImage(defaultImage))
+	// not set the env
+	b := getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "true"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "true")
+	b = getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "True"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "True")
+	b = getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "false"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "false")
+	b = getEnableInitContainerInjection()
+	assert.False(t, b)
+	// set the env with "False"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "False")
+	b = getEnableInitContainerInjection()
+	assert.False(t, b)
 }
