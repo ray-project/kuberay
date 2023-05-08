@@ -107,6 +107,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
@@ -212,12 +213,72 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Final status update for any CR modification.
-	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		logger.Error(errStatus, "Fail to update status of RayService", "rayServiceInstance", rayServiceInstance)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
+		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
+			logger.Error(errStatus, "Failed to update RayService status", "rayServiceInstance", rayServiceInstance)
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
 	}
 
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+// Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
+// If the only differences between the old and new status are the LastUpdateTime and HealthLastUpdateTime fields,
+// the status update will not be triggered.
+// The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
+func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha1.RayServiceStatus, newStatus rayv1alpha1.RayServiceStatus) bool {
+	if oldStatus.RayClusterName != newStatus.RayClusterName {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService RayClusterName changed from %s to %s", oldStatus.RayClusterName, newStatus.RayClusterName))
+		return true
+	}
+
+	if oldStatus.DashboardStatus.IsHealthy != newStatus.DashboardStatus.IsHealthy {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DashboardStatus changed from %v to %v", oldStatus.DashboardStatus, newStatus.DashboardStatus))
+		return true
+	}
+
+	if oldStatus.ApplicationStatus.Status != newStatus.ApplicationStatus.Status ||
+		oldStatus.ApplicationStatus.Message != newStatus.ApplicationStatus.Message {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldStatus.ApplicationStatus, newStatus.ApplicationStatus))
+		return true
+	}
+
+	if len(oldStatus.ServeStatuses) != len(newStatus.ServeStatuses) {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService number of ServeStatus changed from %v to %v", len(oldStatus.ServeStatuses), len(newStatus.ServeStatuses)))
+		return true
+	}
+
+	for i := 0; i < len(oldStatus.ServeStatuses); i++ {
+		if oldStatus.ServeStatuses[i].Name != newStatus.ServeStatuses[i].Name ||
+			oldStatus.ServeStatuses[i].Status != newStatus.ServeStatuses[i].Status ||
+			oldStatus.ServeStatuses[i].Message != newStatus.ServeStatuses[i].Message {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServeDeploymentStatus changed from %v to %v", oldStatus.ServeStatuses[i], newStatus.ServeStatuses[i]))
+			return true
+		}
+	}
+
+	return false
+}
+
+// Determine whether to update the status of the RayService instance.
+func (r *RayServiceReconciler) inconsistentRayServiceStatuses(oldStatus rayv1alpha1.RayServiceStatuses, newStatus rayv1alpha1.RayServiceStatuses) bool {
+	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServiceStatus changed from %s to %s", oldStatus.ServiceStatus, newStatus.ServiceStatus))
+		return true
+	}
+
+	if r.inconsistentRayServiceStatus(oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
+		r.Log.Info("inconsistentRayServiceStatus RayService ActiveServiceStatus changed")
+		return true
+	}
+
+	if r.inconsistentRayServiceStatus(oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
+		r.Log.Info("inconsistentRayServiceStatus RayService PendingServiceStatus changed")
+		return true
+	}
+
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.

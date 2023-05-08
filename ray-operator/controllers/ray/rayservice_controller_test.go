@@ -381,6 +381,94 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(initialPendingClusterName), "New active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
 
+		It("Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.", func() {
+			// Make sure (1) Dashboard client is healthy (2) All the three Ray Serve deployments in the active RayCluster are HEALTHY.
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+			Eventually(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+
+			// ServiceUnhealthySecondThreshold is a global variable in rayservice_controller.go.
+			// If the time elapsed since the last update of the service HEALTHY status exceeds ServiceUnhealthySecondThreshold seconds,
+			// the RayService controller will consider the active RayCluster as unhealthy and prepare a new RayCluster.
+			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
+			ServiceUnhealthySecondThreshold = 500
+
+			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
+			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
+			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "UNHEALTHY"))
+
+			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// Check if all the ServeStatuses[i].Status are UNHEALTHY.
+			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *rayiov1alpha1.RayService) bool {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
+					return false
+				}
+				for _, serveStatus := range rayService.Status.ActiveServiceStatus.ServeStatuses {
+					if serveStatus.Status != "UNHEALTHY" {
+						return false
+					}
+				}
+				return true
+			}
+
+			// The status update not only includes the LastUpdateTime and HealthLastUpdateTime fields, but also the ServeStatuses[i].Status field.
+			// Hence, all the ServeStatuses[i].Status should be updated to UNHEALTHY.
+			//
+			// Note: LastUpdateTime/HealthLastUpdateTime will be overwritten via metav1.Now() in rayservice_controller.go.
+			// Hence, we cannot use `newTime`` to check whether the status is updated or not.
+			Eventually(
+				checkAllServeStatusesUnhealthy(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "HEALTHY"))
+
+			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// The status update not only includes the LastUpdateTime and HealthLastUpdateTime fields, but also the ServeStatuses[i].Status field.
+			// Hence, the status should be updated.
+			Eventually(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
+		})
+
+		It("Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.", func() {
+			// Make sure (1) Dashboard client is healthy (2) All the three Ray Serve deployments in the active RayCluster are HEALTHY.
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+			Eventually(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+
+			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
+			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
+			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
+			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "HEALTHY"))
+
+			// Confirm not switch to a new RayCluster
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// The status is still the same as before.
+			Eventually(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+
+			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
+			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
+			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
+			Expect(myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
+		})
+
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
 			// Certain field updates should not trigger new RayCluster preparation, such as updates
 			// to `Replicas` and `WorkersToDelete` triggered by the autoscaler during scaling up/down.
