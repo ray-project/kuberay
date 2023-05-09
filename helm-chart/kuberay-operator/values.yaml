@@ -67,6 +67,9 @@ singleNamespaceInstall: false
 # watchNamespace: ray-user-namespace
 
 # Environment variables
-env: []
-# - name: EXAMPLE_ENV
-#   value: "1"
+env:
+# If set to true, kuberay auto injects an init container waiting for ray GCS.
+# If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
+# We highly recommend to not set to false and let kuberay handle for you.
+- name: ENABLE_INIT_CONTAINER_INJECTION
+  value: "true"
