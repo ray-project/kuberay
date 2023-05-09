@@ -206,7 +206,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	// only inject init container only when ENABLE_INIT_CONTAINER_INJECTION is true
 	enableInitContainerInjection := getEnableInitContainerInjection()
 
-	if enableInitContainerInjection == true {
+	if enableInitContainerInjection {
 		// Do not modify `deepCopyRayContainer` anywhere.
 		deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
 		initContainer := v1.Container{
