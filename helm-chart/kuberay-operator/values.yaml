@@ -70,6 +70,6 @@ singleNamespaceInstall: false
 env:
 # If set to true, kuberay auto injects an init container waiting for ray GCS.
 # If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
-# We highly recommend to not set to false and let kuberay handle for you.
+# Warning: we highly recommend setting to true and let kuberay handle for you.
 - name: ENABLE_INIT_CONTAINER_INJECTION
   value: "true"
