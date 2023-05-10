@@ -20,15 +20,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
@@ -48,21 +47,21 @@ var _ = Context("Inside the default namespace", func() {
 	var numReplicas int32 = 1
 	var numCpus float64 = 0.1
 
-	myRayService := &rayiov1alpha1.RayService{
+	myRayService := &v1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayservice-sample",
 			Namespace: "default",
 		},
-		Spec: rayiov1alpha1.RayServiceSpec{
-			ServeDeploymentGraphSpec: rayiov1alpha1.ServeDeploymentGraphSpec{
+		Spec: v1alpha1.RayServiceSpec{
+			ServeDeploymentGraphSpec: v1alpha1.ServeDeploymentGraphSpec{
 				ImportPath: "fruit.deployment_graph",
 				RuntimeEnv: runtimeEnvStr,
-				ServeConfigSpecs: []rayiov1alpha1.ServeConfigSpec{
+				ServeConfigSpecs: []v1alpha1.ServeConfigSpec{
 					{
 						Name:        "MangoStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 3",
-						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+						RayActorOptions: v1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
@@ -70,7 +69,7 @@ var _ = Context("Inside the default namespace", func() {
 						Name:        "OrangeStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 2",
-						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+						RayActorOptions: v1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
@@ -78,15 +77,15 @@ var _ = Context("Inside the default namespace", func() {
 						Name:        "PearStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 1",
-						RayActorOptions: rayiov1alpha1.RayActorOptionSpec{
+						RayActorOptions: v1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
 				},
 			},
-			RayClusterSpec: rayiov1alpha1.RayClusterSpec{
+			RayClusterSpec: v1alpha1.RayClusterSpec{
 				RayVersion: "1.12.1",
-				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+				HeadGroupSpec: v1alpha1.HeadGroupSpec{
 					Replicas: pointer.Int32(1),
 					RayStartParams: map[string]string{
 						"port":                        "6379",
@@ -161,7 +160,7 @@ var _ = Context("Inside the default namespace", func() {
 						},
 					},
 				},
-				WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
+				WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
 					{
 						Replicas:    pointer.Int32(3),
 						MinReplicas: pointer.Int32(0),
@@ -228,7 +227,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
 
-	myRayCluster := &rayiov1alpha1.RayCluster{}
+	myRayCluster := &v1alpha1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {
 		It("should create a rayservice object", func() {
@@ -244,12 +243,22 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("should create a raycluster object", func() {
 			Eventually(
-				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+				getPreparingRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
+			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
+			// Update the status of the head Pod to Running.
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+
+			// Make sure the pending RayCluster becomes the active RayCluster.
+			Eventually(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// Initialize myRayCluster for the following tests.
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "myRayCluster  = %v", myRayCluster.Name)
 		})
 
 		It("should create more than 1 worker", func() {
@@ -273,7 +282,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayiov1alpha1.HeadNode)))
+			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, v1alpha1.HeadNode)))
 		})
 
 		It("should create a new agent service resource", func() {
@@ -304,10 +313,18 @@ var _ = Context("Inside the default namespace", func() {
 
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, myRayService),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
+			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
+
+			// Update the status of the head Pod to Running.
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+
 			// Confirm switch to a new Ray Cluster.
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Not(Equal(myRayCluster.Name)), "My new RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
@@ -370,7 +387,10 @@ var _ = Context("Inside the default namespace", func() {
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*5, time.Millisecond*500).Should(Equal(initialPendingClusterName), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 
-			// The pending RayCluster will become the active RayCluster after the pending RayCluster is ready.
+			// The pending RayCluster will become the active RayCluster after:
+			// (1) The pending RayCluster's head Pod becomes Running and Ready
+			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
+			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
 			Eventually(
@@ -405,7 +425,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// Check if all the ServeStatuses[i].Status are UNHEALTHY.
-			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *rayiov1alpha1.RayService) bool {
+			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *v1alpha1.RayService) bool {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 					return false
 				}
@@ -505,6 +525,7 @@ var _ = Context("Inside the default namespace", func() {
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
@@ -542,6 +563,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// The cluster should switch once the deployments are finished updating
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "HEALTHY"))
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
@@ -560,12 +582,12 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 
 func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
 	serveStatuses := utils.ServeDeploymentStatuses{
-		ApplicationStatus: rayiov1alpha1.AppStatus{
+		ApplicationStatus: v1alpha1.AppStatus{
 			Status:               "RUNNING",
 			LastUpdateTime:       &time,
 			HealthLastUpdateTime: &time,
 		},
-		DeploymentStatuses: []rayiov1alpha1.ServeDeploymentStatus{
+		DeploymentStatuses: []v1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "shallow",
 				Status:               status,
@@ -593,7 +615,7 @@ func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentS
 	return serveStatuses
 }
 
-func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
+func getRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.RayService) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
@@ -602,7 +624,7 @@ func getRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RaySer
 	}
 }
 
-func getPreparingRayClusterNameFunc(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (string, error) {
+func getPreparingRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.RayService) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
@@ -611,7 +633,7 @@ func getPreparingRayClusterNameFunc(ctx context.Context, rayService *rayiov1alph
 	}
 }
 
-func checkServiceHealth(ctx context.Context, rayService *rayiov1alpha1.RayService) func() (bool, error) {
+func checkServiceHealth(ctx context.Context, rayService *v1alpha1.RayService) func() (bool, error) {
 	return func() (bool, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 			return false, err
@@ -627,4 +649,40 @@ func checkServiceHealth(ctx context.Context, rayService *rayiov1alpha1.RayServic
 
 		return healthy, nil
 	}
+}
+
+// Update the status of the head Pod to Running.
+// We need to manually update Pod statuses otherwise they'll always be Pending.
+// envtest doesn't create a full K8s cluster. It's only the control plane.
+// There's no container runtime or any other K8s controllers.
+// So Pods are created, but no controller updates them from Pending to Running.
+// See https://book.kubebuilder.io/reference/envtest.html for more details.
+func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) {
+	headPods := corev1.PodList{}
+	headFilterLabels := client.MatchingLabels{
+		common.RayClusterLabelKey:  rayClusterName,
+		common.RayNodeTypeLabelKey: string(v1alpha1.HeadNode),
+	}
+
+	Eventually(
+		listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}),
+		time.Second*15, time.Millisecond*500).Should(Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
+
+	headPod := headPods.Items[0]
+	headPod.Status.Phase = corev1.PodRunning
+	headPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionTrue,
+		},
+	}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return k8sClient.Status().Update(ctx, &headPod)
+	})
+	Expect(err).NotTo(HaveOccurred(), "Failed to update head Pod status to PodRunning")
+
+	// Make sure the head Pod is updated.
+	Eventually(
+		isAllPodsRunning(ctx, headPods, headFilterLabels, "default"),
+		time.Second*15, time.Millisecond*500).Should(BeTrue(), "Head Pod should be running: %v", headPods.Items)
 }

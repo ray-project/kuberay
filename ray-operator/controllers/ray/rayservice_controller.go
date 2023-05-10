@@ -125,6 +125,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Check if we need to create pending RayCluster.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName != "" && pendingRayClusterInstance == nil {
 		// Update RayService Status since reconcileRayCluster may mark RayCluster restart.
+		r.Log.Info("r.Status().Update() Update RayService Status since reconcileRayCluster may mark RayCluster restart.")
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Fail to update status of RayService after RayCluster changes", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -214,6 +215,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// Final status update for any CR modification.
 	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
+		r.Log.Info("r.Status().Update() Final status update for any CR modification.")
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Failed to update RayService status", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -310,6 +312,7 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 
 func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, status rayv1alpha1.ServiceStatus, err error) error {
 	rayServiceInstance.Status.ServiceStatus = status
+	r.Log.Info("r.Status().Update() updateState", "error", err)
 	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
 	}
@@ -583,6 +586,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 }
 
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serveStatus *rayv1alpha1.RayServiceStatus) bool {
+	// If the Serve config has not been cached, update the Serve config.
 	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
 	cachedConfigObj, exist := r.ServeDeploymentConfigs.Get(cacheKey)
 
@@ -600,6 +604,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 		return true
 	}
 
+	// If the Serve config has been cached, check if it needs to be updated.
 	shouldUpdate := false
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
 		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
@@ -904,6 +909,21 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
+	// Check if head pod is running and ready. If not, requeue the resource event to avoid
+	// redundant custom resource status updates.
+	//
+	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
+	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
+	// This is not a big issue since `UpdateDeployments` is an idempotent operation.
+	if isRunningAndReady, err := r.isHeadPodRunningAndReady(rayClusterInstance); err != nil || !isRunningAndReady {
+		if err != nil {
+			logger.Error(err, "Failed to check if head pod is running and ready!")
+		} else {
+			logger.Info("Head pod is not running and ready. Serve deployments will only be updated if the head Pod is both running and ready.")
+		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
+	}
+
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
@@ -943,6 +963,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
 	} else if isHealthy && !isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.WaitForServeDeploymentReady
+		r.Log.Info("r.Status().Update() isHealthy && !isReady")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, true, false, err
 		}
@@ -951,6 +972,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
 		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1alpha1.Restarting
+		r.Log.Info("r.Status().Update() !isHealthy")
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
@@ -1017,4 +1039,21 @@ func compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alph
 		return false, err2
 	}
 	return hash1 == hash2, nil
+}
+
+// getHeadPod returns the head pod of the RayCluster.
+func (r *RayServiceReconciler) isHeadPodRunningAndReady(instance *rayv1alpha1.RayCluster) (bool, error) {
+	podList := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
+
+	if err := r.List(context.TODO(), &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		r.Log.Error(err, "Failed to list the head Pod of the RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
+		return false, err
+	}
+
+	if len(podList.Items) != 1 {
+		return false, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+	}
+
+	return utils.IsRunningAndReady(&podList.Items[0]), nil
 }

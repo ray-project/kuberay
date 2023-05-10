@@ -903,7 +903,7 @@ func (r *RayClusterReconciler) updateStatus(instance *rayiov1alpha1.RayCluster) 
 	if !isValid {
 		instance.Status.State = rayiov1alpha1.Unhealthy
 	} else {
-		if utils.CheckAllPodsRunnning(runtimePods) {
+		if utils.CheckAllPodsRunning(runtimePods) {
 			instance.Status.State = rayiov1alpha1.Ready
 		}
 	}

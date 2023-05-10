@@ -336,8 +336,8 @@ func GetHeadGroupServiceAccountName(cluster *rayiov1alpha1.RayCluster) string {
 	return cluster.Name
 }
 
-// CheckAllPodsRunnning check if all pod in a list is running
-func CheckAllPodsRunnning(runningPods corev1.PodList) bool {
+// CheckAllPodsRunning check if all pod in a list is running
+func CheckAllPodsRunning(runningPods corev1.PodList) bool {
 	// check if there is no pods.
 	if len(runningPods.Items) == 0 {
 		return false
