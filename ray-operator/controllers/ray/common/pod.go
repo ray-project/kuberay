@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,9 @@ const (
 	ObjectStoreMemoryKey        = "object-store-memory"
 	// TODO (davidxia): should be a const in upstream ray-project/ray
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
+	// If set to true, kuberay auto injects an init container waiting for ray GCS.
+	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
+	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
 )
 
 var log = logf.Log.WithName("RayCluster-Controller")
@@ -180,6 +184,13 @@ func autoscalerSupportIsStable(rayVersion string) bool {
 	}
 }
 
+func getEnableInitContainerInjection() bool {
+	if s := os.Getenv(EnableInitContainerInjectionEnvKey); strings.ToLower(s) == "false" {
+		return false
+	}
+	return true
+}
+
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -191,27 +202,32 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
-	// Do not modify `deepCopyRayContainer` anywhere.
-	deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
-	initContainer := v1.Container{
-		Name:            "wait-gcs-ready",
-		Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command:         []string{"/bin/bash", "-lc", "--"},
-		Args: []string{
-			fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
-		},
-		SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
-		// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
-		// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
-		// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
-		Env:          deepCopyRayContainer.Env,
-		VolumeMounts: deepCopyRayContainer.VolumeMounts,
-		// If users specify ResourceQuota for the namespace, the init container need to specify resource explicitly.
-		Resources: deepCopyRayContainer.Resources,
-	}
-	podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 
+	// only inject init container only when ENABLE_INIT_CONTAINER_INJECTION is true
+	enableInitContainerInjection := getEnableInitContainerInjection()
+
+	if enableInitContainerInjection {
+		// Do not modify `deepCopyRayContainer` anywhere.
+		deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
+		initContainer := v1.Container{
+			Name:            "wait-gcs-ready",
+			Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Command:         []string{"/bin/bash", "-lc", "--"},
+			Args: []string{
+				fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
+			},
+			SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
+			// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
+			// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
+			// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
+			Env:          deepCopyRayContainer.Env,
+			VolumeMounts: deepCopyRayContainer.VolumeMounts,
+			// If users specify ResourceQuota for the namespace, the init container need to specify resource explicitly.
+			Resources: deepCopyRayContainer.Resources,
+		}
+		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
+	}
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""

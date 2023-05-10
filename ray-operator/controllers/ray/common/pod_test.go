@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -978,4 +979,29 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+}
+
+func TestGetCustomWorkerInitImage(t *testing.T) {
+	// cleanup
+	defer os.Unsetenv(EnableInitContainerInjectionEnvKey)
+
+	// not set the env
+	b := getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "true"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "true")
+	b = getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "True"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "True")
+	b = getEnableInitContainerInjection()
+	assert.True(t, b)
+	// set the env with "false"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "false")
+	b = getEnableInitContainerInjection()
+	assert.False(t, b)
+	// set the env with "False"
+	os.Setenv(EnableInitContainerInjectionEnvKey, "False")
+	b = getEnableInitContainerInjection()
+	assert.False(t, b)
 }
