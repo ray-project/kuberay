@@ -916,7 +916,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		if err != nil {
 			logger.Error(err, "Failed to check if head pod is running and ready!")
 		} else {
-			logger.Info("Head pod is not running and ready. Serve deployments will only be updated if the head Pod is both running and ready.")
+			logger.Info("Skipping the update of Serve deployments because the Ray head pod is not ready.")
 		}
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
@@ -1036,7 +1036,7 @@ func compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alph
 	return hash1 == hash2, nil
 }
 
-// getHeadPod returns the head pod of the RayCluster.
+// isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
 func (r *RayServiceReconciler) isHeadPodRunningAndReady(instance *rayv1alpha1.RayCluster) (bool, error) {
 	podList := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
