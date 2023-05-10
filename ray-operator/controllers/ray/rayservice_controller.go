@@ -911,7 +911,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	//
 	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
 	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
-	// This is not a big issue since `UpdateDeployments` is an idempotent operation.
+	// This is not an issue since `UpdateDeployments` is an idempotent operation.
 	if isRunningAndReady, err := r.isHeadPodRunningAndReady(rayClusterInstance); err != nil || !isRunningAndReady {
 		if err != nil {
 			logger.Error(err, "Failed to check if head pod is running and ready!")
