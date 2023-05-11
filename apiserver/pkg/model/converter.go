@@ -191,7 +191,7 @@ func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate 
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 	val, ok := configMap.Data["tolerations"]
 	if ok {
-		_ =json.Unmarshal([]byte(val), &runtime.Tolerations)
+		_ = json.Unmarshal([]byte(val), &runtime.Tolerations)
 	}
 	return runtime
 }
