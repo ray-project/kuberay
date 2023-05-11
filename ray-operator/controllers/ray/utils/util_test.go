@@ -61,7 +61,7 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-func TestCheckAllPodsRunnning(t *testing.T) {
+func TestCheckAllPodsRunning(t *testing.T) {
 	pods := []corev1.Pod{
 		*createSomePod(),
 		*createSomePod(),
@@ -71,11 +71,11 @@ func TestCheckAllPodsRunnning(t *testing.T) {
 	podList1 := corev1.PodList{
 		Items: pods,
 	}
-	if CheckAllPodsRunnning(podList1) {
+	if CheckAllPodsRunning(podList1) {
 		t.Fail()
 	}
 	podList2 := corev1.PodList{}
-	if CheckAllPodsRunnning(podList2) {
+	if CheckAllPodsRunning(podList2) {
 		t.Fail()
 	}
 }

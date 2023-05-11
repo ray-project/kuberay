@@ -583,6 +583,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 }
 
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serveStatus *rayv1alpha1.RayServiceStatus) bool {
+	// If the Serve config has not been cached, update the Serve config.
 	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
 	cachedConfigObj, exist := r.ServeDeploymentConfigs.Get(cacheKey)
 
@@ -600,6 +601,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 		return true
 	}
 
+	// If the Serve config has been cached, check if it needs to be updated.
 	shouldUpdate := false
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
 		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
@@ -904,6 +906,21 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
+	// Check if head pod is running and ready. If not, requeue the resource event to avoid
+	// redundant custom resource status updates.
+	//
+	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
+	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
+	// This is not an issue since `UpdateDeployments` is an idempotent operation.
+	if isRunningAndReady, err := r.isHeadPodRunningAndReady(rayClusterInstance); err != nil || !isRunningAndReady {
+		if err != nil {
+			logger.Error(err, "Failed to check if head pod is running and ready!")
+		} else {
+			logger.Info("Skipping the update of Serve deployments because the Ray head pod is not ready.")
+		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
+	}
+
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
@@ -1017,4 +1034,21 @@ func compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alph
 		return false, err2
 	}
 	return hash1 == hash2, nil
+}
+
+// isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
+func (r *RayServiceReconciler) isHeadPodRunningAndReady(instance *rayv1alpha1.RayCluster) (bool, error) {
+	podList := corev1.PodList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
+
+	if err := r.List(context.TODO(), &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		r.Log.Error(err, "Failed to list the head Pod of the RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
+		return false, err
+	}
+
+	if len(podList.Items) != 1 {
+		return false, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+	}
+
+	return utils.IsRunningAndReady(&podList.Items[0]), nil
 }
