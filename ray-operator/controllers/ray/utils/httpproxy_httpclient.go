@@ -7,9 +7,7 @@ import (
 	"time"
 )
 
-var (
-	HealthCheckPath = "/-/healthz"
-)
+const HealthCheckPath = "/-/healthz"
 
 type RayHttpProxyClientInterface interface {
 	InitClient()
