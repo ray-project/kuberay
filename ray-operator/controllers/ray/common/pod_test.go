@@ -891,6 +891,48 @@ func TestDefaultInitContainer(t *testing.T) {
 	assert.Equal(t, rayContainer.Resources, healthCheckContainer.Resources)
 }
 
+func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
+	cluster := instance.DeepCopy()
+	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + DashSymbol + string(rayiov1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+
+	cases := []struct {
+		name               string
+		imagePullPolicy    v1.PullPolicy
+		expectedPullPolicy v1.PullPolicy
+	}{
+		{
+			name:               "Always",
+			imagePullPolicy:    v1.PullAlways,
+			expectedPullPolicy: v1.PullAlways,
+		},
+		{
+			name:               "IfNotPresent",
+			imagePullPolicy:    v1.PullIfNotPresent,
+			expectedPullPolicy: v1.PullIfNotPresent,
+		},
+		{
+			name:               "Never",
+			imagePullPolicy:    v1.PullNever,
+			expectedPullPolicy: v1.PullNever,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// set ray container imagePullPolicy
+			rayContainerIndex := getRayContainerIndex(worker.Template.Spec)
+			worker.Template.Spec.Containers[rayContainerIndex].ImagePullPolicy = tc.imagePullPolicy
+
+			podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+
+			healthCheckContainer := podTemplateSpec.Spec.InitContainers[len(podTemplateSpec.Spec.InitContainers)-1]
+			assert.Equal(t, tc.expectedPullPolicy, healthCheckContainer.ImagePullPolicy, "The ImagePullPolicy of the init container should be the same as the Ray container.")
+		})
+	}
+}
+
 func TestSetMissingRayStartParamsAddress(t *testing.T) {
 	// The address option is automatically injected into RayStartParams with a default value of <Fully Qualified Domain Name (FQDN)>:<headPort> for workers only, which is used to connect to the Ray cluster.
 	// The head should not include the address option in RayStartParams, as it can access the GCS server, which also runs on the head, via localhost.

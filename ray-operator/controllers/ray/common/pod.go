@@ -212,7 +212,7 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 		initContainer := v1.Container{
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
-			ImagePullPolicy: v1.PullIfNotPresent,
+			ImagePullPolicy: podTemplate.Spec.Containers[rayContainerIndex].ImagePullPolicy,
 			Command:         []string{"/bin/bash", "-lc", "--"},
 			Args: []string{
 				fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
