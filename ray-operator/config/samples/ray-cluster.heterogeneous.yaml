@@ -38,16 +38,22 @@ spec:
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
-    # the following params are used to complete the ray start: ray start --head --block ...
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in kuberay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
       dashboard-host: '0.0.0.0'
-      num-cpus: '1' # can be auto-completed from Ray container resource limits
     #pod template
     template:
       spec:
         containers:
         - name: ray-head
           image: rayproject/ray:2.4.0
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "200m"
           volumeMounts:
           - mountPath: /opt
             name: config
@@ -72,7 +78,9 @@ spec:
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
-    # the following params are used to complete the ray start: ray start --block ...
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in kuberay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams: {}
     #pod template
     template:
@@ -106,7 +114,9 @@ spec:
 #      workersToDelete:
       #- raycluster-heterogeneous-worker-medium-group-7bv5h
     #  - worker-4k2ih
-    # the following params are used to complete the ray start: ray start --block --node-ip-address= ...
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in kuberay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams: {}
     #pod template
     template:
