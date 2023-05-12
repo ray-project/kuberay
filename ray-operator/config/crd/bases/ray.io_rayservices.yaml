@@ -11784,6 +11784,8 @@ spec:
                     type: array
                   importPath:
                     type: string
+                  port:
+                    type: integer
                   runtimeEnv:
                     type: string
                 required:

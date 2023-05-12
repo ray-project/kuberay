@@ -58,6 +58,7 @@ type ServeDeploymentGraphSpec struct {
 	ImportPath       string            `json:"importPath"`
 	RuntimeEnv       string            `json:"runtimeEnv,omitempty"`
 	ServeConfigSpecs []ServeConfigSpec `json:"deployments,omitempty"`
+	Port             int               `json:"port,omitempty"`
 }
 
 // ServeConfigSpec defines the desired state of RayService

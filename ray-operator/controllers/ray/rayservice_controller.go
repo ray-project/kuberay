@@ -216,7 +216,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Failed to update RayService status", "rayServiceInstance", rayServiceInstance)
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
 	}
 
@@ -992,7 +992,8 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	httpProxyClient := utils.GetRayHttpProxyClientFunc()
 	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
-		httpProxyClient.SetHostIp(pod.Status.PodIP)
+		servingPort := utils.FindRayContainerPort(&pod, common.DefaultServingPortName, common.DefaultServingPort)
+		httpProxyClient.SetHostIp(pod.Status.PodIP, servingPort)
 		if pod.Labels == nil {
 			pod.Labels = make(map[string]string)
 		}

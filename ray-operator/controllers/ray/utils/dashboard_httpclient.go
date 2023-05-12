@@ -67,10 +67,12 @@ type ServeDeploymentStatuses struct {
 }
 
 // ServingClusterDeployments defines the request sent to the dashboard api server.
+// See https://docs.ray.io/en/master/_modules/ray/serve/schema.html#ServeApplicationSchema for more details.
 type ServingClusterDeployments struct {
 	ImportPath  string                 `json:"import_path"`
 	RuntimeEnv  map[string]interface{} `json:"runtime_env,omitempty"`
 	Deployments []ServeConfigSpec      `json:"deployments,omitempty"`
+	Port        int                    `json:"port,omitempty"`
 }
 
 type RayDashboardClientInterface interface {
@@ -191,14 +193,15 @@ func (r *RayDashboardClient) GetDeployments() (string, error) {
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
-func (r *RayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeploymentGraphSpec) error {
+func (r *RayDashboardClient) UpdateDeployments(spec rayv1alpha1.ServeDeploymentGraphSpec) error {
 	runtimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(specs.RuntimeEnv), &runtimeEnv)
+	_ = yaml.Unmarshal([]byte(spec.RuntimeEnv), &runtimeEnv)
 
 	servingClusterDeployments := ServingClusterDeployments{
-		ImportPath:  specs.ImportPath,
+		ImportPath:  spec.ImportPath,
 		RuntimeEnv:  runtimeEnv,
-		Deployments: r.ConvertServeConfig(specs.ServeConfigSpecs),
+		Deployments: r.ConvertServeConfig(spec.ServeConfigSpecs),
+		Port:        spec.Port,
 	}
 
 	deploymentJson, err := json.Marshal(servingClusterDeployments)
