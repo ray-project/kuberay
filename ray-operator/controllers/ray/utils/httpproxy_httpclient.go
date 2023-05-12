@@ -8,8 +8,7 @@ import (
 )
 
 var (
-	DefaultHttpProxyPort = 8000
-	HealthCheckPath      = "/-/healthz"
+	HealthCheckPath = "/-/healthz"
 )
 
 type RayHttpProxyClientInterface interface {
