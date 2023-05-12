@@ -8,8 +8,7 @@ without affecting important services such as detached Actors & RayServe deployme
 ### Prerequisite
 
 * Ray 2.0 is required.
-* You need to support external Redis server for Ray. (Redis HA cluster is highly recommended.)
-
+* You need to support external Redis server for Ray. Redis HA cluster is highly recommended. Please note: While a Redis cluster with a single shard and multiple replicas is supported, clusters with multiple shards are not supported. For further details about limitations of using a Redis cluster, refer to this [issue](https://github.com/ray-project/ray/issues/34015).
 ### Enable Ray GCS FT
 
 To enable Ray GCS FT in your newly KubeRay-managed Ray cluster, you need to enable it by adding an annotation to the
