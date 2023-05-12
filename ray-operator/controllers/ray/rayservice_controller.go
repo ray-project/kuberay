@@ -992,7 +992,8 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	httpProxyClient := utils.GetRayHttpProxyClientFunc()
 	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
-		servingPort := utils.FindRayContainerPort(&pod, common.DefaultServingPortName, common.DefaultServingPort)
+		rayContainer := pod.Spec.Containers[utils.FindRayContainerIndex(pod.Spec)]
+		servingPort := utils.FindContainerPort(&rayContainer, common.DefaultServingPortName, common.DefaultServingPort)
 		httpProxyClient.SetHostIp(pod.Status.PodIP, servingPort)
 		if pod.Labels == nil {
 			pod.Labels = make(map[string]string)

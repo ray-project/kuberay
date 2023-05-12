@@ -454,12 +454,11 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	return hashStr, nil
 }
 
-// FindRayContainerPort searches for a specific port $portName in the Ray container of a given pod.
-// If the port is found in the Ray container, the corresponding port is returned.
+// FindContainerPort searches for a specific port $portName in the container.
+// If the port is found in the container, the corresponding port is returned.
 // If the port is not found, the $defaultPort is returned instead.
-func FindRayContainerPort(pod *corev1.Pod, portName string, defaultPort int) int {
-	rayContainerIndex := FindRayContainerIndex(pod.Spec)
-	for _, port := range pod.Spec.Containers[rayContainerIndex].Ports {
+func FindContainerPort(container *corev1.Container, portName string, defaultPort int) int {
+	for _, port := range container.Ports {
 		if port.Name == portName {
 			return int(port.ContainerPort)
 		}
