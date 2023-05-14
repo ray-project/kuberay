@@ -45,7 +45,7 @@ func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 	return labels
 }
 
-// Bukild cluster annotations
+// Build cluster annotations
 func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 	annotations := map[string]string{}
 	// TODO: Add optional annotations
@@ -178,30 +178,31 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		},
 	}
 
-	if computeRuntime.GetGpu() != 0 {
-		gpu := computeRuntime.GetGpu()
-		accelerator := "nvidia.com/gpu"
-		if len(computeRuntime.GetGpuAccelerator()) != 0 {
-			accelerator = computeRuntime.GetGpuAccelerator()
+	// need smarter algorithm to filter main container. for example filter by name `ray-worker`
+	container, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head")
+	if ok {
+		if computeRuntime.GetGpu() != 0 {
+			gpu := computeRuntime.GetGpu()
+			accelerator := "nvidia.com/gpu"
+			if len(computeRuntime.GetGpuAccelerator()) != 0 {
+				accelerator = computeRuntime.GetGpuAccelerator()
+			}
+			container.Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 		}
-
-		// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-		podTemplateSpec.Spec.Containers[0].Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-	}
-
-	for k, v := range envs {
-		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
-			Name: k, Value: v,
-		})
-	}
-
-	// Add specific environments
-	if spec.Environment != nil {
-		for key, value := range spec.Environment {
-			podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
-				Name: key, Value: value,
+		for k, v := range envs {
+			container.Env = append(container.Env, v1.EnvVar{
+				Name: k, Value: v,
 			})
+		}
+	
+		// Add specific environments
+		if spec.Environment != nil {
+			for key, value := range spec.Environment {
+				container.Env = append(container.Env, v1.EnvVar{
+					Name: key, Value: value,
+				})
+			}
 		}
 	}
 
@@ -376,30 +377,33 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		},
 	}
 
-	if computeRuntime.GetGpu() != 0 {
-		gpu := computeRuntime.GetGpu()
-		accelerator := "nvidia.com/gpu"
-		if len(computeRuntime.GetGpuAccelerator()) != 0 {
-			accelerator = computeRuntime.GetGpuAccelerator()
+	container, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker")
+	if ok {
+		if computeRuntime.GetGpu() != 0 {
+			gpu := computeRuntime.GetGpu()
+			accelerator := "nvidia.com/gpu"
+			if len(computeRuntime.GetGpuAccelerator()) != 0 {
+				accelerator = computeRuntime.GetGpuAccelerator()
+			}
+
+			// need smarter algorithm to filter main container. for example filter by name `ray-worker`
+			container.Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 		}
 
-		// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-		podTemplateSpec.Spec.Containers[0].Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-		podTemplateSpec.Spec.Containers[0].Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-	}
-
-	for k, v := range envs {
-		podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
-			Name: k, Value: v,
-		})
-	}
-
-	// Add specific environments
-	if spec.Environment != nil {
-		for key, value := range spec.Environment {
-			podTemplateSpec.Spec.Containers[0].Env = append(podTemplateSpec.Spec.Containers[0].Env, v1.EnvVar{
-				Name: key, Value: value,
+		for k, v := range envs {
+			container.Env = append(container.Env, v1.EnvVar{
+				Name: k, Value: v,
 			})
+		}
+
+		// Add specific environments
+		if spec.Environment != nil {
+			for key, value := range spec.Environment {
+				container.Env = append(container.Env, v1.EnvVar{
+					Name: key, Value: value,
+				})
+			}
 		}
 	}
 
@@ -552,4 +556,13 @@ func GetNodeHostIP(node *v1.Node) (net.IP, error) {
 		return net.ParseIP(addresses[0].Address), nil
 	}
 	return nil, fmt.Errorf("host IP unknown; known addresses: %v", addresses)
+}
+
+func GetContainerByName(containers []v1.Container, name string) (v1.Container, bool) {
+	for _, container := range containers {
+		if container.Name == name {
+			return container, true
+		}
+	}
+	return v1.Container{}, false
 }

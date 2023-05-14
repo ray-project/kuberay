@@ -120,9 +120,11 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.Labels = spec.Template.Labels
 	}
 
-	if len(spec.Template.Spec.Containers[0].Env) > 0 {
+	// Here we update environment only for a container named 'ray-head'
+	container, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head")
+	if ok && len(container.Env) > 0 {
 		env := make(map[string]string)
-		for _, kv := range spec.Template.Spec.Containers[0].Env {
+		for _, kv := range container.Env {
 			if !contains(getHeadNodeEnv(), kv.Name) {
 				env[kv.Name] = kv.Value
 			}
@@ -161,9 +163,11 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 			workerNodeSpec.Labels = spec.Template.Labels
 		}
 
-		if len(spec.Template.Spec.Containers[0].Env) > 0 {
+		// Here we update environment only for a container named 'ray-worker'
+		container, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker")
+		if ok && len(container.Env) > 0 {
 			env := make(map[string]string)
-			for _, kv := range spec.Template.Spec.Containers[0].Env {
+			for _, kv := range container.Env {
 				if !contains(getWorkNodeEnv(), kv.Name) {
 					env[kv.Name] = kv.Value
 				}
