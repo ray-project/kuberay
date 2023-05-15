@@ -239,7 +239,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		Spec: corev1.ServiceSpec{
 			Ports:    userPorts,
 			Selector: userSelector,
-			Type:    userType,
+			Type:     userType,
 		},
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
