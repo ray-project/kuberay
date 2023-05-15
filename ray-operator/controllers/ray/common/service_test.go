@@ -295,8 +295,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	// 2. The user-specified labels from the HeadService (userLabels).
 	// In the case of overlap, the selector labels have priority over userLabels.
 	for k, v := range headService.ObjectMeta.Labels {
-		// If k is in the user-specified labels, then the final labels should contain it with the value from the user-specified labels.
-		// Otherwise, it should contain the value from the final selector.
+		// If k is in the user-specified labels, then the final labels should contain it with the value from the final selector.
+		// Otherwise, it should contain the value from userLabels from the HeadService.
 		if _, ok := headService.Spec.Selector[k]; ok {
 			if v != headService.Spec.Selector[k] {
 				t.Errorf("Final labels should contain key=%s with value=%s, actual value=%s", k, headService.Spec.Selector[k], v)
@@ -306,6 +306,17 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 				t.Errorf("Final labels should contain key=%s with value=%s, actual value=%s", k, userLabels[k], v)
 			}
 		} else {
+			t.Errorf("Final labels contains key=%s but it should not", k)
+		}
+	}
+	// Check that every key from the final selector (headService.Spec.Selector) and userLabels is in the final labels.
+	for k := range headService.Spec.Selector {
+		if _, ok := headService.ObjectMeta.Labels[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
+	}
+	for k := range userLabels {
+		if _, ok := headService.ObjectMeta.Labels[k]; !ok {
 			t.Errorf("Final labels should contain key=%s", k)
 		}
 	}
