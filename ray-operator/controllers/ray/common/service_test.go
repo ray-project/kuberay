@@ -219,6 +219,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	testRayClusterWithHeadService := instanceWithWrongSvc.DeepCopy()
 
 	// Set user-specified head service with user-specified labels, annotations, and ports.
+	userName := "user-custom-name"
+	userNamespace := "user-custom-namespace"
 	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
 	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", headServiceAnnotationKey1: "user_override"}
 	userPort := corev1.ServicePort{Name: "userPort", Port: 12345}
@@ -226,6 +228,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
 	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
+			Name:        userName,
+			Namespace:   userNamespace,
 			Labels:      userLabels,
 			Annotations: userAnnotations,
 		},
@@ -237,6 +241,13 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	headService, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, nil, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
+	}
+	// The user-provided namespace should be ignored, but the name should be respected
+	if headService.ObjectMeta.Namespace != testRayClusterWithHeadService.ObjectMeta.Namespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", testRayClusterWithHeadService.ObjectMeta.Namespace, headService.ObjectMeta.Namespace)
+	}
+	if headService.ObjectMeta.Name != userName {
+		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, headService.ObjectMeta.Name)
 	}
 
 	// Test merged labels. In the case of overlap (RayClusterLabelKey) the user label should be ignored.
