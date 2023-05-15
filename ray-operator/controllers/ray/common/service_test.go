@@ -227,6 +227,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
 	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
+	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
+	userType := corev1.ServiceTypeLoadBalancer
 	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        userName,
@@ -237,6 +239,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		Spec: corev1.ServiceSpec{
 			Ports:    userPorts,
 			Selector: userSelector,
+			Type:    userType,
 		},
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
@@ -363,6 +366,11 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 	if headService.ObjectMeta.Namespace == "" {
 		t.Errorf("Generated head service namespace is empty")
+	}
+
+	// Test that the user service type takes priority over the default service type (ClusterIP)
+	if headService.Spec.Type != userType {
+		t.Errorf("Generated head service type is not %s", userType)
 	}
 }
 
