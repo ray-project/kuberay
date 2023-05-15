@@ -453,3 +453,15 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 
 	return hashStr, nil
 }
+
+// FindContainerPort searches for a specific port $portName in the container.
+// If the port is found in the container, the corresponding port is returned.
+// If the port is not found, the $defaultPort is returned instead.
+func FindContainerPort(container *corev1.Container, portName string, defaultPort int) int {
+	for _, port := range container.Ports {
+		if port.Name == portName {
+			return int(port.ContainerPort)
+		}
+	}
+	return defaultPort
+}

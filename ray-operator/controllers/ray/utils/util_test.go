@@ -393,3 +393,25 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 	count := CalculateAvailableReplicas(podList)
 	assert.Equal(t, count, int32(1), "expect 1 available replica")
 }
+
+func TestFindContainerPort(t *testing.T) {
+	container := corev1.Container{
+		Name: "ray-head",
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "port1",
+				ContainerPort: 10001,
+			},
+			{
+				Name:          "port2",
+				ContainerPort: 10002,
+			},
+		},
+	}
+	port := FindContainerPort(&container, "port1", -1)
+	assert.NotEqual(t, port, -1, "expect port1 found")
+	port = FindContainerPort(&container, "port2", -1)
+	assert.NotEqual(t, port, -1, "expect port2 found")
+	port = FindContainerPort(&container, "port3", -1)
+	assert.Equal(t, port, -1, "expect port3 not found")
+}

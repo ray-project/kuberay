@@ -108,6 +108,7 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
 	initTemplateAnnotations(instance, &podTemplate)
+	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -115,8 +116,6 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
 		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
-
-		rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
 		// Determine the default image to use for the Ray container.
 		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
@@ -127,20 +126,14 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	isMetricsPortExists := false
-	for _, port := range podTemplate.Spec.Containers[0].Ports {
-		if port.Name == DefaultMetricsName {
-			isMetricsPortExists = true
-			break
-		}
-	}
+	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[rayContainerIndex], DefaultMetricsName, -1) != -1
 	if !isMetricsPortExists {
-		// add metrics port for exposing to the promethues stack.
 		metricsPort := v1.ContainerPort{
 			Name:          DefaultMetricsName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
-		podTemplate.Spec.Containers[0].Ports = append(podTemplate.Spec.Containers[0].Ports, metricsPort)
+		podTemplate.Spec.Containers[rayContainerIndex].Ports = append(podTemplate.Spec.Containers[rayContainerIndex].Ports, metricsPort)
 	}
 
 	return podTemplate
@@ -240,15 +233,9 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 
 	initTemplateAnnotations(instance, &podTemplate)
 
-	isMetricsPortExists := false
-	for _, port := range podTemplate.Spec.Containers[rayContainerIndex].Ports {
-		if port.Name == DefaultMetricsName {
-			isMetricsPortExists = true
-			break
-		}
-	}
+	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[rayContainerIndex], DefaultMetricsName, -1) != -1
 	if !isMetricsPortExists {
-		// add metrics port for exposing to the promethues stack.
 		metricsPort := v1.ContainerPort{
 			Name:          DefaultMetricsName,
 			ContainerPort: int32(DefaultMetricsPort),

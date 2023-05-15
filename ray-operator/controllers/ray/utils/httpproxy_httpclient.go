@@ -7,15 +7,12 @@ import (
 	"time"
 )
 
-var (
-	DefaultHttpProxyPort = 8000
-	HealthCheckPath      = "/-/healthz"
-)
+const healthCheckPath = "/-/healthz"
 
 type RayHttpProxyClientInterface interface {
 	InitClient()
 	CheckHealth() error
-	SetHostIp(hostIp string)
+	SetHostIp(hostIp string, port int)
 }
 
 // GetRayHttpProxyClientFunc Used for unit tests.
@@ -36,12 +33,12 @@ func (r *RayHttpProxyClient) InitClient() {
 	}
 }
 
-func (r *RayHttpProxyClient) SetHostIp(hostIp string) {
-	r.httpProxyURL = fmt.Sprint("http://", hostIp, ":", DefaultHttpProxyPort)
+func (r *RayHttpProxyClient) SetHostIp(hostIp string, port int) {
+	r.httpProxyURL = fmt.Sprintf("http://%s:%d", hostIp, port)
 }
 
 func (r *RayHttpProxyClient) CheckHealth() error {
-	req, err := http.NewRequest("GET", r.httpProxyURL+HealthCheckPath, nil)
+	req, err := http.NewRequest("GET", r.httpProxyURL+healthCheckPath, nil)
 	if err != nil {
 		return err
 	}

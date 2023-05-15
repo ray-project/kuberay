@@ -21,8 +21,8 @@ func (r *FakeRayHttpProxyClient) InitClient() {
 	}
 }
 
-func (r *FakeRayHttpProxyClient) SetHostIp(hostIp string) {
-	r.httpProxyURL = fmt.Sprint("http://", hostIp, ":", DefaultHttpProxyPort)
+func (r *FakeRayHttpProxyClient) SetHostIp(hostIp string, port int) {
+	r.httpProxyURL = fmt.Sprintf("http://%s:%d", hostIp, port)
 }
 
 func (r *FakeRayHttpProxyClient) CheckHealth() error {
