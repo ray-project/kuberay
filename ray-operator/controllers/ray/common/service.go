@@ -56,6 +56,7 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 	default_type := cluster.Spec.HeadGroupSpec.ServiceType
 
 	defaultAppProtocol := DefaultServiceAppProtocol
+	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
 	ports_int := getServicePorts(cluster)
 	ports := []corev1.ServicePort{}
 	for name, port := range ports_int {
