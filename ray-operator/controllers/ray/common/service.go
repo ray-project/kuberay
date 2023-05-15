@@ -31,46 +31,126 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 	default_labels := HeadServiceLabels(cluster)
 
-	for k, v := range default_labels {
-		if _, ok := labels[k]; !ok {
-			labels[k] = v
+	// selector consists of *only* the keys in default_labels, updated with the values in labels if they exist
+	selector := make(map[string]string)
+	for k := range default_labels {
+		if _, ok := labels[k]; ok {
+			selector[k] = labels[k]
+		} else {
+			selector[k] = default_labels[k]
 		}
+	}
+
+	// Deep copy the selector to avoid modifying the original object
+	labels_for_service := make(map[string]string)
+	for k, v := range selector {
+		labels_for_service[k] = v
 	}
 
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
 
-	service := &corev1.Service{
+	default_name := utils.GenerateServiceName(cluster.Name)
+	default_namespace := cluster.Namespace
+	default_type := cluster.Spec.HeadGroupSpec.ServiceType
+
+	defaultAppProtocol := DefaultServiceAppProtocol
+	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	ports_int := getServicePorts(cluster)
+	ports := []corev1.ServicePort{}
+	for name, port := range ports_int {
+		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
+		ports = append(ports, svcPort)
+	}
+	if cluster.Spec.HeadGroupSpec.HeadService != nil {
+		// Use the provided "custom" HeadService.
+		// Deep copy the HeadService to avoid modifying the original object
+		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
+
+		// For the Labels field, merge labels_for_service with custom HeadService labels.
+		// If there are overlaps, ignore the custom HeadService labels.
+		for k, v := range labels_for_service {
+			headService.ObjectMeta.Labels[k] = v
+		}
+
+		// For the selector, ignore any custom HeadService selectors or labels.
+		headService.Spec.Selector = selector
+
+		// Merge annotations with custom HeadService annotations. If there are overlaps,
+		// ignore the custom HeadService annotations.
+		for k, v := range annotations {
+			// if the key is present, log a warning message
+			if _, ok := headService.ObjectMeta.Annotations[k]; ok {
+				log.Info("Overwriting annotation provided in HeadGroupSpec.HeadService with value from HeadServiceAnnotations",
+					"annotation_key", k,
+					"headService_name", headService.ObjectMeta.Name,
+					"annotation_value", v)
+			}
+			headService.ObjectMeta.Annotations[k] = v
+		}
+
+		// Append default ports.
+		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
+
+		// If the user has not specified a name, generate one
+		if headService.ObjectMeta.Name == "" {
+			headService.ObjectMeta.Name = default_name
+			log.Info("Using default name for head service.", "default_name", default_name)
+		} else {
+			log.Info("Overriding default name for head service with provided name in HeadGroupSpec.HeadService",
+				"default_name", default_name,
+				"provided_name", headService.ObjectMeta.Name)
+		}
+		// If the user has specified a namespace, ignore it and raise a warning
+		if headService.ObjectMeta.Namespace != "" && headService.ObjectMeta.Namespace != default_namespace {
+			log.Info("Ignoring namespace provided in HeadGroupSpec.HeadService",
+				"provided_namespace", headService.ObjectMeta.Namespace,
+				"headService_name", headService.ObjectMeta.Name,
+				"default_namespace", default_namespace)
+		}
+		headService.ObjectMeta.Namespace = default_namespace
+
+		// If the user has not specified a service type, use the cluster's service type
+		if headService.Spec.Type == "" {
+			headService.Spec.Type = default_type
+			log.Info("Using HeadGroupSpec.ServiceType for head service",
+				"HeadGroupSpec.ServiceType", default_type,
+				"headService.ObjectMeta.Name", headService.ObjectMeta.Name)
+		} else {
+			log.Info("Overriding HeadGroupSpec.ServiceType for head service with provided type in HeadGroupSpec.HeadService.Spec.Type",
+				"HeadGroupSpec.ServiceType", default_type,
+				"headService.ObjectMeta.Name", headService.ObjectMeta.Name,
+				"HeadGroupSpec.ServiceType", default_type,
+				"HeadGroupSpec.HeadService.Spec.Type", headService.Spec.Type)
+		}
+
+		return headService, nil
+	}
+
+	headService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateServiceName(cluster.Name),
-			Namespace:   cluster.Namespace,
-			Labels:      labels,
+			Name:        default_name,
+			Namespace:   default_namespace,
+			Labels:      labels_for_service,
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: labels,
-			Ports:    []corev1.ServicePort{},
-			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
+			Selector: selector,
+			Ports:    ports,
+			Type:     default_type,
 		},
 	}
 
-	ports := getServicePorts(cluster)
-	defaultAppProtocol := DefaultServiceAppProtocol
-	for name, port := range ports {
-		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
-		service.Spec.Ports = append(service.Spec.Ports, svcPort)
-	}
-
-	// this change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
+	// This change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
 	// sorting the ServicePorts on their name
-	if len(service.Spec.Ports) > 1 {
-		sort.SliceStable(service.Spec.Ports, func(i, j int) bool {
-			return service.Spec.Ports[i].Name < service.Spec.Ports[j].Name
+	if len(headService.Spec.Ports) > 1 {
+		sort.SliceStable(headService.Spec.Ports, func(i, j int) bool {
+			return headService.Spec.Ports[i].Name < headService.Spec.Ports[j].Name
 		})
 	}
 
-	return service, nil
+	return headService, nil
 }
 
 // BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows

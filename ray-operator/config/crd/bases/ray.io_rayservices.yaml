@@ -347,6 +347,323 @@ spec:
                         description: EnableIngress indicates whether operator should
                           create ingress object for head service or not.
                         type: boolean
+                      headService:
+                        description: HeadService is the Kubernetes service of the
+                          head pod.
+                        properties:
+                          apiVersion:
+                            description: APIVersion defines the versioned schema of
+                              this representation of an object.
+                            type: string
+                          kind:
+                            description: Kind is a string value representing the REST
+                              resource this object represents.
+                            type: string
+                          metadata:
+                            description: 'Standard object''s metadata. More info:
+                              https://git.k8s.'
+                            properties:
+                              annotations:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              finalizers:
+                                items:
+                                  type: string
+                                type: array
+                              labels:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            type: object
+                          spec:
+                            description: Spec defines the behavior of a service. https://git.k8s.
+                            properties:
+                              allocateLoadBalancerNodePorts:
+                                description: allocateLoadBalancerNodePorts defines
+                                  if NodePorts will be automatically allocated for
+                                  services with
+                                type: boolean
+                              clusterIP:
+                                description: clusterIP is the IP address of the service
+                                  and is usually assigned randomly.
+                                type: string
+                              clusterIPs:
+                                description: ClusterIPs is a list of IP addresses
+                                  assigned to this service, and are usually assigned
+                                  randomly.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              externalIPs:
+                                description: externalIPs is a list of IP addresses
+                                  for which nodes in the cluster will also accept
+                                  traffic for th
+                                items:
+                                  type: string
+                                type: array
+                              externalName:
+                                description: externalName is the external reference
+                                  that discovery mechanisms will return as an alias
+                                  for this se
+                                type: string
+                              externalTrafficPolicy:
+                                description: externalTrafficPolicy denotes if this
+                                  Service desires to route external traffic to node-local
+                                  or clu
+                                type: string
+                              healthCheckNodePort:
+                                description: healthCheckNodePort specifies the healthcheck
+                                  nodePort for the service.
+                                format: int32
+                                type: integer
+                              internalTrafficPolicy:
+                                description: InternalTrafficPolicy specifies if the
+                                  cluster internal traffic should be routed to all
+                                  endpoints or
+                                type: string
+                              ipFamilies:
+                                description: IPFamilies is a list of IP families (e.g.
+                                  IPv4, IPv6) assigned to this service.
+                                items:
+                                  description: IPFamily represents the IP Family (IPv4
+                                    or IPv6).
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              ipFamilyPolicy:
+                                description: IPFamilyPolicy represents the dual-stack-ness
+                                  requested or required by this Service.
+                                type: string
+                              loadBalancerClass:
+                                description: loadBalancerClass is the class of the
+                                  load balancer implementation this Service belongs
+                                  to.
+                                type: string
+                              loadBalancerIP:
+                                description: 'Only applies to Service Type: LoadBalancer
+                                  LoadBalancer will get created with the IP specified
+                                  in th'
+                                type: string
+                              loadBalancerSourceRanges:
+                                description: If specified and supported by the platform,
+                                  this will restrict traffic through the cloud-provider
+                                  lo
+                                items:
+                                  type: string
+                                type: array
+                              ports:
+                                description: 'The list of ports that are exposed by
+                                  this service. More info: https://kubernetes.'
+                                items:
+                                  description: ServicePort contains information on
+                                    service's port.
+                                  properties:
+                                    appProtocol:
+                                      description: The application protocol for this
+                                        port. This field follows standard Kubernetes
+                                        label syntax.
+                                      type: string
+                                    name:
+                                      description: The name of this port within the
+                                        service. This must be a DNS_LABEL.
+                                      type: string
+                                    nodePort:
+                                      description: The port on each node on which
+                                        this service is exposed when type is NodePort
+                                        or LoadBalancer.
+                                      format: int32
+                                      type: integer
+                                    port:
+                                      description: The port that will be exposed by
+                                        this service.
+                                      format: int32
+                                      type: integer
+                                    protocol:
+                                      default: TCP
+                                      description: The IP protocol for this port.
+                                        Supports "TCP", "UDP", and "SCTP". Default
+                                        is TCP.
+                                      type: string
+                                    targetPort:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      description: Number or name of the port to access
+                                        on the pods targeted by the service.
+                                      x-kubernetes-int-or-string: true
+                                  required:
+                                  - port
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - port
+                                - protocol
+                                x-kubernetes-list-type: map
+                              publishNotReadyAddresses:
+                                description: publishNotReadyAddresses indicates that
+                                  any agent which deals with endpoints for this Service
+                                  should
+                                type: boolean
+                              selector:
+                                additionalProperties:
+                                  type: string
+                                description: Route service traffic to pods with label
+                                  keys and values matching this selector.
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              sessionAffinity:
+                                description: Supports "ClientIP" and "None". Used
+                                  to maintain session affinity.
+                                type: string
+                              sessionAffinityConfig:
+                                description: sessionAffinityConfig contains the configurations
+                                  of session affinity.
+                                properties:
+                                  clientIP:
+                                    description: clientIP contains the configurations
+                                      of Client IP based session affinity.
+                                    properties:
+                                      timeoutSeconds:
+                                        description: timeoutSeconds specifies the
+                                          seconds of ClientIP type session sticky
+                                          time.
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                type: object
+                              type:
+                                description: type determines how the Service is exposed.
+                                  Defaults to ClusterIP.
+                                type: string
+                            type: object
+                          status:
+                            description: Most recently observed status of the service.
+                              Populated by the system. Read-only.
+                            properties:
+                              conditions:
+                                description: Current service state
+                                items:
+                                  description: Condition contains details for one
+                                    aspect of the current state of this API Resource.
+                                  properties:
+                                    lastTransitionTime:
+                                      description: lastTransitionTime is the last
+                                        time the condition transitioned from one status
+                                        to another.
+                                      format: date-time
+                                      type: string
+                                    message:
+                                      description: message is a human readable message
+                                        indicating details about the transition.
+                                      maxLength: 32768
+                                      type: string
+                                    observedGeneration:
+                                      description: observedGeneration represents the
+                                        .metadata.generation that the condition was
+                                        set based upon.
+                                      format: int64
+                                      minimum: 0
+                                      type: integer
+                                    reason:
+                                      description: reason contains a programmatic
+                                        identifier indicating the reason for the condition's
+                                        last transition.
+                                      maxLength: 1024
+                                      minLength: 1
+                                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                      type: string
+                                    status:
+                                      description: status of the condition, one of
+                                        True, False, Unknown.
+                                      enum:
+                                      - "True"
+                                      - "False"
+                                      - Unknown
+                                      type: string
+                                    type:
+                                      description: type of condition in CamelCase
+                                        or in foo.example.com/CamelCase. --- Many
+                                        .condition.
+                                      maxLength: 316
+                                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                      type: string
+                                  required:
+                                  - lastTransitionTime
+                                  - message
+                                  - reason
+                                  - status
+                                  - type
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - type
+                                x-kubernetes-list-type: map
+                              loadBalancer:
+                                description: LoadBalancer contains the current status
+                                  of the load-balancer, if one is present.
+                                properties:
+                                  ingress:
+                                    description: Ingress is a list containing ingress
+                                      points for the load-balancer.
+                                    items:
+                                      description: 'LoadBalancerIngress represents
+                                        the status of a load-balancer ingress point:
+                                        traffic intended for the'
+                                      properties:
+                                        hostname:
+                                          description: Hostname is set for load-balancer
+                                            ingress points that are DNS based (typically
+                                            AWS load-balancers)
+                                          type: string
+                                        ip:
+                                          description: IP is set for load-balancer
+                                            ingress points that are IP based (typically
+                                            GCE or OpenStack load-balanc
+                                          type: string
+                                        ports:
+                                          description: Ports is a list of records
+                                            of service ports If used, every port defined
+                                            in the service should have a
+                                          items:
+                                            properties:
+                                              error:
+                                                description: Error is to record the
+                                                  problem with the service port The
+                                                  format of the error shall comply
+                                                  with the f
+                                                maxLength: 316
+                                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                                type: string
+                                              port:
+                                                description: Port is the port number
+                                                  of the service port of which status
+                                                  is recorded here
+                                                format: int32
+                                                type: integer
+                                              protocol:
+                                                default: TCP
+                                                description: Protocol is the protocol
+                                                  of the service port of which status
+                                                  is recorded here The supported values
+                                                  a
+                                                type: string
+                                            required:
+                                            - port
+                                            - protocol
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      type: object
+                                    type: array
+                                type: object
+                            type: object
+                        type: object
                       rayStartParams:
                         additionalProperties:
                           type: string
