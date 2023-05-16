@@ -125,7 +125,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ray-operator-leader",
-		NewCache:               cache.MultiNamespacedCacheBuilder([]string{"default"}),
+		NewCache:               cache.MultiNamespacedCacheBuilder([]string{"default", "n1"}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
