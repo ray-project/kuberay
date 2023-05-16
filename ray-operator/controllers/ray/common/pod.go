@@ -692,15 +692,10 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
 	// Note: The argument headPort is unused for nodeType == rayiov1alpha1.HeadNode.
 	if nodeType == rayiov1alpha1.WorkerNode {
-
 		if _, ok := rayStartParams["address"]; !ok {
 			address := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 			rayStartParams["address"] = address
 		}
-
-		// wokers do not need to set the dashboard-host. Dashboard is only for head.
-		delete(rayStartParams, "dashboard-host")
-
 	}
 
 	if nodeType == rayiov1alpha1.HeadNode {
