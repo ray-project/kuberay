@@ -12060,6 +12060,10 @@ spec:
                 description: ShutdownAfterJobFinishes will determine whether to delete
                   the ray cluster once rayJob succeed or fai
                 type: boolean
+              suspend:
+                description: suspend specifies whether the RayJob controller should
+                  create a RayCluster instance If a job is appl
+                type: boolean
               ttlSecondsAfterFinished:
                 description: TTLSecondsAfterFinished is the TTL to clean up RayCluster.
                 format: int32

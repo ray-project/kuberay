@@ -39,6 +39,7 @@ const (
 	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
 	JobDeploymentStatusFailedToGetJobStatus          JobDeploymentStatus = "FailedToGetJobStatus"
 	JobDeploymentStatusComplete                      JobDeploymentStatus = "Complete"
+	JobDeploymentStatusSuspended                     JobDeploymentStatus = "Suspended"
 )
 
 // RayJobSpec defines the desired state of RayJob
@@ -61,6 +62,12 @@ type RayJobSpec struct {
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
+	// suspend specifies whether the RayJob controller should create a RayCluster instance
+	// If a job is applied with the suspend field set to true,
+	// the RayCluster will not be created and will wait for the transition to false.
+	// If the RayCluster is already created, it will be deleted.
+	// In case of transition to false a new RayCluster will be created.
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob

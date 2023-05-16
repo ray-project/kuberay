@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -16,21 +17,23 @@ type FakeRayDashboardClient struct {
 	serveStatuses ServeDeploymentStatuses
 }
 
+var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
+
 func (r *FakeRayDashboardClient) InitClient(url string) {
 	r.client = http.Client{}
 	r.dashboardURL = "http://" + url
 }
 
-func (r *FakeRayDashboardClient) GetDeployments() (string, error) {
+func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, error) {
 	panic("Fake GetDeployments not implemented")
 }
 
-func (r *FakeRayDashboardClient) UpdateDeployments(specs rayv1alpha1.ServeDeploymentGraphSpec) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, specs rayv1alpha1.ServeDeploymentGraphSpec) error {
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
 }
 
-func (r *FakeRayDashboardClient) GetDeploymentsStatus() (*ServeDeploymentStatuses, error) {
+func (r *FakeRayDashboardClient) GetDeploymentsStatus(_ context.Context) (*ServeDeploymentStatuses, error) {
 	return &r.serveStatuses, nil
 }
 
@@ -80,14 +83,14 @@ func (r *FakeRayDashboardClient) SetServeStatus(status ServeDeploymentStatuses) 
 	r.serveStatuses = status
 }
 
-func (r *FakeRayDashboardClient) GetJobInfo(jobId string) (*RayJobInfo, error) {
+func (r *FakeRayDashboardClient) GetJobInfo(_ context.Context, jobId string) (*RayJobInfo, error) {
 	return nil, nil
 }
 
-func (r *FakeRayDashboardClient) SubmitJob(rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
 	return "", nil
 }
 
-func (r *FakeRayDashboardClient) StopJob(jobName string, log *logr.Logger) (err error) {
+func (r *FakeRayDashboardClient) StopJob(_ context.Context, jobName string, log *logr.Logger) (err error) {
 	return nil
 }

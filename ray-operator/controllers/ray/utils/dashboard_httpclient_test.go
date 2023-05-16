@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -80,16 +81,16 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
 			})
 
-		jobId, err := rayDashboardClient.SubmitJob(rayJob, &ctrl.Log)
+		jobId, err := rayDashboardClient.SubmitJob(context.TODO(), rayJob, &ctrl.Log)
 		Expect(err).To(BeNil())
 		Expect(jobId).To(Equal(expectJobId))
 
-		rayJobInfo, err := rayDashboardClient.GetJobInfo(jobId)
+		rayJobInfo, err := rayDashboardClient.GetJobInfo(context.TODO(), jobId)
 		Expect(err).To(BeNil())
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
 		Expect(rayJobInfo.JobStatus).To(Equal(rayv1alpha1.JobStatusRunning))
 
-		_, err = rayDashboardClient.GetJobInfo(errorJobId)
+		_, err = rayDashboardClient.GetJobInfo(context.TODO(), errorJobId)
 		Expect(err).NotTo(BeNil())
 		Expect(err.Error()).To(ContainSubstring("GetJobInfo fail"))
 		Expect(err.Error()).To(ContainSubstring("Ray misbehaved"))
@@ -107,7 +108,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 
-		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
+		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1", &ctrl.Log)
 		Expect(err).To(BeNil())
 	})
 
@@ -134,7 +135,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 
-		err := rayDashboardClient.StopJob("stop-job-1", &ctrl.Log)
+		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1", &ctrl.Log)
 		Expect(err).To(BeNil())
 	})
 })
