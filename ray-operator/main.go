@@ -13,6 +13,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 
 	"go.uber.org/zap/zapcore"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -124,7 +125,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ray-operator-leader",
-		Namespace:              watchNamespace,
+		NewCache:               cache.MultiNamespacedCacheBuilder([]string{"default"}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
