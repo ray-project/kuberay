@@ -23,7 +23,7 @@ spec:
     # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
     replicas: 1
     # The `rayStartParams` are used to configure the `ray start` command.
-    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in kuberay.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
       dashboard-host: '0.0.0.0'
@@ -83,7 +83,7 @@ spec:
     #  - raycluster-complete-worker-large-group-hv457
     #  - raycluster-complete-worker-large-group-k8tj7
     # The `rayStartParams` are used to configure the `ray start` command.
-    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in kuberay.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams: {}
     #pod template
