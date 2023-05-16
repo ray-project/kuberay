@@ -13,7 +13,7 @@ The default value for both Ray and KubeRay 0.5.0 is `localhost`, however, for ve
 - `--no-monitor`: This option disables the monitor and autoscaler in the **user's container**. It will be automatically set when [autoscaling](https://github.com/ray-project/kuberay/blob/master/docs/guidance/autoscaler.md) is enabled. The autoscaling feature introduces the autoscaler as a sidecar container within the head pod, thereby obviating the need for a monitor and autoscaler in the **user's container**. See [PR #13505](https://github.com/ray-project/ray/pull/13505) for more details. Modification is not recommended.
 
 
-- `--port`: Port for the GCS server. The port is set to `6379` by default. Please ensure that this value matches the `gcs-server` container port in ray head container.
+- `--port`: Port for the GCS server. The port is set to `6379` by default. Please ensure that this value matches the `gcs-server` container port in Ray head container.
 
 - `--redis-password`: Redis password for an external Redis, necessary when [fault tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md) is enabled. 
 The default value is `""` after Ray 2.3.0. See [#929](https://github.com/ray-project/kuberay/pull/929) for more details. 
