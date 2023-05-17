@@ -3,7 +3,6 @@ kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  suspend: false
   entrypoint: python /home/ray/samples/sample_code.py
   # runtimeEnv decoded to '{
   #    "pip": [
