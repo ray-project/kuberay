@@ -186,11 +186,7 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
 		t.Errorf("failed to propagate annotations, got %v, expected %v", podSpec.Spec.Tolerations[0], expectedToleration)
 	}
-	if val, exists := podSpec.Annotations["foo"]; exists {
-		if val != "bar" {
-			t.Errorf("failed to convert annotations")
-		}
-	} else {
+	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
 		t.Errorf("failed to convert annotations")
 	}
 	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
@@ -209,11 +205,7 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
 		t.Errorf("failed to propagate annotations, got %v, expected %v", podSpec.Spec.Tolerations[0], expectedToleration)
 	}
-	if val, exists := podSpec.Annotations["foo"]; exists {
-		if val != "bar" {
-			t.Errorf("failed to convert annotations")
-		}
-	} else {
+	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
 		t.Errorf("failed to convert annotations")
 	}
 	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
