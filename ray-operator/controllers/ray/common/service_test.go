@@ -374,6 +374,21 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 }
 
+func TestNilMapDoesntErrorInUserSpecifiedHeadService(t *testing.T) {
+	// Use any RayCluster instance as a base for the test.
+	testRayClusterWithHeadService := instanceWithWrongSvc.DeepCopy()
+
+	// Set user-specified head service with many nil fields.
+	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{},
+	}
+
+	_, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, nil, nil)
+	if err != nil {
+		t.Errorf("failed to build head service: %v", err)
+	}
+}
+
 func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	svc1, err1 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
 	svc2, err2 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
