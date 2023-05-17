@@ -121,7 +121,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 	}
 
 	// Here we update environment only for a container named 'ray-head'
-	container, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head")
+	container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head")
 	if ok && len(container.Env) > 0 {
 		env := make(map[string]string)
 		for _, kv := range container.Env {
@@ -164,7 +164,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 		}
 
 		// Here we update environment only for a container named 'ray-worker'
-		container, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker")
+		container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker")
 		if ok && len(container.Env) > 0 {
 			env := make(map[string]string)
 			for _, kv := range container.Env {
@@ -195,7 +195,11 @@ func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate 
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 	val, ok := configMap.Data["tolerations"]
 	if ok {
-		_ = json.Unmarshal([]byte(val), &runtime.Tolerations)
+		err := json.Unmarshal([]byte(val), &runtime.Tolerations)
+		if err != nil {
+			klog.Errorf("failed to unmarshall tolerations for compute template ", runtime.Name, " value ",
+				runtime.Tolerations, " error ", err)
+		}
 	}
 	return runtime
 }

@@ -28,6 +28,71 @@ var testFileVolume = &api.Volume{
 	ReadOnly:             true,
 }
 
+// Spec for testing
+var headGroup = api.HeadGroupSpec{
+	ComputeTemplate: "foo",
+	Image:           "bar",
+	ServiceType:     "ClusterIP",
+	RayStartParams: map[string]string{
+		"dashboard-host":      "0.0.0.0",
+		"metrics-export-port": "8080",
+		"num-cpus":            "0",
+	},
+	Environment: map[string]string{
+		"foo": "bar",
+	},
+	Annotations: map[string]string{
+		"foo": "bar",
+	},
+	Labels: map[string]string{
+		"foo": "bar",
+	},
+}
+var workerGroup = api.WorkerGroupSpec{
+	GroupName:       "wg",
+	ComputeTemplate: "foo",
+	Image:           "bar",
+	Replicas:        5,
+	MinReplicas:     5,
+	MaxReplicas:     5,
+	RayStartParams: map[string]string{
+		"node-ip-address": "$MY_POD_IP",
+	},
+	Environment: map[string]string{
+		"foo": "bar",
+	},
+	Annotations: map[string]string{
+		"foo": "bar",
+	},
+	Labels: map[string]string{
+		"foo": "bar",
+	},
+}
+
+var template = api.ComputeTemplate{
+	Name:      "",
+	Namespace: "",
+	Cpu:       2,
+	Memory:    8,
+	Tolerations: []*api.PodToleration{
+		{
+			Key:      "blah1",
+			Operator: "Exists",
+			Effect:   "NoExecute",
+		},
+	},
+}
+
+var expectedToleration = v1.Toleration{
+	Key:      "blah1",
+	Operator: "Exists",
+	Effect:   "NoExecute",
+}
+
+var expectedLabels = map[string]string{
+	"foo": "bar",
+}
+
 func TestBuildVolumes(t *testing.T) {
 	targetVolume := v1.Volume{
 		Name: testVolume.Name,
@@ -108,4 +173,59 @@ func TestBuildVolumeMounts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildHeadPodTemplate(t *testing.T) {
+	podSpec := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
+		t.Errorf("failed to propagate environment")
+	}
+	if len(podSpec.Spec.Tolerations) != 1 {
+		t.Errorf("failed to propagate tolerations, expected 1, got %v", len(podSpec.Spec.Tolerations))
+	}
+	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
+		t.Errorf("failed to propagate annotations, got %v, expected %v", podSpec.Spec.Tolerations[0], expectedToleration)
+	}
+	if val, exists := podSpec.Annotations["foo"]; exists {
+		if val != "bar" {
+			t.Errorf("failed to convert annotations")
+		}
+	} else {
+		t.Errorf("failed to convert annotations")
+	}
+	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
+		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
+	}
+}
+
+func TestBuilWorkerPodTemplate(t *testing.T) {
+	podSpec := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
+		t.Errorf("failed to propagate environment")
+	}
+	if len(podSpec.Spec.Tolerations) != 1 {
+		t.Errorf("failed to propagate tolerations, expected 1, got %v", len(podSpec.Spec.Tolerations))
+	}
+	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
+		t.Errorf("failed to propagate annotations, got %v, expected %v", podSpec.Spec.Tolerations[0], expectedToleration)
+	}
+	if val, exists := podSpec.Annotations["foo"]; exists {
+		if val != "bar" {
+			t.Errorf("failed to convert annotations")
+		}
+	} else {
+		t.Errorf("failed to convert annotations")
+	}
+	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
+		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
+	}
+}
+
+func containsEnv(envs []v1.EnvVar, key string, val string) bool {
+	for _, env := range envs {
+		if env.Name == key && env.Value == val {
+			return true
+		}
+	}
+	return false
 }

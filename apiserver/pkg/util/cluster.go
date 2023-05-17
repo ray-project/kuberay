@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 
+	"k8s.io/klog/v2"
+
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -179,7 +181,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 	}
 
 	// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-	container, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head")
+	container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head")
 	if ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
@@ -195,7 +197,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 				Name: k, Value: v,
 			})
 		}
-	
+
 		// Add specific environments
 		if spec.Environment != nil {
 			for key, value := range spec.Environment {
@@ -204,6 +206,8 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 				})
 			}
 		}
+		// Replace container
+		podTemplateSpec.Spec.Containers[index] = container
 	}
 
 	// Add specific annotations
@@ -377,7 +381,7 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		},
 	}
 
-	container, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker")
+	container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker")
 	if ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
@@ -405,6 +409,8 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 				})
 			}
 		}
+		// Replace container
+		podTemplateSpec.Spec.Containers[index] = container
 	}
 
 	// Add specific annotations
@@ -521,8 +527,13 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
-		t, _ := json.Marshal(runtime.Tolerations)
-		dmap["tolerations"] = string(t)
+		t, err := json.Marshal(runtime.Tolerations)
+		if err != nil {
+			klog.Errorf("failed to marshall tolerations ", runtime.Tolerations, " for compute template ", runtime.Name,
+				" error ", err)
+		} else {
+			dmap["tolerations"] = string(t)
+		}
 	}
 
 	config := &v1.ConfigMap{
@@ -558,11 +569,11 @@ func GetNodeHostIP(node *v1.Node) (net.IP, error) {
 	return nil, fmt.Errorf("host IP unknown; known addresses: %v", addresses)
 }
 
-func GetContainerByName(containers []v1.Container, name string) (v1.Container, bool) {
-	for _, container := range containers {
+func GetContainerByName(containers []v1.Container, name string) (v1.Container, int, bool) {
+	for index, container := range containers {
 		if container.Name == name {
-			return container, true
+			return container, index, true
 		}
 	}
-	return v1.Container{}, false
+	return v1.Container{}, 0, false
 }
