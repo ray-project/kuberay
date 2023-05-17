@@ -70,6 +70,9 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 		// For the Labels field, merge labels_for_service with custom HeadService labels.
 		// If there are overlaps, ignore the custom HeadService labels.
+		if headService.ObjectMeta.Labels == nil {
+			headService.ObjectMeta.Labels = make(map[string]string)
+		}
 		for k, v := range labels_for_service {
 			headService.ObjectMeta.Labels[k] = v
 		}
@@ -79,6 +82,9 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 
 		// Merge annotations with custom HeadService annotations. If there are overlaps,
 		// ignore the custom HeadService annotations.
+		if headService.ObjectMeta.Annotations == nil {
+			headService.ObjectMeta.Annotations = make(map[string]string)
+		}
 		for k, v := range annotations {
 			// if the key is present, log a warning message
 			if _, ok := headService.ObjectMeta.Annotations[k]; ok {
