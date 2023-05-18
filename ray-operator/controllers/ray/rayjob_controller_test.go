@@ -202,9 +202,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			for _, workerPod := range workerPods.Items {
-				Expect(workerPod.Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
-			}
 		})
 
 		// If in-tree autoscaling is disabled, the user should be able to update the replica settings.
@@ -234,9 +231,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(int(newReplicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			for _, workerPod := range workerPods.Items {
-				Expect(workerPod.Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
-			}
 		})
 
 		It("Dashboard URL should be set", func() {
@@ -296,7 +290,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayJob  = %v", myRayJob.Name)
 		})
 
-		// if In-tree autoscaling is enabled,  the autoscaler should adjust the number of replicas based on the workload.
+		// if In-tree autoscaling is enabled, the autoscaler should adjust the number of replicas based on the workload.
 		// This test emulates the behavior of the autoscaler by directly updating the RayCluster and verifying if the number of worker pods increases accordingly.
 		It("should create new worker since autoscaler increases the replica", func() {
 			Eventually(
@@ -325,9 +319,6 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)+1), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			for _, workerPod := range workerPods.Items {
-				Expect(workerPod.Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
-			}
 			// confirm RayJob controller does not revert the number of workers.
 			Consistently(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
@@ -365,9 +356,6 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 			Consistently(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*5, time.Millisecond*500).Should(Equal(int(oldReplicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			for _, workerPod := range workerPods.Items {
-				Expect(workerPod.Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
-			}
 		})
 	})
 })

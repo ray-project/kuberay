@@ -432,8 +432,12 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		r.Log.Info("Found associated RayCluster for RayJob", "rayjob", rayJobInstance.Name, "raycluster", rayClusterNamespacedName)
 
 		// Case1: The job is submitted to an existing ray cluster, simply return the rayClusterInstance.
-		if rayJobInstance.Spec.RayClusterSpec == nil {
-			r.Log.Info("RayClusterSpec is empty. You are using ClusterSelector to select an existing RayCluster", "raycluster", rayClusterNamespacedName)
+		// We do not use rayJobInstance.Spec.RayClusterSpec == nil to check if the cluster selector mode is activated.
+		// This is because a user might set both RayClusterSpec and ClusterSelector. with rayJobInstance.Spec.RayClusterSpec == nil,
+		// though the RayJob controller will still use ClusterSelector, but it's now able to update the replica.
+		// this could result in a conflict as both the RayJob controller and the autoscaler in the existing RayCluster might try to update replicas simultaneously.
+		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
+			r.Log.Info("ClusterSelector is being used to select an existing RayCluster", "raycluster", rayClusterNamespacedName)
 			return rayClusterInstance, nil
 		}
 
@@ -450,7 +454,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			// Note, currently, there is no method to verify if the user has updated the RayJob since the last reconcile.
 			// In future, we could utilize annotation that stores the hash of the RayJob since last reconcile to compare.
 			// For now, we just log a warning message to remind the user regadless whether user has updated RayJob.
-			r.Log.Info("In-tree autoscaling is enabled, Adjustments made to RayJob will be disregarded")
+			r.Log.Info("Since in-tree autoscaling is enabled, any adjustments made to the RayJob will be disregarded and will not be propagated to the RayCluster.")
 			return rayClusterInstance, nil
 		}
 
