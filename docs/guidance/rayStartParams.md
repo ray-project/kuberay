@@ -6,9 +6,9 @@ This document outlines the default settings for `rayStartParams` in KubeRay.
 
 ### Options Exclusive to the Head Pod
 
-- `--dashboard-host`: Host for the dashboard server, either `localhost` (127.0.0.1) or `0.0.0.0` (all interfaces).
-The default value for both Ray and KubeRay 0.5.0 is `localhost`, however, for versions of KubeRay after 0.5.0, the default value will be `0.0.0.0`.
-
+- `--dashboard-host`: Host for the dashboard server, either `localhost` (127.0.0.1) or `0.0.0.0`.
+The latter setting exposes the Ray dashboard outside the Ray cluster, which is required when [ingress](https://github.com/ray-project/kuberay/blob/master/docs/guidance/ingress.md) is utilized for Ray cluster access.
+The default value for both Ray and KubeRay 0.5.0 is `localhost`. Please note that this will change for versions of KubeRay later than 0.5.0, where the default setting will be `0.0.0.0`.
 
 - `--no-monitor`: This option disables the monitor and autoscaler in the **user's container**. It will be automatically set when [autoscaling](https://github.com/ray-project/kuberay/blob/master/docs/guidance/autoscaler.md) is enabled. The autoscaling feature introduces the autoscaler as a sidecar container within the head pod, thereby obviating the need for a monitor and autoscaler in the **user's container**. See [PR #13505](https://github.com/ray-project/ray/pull/13505) for more details. Modification is not recommended.
 
@@ -30,7 +30,7 @@ The default value is `""` after Ray 2.3.0. See [#929](https://github.com/ray-pro
 
 - `--metrics-export-port`: Port for exposing Ray metrics through a Prometheus endpoint. The port is set to `8080` by default. Please ensure that this value matches the `metrics` container port if you need to customize it. See [PR #954](https://github.com/ray-project/kuberay/pull/954) and [prometheus-grafana doc](https://github.com/ray-project/kuberay/blob/master/docs/guidance/prometheus-grafana.md) for more details.
 
-- `--num-cpus`: Number of logical CPUs on this Ray node. Default is determined by Ray container resource limits. Modify Ray container resource limits instead of this option. See [PR #170](https://github.com/ray-project/kuberay/pull/170).
+- `--num-cpus`: Number of logical CPUs on this Ray node. Default is determined by Ray container resource limits. Modify Ray container resource limits instead of this option. See [PR #170](https://github.com/ray-project/kuberay/pull/170). However, it is sometimes useful to override this autodetected value. For example, setting `num-cpus:"0"` for the Ray head pod will prevent Ray workloads with non-zero CPU requirements from being scheduled on the head.
 
 - `--num-gpus`: Number of GPUs on this Ray node. Default is determined by Ray container resource limits. Modify Ray container resource limits instead of this option. See [PR #170](https://github.com/ray-project/kuberay/pull/170).
 
