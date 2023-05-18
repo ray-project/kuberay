@@ -181,8 +181,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 	}
 
 	// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-	container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head")
-	if ok {
+	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head"); ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
 			accelerator := "nvidia.com/gpu"
@@ -381,8 +380,7 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		},
 	}
 
-	container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker")
-	if ok {
+	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker"); ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
 			accelerator := "nvidia.com/gpu"

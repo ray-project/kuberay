@@ -121,8 +121,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 	}
 
 	// Here we update environment only for a container named 'ray-head'
-	container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head")
-	if ok && len(container.Env) > 0 {
+	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
 		env := make(map[string]string)
 		for _, kv := range container.Env {
 			if !contains(getHeadNodeEnv(), kv.Name) {
@@ -164,8 +163,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 		}
 
 		// Here we update environment only for a container named 'ray-worker'
-		container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker")
-		if ok && len(container.Env) > 0 {
+		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
 			env := make(map[string]string)
 			for _, kv := range container.Env {
 				if !contains(getWorkNodeEnv(), kv.Name) {
