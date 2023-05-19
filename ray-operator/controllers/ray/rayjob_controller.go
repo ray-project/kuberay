@@ -429,24 +429,71 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	rayClusterInstance := &rayv1alpha1.RayCluster{}
 	err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance)
 	if err == nil {
-		r.Log.Info("RayJob associated rayCluster found", "rayjob", rayJobInstance.Name, "raycluster", rayClusterNamespacedName)
-		// just return the rayClusterInstance if cluster spec is nil
-		if rayJobInstance.Spec.RayClusterSpec == nil {
+		r.Log.Info("Found associated RayCluster for RayJob", "rayjob", rayJobInstance.Name, "raycluster", rayClusterNamespacedName)
+
+		// Case1: The job is submitted to an existing ray cluster, simply return the rayClusterInstance.
+		// We do not use rayJobInstance.Spec.RayClusterSpec == nil to check if the cluster selector mode is activated.
+		// This is because a user might set both RayClusterSpec and ClusterSelector. with rayJobInstance.Spec.RayClusterSpec == nil,
+		// though the RayJob controller will still use ClusterSelector, but it's now able to update the replica.
+		// this could result in a conflict as both the RayJob controller and the autoscaler in the existing RayCluster might try to update replicas simultaneously.
+		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
+			r.Log.Info("ClusterSelector is being used to select an existing RayCluster. RayClusterSpec will be disregarded", "raycluster", rayClusterNamespacedName)
 			return rayClusterInstance, nil
 		}
 
-		if utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
+		// Note, unlike the RayService, which creates new Ray clusters if any spec is changed,
+		// RayJob only supports changing the replicas. Changes to other specs may lead to
+		// unexpected behavior. Therefore, the following code focuses solely on updating replicas.
+
+		// Case2: In-tree autoscaling is enabled, only the autoscaler should update replicas to prevent race conditions
+		// between user updates and autoscaler decisions. RayJob controller should not modify the replica. Consider this scenario:
+		// 1. The autoscaler updates replicas to 10 based on the current workload.
+		// 2. The user updates replicas to 15 in the RayJob YAML file.
+		// 3. Both RayJob controller and the autoscaler attempt to update replicas, causing worker pods to be repeatedly created and terminated.
+		if rayJobInstance.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *rayJobInstance.Spec.RayClusterSpec.EnableInTreeAutoscaling {
+			// Note, currently, there is no method to verify if the user has updated the RayJob since the last reconcile.
+			// In future, we could utilize annotation that stores the hash of the RayJob since last reconcile to compare.
+			// For now, we just log a warning message to remind the user regadless whether user has updated RayJob.
+			r.Log.Info("Since in-tree autoscaling is enabled, any adjustments made to the RayJob will be disregarded and will not be propagated to the RayCluster.")
 			return rayClusterInstance, nil
 		}
-		rayClusterInstance.Spec = *rayJobInstance.Spec.RayClusterSpec
 
-		r.Log.Info("Update ray cluster spec", "raycluster", rayClusterNamespacedName)
+		// Case3: In-tree autoscaling is disabled, respect the user's replicas setting.
+		// Loop over all worker groups and update replicas.
+		areReplicasIdentical := true
+		for i := range rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs {
+			if *rayClusterInstance.Spec.WorkerGroupSpecs[i].Replicas != *rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas {
+				areReplicasIdentical = false
+				*rayClusterInstance.Spec.WorkerGroupSpecs[i].Replicas = *rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas
+			}
+		}
+
+		// Other specs rather than replicas are changed, warn the user that the RayJob supports replica changes only.
+		if !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
+			r.Log.Info("RayJob supports replica changes only. Adjustments made to other specs will be disregarded as they may cause unexpected behavior")
+		}
+
+		// Avoid updating the RayCluster's replicas if it's identical to the RayJob's replicas.
+		if areReplicasIdentical {
+			return rayClusterInstance, nil
+		}
+
+		r.Log.Info("Update ray cluster replica", "raycluster", rayClusterNamespacedName)
 		if err := r.Update(ctx, rayClusterInstance); err != nil {
-			r.Log.Error(err, "Fail to update ray cluster instance!", "rayCluster", rayClusterNamespacedName)
+			r.Log.Error(err, "Fail to update ray cluster replica!", "rayCluster", rayClusterNamespacedName)
 			// Error updating the RayCluster object.
 			return nil, client.IgnoreNotFound(err)
 		}
+
 	} else if errors.IsNotFound(err) {
+		// TODO: If both ClusterSelector and RayClusterSpec are not set, we avoid should attempting to retrieve a RayCluster instance.
+		// Consider moving this logic to a more appropriate location.
+		if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
+			err := fmt.Errorf("Both ClusterSelector and RayClusterSpec are undefined")
+			r.Log.Error(err, "Failed to configure RayCluster instance due to missing configuration")
+			return nil, err
+		}
+
 		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
 			err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
 			r.Log.Error(err, "Get rayCluster instance error!")
