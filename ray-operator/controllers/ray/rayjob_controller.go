@@ -437,7 +437,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		// though the RayJob controller will still use ClusterSelector, but it's now able to update the replica.
 		// this could result in a conflict as both the RayJob controller and the autoscaler in the existing RayCluster might try to update replicas simultaneously.
 		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-			r.Log.Info("ClusterSelector is being used to select an existing RayCluster", "raycluster", rayClusterNamespacedName)
+			r.Log.Info("ClusterSelector is being used to select an existing RayCluster. RayClusterSpec will be disregarded", "raycluster", rayClusterNamespacedName)
 			return rayClusterInstance, nil
 		}
 
@@ -486,6 +486,8 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		}
 
 	} else if errors.IsNotFound(err) {
+		// TODO: If both ClusterSelector and RayClusterSpec are not set, we avoid should attempting to retrieve a RayCluster instance.
+		// Consider moving this logic to a more appropriate location.
 		if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
 			err := fmt.Errorf("Both ClusterSelector and RayClusterSpec are undefined")
 			r.Log.Error(err, "Failed to configure RayCluster instance due to missing configuration")
