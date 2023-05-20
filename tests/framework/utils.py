@@ -155,6 +155,11 @@ class OperatorManager:
                     f"--set image.repository={repo},image.tag={tag}"
                 )
 
+        logger.info("!!!check CRD!!!")
+        shell_subprocess_check_output("kubectl get crd rayjobs.ray.io -o yaml | grep suspend")
+    
+
+
 def shell_subprocess_run(command, check = True):
     """
     Command will be executed through the shell. If check=True, it will raise an error when
