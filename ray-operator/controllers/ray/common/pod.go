@@ -688,18 +688,19 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	}
 
 	if nodeType == rayiov1alpha1.HeadNode {
-		// allow incoming connections from all network interfaces for the dashboard by default.
+		// Allow incoming connections from all network interfaces for the dashboard by default.
+		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
 			rayStartParams["dashboard-host"] = "0.0.0.0"
 		}
-	}
 
-	if nodeType == rayiov1alpha1.HeadNode {
-		if _, ok := rayStartParams["no-monitor"]; !ok {
-			// Ray autoscaler supports various node providers such as AWS, GCP, Azure, and Kubernetes.
-			// However, the default autoscaler is not compatible with Kubernetes. Therefore, we disable
-			// the monitor process by default.
-			rayStartParams["no-monitor"] = "true"
+		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
+		// will be used to initialize the monitor with a READONLY autoscaler which only mirrors what the GCS tells it.
+		// See `monitor.py` in Ray repository for more details.
+		if _, ok := rayStartParams["autoscaling-config"]; ok {
+			log.Info("Detect autoscaling-config in head Pod's rayStartParams. " +
+				"The monitor process will initialize the monitor with the provided config. " +
+				"Please ensure the autoscaler is set to READONLY mode.")
 		}
 	}
 
