@@ -16,7 +16,9 @@ spec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
     # Refer to https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types.
     serviceType: ClusterIP
-    # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
       dashboard-host: '0.0.0.0'
     # pod template
@@ -80,7 +82,9 @@ spec:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
-    # the following params are used to complete the ray start: ray start --block
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams: {}
     #pod template
     template:

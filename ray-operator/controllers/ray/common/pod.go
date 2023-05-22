@@ -685,6 +685,13 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		}
 	}
 
+	if nodeType == rayiov1alpha1.HeadNode {
+		// allow incoming connections from all network interfaces for the dashboard by default.
+		if _, ok := rayStartParams["dashboard-host"]; !ok {
+			rayStartParams["dashboard-host"] = "0.0.0.0"
+		}
+	}
+
 	// add metrics port for expose the metrics to the prometheus.
 	if _, ok := rayStartParams["metrics-export-port"]; !ok {
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)

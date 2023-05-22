@@ -1023,6 +1023,34 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
 
+func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
+	// The dashboard-host option is automatically injected into RayStartParams with a default value of "0.0.0.0" for head only as workers do not have dashborad server.
+	// Users can manually set the dashboard-host option to customize the host the dashboard server binds to, either "localhost" (127.0.0.1) or "0.0.0.0" (available from all interfaces).
+	headPort := "6379"
+	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+
+	// Case 1: Head node with no dashboard-host option set.
+	rayStartParams := map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
+
+	// Case 2: Head node with dashboard-host option set.
+	rayStartParams = map[string]string{"dashboard-host": "localhost"}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+
+	// Case 3: Worker node with no dashboard-host option set.
+	rayStartParams = map[string]string{}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.NotContains(t, rayStartParams, "dashboard-host", "workers should not have an dashboard-host option set.")
+
+	// Case 4: Worker node with dashboard-host option set.
+	// To maximize user empowerment, this option can be enabled. However, it is important to note that the dashboard is not available on worker nodes.
+	rayStartParams = map[string]string{"dashboard-host": "localhost"}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+}
+
 func TestGetCustomWorkerInitImage(t *testing.T) {
 	// cleanup
 	defer os.Unsetenv(EnableInitContainerInjectionEnvKey)
