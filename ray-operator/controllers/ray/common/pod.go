@@ -112,6 +112,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
+		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
+		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
@@ -689,6 +691,15 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 		// allow incoming connections from all network interfaces for the dashboard by default.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
 			rayStartParams["dashboard-host"] = "0.0.0.0"
+		}
+	}
+
+	if nodeType == rayiov1alpha1.HeadNode {
+		if _, ok := rayStartParams["no-monitor"]; !ok {
+			// Ray autoscaler supports various node providers such as AWS, GCP, Azure, and Kubernetes.
+			// However, the default autoscaler is not compatible with Kubernetes. Therefore, we disable
+			// the monitor process by default.
+			rayStartParams["no-monitor"] = "true"
 		}
 	}
 
