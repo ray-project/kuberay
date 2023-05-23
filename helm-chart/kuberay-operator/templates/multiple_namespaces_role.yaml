@@ -1,11 +1,14 @@
-{{- if and .Values.rbacEnable (not .Values.singleNamespaceInstall) }}
+# Install Role for namespaces listed in watchNamespace.
+{{- if and .Values.rbacEnable .Values.singleNamespaceInstall }}
 
-kind: ClusterRole
+{{- range $namespace := .Values.watchNamespace }}
+---
+kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  labels:
-{{ include "kuberay-operator.labels" . | indent 4 }}
-  name: {{ include "kuberay-operator.fullname" . }}
+  labels: {{ include "kuberay-operator.labels" $ | nindent 4 }}
+  name: {{ include "kuberay-operator.fullname" $ }}
+  namespace: {{ $namespace }}
 rules:
 - apiGroups:
   - coordination.k8s.io
@@ -213,7 +216,7 @@ rules:
   - list
   - update
   - watch
-{{- if .Values.batchScheduler.enabled }}
+{{- if $.Values.batchScheduler.enabled }}
 - apiGroups:
   - scheduling.volcano.sh
   resources:
@@ -231,5 +234,6 @@ rules:
   - customresourcedefinitions
   verbs:
   - get
+{{- end }}
 {{- end }}
 {{- end }}

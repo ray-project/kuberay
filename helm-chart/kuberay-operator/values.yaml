@@ -55,16 +55,16 @@ batchScheduler:
 securityContext: {}
 
 # When singleNamespaceInstall is true:
-# - the chart can be installed by users with permissions to a single namespace only
-#   (this excludes the CRDs which can only be installed at cluster-scope)
-# - the KubeRay operator will only listen to the resource
-#   events from the operator's namespace by default
+# - Install namespaced RBAC resources instead of cluster-scoped ones so that the chart can be installed by users
+#   with permissions restricted to a single namespace. (Please note that this excludes the CRDs, which can only be installed at the cluster scope.)
+# - If "watchNamespace" is not set, the KubeRay operator will, by default, only listen
+#   to resource events within its own namespace.
 singleNamespaceInstall: false
 
-# kuberay operator will only watch the resource events from the "watchNamespace" namespace.
-# this option has no effect if singleNamespaceInstall is true, because we assume there are no
-# permissions outside of the current namespace
-# watchNamespace: ray-user-namespace
+# The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
+# watchNamespace:
+#   - n1
+#   - n2
 
 # Environment variables
 env:
