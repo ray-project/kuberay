@@ -235,12 +235,12 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 func TestPopulateTemplate(t *testing.T) {
 	template := FromKubeToAPIComputeTemplate(&configMapWithoutTolerations)
 	if len(template.Tolerations) != 0 {
-		t.Errorf("failed to convert config map, expected no tolerations, got %v", len(template.Tolerations))
+		t.Errorf("failed to convert config map, expected no tolerations, got %d", len(template.Tolerations))
 	}
 
 	template = FromKubeToAPIComputeTemplate(&configMapWithTolerations)
 	if len(template.Tolerations) != 1 {
-		t.Errorf("failed to convert config map, expected 1 toleration, got %v", len(template.Tolerations))
+		t.Errorf("failed to convert config map, expected 1 toleration, got %d", len(template.Tolerations))
 	}
 	if template.Tolerations[0].Key != expectedTolerations.Key ||
 		template.Tolerations[0].Operator != expectedTolerations.Operator ||

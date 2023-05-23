@@ -181,7 +181,7 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 		t.Errorf("failed to propagate environment")
 	}
 	if len(podSpec.Spec.Tolerations) != 1 {
-		t.Errorf("failed to propagate tolerations, expected 1, got %v", len(podSpec.Spec.Tolerations))
+		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
 	}
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
 		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(podSpec.Spec.Tolerations[0]),
@@ -201,7 +201,7 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 		t.Errorf("failed to propagate environment")
 	}
 	if len(podSpec.Spec.Tolerations) != 1 {
-		t.Errorf("failed to propagate tolerations, expected 1, got %v", len(podSpec.Spec.Tolerations))
+		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
 	}
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
 		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(podSpec.Spec.Tolerations[0]),
