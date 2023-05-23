@@ -59,4 +59,19 @@ spec:
           requests:
             cpu: 100m
             memory: 512Mi
+        # env:
+          # If not set or set to true, kuberay auto injects an init container waiting for ray GCS.
+          # If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
+          # Warning: we highly recommend setting to true and let kuberay handle for you.
+          # - name: ENABLE_INIT_CONTAINER_INJECTION
+          #   value: "true"
+          # If not set or set to "", kuberay will pick up the default k8s cluster domain `cluster.local`
+          # Otherwise, kuberay will use your custom domain
+          # - name: CLUSTER_DOMAIN
+          #   value: ""
+          # Unconditionally requeue after the number of seconds specified in the
+          # environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
+          # environment variable is not set, requeue after the default value (300).
+          # - name: RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV
+          #   value: "300"
       terminationGracePeriodSeconds: 10
