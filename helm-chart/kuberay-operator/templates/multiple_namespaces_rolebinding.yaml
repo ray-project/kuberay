@@ -1,6 +1,8 @@
+# Install RoleBinding for namespaces listed in watchNamespace.
 {{- if and .Values.rbacEnable .Values.singleNamespaceInstall }}
 
 {{- range $namespace := .Values.watchNamespace }}
+---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
