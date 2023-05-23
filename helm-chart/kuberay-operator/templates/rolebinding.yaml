@@ -1,9 +1,5 @@
 {{- if .Values.rbacEnable }}
-{{- if .Values.singleNamespaceInstall }}
-kind: RoleBinding
-{{- else }}
 kind: ClusterRoleBinding
-{{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
@@ -14,11 +10,7 @@ subjects:
   name: {{ .Values.serviceAccount.name  }}
   namespace: {{ .Release.Namespace }}
 roleRef:
-{{- if .Values.singleNamespaceInstall }}
-  kind: Role
-{{- else }}
   kind: ClusterRole
-{{- end }}
   name: {{ include "kuberay-operator.fullname" . }}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}
