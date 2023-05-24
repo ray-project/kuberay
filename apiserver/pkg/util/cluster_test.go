@@ -184,8 +184,8 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
 	}
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
-		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(podSpec.Spec.Tolerations[0]),
-			tolerationToString(expectedToleration))
+		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(&podSpec.Spec.Tolerations[0]),
+			tolerationToString(&expectedToleration))
 	}
 	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
 		t.Errorf("failed to convert annotations")
@@ -204,8 +204,8 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
 	}
 	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
-		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(podSpec.Spec.Tolerations[0]),
-			tolerationToString(expectedToleration))
+		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(&podSpec.Spec.Tolerations[0]),
+			tolerationToString(&expectedToleration))
 	}
 	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
 		t.Errorf("failed to convert annotations")
@@ -224,6 +224,6 @@ func containsEnv(envs []v1.EnvVar, key string, val string) bool {
 	return false
 }
 
-func tolerationToString(toleration v1.Toleration) string {
+func tolerationToString(toleration *v1.Toleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
 }

@@ -245,11 +245,11 @@ func TestPopulateTemplate(t *testing.T) {
 	if template.Tolerations[0].Key != expectedTolerations.Key ||
 		template.Tolerations[0].Operator != expectedTolerations.Operator ||
 		template.Tolerations[0].Effect != expectedTolerations.Effect {
-		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(*template.Tolerations[0]),
-			tolerationToString(expectedTolerations))
+		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(template.Tolerations[0]),
+			tolerationToString(&expectedTolerations))
 	}
 }
 
-func tolerationToString(toleration api.PodToleration) string {
+func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
 }
