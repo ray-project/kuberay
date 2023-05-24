@@ -112,6 +112,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
+		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
+		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
@@ -686,9 +688,19 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	}
 
 	if nodeType == rayiov1alpha1.HeadNode {
-		// allow incoming connections from all network interfaces for the dashboard by default.
+		// Allow incoming connections from all network interfaces for the dashboard by default.
+		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
 			rayStartParams["dashboard-host"] = "0.0.0.0"
+		}
+
+		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
+		// will be used to initialize the monitor with a READONLY autoscaler which only mirrors what the GCS tells it.
+		// See `monitor.py` in Ray repository for more details.
+		if _, ok := rayStartParams["autoscaling-config"]; ok {
+			log.Info("Detect autoscaling-config in head Pod's rayStartParams. " +
+				"The monitor process will initialize the monitor with the provided config. " +
+				"Please ensure the autoscaler is set to READONLY mode.")
 		}
 	}
 
