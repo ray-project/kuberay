@@ -327,7 +327,9 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			ContainerPort: 9999,
 		},
 	}
-	r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
@@ -336,7 +338,9 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
-	r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
