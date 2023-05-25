@@ -15,6 +15,8 @@ type FakeRayDashboardClient struct {
 	client        http.Client
 	dashboardURL  string
 	serveStatuses ServeDeploymentStatuses
+	serveDetails  ServeDetails
+	rayVersion    string
 }
 
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
@@ -22,6 +24,10 @@ var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 func (r *FakeRayDashboardClient) InitClient(url string) {
 	r.client = http.Client{}
 	r.dashboardURL = "http://" + url
+}
+
+func (r *FakeRayDashboardClient) GetRayVersion(_ context.Context) (string, error) {
+	return r.rayVersion, nil
 }
 
 func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, error) {
@@ -35,6 +41,10 @@ func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, specs rayv
 
 func (r *FakeRayDashboardClient) GetDeploymentsStatus(_ context.Context) (*ServeDeploymentStatuses, error) {
 	return &r.serveStatuses, nil
+}
+
+func (r *FakeRayDashboardClient) GetDeploymentsStatusV2(_ context.Context) (*ServeDetails, error) {
+	return &r.serveDetails, nil
 }
 
 func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {

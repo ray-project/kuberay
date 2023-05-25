@@ -3,6 +3,9 @@ package ray
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,12 +47,24 @@ const (
 	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
 )
 
+type ServeGetAPIVersion string
+
+const (
+	GetAPIVersionMultiApp  ServeGetAPIVersion = "MULTI_APP"
+	GetAPIVersionSingleApp ServeGetAPIVersion = "SINGLE_APP"
+)
+
+var getAPIVersionMultiApp ServeGetAPIVersion = GetAPIVersionMultiApp
+var getAPIVersionSingleApp ServeGetAPIVersion = GetAPIVersionSingleApp
+
 // RayServiceReconciler reconciles a RayService object
 type RayServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Log      logr.Logger
 	Recorder record.EventRecorder
+	// rest api version - single app or multi app
+	serveAPIToQuery *ServeGetAPIVersion
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	ServeDeploymentConfigs       cmap.ConcurrentMap
@@ -238,23 +253,59 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 		return true
 	}
 
-	if oldStatus.ApplicationStatus.Status != newStatus.ApplicationStatus.Status ||
-		oldStatus.ApplicationStatus.Message != newStatus.ApplicationStatus.Message {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldStatus.ApplicationStatus, newStatus.ApplicationStatus))
+	oldAppNames := make([]string, 0, len(oldStatus.ApplicationStatuses))
+	for appName := range oldStatus.ApplicationStatuses {
+		oldAppNames = append(oldAppNames, appName)
+	}
+	sort.Strings(oldAppNames)
+
+	newAppNames := make([]string, 0, len(newStatus.ApplicationStatuses))
+	for appName := range newStatus.ApplicationStatuses {
+		newAppNames = append(newAppNames, appName)
+	}
+	sort.Strings(newAppNames)
+
+	if !reflect.DeepEqual(oldAppNames, newAppNames) {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application names changed from %v to %v", oldAppNames, newAppNames))
 		return true
 	}
 
-	if len(oldStatus.ServeStatuses) != len(newStatus.ServeStatuses) {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService number of ServeStatus changed from %v to %v", len(oldStatus.ServeStatuses), len(newStatus.ServeStatuses)))
-		return true
-	}
-
-	for i := 0; i < len(oldStatus.ServeStatuses); i++ {
-		if oldStatus.ServeStatuses[i].Name != newStatus.ServeStatuses[i].Name ||
-			oldStatus.ServeStatuses[i].Status != newStatus.ServeStatuses[i].Status ||
-			oldStatus.ServeStatuses[i].Message != newStatus.ServeStatuses[i].Message {
-			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServeDeploymentStatus changed from %v to %v", oldStatus.ServeStatuses[i], newStatus.ServeStatuses[i]))
+	for appName, oldAppStatus := range oldStatus.ApplicationStatuses {
+		newAppStatus := newStatus.ApplicationStatuses[appName]
+		if oldAppStatus.Status != newAppStatus.Status {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldAppStatus.Status, newAppStatus.Status))
 			return true
+		} else if oldAppStatus.Message != newAppStatus.Message {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application status message changed from %v to %v", oldAppStatus.Message, newAppStatus.Message))
+			return true
+		}
+
+		oldDeploymentNames := make([]string, 0, len(oldAppStatus.DeploymentStatuses))
+		for deploymentName := range oldAppStatus.DeploymentStatuses {
+			oldDeploymentNames = append(oldDeploymentNames, deploymentName)
+		}
+		sort.Strings(oldDeploymentNames)
+
+		newDeploymentNames := make([]string, 0, len(newAppStatus.DeploymentStatuses))
+		for deploymentName := range newAppStatus.DeploymentStatuses {
+			newDeploymentNames = append(newDeploymentNames, deploymentName)
+		}
+		sort.Strings(newDeploymentNames)
+
+		if !reflect.DeepEqual(oldDeploymentNames, newDeploymentNames) {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService deployment names in application %s changed from %v to %v", appName, oldDeploymentNames, newDeploymentNames))
+			return true
+		}
+
+		for deploymentName, oldDeploymentStatus := range oldAppStatus.DeploymentStatuses {
+			newDeploymentStatus := newAppStatus.DeploymentStatuses[deploymentName]
+			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DeploymentStatus changed from %v to %v", oldDeploymentStatus.Status, newDeploymentStatus.Status))
+				return true
+			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService deployment status message changed from %v to %v", oldDeploymentStatus.Message, newDeploymentStatus.Message))
+				return true
+			}
 		}
 	}
 
@@ -649,11 +700,71 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, bool, error) {
+	if r.serveAPIToQuery == nil {
+		rayVersion, err := dashboardClient.GetRayVersion(ctx)
+		if err != nil {
+			r.Log.Error(err, "Failed to get Ray Version from dashboard!")
+			return false, false, err
+		}
+
+		r.serveAPIToQuery = r.getServeAPIToQueryFromRayVersion(rayVersion)
+		r.Log.V(1).Info(fmt.Sprintf("Ray version is %s, setting GET API version to %s.", rayVersion, string(*r.serveAPIToQuery)))
+	}
+
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
+	// r.serveAPIToQuery is non-nil
+	if *r.serveAPIToQuery == getAPIVersionSingleApp {
+		return r.getApplicationStatusesV1(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
+	} else {
+		return r.getApplicationStatusesV2(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
+	}
+}
+
+// Decide Serve API Version to query for status based off of the Ray version.
+// If the Ray version is greater than or equal to "2.4.0", set the API version to the multi-app API
+// Otherwise, set the API version to the single-app API
+// (Eventually we want to migrate fully to the multi-app API)
+func (r *RayServiceReconciler) getServeAPIToQueryFromRayVersion(v string) *ServeGetAPIVersion {
+	// We assume nightly is greater than "2.4.0"
+	if v == "2.4.0" || v == "nightly" {
+		return &getAPIVersionMultiApp
+	}
+
+	vArr := strings.Split(v, ".")
+
+	// Compare MAJOR version.
+	majorVersion, err1 := strconv.Atoi(vArr[0])
+	// If we fail to parse the ray version, default to single-app
+	if err1 != nil {
+		return &getAPIVersionSingleApp
+	}
+	if majorVersion < 2 {
+		return &getAPIVersionSingleApp
+	} else if majorVersion > 2 {
+		return &getAPIVersionMultiApp
+	}
+
+	// Compare MINOR version.
+	minorVersion, err2 := strconv.Atoi(vArr[1])
+	// If we fail to parse the ray version, default to single-app
+	if err2 != nil {
+		return &getAPIVersionSingleApp
+	}
+	if minorVersion < 4 {
+		return &getAPIVersionSingleApp
+	} else if minorVersion > 4 {
+		return &getAPIVersionMultiApp
+	}
+
+	// If v starts with the prefix "2.4", but not exactly "2.4.0", assume bigger than "2.4.0"
+	return &getAPIVersionMultiApp
+}
+
+func (r *RayServiceReconciler) getApplicationStatusesV1(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
 	var serveStatuses *utils.ServeDeploymentStatuses
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(ctx); err != nil {
@@ -661,23 +772,35 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		return false, false, err
 	}
 
-	statusMap := make(map[string]rayv1alpha1.ServeDeploymentStatus)
-
-	for _, status := range rayServiceServeStatus.ServeStatuses {
-		statusMap[status.Name] = status
-	}
-
 	isHealthy := true
 	isReady := true
 	timeNow := metav1.Now()
-	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
-		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
-		serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = &timeNow
-		if serveStatuses.DeploymentStatuses[i].Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-			prevStatus, exist := statusMap[serveStatuses.DeploymentStatuses[i].Name]
+
+	oldDefaultAppStatus, ok := rayServiceServeStatus.ApplicationStatuses["default"]
+	if !ok {
+		oldDefaultAppStatus = rayv1alpha1.AppStatus{}
+	}
+	newDefaultAppStatus := rayv1alpha1.AppStatus{
+		Message:              serveStatuses.ApplicationStatus.Message,
+		Status:               serveStatuses.ApplicationStatus.Status,
+		LastUpdateTime:       &timeNow,
+		HealthLastUpdateTime: &timeNow,
+		DeploymentStatuses:   make(map[string]rayv1alpha1.ServeDeploymentStatus),
+	}
+	r.Log.V(1).Info("getAndCheckServeStatus", "previous default app status", oldDefaultAppStatus)
+
+	for _, deployment := range serveStatuses.DeploymentStatuses {
+		deploymentStatus := rayv1alpha1.ServeDeploymentStatus{
+			Status:               deployment.Status,
+			Message:              deployment.Message,
+			LastUpdateTime:       &timeNow,
+			HealthLastUpdateTime: &timeNow,
+		}
+		if deployment.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+			prevStatus, exist := oldDefaultAppStatus.DeploymentStatuses[deployment.Name]
 			if exist {
 				if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-					serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
+					deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
 					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
 						isHealthy = false
@@ -686,18 +809,18 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			}
 			isReady = false
 		}
+
+		newDefaultAppStatus.DeploymentStatuses[deployment.Name] = deploymentStatus
 	}
 
 	// Check app status
-	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
-	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
 	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 		// Check previous app status
-		if rayServiceServeStatus.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil {
-				serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
+		if oldDefaultAppStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+			if oldDefaultAppStatus.HealthLastUpdateTime != nil {
+				newDefaultAppStatus.HealthLastUpdateTime = oldDefaultAppStatus.HealthLastUpdateTime
 
-				if time.Since(rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+				if time.Since(oldDefaultAppStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
 					isHealthy = false
 				}
 			}
@@ -705,11 +828,83 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		isReady = false
 	}
 
-	rayServiceServeStatus.ServeStatuses = serveStatuses.DeploymentStatuses
-	rayServiceServeStatus.ApplicationStatus = serveStatuses.ApplicationStatus
+	rayServiceServeStatus.ApplicationStatuses = map[string]rayv1alpha1.AppStatus{"default": newDefaultAppStatus}
+	r.Log.V(1).Info("getAndCheckServeStatus", "new default app status", newDefaultAppStatus)
+	return isHealthy, isReady, nil
+}
 
-	r.Log.V(1).Info("getAndCheckServeStatus", "statusMap", statusMap, "serveStatuses", serveStatuses)
+func (r *RayServiceReconciler) getApplicationStatusesV2(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
+	var serveDetails *utils.ServeDetails
+	var err error
+	if serveDetails, err = dashboardClient.GetDeploymentsStatusV2(ctx); err != nil {
+		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+		return false, false, err
+	}
+	r.Log.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.ApplicationStatuses, "serveDetails", serveDetails)
 
+	isHealthy := true
+	isReady := true
+	timeNow := metav1.Now()
+
+	rayServiceServeStatus.ApplicationStatuses = make(map[string]rayv1alpha1.AppStatus)
+	for appName, app := range serveDetails.Applications {
+		if appName == "" {
+			appName = "default"
+		}
+
+		prevApplicationStatus := rayServiceServeStatus.ApplicationStatuses[appName]
+
+		applicationStatus := rayv1alpha1.AppStatus{
+			Message:              app.Message,
+			Status:               app.Status,
+			LastUpdateTime:       &timeNow,
+			HealthLastUpdateTime: &timeNow,
+			DeploymentStatuses:   make(map[string]rayv1alpha1.ServeDeploymentStatus),
+		}
+
+		// Check app status
+		if app.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+			// Check previous app status
+			if prevApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+				if prevApplicationStatus.HealthLastUpdateTime != nil {
+					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
+
+					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+						isHealthy = false
+					}
+				}
+			}
+			isReady = false
+		}
+
+		// Check deployment statuses
+		for deploymentName, deployment := range app.Deployments {
+			deploymentStatus := rayv1alpha1.ServeDeploymentStatus{
+				Status:               deployment.Status,
+				Message:              deployment.Message,
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+			}
+
+			if deployment.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+				prevStatus, exist := prevApplicationStatus.DeploymentStatuses[deploymentName]
+				if exist {
+					if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
+
+						if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+							isHealthy = false
+						}
+					}
+				}
+				isReady = false
+			}
+			applicationStatus.DeploymentStatuses[deploymentName] = deploymentStatus
+		}
+		rayServiceServeStatus.ApplicationStatuses[appName] = applicationStatus
+	}
+
+	r.Log.V(1).Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.ApplicationStatuses)
 	return isHealthy, isReady, nil
 }
 

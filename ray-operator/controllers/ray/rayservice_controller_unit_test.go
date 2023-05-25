@@ -82,19 +82,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: v1alpha1.AppStatus{
-				Status:               "running",
-				Message:              "OK",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []v1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "unhealthy",
-					Message:              "error",
+			ApplicationStatuses: map[string]v1alpha1.AppStatus{
+				"default": {
+					Status:               "running",
+					Message:              "OK",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					DeploymentStatuses: map[string]v1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               "unhealthy",
+							Message:              "error",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -105,19 +106,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: v1alpha1.AppStatus{
-				Status:               "stopped",
-				Message:              "stopped",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []v1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "healthy",
-					Message:              "Serve is healthy",
+			ApplicationStatuses: map[string]v1alpha1.AppStatus{
+				"default": {
+					Status:               "stopped",
+					Message:              "stopped",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					DeploymentStatuses: map[string]v1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               "healthy",
+							Message:              "Serve is healthy",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -147,19 +149,20 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
-		ApplicationStatus: v1alpha1.AppStatus{
-			Status:               "running",
-			Message:              "Application is running",
-			LastUpdateTime:       &timeNow,
-			HealthLastUpdateTime: &timeNow,
-		},
-		ServeStatuses: []v1alpha1.ServeDeploymentStatus{
-			{
-				Name:                 "serve-1",
-				Status:               "healthy",
-				Message:              "Serve is healthy",
+		ApplicationStatuses: map[string]v1alpha1.AppStatus{
+			"default": {
+				Status:               "running",
+				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
+				DeploymentStatuses: map[string]v1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               "healthy",
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
 			},
 		},
 	}

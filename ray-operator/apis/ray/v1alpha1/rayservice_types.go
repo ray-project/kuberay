@@ -104,11 +104,10 @@ type RayServiceStatuses struct {
 
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
-	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
-	RayClusterName    string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	ApplicationStatuses map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	DashboardStatus     DashboardStatus      `json:"dashboardStatus,omitempty"`
+	RayClusterName      string               `json:"rayClusterName,omitempty"`
+	RayClusterStatus    RayClusterStatus     `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
@@ -126,13 +125,13 @@ type AppStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time                     `json:"healthLastUpdateTime,omitempty"`
+	DeploymentStatuses   map[string]ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
-	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
 	Status         string       `json:"status,omitempty"`
 	Message        string       `json:"message,omitempty"`

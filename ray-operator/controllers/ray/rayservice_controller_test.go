@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+    "errors"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -415,7 +416,7 @@ var _ = Context("Inside the default namespace", func() {
 			ServiceUnhealthySecondThreshold = 500
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
+			oldTime := myRayService.Status.ActiveServiceStatus.ApplicationStatuses["default"].HealthLastUpdateTime.DeepCopy()
 			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "UNHEALTHY"))
 
@@ -429,8 +430,8 @@ var _ = Context("Inside the default namespace", func() {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 					return false
 				}
-				for _, serveStatus := range rayService.Status.ActiveServiceStatus.ServeStatuses {
-					if serveStatus.Status != "UNHEALTHY" {
+				for _, deploymentStatus := range rayService.Status.ActiveServiceStatus.ApplicationStatuses["default"].DeploymentStatuses {
+					if deploymentStatus.Status != "UNHEALTHY" {
 						return false
 					}
 				}
@@ -469,7 +470,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
+			oldTime := myRayService.Status.ActiveServiceStatus.ApplicationStatuses["default"].DeploymentStatuses["shallow"].HealthLastUpdateTime.DeepCopy()
 			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
 			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "HEALTHY"))
 
@@ -486,7 +487,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
 			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
 			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
-			Expect(myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
+			Expect(myRayService.Status.ActiveServiceStatus.ApplicationStatuses["default"].DeploymentStatuses["shallow"].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
 		})
 
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
@@ -582,32 +583,32 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 
 func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
 	serveStatuses := utils.ServeDeploymentStatuses{
-		ApplicationStatus: v1alpha1.AppStatus{
+		ApplicationStatus: utils.AppStatusV1{
 			Status:               "RUNNING",
-			LastUpdateTime:       &time,
-			HealthLastUpdateTime: &time,
+			// LastUpdateTime:       &time,
+			// HealthLastUpdateTime: &time,
 		},
-		DeploymentStatuses: []v1alpha1.ServeDeploymentStatus{
+		DeploymentStatuses: []utils.ServeDeploymentStatusV1{
 			{
 				Name:                 "shallow",
 				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+				// LastUpdateTime:       &time,
+				// HealthLastUpdateTime: &time,
 			},
 			{
 				Name:                 "deep",
 				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+				// LastUpdateTime:       &time,
+				// HealthLastUpdateTime: &time,
 			},
 			{
 				Name:                 "one",
 				Status:               status,
 				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+				// LastUpdateTime:       &time,
+				// HealthLastUpdateTime: &time,
 			},
 		},
 	}
@@ -642,10 +643,17 @@ func checkServiceHealth(ctx context.Context, rayService *v1alpha1.RayService) fu
 		healthy := true
 
 		healthy = healthy && rayService.Status.ActiveServiceStatus.DashboardStatus.IsHealthy
-		healthy = healthy && (len(rayService.Status.ActiveServiceStatus.ServeStatuses) == 3)
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[0].Status == "HEALTHY"
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[1].Status == "HEALTHY"
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[2].Status == "HEALTHY"
+
+        defaultAppStatus, ok := rayService.Status.ActiveServiceStatus.ApplicationStatuses["default"]
+        if !ok {
+            return false, errors.New("default app not found in ActiveServiceStatus")
+        }
+
+        deploymentStatuses := defaultAppStatus.DeploymentStatuses
+		healthy = healthy && (len(deploymentStatuses) == 3)
+        for _, deploymentStatus := range deploymentStatuses {
+            healthy = healthy && deploymentStatus.Status == "HEALTHY"
+        }
 
 		return healthy, nil
 	}
