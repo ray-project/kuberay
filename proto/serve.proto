@@ -230,11 +230,12 @@ message ActorOptions {
 }
 
 message RayServiceStatus {
-  // The ray serve application status.
+  // NOTE(zcin): the first three fields are deprecated in favor of serve_application_status.
+  // (Deprecated) The ray serve application status.
   string application_status = 1;
-  // A human-readable description of the status of this operation.
+  // (Deprecated) A human-readable description of the status of this operation.
   string application_message = 2;
-  // The status for each deployment.
+  // (Deprecated) The status for each deployment.
   repeated ServeDeploymentStatus serve_deployment_status = 3;
   // The related event for the ray service.
   repeated RayServiceEvent ray_service_events = 4;
@@ -244,6 +245,19 @@ message RayServiceStatus {
   string ray_cluster_state = 6;
   // The service endpoint of the cluster and service.
   map<string, string> service_endpoint = 7;
+  // All ray serve application statuses
+  repeated ServeApplicationStatus serve_application_status = 8;
+}
+
+message ServeApplicationStatus {
+  // Application name
+  string name = 1;
+  // Application status
+  string status = 2;
+  // Details about the application status.
+  string message = 3;
+  // All ray serve deployment statuses in this application
+  repeated ServeDeploymentStatus serve_deployment_status = 4;
 }
 
 message ServeDeploymentStatus {

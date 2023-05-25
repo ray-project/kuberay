@@ -361,9 +361,6 @@ var expected = `{
    },
    "status":{
       "activeServiceStatus":{
-         "appStatus":{
-
-         },
          "dashboardStatus":{
 
          },
@@ -372,9 +369,6 @@ var expected = `{
          }
       },
       "pendingServiceStatus":{
-         "appStatus":{
-
-         },
          "dashboardStatus":{
 
          },
