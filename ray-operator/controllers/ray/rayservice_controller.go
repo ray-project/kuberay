@@ -842,6 +842,8 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		if newSvc.Spec.ClusterIP == "" {
 			newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
 		}
+
+		// TODO (kevin85421): Consider not only the updates of the Spec but also the ObjectMeta.
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
 		r.Log.Info(fmt.Sprintf("Update Kubernetes Service serviceType %v", serviceType))
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
