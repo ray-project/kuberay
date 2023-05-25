@@ -6,7 +6,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	"github.com/stretchr/testify/assert"
 
@@ -15,7 +15,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
+var instanceWithIngressEnabled = &rayv1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
@@ -23,9 +23,9 @@ var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 			IngressClassAnnotationKey: "nginx",
 		},
 	},
-	Spec: rayiov1alpha1.RayClusterSpec{
+	Spec: rayv1alpha1.RayClusterSpec{
 		RayVersion: "1.0",
-		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -43,14 +43,14 @@ var instanceWithIngressEnabled = &rayiov1alpha1.RayCluster{
 	},
 }
 
-var instanceWithIngressEnabledWithoutIngressClass = &rayiov1alpha1.RayCluster{
+var instanceWithIngressEnabledWithoutIngressClass = &rayv1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
 	},
-	Spec: rayiov1alpha1.RayClusterSpec{
+	Spec: rayv1alpha1.RayClusterSpec{
 		RayVersion: "1.0",
-		HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{

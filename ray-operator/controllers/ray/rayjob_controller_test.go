@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
@@ -38,16 +38,16 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-var myRayJob = &rayiov1alpha1.RayJob{
+var myRayJob = &rayv1alpha1.RayJob{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "rayjob-test",
 		Namespace: "default",
 	},
-	Spec: rayiov1alpha1.RayJobSpec{
+	Spec: rayv1alpha1.RayJobSpec{
 		Entrypoint: "sleep 999",
-		RayClusterSpec: &rayiov1alpha1.RayClusterSpec{
+		RayClusterSpec: &rayv1alpha1.RayClusterSpec{
 			RayVersion: "1.12.1",
-			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Replicas: pointer.Int32(1),
 				RayStartParams: map[string]string{
 					"port":                        "6379",
@@ -114,7 +114,7 @@ var myRayJob = &rayiov1alpha1.RayJob{
 					},
 				},
 			},
-			WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 				{
 					Replicas:    pointer.Int32(3),
 					MinReplicas: pointer.Int32(0),
@@ -190,7 +190,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-			myRayCluster := &rayiov1alpha1.RayCluster{}
+			myRayCluster := &rayv1alpha1.RayCluster{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -211,7 +211,7 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
 
-			myRayCluster := &rayiov1alpha1.RayCluster{}
+			myRayCluster := &rayv1alpha1.RayCluster{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -243,12 +243,12 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-			myRayJobWithClusterSelector := &rayiov1alpha1.RayJob{
+			myRayJobWithClusterSelector := &rayv1alpha1.RayJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "rayjob-test-default-2",
 					Namespace: "default",
 				},
-				Spec: rayiov1alpha1.RayJobSpec{
+				Spec: rayv1alpha1.RayJobSpec{
 					Entrypoint:      "sleep 999",
 					ClusterSelector: map[string]string{},
 				},
@@ -269,10 +269,10 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 	ctx := context.TODO()
 	myRayJob := myRayJob.DeepCopy()
 	myRayJob.Name = "rayjob-test-with-autoscaler"
-	upscalingMode := rayiov1alpha1.UpscalingMode("Default")
+	upscalingMode := rayv1alpha1.UpscalingMode("Default")
 	imagePullPolicy := corev1.PullPolicy("IfNotPresent")
 	myRayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling = pointer.BoolPtr(true)
-	myRayJob.Spec.RayClusterSpec.AutoscalerOptions = &rayiov1alpha1.AutoscalerOptions{
+	myRayJob.Spec.RayClusterSpec.AutoscalerOptions = &rayv1alpha1.AutoscalerOptions{
 		UpscalingMode:      &upscalingMode,
 		IdleTimeoutSeconds: pointer.Int32(1),
 		ImagePullPolicy:    &imagePullPolicy,
@@ -297,7 +297,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
 
-			myRayCluster := &rayiov1alpha1.RayCluster{}
+			myRayCluster := &rayv1alpha1.RayCluster{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -336,7 +336,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 				getRayClusterNameForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
 
-			myRayCluster := &rayiov1alpha1.RayCluster{}
+			myRayCluster := &rayv1alpha1.RayCluster{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
@@ -360,7 +360,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 	})
 })
 
-func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayiov1alpha1.RayJob) func() (string, error) {
+func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayv1alpha1.RayJob) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
 			return "", err
@@ -369,7 +369,7 @@ func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayiov1alpha1.RayJo
 	}
 }
 
-func getDashboardURLForRayJob(ctx context.Context, rayJob *rayiov1alpha1.RayJob) func() (string, error) {
+func getDashboardURLForRayJob(ctx context.Context, rayJob *rayv1alpha1.RayJob) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
 			return "", err

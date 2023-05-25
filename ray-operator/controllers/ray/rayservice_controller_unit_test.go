@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
@@ -23,10 +23,10 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 	// `generateRayClusterJsonHash` will mute fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down. Hence, `hash1` should be equal to
 	// `hash2` in this case.
-	cluster := v1alpha1.RayCluster{
-		Spec: v1alpha1.RayClusterSpec{
+	cluster := rayv1alpha1.RayCluster{
+		Spec: rayv1alpha1.RayClusterSpec{
 			RayVersion: "2.4.0",
-			WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{},
@@ -55,8 +55,8 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 }
 
 func TestCompareRayClusterJsonHash(t *testing.T) {
-	cluster1 := v1alpha1.RayCluster{
-		Spec: v1alpha1.RayClusterSpec{
+	cluster1 := rayv1alpha1.RayCluster{
+		Spec: rayv1alpha1.RayClusterSpec{
 			RayVersion: "2.4.0",
 		},
 	}
@@ -77,21 +77,21 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	}
 
 	timeNow := metav1.Now()
-	oldStatus := v1alpha1.RayServiceStatuses{
-		ActiveServiceStatus: v1alpha1.RayServiceStatus{
+	oldStatus := rayv1alpha1.RayServiceStatuses{
+		ActiveServiceStatus: rayv1alpha1.RayServiceStatus{
 			RayClusterName: "new-cluster",
-			DashboardStatus: v1alpha1.DashboardStatus{
+			DashboardStatus: rayv1alpha1.DashboardStatus{
 				IsHealthy:            true,
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: v1alpha1.AppStatus{
+			ApplicationStatus: rayv1alpha1.AppStatus{
 				Status:               "running",
 				Message:              "OK",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ServeStatuses: []v1alpha1.ServeDeploymentStatus{
+			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
 				{
 					Name:                 "serve-1",
 					Status:               "unhealthy",
@@ -101,20 +101,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		PendingServiceStatus: v1alpha1.RayServiceStatus{
+		PendingServiceStatus: rayv1alpha1.RayServiceStatus{
 			RayClusterName: "old-cluster",
-			DashboardStatus: v1alpha1.DashboardStatus{
+			DashboardStatus: rayv1alpha1.DashboardStatus{
 				IsHealthy:            true,
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: v1alpha1.AppStatus{
+			ApplicationStatus: rayv1alpha1.AppStatus{
 				Status:               "stopped",
 				Message:              "stopped",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ServeStatuses: []v1alpha1.ServeDeploymentStatus{
+			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
 				{
 					Name:                 "serve-1",
 					Status:               "healthy",
@@ -124,12 +124,12 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: v1alpha1.WaitForDashboard,
+		ServiceStatus: rayv1alpha1.WaitForDashboard,
 	}
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = v1alpha1.WaitForServeDeploymentReady
+	newStatus.ServiceStatus = rayv1alpha1.WaitForServeDeploymentReady
 	assert.True(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus
@@ -143,20 +143,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 
 func TestInconsistentRayServiceStatus(t *testing.T) {
 	timeNow := metav1.Now()
-	oldStatus := v1alpha1.RayServiceStatus{
+	oldStatus := rayv1alpha1.RayServiceStatus{
 		RayClusterName: "cluster-1",
-		DashboardStatus: v1alpha1.DashboardStatus{
+		DashboardStatus: rayv1alpha1.DashboardStatus{
 			IsHealthy:            true,
 			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
-		ApplicationStatus: v1alpha1.AppStatus{
+		ApplicationStatus: rayv1alpha1.AppStatus{
 			Status:               "running",
 			Message:              "Application is running",
 			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
-		ServeStatuses: []v1alpha1.ServeDeploymentStatus{
+		ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "serve-1",
 				Status:               "healthy",
@@ -186,11 +186,11 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(newScheme)
+	_ = rayv1alpha1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Mock data
-	cluster := v1alpha1.RayCluster{
+	cluster := rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
@@ -203,7 +203,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 			Namespace: cluster.ObjectMeta.Namespace,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:  cluster.ObjectMeta.Name,
-				common.RayNodeTypeLabelKey: string(v1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
 			},
 		},
 		Status: corev1.PodStatus{
@@ -267,18 +267,18 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 func TestReconcileServices_UpdateService(t *testing.T) {
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(newScheme)
+	_ = rayv1alpha1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Mock data
 	namespace := "ray"
-	cluster := v1alpha1.RayCluster{
+	cluster := rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.RayClusterSpec{
-			HeadGroupSpec: v1alpha1.HeadGroupSpec{
+		Spec: rayv1alpha1.RayClusterSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
@@ -292,7 +292,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			},
 		},
 	}
-	rayService := v1alpha1.RayService{
+	rayService := rayv1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-service",
 			Namespace: cluster.ObjectMeta.Namespace,
