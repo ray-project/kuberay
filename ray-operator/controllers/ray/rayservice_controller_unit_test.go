@@ -313,9 +313,11 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	}
 
 	// Create a head service.
-	r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err := r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
 	svcList := corev1.ServiceList{}
-	err := fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	oldSvc := svcList.Items[0].DeepCopy()
