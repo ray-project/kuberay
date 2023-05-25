@@ -802,48 +802,67 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serviceType common.ServiceType) error {
-	// Creat Service Struct.
-	var raySvc *corev1.Service
+	r.Log.Info(
+		"reconcileServices", "serviceType", serviceType,
+		"RayService name", rayServiceInstance.Name, "RayService namespace", rayServiceInstance.Namespace,
+	)
+
+	var newSvc *corev1.Service
 	var err error
-	if serviceType == common.HeadService {
-		raySvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
-	} else if serviceType == common.ServingService {
-		raySvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+
+	switch serviceType {
+	case common.HeadService:
+		newSvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+	case common.ServingService:
+		newSvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+	default:
+		return fmt.Errorf("unknown service type %v", serviceType)
 	}
 
+	// TODO: This seems to be useless because BuildHeadServiceForRayService and BuildServeServiceForRayService will not return error.
 	if err != nil {
 		return err
 	}
-	raySvc.Name = utils.CheckName(raySvc.Name)
+	r.Log.Info("reconcileServices", "newSvc", newSvc)
 
-	// Get Service instance.
-	rayService := &corev1.Service{}
-	err = r.Get(ctx, client.ObjectKey{Name: raySvc.Name, Namespace: rayServiceInstance.Namespace}, rayService)
+	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
+	oldSvc := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: newSvc.Name, Namespace: rayServiceInstance.Namespace}, oldSvc)
 
 	if err == nil {
-		// Update Service
-		rayService.Spec = raySvc.Spec
-		r.Log.V(1).Info("reconcileServices update service")
-		if updateErr := r.Update(ctx, rayService); updateErr != nil {
-			r.Log.Error(updateErr, "raySvc Update error!", "raySvc.Error", updateErr)
+		// Only update the service if the RayCluster switches.
+		if newSvc.Spec.Selector[common.RayClusterLabelKey] == oldSvc.Spec.Selector[common.RayClusterLabelKey] {
+			r.Log.Info(fmt.Sprintf("RayCluster %v's %v has already exists, skip Update", newSvc.Spec.Selector[common.RayClusterLabelKey], serviceType))
+			return nil
+		}
+
+		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
+		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
+		// with older versions of Kubernetes, we need to assign the ClusterIP here.
+		if newSvc.Spec.ClusterIP == "" {
+			newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
+		}
+		oldSvc.Spec = *newSvc.Spec.DeepCopy()
+		r.Log.Info(fmt.Sprintf("Update Kubernetes Service serviceType %v", serviceType))
+		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
+			r.Log.Error(updateErr, fmt.Sprintf("Fail to update Kubernetes Service serviceType %v", serviceType), "Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
-		// Create Service
-		r.Log.V(1).Info("reconcileServices create service")
-		if err := ctrl.SetControllerReference(rayServiceInstance, raySvc, r.Scheme); err != nil {
+		r.Log.Info(fmt.Sprintf("Create a Kubernetes Service for RayService serviceType %v", serviceType))
+		if err := ctrl.SetControllerReference(rayServiceInstance, newSvc, r.Scheme); err != nil {
 			return err
 		}
-		if createErr := r.Create(ctx, raySvc); createErr != nil {
+		if createErr := r.Create(ctx, newSvc); createErr != nil {
 			if errors.IsAlreadyExists(createErr) {
-				r.Log.Info("raySvc already exists,no need to create")
+				r.Log.Info("The Kubernetes Service already exists, no need to create.")
 				return nil
 			}
-			r.Log.Error(createErr, "raySvc create error!", "raySvc.Error", createErr)
+			r.Log.Error(createErr, fmt.Sprintf("Fail to create Kubernetes Service serviceType %v", serviceType), "Error", createErr)
 			return createErr
 		}
 	} else {
-		r.Log.Error(err, "raySvc get error!")
+		r.Log.Error(err, "Fail to retrieve the Kubernetes Service from the cluster!")
 		return err
 	}
 
