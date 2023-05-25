@@ -239,9 +239,9 @@ func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RaySer
 		// ApplicationStatus:     serviceStatus.ActiveServiceStatus.ApplicationStatus.Status,
 		// ApplicationMessage:    serviceStatus.ActiveServiceStatus.ApplicationStatus.Message,
 		// ServeDeploymentStatus: PopulateServeDeploymentStatus(serviceStatus.ActiveServiceStatus.ServeStatuses),
-		RayServiceEvents:      PopulateRayServiceEvent(serviceName, events),
-		RayClusterName:        serviceStatus.ActiveServiceStatus.RayClusterName,
-		RayClusterState:       string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
+		RayServiceEvents:       PopulateRayServiceEvent(serviceName, events),
+		RayClusterName:         serviceStatus.ActiveServiceStatus.RayClusterName,
+		RayClusterState:        string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
 		ServeApplicationStatus: PopulateServeApplicationStatus(serviceStatus.ActiveServiceStatus.Applications),
 	}
 	status.ServiceEndpoint = map[string]string{}
@@ -255,9 +255,9 @@ func PopulateServeApplicationStatus(serveApplicationStatuses map[string]v1alpha1
 	appStatuses := make([]*api.ServeApplicationStatus, 0)
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
-			Name: appName,
-			Status: appStatus.Status,
-			Message: appStatus.Message,
+			Name:                  appName,
+			Status:                appStatus.Status,
+			Message:               appStatus.Message,
 			ServeDeploymentStatus: PopulateServeDeploymentStatus(appStatus.Deployments),
 		}
 		appStatuses = append(appStatuses, ds)
@@ -270,8 +270,8 @@ func PopulateServeDeploymentStatus(serveDeploymentStatuses map[string]v1alpha1.S
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{
 			DeploymentName: deploymentName,
-			Status: deploymentStatus.Status,
-			Message: deploymentStatus.Message,
+			Status:         deploymentStatus.Status,
+			Message:        deploymentStatus.Message,
 		}
 		deploymentStatuses = append(deploymentStatuses, ds)
 	}
