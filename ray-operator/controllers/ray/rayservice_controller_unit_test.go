@@ -10,7 +10,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -285,7 +284,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Ports: []v1.ContainerPort{},
+								Ports: []corev1.ContainerPort{},
 							},
 						},
 					},
@@ -323,7 +322,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	oldSvc := svcList.Items[0].DeepCopy()
 
 	// Test 1: When the service for the RayCluster already exists, it should not be updated.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
 		{
 			Name:          "test-port",
 			ContainerPort: 9999,
