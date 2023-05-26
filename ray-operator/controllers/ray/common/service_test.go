@@ -520,7 +520,7 @@ func TestUserSpecifiedServeService(t *testing.T) {
 
 	// Test that the user service type takes priority over the default service type (ClusterIP)
 	if svc.Spec.Type != userType {
-		t.Errorf("Generated head service type is not %s", userType)
+		t.Errorf("Generated serve service type is not %s", userType)
 	}
 
 	// ports should only have DefaultServePort
