@@ -10,9 +10,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var enableIngress = false
-var headNodeReplicas int32 = 1
-var workerReplicas int32 = 5
+var (
+	enableIngress          = false
+	headNodeReplicas int32 = 1
+	workerReplicas   int32 = 5
+)
 
 var headSpecTest = v1alpha1.HeadGroupSpec{
 	ServiceType:   "ClusterIP",

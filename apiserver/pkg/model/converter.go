@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -16,25 +16,33 @@ import (
 )
 
 func getNodeDefaultAnnotations() []string {
-	return []string{"ray.io/compute-image", "openshift.io/scc", "cni.projectcalico.org/podIP", "ray.io/health-state",
+	return []string{
+		"ray.io/compute-image", "openshift.io/scc", "cni.projectcalico.org/podIP", "ray.io/health-state",
 		"ray.io/ft-enabled", "cni.projectcalico.org/podIPs", "cni.projectcalico.org/containerID", "ray.io/compute-template",
-		"k8s.v1.cni.cncf.io/network-status", "k8s.v1.cni.cncf.io/networks-status"}
+		"k8s.v1.cni.cncf.io/network-status", "k8s.v1.cni.cncf.io/networks-status",
+	}
 }
 
 func getNodeDefaultLabels() []string {
-	return []string{"app.kubernetes.io/created-by", "app.kubernetes.io/name", "ray.io/cluster", "ray.io/cluster-dashboard",
-		"ray.io/group", "ray.io/identifier", "ray.io/is-ray-node", "ray.io/node-type"}
+	return []string{
+		"app.kubernetes.io/created-by", "app.kubernetes.io/name", "ray.io/cluster", "ray.io/cluster-dashboard",
+		"ray.io/group", "ray.io/identifier", "ray.io/is-ray-node", "ray.io/node-type",
+	}
 }
 
 func getHeadNodeEnv() []string {
-	return []string{"MY_POD_IP", "RAY_CLUSTER_NAME", "RAY_PORT", "RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE",
-		"REDIS_PASSWORD"}
+	return []string{
+		"MY_POD_IP", "RAY_CLUSTER_NAME", "RAY_PORT", "RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE",
+		"REDIS_PASSWORD",
+	}
 }
 
 func getWorkNodeEnv() []string {
-	return []string{"RAY_DISABLE_DOCKER_CPU_WARNING", "TYPE", "CPU_REQUEST", "CPU_LIMITS", "MEMORY_REQUESTS",
+	return []string{
+		"RAY_DISABLE_DOCKER_CPU_WARNING", "TYPE", "CPU_REQUEST", "CPU_LIMITS", "MEMORY_REQUESTS",
 		"MEMORY_LIMITS", "MY_POD_NAME", "MY_POD_IP", "FQ_RAY_IP", "RAY_IP", "RAY_CLUSTER_NAME", "RAY_PORT",
-		"RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE", "REDIS_PASSWORD"}
+		"RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE", "REDIS_PASSWORD",
+	}
 }
 
 func contains(s []string, str string) bool {

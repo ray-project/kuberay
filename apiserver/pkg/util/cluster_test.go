@@ -48,6 +48,7 @@ var headGroup = api.HeadGroupSpec{
 		"foo": "bar",
 	},
 }
+
 var workerGroup = api.WorkerGroupSpec{
 	GroupName:       "wg",
 	ComputeTemplate: "foo",

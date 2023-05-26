@@ -6,7 +6,7 @@ import (
 	"net"
 	"strconv"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"

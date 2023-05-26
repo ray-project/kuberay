@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"

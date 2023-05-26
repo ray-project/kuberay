@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 )
 
 // ApiServerInterceptor implements UnaryServerInterceptor that provides the common wrapping logic

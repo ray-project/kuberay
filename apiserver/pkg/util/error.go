@@ -3,7 +3,7 @@ package util
 import (
 	"fmt"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 
 	"github.com/go-openapi/runtime"
 	"github.com/pkg/errors"
