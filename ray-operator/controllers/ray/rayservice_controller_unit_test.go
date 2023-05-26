@@ -1,6 +1,8 @@
 package ray
 
 import (
+	"context"
+	"reflect"
 	"testing"
 
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -13,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -259,4 +262,89 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	isReady, err = r.isHeadPodRunningAndReady(&cluster)
 	assert.Nil(t, err)
 	assert.True(t, isReady)
+}
+
+func TestReconcileServices_UpdateService(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	namespace := "ray"
+	cluster := v1alpha1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.RayClusterSpec{
+			HeadGroupSpec: v1alpha1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "ray-head",
+								Ports: []corev1.ContainerPort{},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	rayService := v1alpha1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: cluster.ObjectMeta.Namespace,
+		},
+	}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayCluster reconciler.
+	r := &RayServiceReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
+	}
+
+	// Create a head service.
+	err := r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	svcList := corev1.ServiceList{}
+	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	oldSvc := svcList.Items[0].DeepCopy()
+
+	// Test 1: When the service for the RayCluster already exists, it should not be updated.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{
+			Name:          "test-port",
+			ContainerPort: 9999,
+		},
+	}
+	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
+
+	// Test 2: When the RayCluster switches, the service should be updated.
+	cluster.Name = "new-cluster"
+	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 }
