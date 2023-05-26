@@ -236,9 +236,6 @@ func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.Ser
 
 func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {
 	status := &api.RayServiceStatus{
-		// ApplicationStatus:     serviceStatus.ActiveServiceStatus.ApplicationStatus.Status,
-		// ApplicationMessage:    serviceStatus.ActiveServiceStatus.ApplicationStatus.Message,
-		// ServeDeploymentStatus: PopulateServeDeploymentStatus(serviceStatus.ActiveServiceStatus.ServeStatuses),
 		RayServiceEvents:       PopulateRayServiceEvent(serviceName, events),
 		RayClusterName:         serviceStatus.ActiveServiceStatus.RayClusterName,
 		RayClusterState:        string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),

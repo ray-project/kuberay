@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,18 +46,6 @@ const (
 	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
 )
 
-type ServeGetAPIVersion string
-
-const (
-	GetAPIVersionMultiApp  ServeGetAPIVersion = "MULTI_APP"
-	GetAPIVersionSingleApp ServeGetAPIVersion = "SINGLE_APP"
-)
-
-var (
-	getAPIVersionMultiApp  ServeGetAPIVersion = GetAPIVersionMultiApp
-	getAPIVersionSingleApp ServeGetAPIVersion = GetAPIVersionSingleApp
-)
-
 // RayServiceReconciler reconciles a RayService object
 type RayServiceReconciler struct {
 	client.Client
@@ -66,7 +53,7 @@ type RayServiceReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	// rest api version - single app or multi app
-	serveAPIToQuery *ServeGetAPIVersion
+	serveConfigType *rayv1alpha1.RayServeConfigType
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	ServeDeploymentConfigs       cmap.ConcurrentMap
@@ -126,6 +113,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
+	r.serveConfigType = &rayServiceInstance.Spec.ServeConfigType
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
@@ -702,68 +690,18 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, bool, error) {
-	if r.serveAPIToQuery == nil {
-		rayVersion, err := dashboardClient.GetRayVersion(ctx)
-		if err != nil {
-			r.Log.Error(err, "Failed to get Ray Version from dashboard!")
-			return false, false, err
-		}
-
-		r.serveAPIToQuery = r.getServeAPIToQueryFromRayVersion(rayVersion)
-		r.Log.V(1).Info(fmt.Sprintf("Ray version is %s, setting GET API version to %s.", rayVersion, string(*r.serveAPIToQuery)))
-	}
-
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
-	// r.serveAPIToQuery is non-nil
-	if *r.serveAPIToQuery == getAPIVersionSingleApp {
+	if *r.serveConfigType == rayv1alpha1.SINGLE_APP {
 		return r.getApplicationStatusesV1(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
-	} else {
+	} else if *r.serveConfigType == rayv1alpha1.MULTI_APP {
 		return r.getApplicationStatusesV2(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
+	} else {
+		return false, false, fmt.Errorf("Unrecognized serve config type %s", string(*r.serveConfigType))
 	}
-}
-
-// Decide Serve API Version to query for status based off of the Ray version.
-// If the Ray version is greater than or equal to "2.4.0", set the API version to the multi-app API
-// Otherwise, set the API version to the single-app API
-// (Eventually we want to migrate fully to the multi-app API)
-func (r *RayServiceReconciler) getServeAPIToQueryFromRayVersion(v string) *ServeGetAPIVersion {
-	// We assume nightly is greater than "2.4.0"
-	if v == "2.4.0" || v == "nightly" {
-		return &getAPIVersionMultiApp
-	}
-
-	vArr := strings.Split(v, ".")
-
-	// Compare MAJOR version.
-	majorVersion, err1 := strconv.Atoi(vArr[0])
-	// If we fail to parse the ray version, default to single-app
-	if err1 != nil {
-		return &getAPIVersionSingleApp
-	}
-	if majorVersion < 2 {
-		return &getAPIVersionSingleApp
-	} else if majorVersion > 2 {
-		return &getAPIVersionMultiApp
-	}
-
-	// Compare MINOR version.
-	minorVersion, err2 := strconv.Atoi(vArr[1])
-	// If we fail to parse the ray version, default to single-app
-	if err2 != nil {
-		return &getAPIVersionSingleApp
-	}
-	if minorVersion < 4 {
-		return &getAPIVersionSingleApp
-	} else if minorVersion > 4 {
-		return &getAPIVersionMultiApp
-	}
-
-	// If v starts with the prefix "2.4", but not exactly "2.4.0", assume bigger than "2.4.0"
-	return &getAPIVersionMultiApp
 }
 
 func (r *RayServiceReconciler) getApplicationStatusesV1(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {

@@ -12108,6 +12108,11 @@ spec:
                 required:
                 - importPath
                 type: object
+              serveConfigType:
+                default: SINGLE_APP
+                description: Type of Serve config, can be either MULTI_APP or SINGLE_APP.
+                  Default is SINGLE_APP.
+                type: string
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer

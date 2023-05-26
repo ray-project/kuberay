@@ -32,7 +32,6 @@ var (
 	DeployPath         = "/api/serve/deployments/"
 	StatusPath         = "/api/serve/deployments/status"
 	ServeDetailsPathV2 = "/api/serve/applications/"
-	RayVersionPath     = "/api/ray/version"
 	JobPath            = "/api/jobs/"
 )
 
@@ -112,7 +111,6 @@ type ServingClusterDeployments struct {
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
-	GetRayVersion(context.Context) (string, error)
 	GetDeployments(context.Context) (string, error)
 	UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error
 	GetDeploymentsStatus(context.Context) (*ServeDeploymentStatuses, error)
@@ -206,36 +204,6 @@ func (r *RayDashboardClient) InitClient(url string) {
 		Timeout: 120 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
-}
-
-func (r *RayDashboardClient) GetRayVersion(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+RayVersionPath, nil)
-	if err != nil {
-		return "", err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := ioutil.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("GetRayVersion failed: %s %s", resp.Status, string(body))
-	}
-
-	var s map[string]string
-	if err := json.Unmarshal(body, &s); err != nil {
-		return "", err
-	}
-
-	version, ok := s["ray_version"]
-	if !ok {
-		return "", fmt.Errorf("Failed to get ray version: ray_version not found in /api/ray/version response")
-	}
-
-	return version, nil
 }
 
 // GetDeployments get the current deployments in the Ray cluster.

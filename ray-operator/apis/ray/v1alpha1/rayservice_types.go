@@ -45,13 +45,23 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
+type RayServeConfigType string
+
+const (
+	MULTI_APP  RayServeConfigType = "MULTI_APP"
+	SINGLE_APP RayServeConfigType = "SINGLE_APP"
+)
+
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
+	// Type of Serve config, can be either MULTI_APP or SINGLE_APP. Default is SINGLE_APP. Note that MULTI_APP configs are supported in Ray 2.4+, and will become the default in the next Kuberay release.
+	//+kubebuilder:default:=SINGLE_APP
+	ServeConfigType                    RayServeConfigType `json:"serveConfigType,omitempty"`
+	RayClusterSpec                     RayClusterSpec     `json:"rayClusterConfig,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32             `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32             `json:"deploymentUnhealthySecondThreshold,omitempty"`
 }
 
 type ServeDeploymentGraphSpec struct {
