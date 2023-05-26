@@ -21,7 +21,21 @@ var (
 	headServiceAnnotationValue1 = "HeadServiceAnnotationValue1"
 	headServiceAnnotationKey2   = "HeadServiceAnnotationKey2"
 	headServiceAnnotationValue2 = "HeadServiceAnnotationValue2"
-	instanceWithWrongSvc        = &rayiov1alpha1.RayCluster{
+	serviceInstance             = &rayiov1alpha1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rayservice-sample",
+			Namespace: "default",
+		},
+		Spec: rayiov1alpha1.RayServiceSpec{
+			RayClusterSpec: rayiov1alpha1.RayClusterSpec{
+				RayVersion: "1.0",
+				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+					ServiceType: corev1.ServiceTypeClusterIP,
+				},
+			},
+		},
+	}
+	instanceWithWrongSvc = &rayiov1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
@@ -60,6 +74,10 @@ var (
 									},
 									{
 										ContainerPort: 8265,
+									},
+									{
+										ContainerPort: 8000,
+										Name:          "serve",
 									},
 								},
 								Command: []string{"python"},
@@ -388,5 +406,130 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	for i := 0; i < len(ports1); i++ {
 		// name should be same
 		assert.Equal(t, ports1[i].Name, ports2[i].Name)
+	}
+}
+
+func TestBuildServeServiceForRayService(t *testing.T) {
+	svc, err := BuildServeServiceForRayService(*serviceInstance, *instanceWithWrongSvc)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	expectedResult := string(instanceWithWrongSvc.Name)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLabel := svc.Labels[RayServiceLabelKey]
+	expectedLabel := string(serviceInstance.Name)
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualType := svc.Spec.Type
+	expectedType := corev1.ServiceTypeClusterIP
+	if !reflect.DeepEqual(expectedType, actualType) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
+	}
+
+	actualName := svc.Name
+	expectedName := fmt.Sprintf("%s-%s-%s", serviceInstance.Name, "serve", "svc")
+	if !reflect.DeepEqual(expectedName, actualName) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedName, actualName)
+	}
+
+	actualNamespace := svc.Namespace
+	expectedNamespace := serviceInstance.Namespace
+	if !reflect.DeepEqual(expectedNamespace, actualNamespace) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedNamespace, actualNamespace)
+	}
+}
+
+func TestUserSpecifiedServeService(t *testing.T) {
+	// Use any RayService instance as a base for the test.
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	userName := "user-custom-name"
+	userNamespace := "user-custom-namespace"
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", "userAnnotationKey2": "userAnnotationValue2"}
+	userPort := corev1.ServicePort{Name: "serve", Port: 12345}
+	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
+	userPorts := []corev1.ServicePort{userPort, userPortOverride}
+	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
+	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
+	userType := corev1.ServiceTypeLoadBalancer
+
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        userName,
+			Namespace:   userNamespace,
+			Labels:      userLabels,
+			Annotations: userAnnotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports:    userPorts,
+			Selector: userSelector,
+			Type:     userType,
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(*testRayServiceWithServeService, *instanceWithWrongSvc)
+
+	if err != nil {
+		t.Errorf("failed to build serve service: %v", err)
+	}
+
+	// The user-provided namespace should be ignored, but the name should be respected
+	if svc.ObjectMeta.Namespace != testRayServiceWithServeService.ObjectMeta.Namespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", testRayServiceWithServeService.ObjectMeta.Namespace, svc.ObjectMeta.Namespace)
+	}
+	if svc.ObjectMeta.Name != userName {
+		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)
+	}
+
+	// Check that every key from the userLabels is in the final labels.
+	for k := range userLabels {
+		if _, ok := svc.ObjectMeta.Labels[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
+
+		if k == RayClusterLabelKey {
+			if svc.Labels[RayServiceLabelKey] == "userClusterName" {
+				t.Errorf("User-provided label should not override default albel: expected label value=%s, actual label value=%s", testRayServiceWithServeService.ObjectMeta.Name, "userClusterName")
+			}
+		}
+	}
+
+	// Check every annotation is in the service annotation
+	for k := range userAnnotations {
+		if _, ok := svc.ObjectMeta.Annotations[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
+	}
+
+	// Check that selectors only have default selectors
+	if len(svc.Spec.Selector) != 2 {
+		t.Errorf("Selectors should have just 2 keys %s and %s", RayClusterLabelKey, RayClusterServingServiceLabelKey)
+	}
+	if svc.Spec.Selector[RayClusterLabelKey] != instanceWithWrongSvc.Name {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterLabelKey, instanceWithWrongSvc.Name, svc.Spec.Selector[RayClusterLabelKey])
+	}
+	if svc.Spec.Selector[RayClusterServingServiceLabelKey] != EnableRayClusterServingServiceTrue {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterServingServiceLabelKey, EnableRayClusterServingServiceTrue, svc.Spec.Selector[RayClusterServingServiceLabelKey])
+	}
+
+	// Test that the user service type takes priority over the default service type (ClusterIP)
+	if svc.Spec.Type != userType {
+		t.Errorf("Generated head service type is not %s", userType)
+	}
+
+	// ports should only have DefaultServePort
+	ports := svc.Spec.Ports
+	expectedPortName := DefaultServingPortName
+	for _, port := range ports {
+		fmt.Println(*&port.Port)
+		if *&port.Name != DefaultServingPortName {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, *&port.Name)
+		}
 	}
 }

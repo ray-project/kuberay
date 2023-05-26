@@ -184,29 +184,101 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 		RayClusterServingServiceLabelKey: EnableRayClusterServingServiceTrue,
 	}
 
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateServeServiceName(rayService.Name),
-			Namespace: rayService.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: selectorLabels,
-			Ports:    []corev1.ServicePort{},
-			Type:     rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType,
-		},
-	}
+	default_name := utils.GenerateServeServiceName(rayService.Name)
+	default_namespace := rayService.Namespace
+	default_type := rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 
-	ports := getServicePorts(rayCluster)
-	for name, port := range ports {
+	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	ports_int := getServicePorts(rayCluster)
+	ports := []corev1.ServicePort{}
+	for name, port := range ports_int {
 		if name == DefaultServingPortName {
 			svcPort := corev1.ServicePort{Name: name, Port: port}
-			service.Spec.Ports = append(service.Spec.Ports, svcPort)
+			ports = append(ports, svcPort)
 			break
 		}
 	}
 
-	return service, nil
+	if rayService.Spec.ServeService != nil {
+		// Use the provided "custom" ServeService.
+		// Deep copy the ServeService to avoid modifying the original object
+		serveService := rayService.Spec.ServeService.DeepCopy()
+
+		// For the Labels field, merge labels with custom ServeService labels.
+		// If there are overlaps, ignore the custom ServeService labels.
+		for k, v := range labels {
+			serveService.ObjectMeta.Labels[k] = v
+		}
+
+		// For the selector, ignore any custom ServeService selectors or labels.
+		serveService.Spec.Selector = selectorLabels
+
+		// Add DeafultServePort if it is already not added and ignore any custom ports
+		// Keeping this consistentent with adding only serve port in serve service
+		if len(ports) != 0 {
+			serveService.Spec.Ports = ports
+		} else {
+			ports := []corev1.ServicePort{}
+			for _, port := range serveService.Spec.Ports {
+				if *&port.Name == DefaultServingPortName {
+					svcPort := corev1.ServicePort{Name: *&port.Name, Port: *&port.Port}
+					ports = append(ports, svcPort)
+					break
+				}
+			}
+			serveService.Spec.Ports = ports
+		}
+
+		// If the user has not specified a name, generate one
+		if serveService.ObjectMeta.Name == "" {
+			serveService.ObjectMeta.Name = default_name
+			log.Info("Using default name for serve service.", "default_name", default_name)
+		} else {
+			log.Info("Overriding default name for serve service with provided name in rayService.Spec.ServeService.",
+				"default_name", default_name,
+				"provided_name", serveService.ObjectMeta.Name)
+		}
+
+		// If the user has specified a namespace, ignore it and raise a warning
+		if serveService.ObjectMeta.Namespace != "" && serveService.ObjectMeta.Namespace != default_namespace {
+			log.Info("Ignoring namespace provided in rayService.Spec.ServeService",
+				"provided_namespace", serveService.ObjectMeta.Namespace,
+				"headService_name", serveService.ObjectMeta.Name,
+				"default_namespace", default_namespace)
+		}
+		serveService.ObjectMeta.Namespace = default_namespace
+
+		// If the user has not specified a service type, use the cluster's service type
+		if serveService.Spec.Type == "" {
+			serveService.Spec.Type = default_type
+			log.Info("Using rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType for serve service",
+				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
+				"serveService.ObjectMeta.Name", serveService.ObjectMeta.Name)
+		} else {
+			log.Info("Overriding rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType for serve service with provided type in rayService.Spec.ServeService.Spec.Type",
+				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
+				"serveService.ObjectMeta.Name", serveService.ObjectMeta.Name,
+				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
+				"rayService.Spec.ServeService.Spec.Type", serveService.Spec.Type)
+		}
+
+		return serveService, nil
+	}
+
+	serveService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      default_name,
+			Namespace: default_namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: selectorLabels,
+			Ports:    ports,
+			Type:     default_type,
+		},
+	}
+
+	return serveService, nil
 }
 
 // BuildDashboardService Builds the service for dashboard agent and head node.
