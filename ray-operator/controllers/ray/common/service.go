@@ -243,7 +243,7 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 		if serveService.ObjectMeta.Namespace != "" && serveService.ObjectMeta.Namespace != default_namespace {
 			log.Info("Ignoring namespace provided in rayService.Spec.ServeService",
 				"provided_namespace", serveService.ObjectMeta.Namespace,
-				"headService_name", serveService.ObjectMeta.Name,
+				"serveService_name", serveService.ObjectMeta.Name,
 				"default_namespace", default_namespace)
 		}
 		serveService.ObjectMeta.Namespace = default_namespace
