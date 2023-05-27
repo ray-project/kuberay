@@ -84,10 +84,10 @@ type ServeDeploymentDetails struct {
 }
 
 type ServeApplicationDetails struct {
-	Name                    string                            `json:"name"`
-	Status                  string                            `json:"status"`
-	Message                 string                            `json:"message"`
-	Deployments             map[string]ServeDeploymentDetails `json:"deployments"`
+	Name        string                            `json:"name"`
+	Status      string                            `json:"status"`
+	Message     string                            `json:"message"`
+	Deployments map[string]ServeDeploymentDetails `json:"deployments"`
 }
 
 //

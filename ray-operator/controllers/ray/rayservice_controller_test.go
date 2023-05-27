@@ -581,14 +581,14 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	return client
 }
 
-func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
-	serveStatuses := utils.ServeDeploymentStatuses{
+func generateServeStatus(time metav1.Time, status string) utils.SingleAppStatusV1 {
+	serveStatuses := utils.SingleAppStatusV1{
 		ApplicationStatus: utils.AppStatusV1{
 			Status: "RUNNING",
 			// LastUpdateTime:       &time,
 			// HealthLastUpdateTime: &time,
 		},
-		DeploymentStatuses: []utils.ServeDeploymentStatusV1{
+		DeploymentStatuses: []utils.ServeDeploymentDetails{
 			{
 				Name:    "shallow",
 				Status:  status,
