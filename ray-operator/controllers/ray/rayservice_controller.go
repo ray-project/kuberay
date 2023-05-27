@@ -52,8 +52,6 @@ type RayServiceReconciler struct {
 	Scheme   *runtime.Scheme
 	Log      logr.Logger
 	Recorder record.EventRecorder
-	// rest api version - single app or multi app
-	serveConfigType *rayv1alpha1.RayServeConfigType
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	ServeDeploymentConfigs       cmap.ConcurrentMap
@@ -113,7 +111,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
-	r.serveConfigType = &rayServiceInstance.Spec.ServeConfigType
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
@@ -689,23 +686,23 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // updates health timestamps, and checks if the RayCluster is overall healthy.
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
-func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, bool, error) {
+func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType rayv1alpha1.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
-	if *r.serveConfigType == rayv1alpha1.SINGLE_APP {
+	if serveConfigType == rayv1alpha1.SINGLE_APP {
 		return r.getApplicationStatusesV1(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
-	} else if *r.serveConfigType == rayv1alpha1.MULTI_APP {
+	} else if serveConfigType == rayv1alpha1.MULTI_APP {
 		return r.getApplicationStatusesV2(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
 	} else {
-		return false, false, fmt.Errorf("Unrecognized serve config type %s", string(*r.serveConfigType))
+		return false, false, fmt.Errorf("Unrecognized serve config type %s", string(serveConfigType))
 	}
 }
 
 func (r *RayServiceReconciler) getApplicationStatusesV1(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
-	var serveStatuses *utils.ServeDeploymentStatuses
+	var serveStatuses *utils.SingleAppStatusV1
 	var err error
 	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(ctx); err != nil {
 		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
@@ -776,7 +773,7 @@ func (r *RayServiceReconciler) getApplicationStatusesV1(ctx context.Context, das
 func (r *RayServiceReconciler) getApplicationStatusesV2(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
 	var serveDetails *utils.ServeDetails
 	var err error
-	if serveDetails, err = dashboardClient.GetDeploymentsStatusV2(ctx); err != nil {
+	if serveDetails, err = dashboardClient.GetServeDetails(ctx); err != nil {
 		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
 		return false, false, err
 	}
@@ -1001,7 +998,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient.InitClient(clientURL)
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServeConfigType, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -1076,7 +1073,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServeConfigType, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)

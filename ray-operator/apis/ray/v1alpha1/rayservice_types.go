@@ -56,7 +56,7 @@ const (
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	// Type of Serve config, can be either MULTI_APP or SINGLE_APP. Default is SINGLE_APP. Note that MULTI_APP configs are supported in Ray 2.4+, and will become the default in the next Kuberay release.
+	// Type of Serve config, can be either MULTI_APP or SINGLE_APP. Default is SINGLE_APP. Note that MULTI_APP configs are supported in Ray 2.4+, and will become the default in the KubeRay v0.7.0 release.
 	//+kubebuilder:default:=SINGLE_APP
 	ServeConfigType                    RayServeConfigType `json:"serveConfigType,omitempty"`
 	RayClusterSpec                     RayClusterSpec     `json:"rayClusterConfig,omitempty"`
