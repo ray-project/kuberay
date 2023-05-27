@@ -595,6 +595,17 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	}
 	customEnv := []v1.EnvVar{{Name: "fooEnv", Value: "fooValue"}}
 	customEnvFrom := []v1.EnvFromSource{{Prefix: "Pre"}}
+	customVolumeMounts := []v1.VolumeMount{
+		{
+			Name:      "ca-tls",
+			MountPath: "/etc/ca/tls",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "ray-tls",
+			MountPath: "/etc/ray/tls",
+		},
+	}
 
 	// Define a custom security profile.
 	allowPrivilegeEscalation := false
@@ -620,6 +631,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		Resources:          &customResources,
 		Env:                customEnv,
 		EnvFrom:            customEnvFrom,
+		VolumeMounts:       customVolumeMounts,
 		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
@@ -630,6 +642,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.Resources = customResources
 	expectedContainer.EnvFrom = customEnvFrom
 	expectedContainer.Env = append(expectedContainer.Env, customEnv...)
+	expectedContainer.VolumeMounts = append(customVolumeMounts, expectedContainer.VolumeMounts...)
 	expectedContainer.SecurityContext = &customSecurityContext
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
