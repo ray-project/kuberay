@@ -85,11 +85,8 @@ type ServeDeploymentDetails struct {
 
 type ServeApplicationDetails struct {
 	Name                    string                            `json:"name"`
-	RoutePrefix             string                            `json:"route_prefix"`
-	DocsPath                string                            `json:"docs_path"`
 	Status                  string                            `json:"status"`
 	Message                 string                            `json:"message"`
-	LastDeployedTimeSeconds float32                           `json:"last_deployed_time_s"`
 	Deployments             map[string]ServeDeploymentDetails `json:"deployments"`
 }
 
