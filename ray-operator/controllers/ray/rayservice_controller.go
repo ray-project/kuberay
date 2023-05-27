@@ -240,6 +240,10 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 		return true
 	}
 
+	if len(oldStatus.Applications) != len(newStatus.Applications) {
+		return true
+	}
+
 	oldAppNames := make([]string, 0, len(oldStatus.Applications))
 	for appName := range oldStatus.Applications {
 		oldAppNames = append(oldAppNames, appName)
@@ -264,6 +268,10 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 			return true
 		} else if oldAppStatus.Message != newAppStatus.Message {
 			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application status message changed from %v to %v", oldAppStatus.Message, newAppStatus.Message))
+			return true
+		}
+
+		if len(oldAppStatus.Deployments) != len(newAppStatus.Deployments) {
 			return true
 		}
 
