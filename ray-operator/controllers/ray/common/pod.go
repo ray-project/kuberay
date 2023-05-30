@@ -470,6 +470,9 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		if len(autoscalerOptions.EnvFrom) > 0 {
 			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
 		}
+		if len(autoscalerOptions.VolumeMounts) > 0 {
+			autoscalerContainer.VolumeMounts = append(autoscalerContainer.VolumeMounts, autoscalerOptions.VolumeMounts...)
+		}
 		if autoscalerOptions.SecurityContext != nil {
 			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext.DeepCopy()
 		}
