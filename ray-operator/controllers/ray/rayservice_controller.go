@@ -3,8 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -244,30 +242,19 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 		return true
 	}
 
-	oldAppNames := make([]string, 0, len(oldStatus.Applications))
-	for appName := range oldStatus.Applications {
-		oldAppNames = append(oldAppNames, appName)
-	}
-	sort.Strings(oldAppNames)
+	var ok bool
+	for appName, newAppStatus := range newStatus.Applications {
+		var oldAppStatus rayv1alpha1.AppStatus
+		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new application %s found", appName))
+			return true
+		}
 
-	newAppNames := make([]string, 0, len(newStatus.Applications))
-	for appName := range newStatus.Applications {
-		newAppNames = append(newAppNames, appName)
-	}
-	sort.Strings(newAppNames)
-
-	if !reflect.DeepEqual(oldAppNames, newAppNames) {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application names changed from %v to %v", oldAppNames, newAppNames))
-		return true
-	}
-
-	for appName, oldAppStatus := range oldStatus.Applications {
-		newAppStatus := newStatus.Applications[appName]
 		if oldAppStatus.Status != newAppStatus.Status {
-			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldAppStatus.Status, newAppStatus.Status))
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status changed from %v to %v", appName, oldAppStatus.Status, newAppStatus.Status))
 			return true
 		} else if oldAppStatus.Message != newAppStatus.Message {
-			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application status message changed from %v to %v", oldAppStatus.Message, newAppStatus.Message))
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status message changed from %v to %v", appName, oldAppStatus.Message, newAppStatus.Message))
 			return true
 		}
 
@@ -275,25 +262,13 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 			return true
 		}
 
-		oldDeploymentNames := make([]string, 0, len(oldAppStatus.Deployments))
-		for deploymentName := range oldAppStatus.Deployments {
-			oldDeploymentNames = append(oldDeploymentNames, deploymentName)
-		}
-		sort.Strings(oldDeploymentNames)
+		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
+			var oldDeploymentStatus rayv1alpha1.ServeDeploymentStatus
+			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new deployment %s found in application %s", deploymentName, appName))
+				return true
+			}
 
-		newDeploymentNames := make([]string, 0, len(newAppStatus.Deployments))
-		for deploymentName := range newAppStatus.Deployments {
-			newDeploymentNames = append(newDeploymentNames, deploymentName)
-		}
-		sort.Strings(newDeploymentNames)
-
-		if !reflect.DeepEqual(oldDeploymentNames, newDeploymentNames) {
-			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService deployment names in application %s changed from %v to %v", appName, oldDeploymentNames, newDeploymentNames))
-			return true
-		}
-
-		for deploymentName, oldDeploymentStatus := range oldAppStatus.Deployments {
-			newDeploymentStatus := newAppStatus.Deployments[deploymentName]
 			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
 				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DeploymentStatus changed from %v to %v", oldDeploymentStatus.Status, newDeploymentStatus.Status))
 				return true
