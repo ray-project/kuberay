@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
@@ -41,19 +41,19 @@ var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 	var headPods corev1.PodList
-	mySuspendedRayCluster := &rayiov1alpha1.RayCluster{}
+	mySuspendedRayCluster := &rayv1alpha1.RayCluster{}
 
-	mySuspendedRayJob := &rayiov1alpha1.RayJob{
+	mySuspendedRayJob := &rayv1alpha1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayjob-test-suspend",
 			Namespace: "default",
 		},
-		Spec: rayiov1alpha1.RayJobSpec{
+		Spec: rayv1alpha1.RayJobSpec{
 			Suspend:    true,
 			Entrypoint: "sleep 999",
-			RayClusterSpec: &rayiov1alpha1.RayClusterSpec{
+			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
 				RayVersion: "2.4.0",
-				HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
 					Replicas:    pointer.Int32(1),
 					RayStartParams: map[string]string{
@@ -123,7 +123,7 @@ var _ = Context("Inside the default namespace", func() {
 						},
 					},
 				},
-				WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
+				WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 					{
 						Replicas:    pointer.Int32(3),
 						MinReplicas: pointer.Int32(0),
@@ -194,7 +194,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should have deployment status suspended", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, mySuspendedRayJob),
-				time.Second*5, time.Millisecond*500).Should(Equal(rayiov1alpha1.JobDeploymentStatusSuspended))
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1alpha1.JobDeploymentStatusSuspended))
 		})
 
 		It("should NOT create a raycluster object", func() {
@@ -302,8 +302,8 @@ var _ = Context("Inside the default namespace", func() {
 	})
 })
 
-func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayiov1alpha1.RayJob) func() (rayiov1alpha1.JobDeploymentStatus, error) {
-	return func() (rayiov1alpha1.JobDeploymentStatus, error) {
+func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1alpha1.RayJob) func() (rayv1alpha1.JobDeploymentStatus, error) {
+	return func() (rayv1alpha1.JobDeploymentStatus, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
 			return "", err
 		}

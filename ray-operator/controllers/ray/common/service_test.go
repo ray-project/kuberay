@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -21,18 +21,18 @@ var (
 	headServiceAnnotationValue1 = "HeadServiceAnnotationValue1"
 	headServiceAnnotationKey2   = "HeadServiceAnnotationKey2"
 	headServiceAnnotationValue2 = "HeadServiceAnnotationValue2"
-	instanceWithWrongSvc        = &rayiov1alpha1.RayCluster{
+	instanceWithWrongSvc        = &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
 		},
-		Spec: rayiov1alpha1.RayClusterSpec{
+		Spec: rayv1alpha1.RayClusterSpec{
 			RayVersion: "1.0",
 			HeadServiceAnnotations: map[string]string{
 				headServiceAnnotationKey1: headServiceAnnotationValue1,
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
 			},
-			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
@@ -94,7 +94,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	}
 
 	actualResult = svc.Spec.Selector[RayNodeTypeLabelKey]
-	expectedResult = string(rayiov1alpha1.HeadNode)
+	expectedResult = string(rayv1alpha1.HeadNode)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
