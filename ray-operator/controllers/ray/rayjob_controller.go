@@ -101,7 +101,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
 		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
-		err := r.Update(context.TODO(), rayJobInstance)
+		err := r.Update(ctx, rayJobInstance)
 		return ctrl.Result{}, err
 	}
 
