@@ -104,6 +104,7 @@ type ServingClusterDeployments struct {
 	Port        int                    `json:"port,omitempty"`
 }
 
+// query ray serve /api/serve/deployments/status -> SingleAppStatusV1 -> process by controller -> turned into RayServiceStatus
 type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments(context.Context) (string, error)
