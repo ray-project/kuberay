@@ -15,36 +15,70 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+// Default annotations used by Ray nodes
 func getNodeDefaultAnnotations() []string {
 	return []string{
-		"ray.io/compute-image", "openshift.io/scc", "cni.projectcalico.org/podIP", "ray.io/health-state",
-		"ray.io/ft-enabled", "cni.projectcalico.org/podIPs", "cni.projectcalico.org/containerID", "ray.io/compute-template",
-		"k8s.v1.cni.cncf.io/network-status", "k8s.v1.cni.cncf.io/networks-status",
+		"ray.io/compute-image",
+		"openshift.io/scc",
+		"cni.projectcalico.org/podIP",
+		"ray.io/health-state",
+		"ray.io/ft-enabled",
+		"cni.projectcalico.org/podIPs",
+		"cni.projectcalico.org/containerID",
+		"ray.io/compute-template",
+		"k8s.v1.cni.cncf.io/network-status",
+		"k8s.v1.cni.cncf.io/networks-status",
 	}
 }
 
+// Default labels used by Ray nodes
 func getNodeDefaultLabels() []string {
 	return []string{
-		"app.kubernetes.io/created-by", "app.kubernetes.io/name", "ray.io/cluster", "ray.io/cluster-dashboard",
-		"ray.io/group", "ray.io/identifier", "ray.io/is-ray-node", "ray.io/node-type",
+		"app.kubernetes.io/created-by",
+		"app.kubernetes.io/name",
+		"ray.io/cluster",
+		"ray.io/cluster-dashboard",
+		"ray.io/group",
+		"ray.io/identifier",
+		"ray.io/is-ray-node",
+		"ray.io/node-type",
 	}
 }
 
+// Default env used by Ray head nodes
 func getHeadNodeEnv() []string {
 	return []string{
-		"MY_POD_IP", "RAY_CLUSTER_NAME", "RAY_PORT", "RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE",
+		"MY_POD_IP",
+		"RAY_CLUSTER_NAME",
+		"RAY_PORT",
+		"RAY_ADDRESS",
+		"RAY_USAGE_STATS_KUBERAY_IN_USE",
 		"REDIS_PASSWORD",
 	}
 }
 
+// Default env used by Ray worker nodes
 func getWorkNodeEnv() []string {
 	return []string{
-		"RAY_DISABLE_DOCKER_CPU_WARNING", "TYPE", "CPU_REQUEST", "CPU_LIMITS", "MEMORY_REQUESTS",
-		"MEMORY_LIMITS", "MY_POD_NAME", "MY_POD_IP", "FQ_RAY_IP", "RAY_IP", "RAY_CLUSTER_NAME", "RAY_PORT",
-		"RAY_ADDRESS", "RAY_USAGE_STATS_KUBERAY_IN_USE", "REDIS_PASSWORD",
+		"RAY_DISABLE_DOCKER_CPU_WARNING",
+		"TYPE",
+		"CPU_REQUEST",
+		"CPU_LIMITS",
+		"MEMORY_REQUESTS",
+		"MEMORY_LIMITS",
+		"MY_POD_NAME",
+		"MY_POD_IP",
+		"FQ_RAY_IP",
+		"RAY_IP",
+		"RAY_CLUSTER_NAME",
+		"RAY_PORT",
+		"RAY_ADDRESS",
+		"RAY_USAGE_STATS_KUBERAY_IN_USE",
+		"REDIS_PASSWORD",
 	}
 }
 
+// Check if an array contains string
 func contains(s []string, str string) bool {
 	for _, v := range s {
 		if v == str {

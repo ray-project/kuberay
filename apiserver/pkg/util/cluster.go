@@ -180,7 +180,8 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		},
 	}
 
-	// need smarter algorithm to filter main container. for example filter by name `ray-worker`
+	// We are filtering container by name `ray-head`. If container with this name does not exist
+	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head"); ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
@@ -380,6 +381,8 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		},
 	}
 
+	// We are filtering container by name `ray-worker`. If container with this name does not exist
+	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker"); ok {
 		if computeRuntime.GetGpu() != 0 {
 			gpu := computeRuntime.GetGpu()
