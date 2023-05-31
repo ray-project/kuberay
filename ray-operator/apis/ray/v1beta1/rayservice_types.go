@@ -8,6 +8,9 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// Hub marks this type as a conversion hub.
+func (*RayService) Hub() {}
+
 type ServiceStatus string
 
 const (
