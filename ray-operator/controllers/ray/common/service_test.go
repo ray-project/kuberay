@@ -35,7 +35,7 @@ var (
 			},
 		},
 	}
-	instanceWithWrongSvc        = &rayv1alpha1.RayCluster{
+	instanceWithWrongSvc = &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
