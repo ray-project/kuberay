@@ -63,6 +63,9 @@ spec:
       #pod template
       template:
         spec:
+          # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
+          # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
+          # serviceAccountName: my-sa
           containers:
             - name: ray-head
               image: rayproject/ray:2.4.0
