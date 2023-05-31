@@ -1026,6 +1026,17 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 			return err
 		}
 
+		// If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves.
+		// However, if KubeRay creates a ServiceAccount for users, the autoscaler may encounter permission issues during
+		// zero-downtime rolling updates when RayService is performed. See https://github.com/ray-project/kuberay/issues/1123
+		// for more details.
+		if instance.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName == namespacedName.Name {
+			r.Log.Error(err, fmt.Sprintf(
+				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves."+
+					"However, ServiceAccount %s is not found. Please create one.", namespacedName.Name), "ServiceAccount", namespacedName)
+			return err
+		}
+
 		// Create service account for autoscaler if there's no existing one in the cluster.
 		serviceAccount, err := common.BuildServiceAccount(instance)
 		if err != nil {
@@ -1034,6 +1045,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 
 		// making sure the name is valid
 		serviceAccount.Name = utils.CheckName(serviceAccount.Name)
+
 		// Set controller reference
 		if err := controllerutil.SetControllerReference(instance, serviceAccount, r.Scheme); err != nil {
 			return err
