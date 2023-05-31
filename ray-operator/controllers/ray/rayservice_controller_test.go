@@ -27,7 +27,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
@@ -47,21 +47,21 @@ var _ = Context("Inside the default namespace", func() {
 	var numReplicas int32 = 1
 	var numCpus float64 = 0.1
 
-	myRayService := &v1alpha1.RayService{
+	myRayService := &rayv1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayservice-sample",
 			Namespace: "default",
 		},
-		Spec: v1alpha1.RayServiceSpec{
-			ServeDeploymentGraphSpec: v1alpha1.ServeDeploymentGraphSpec{
+		Spec: rayv1alpha1.RayServiceSpec{
+			ServeDeploymentGraphSpec: rayv1alpha1.ServeDeploymentGraphSpec{
 				ImportPath: "fruit.deployment_graph",
 				RuntimeEnv: runtimeEnvStr,
-				ServeConfigSpecs: []v1alpha1.ServeConfigSpec{
+				ServeConfigSpecs: []rayv1alpha1.ServeConfigSpec{
 					{
 						Name:        "MangoStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 3",
-						RayActorOptions: v1alpha1.RayActorOptionSpec{
+						RayActorOptions: rayv1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
@@ -69,7 +69,7 @@ var _ = Context("Inside the default namespace", func() {
 						Name:        "OrangeStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 2",
-						RayActorOptions: v1alpha1.RayActorOptionSpec{
+						RayActorOptions: rayv1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
@@ -77,15 +77,15 @@ var _ = Context("Inside the default namespace", func() {
 						Name:        "PearStand",
 						NumReplicas: &numReplicas,
 						UserConfig:  "price: 1",
-						RayActorOptions: v1alpha1.RayActorOptionSpec{
+						RayActorOptions: rayv1alpha1.RayActorOptionSpec{
 							NumCpus: &numCpus,
 						},
 					},
 				},
 			},
-			RayClusterSpec: v1alpha1.RayClusterSpec{
+			RayClusterSpec: rayv1alpha1.RayClusterSpec{
 				RayVersion: "1.12.1",
-				HeadGroupSpec: v1alpha1.HeadGroupSpec{
+				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 					Replicas: pointer.Int32(1),
 					RayStartParams: map[string]string{
 						"port":                        "6379",
@@ -160,7 +160,7 @@ var _ = Context("Inside the default namespace", func() {
 						},
 					},
 				},
-				WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
+				WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 					{
 						Replicas:    pointer.Int32(3),
 						MinReplicas: pointer.Int32(0),
@@ -227,7 +227,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
 
-	myRayCluster := &v1alpha1.RayCluster{}
+	myRayCluster := &rayv1alpha1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {
 		It("should create a rayservice object", func() {
@@ -282,7 +282,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, v1alpha1.HeadNode)))
+			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
 		})
 
 		It("should create a new agent service resource", func() {
@@ -425,7 +425,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// Check if all the ServeStatuses[i].Status are UNHEALTHY.
-			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *v1alpha1.RayService) bool {
+			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *rayv1alpha1.RayService) bool {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 					return false
 				}
@@ -582,12 +582,12 @@ func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 
 func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
 	serveStatuses := utils.ServeDeploymentStatuses{
-		ApplicationStatus: v1alpha1.AppStatus{
+		ApplicationStatus: rayv1alpha1.AppStatus{
 			Status:               "RUNNING",
 			LastUpdateTime:       &time,
 			HealthLastUpdateTime: &time,
 		},
-		DeploymentStatuses: []v1alpha1.ServeDeploymentStatus{
+		DeploymentStatuses: []rayv1alpha1.ServeDeploymentStatus{
 			{
 				Name:                 "shallow",
 				Status:               status,
@@ -615,7 +615,7 @@ func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentS
 	return serveStatuses
 }
 
-func getRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.RayService) func() (string, error) {
+func getRayClusterNameFunc(ctx context.Context, rayService *rayv1alpha1.RayService) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
@@ -624,7 +624,7 @@ func getRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.RayService)
 	}
 }
 
-func getPreparingRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.RayService) func() (string, error) {
+func getPreparingRayClusterNameFunc(ctx context.Context, rayService *rayv1alpha1.RayService) func() (string, error) {
 	return func() (string, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
 			return "", err
@@ -633,7 +633,7 @@ func getPreparingRayClusterNameFunc(ctx context.Context, rayService *v1alpha1.Ra
 	}
 }
 
-func checkServiceHealth(ctx context.Context, rayService *v1alpha1.RayService) func() (bool, error) {
+func checkServiceHealth(ctx context.Context, rayService *rayv1alpha1.RayService) func() (bool, error) {
 	return func() (bool, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 			return false, err
@@ -661,7 +661,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) 
 	headPods := corev1.PodList{}
 	headFilterLabels := client.MatchingLabels{
 		common.RayClusterLabelKey:  rayClusterName,
-		common.RayNodeTypeLabelKey: string(v1alpha1.HeadNode),
+		common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
 	}
 
 	Eventually(

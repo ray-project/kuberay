@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -117,17 +117,17 @@ func createSomePod() (pod *corev1.Pod) {
 
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
 	tests := map[string]struct {
-		input *rayiov1alpha1.RayCluster
+		input *rayv1alpha1.RayCluster
 		want  string
 	}{
 		"Ray cluster with head group service account": {
-			input: &rayiov1alpha1.RayCluster{
+			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
-				Spec: rayiov1alpha1.RayClusterSpec{
-					HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+				Spec: rayv1alpha1.RayClusterSpec{
+					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								ServiceAccountName: "my-service-account",
@@ -139,13 +139,13 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 			want: "my-service-account",
 		},
 		"Ray cluster without head group service account": {
-			input: &rayiov1alpha1.RayCluster{
+			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
-				Spec: rayiov1alpha1.RayClusterSpec{
-					HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+				Spec: rayv1alpha1.RayClusterSpec{
+					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{},
 						},
@@ -348,7 +348,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod1",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayiov1alpha1.HeadNode),
+						"ray.io/node-type": string(rayv1alpha1.HeadNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -359,7 +359,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -370,7 +370,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -381,7 +381,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayiov1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{

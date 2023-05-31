@@ -79,6 +79,8 @@ type AutoscalerOptions struct {
 	Env []v1.EnvVar `json:"env,omitempty"`
 	// Optional list of sources to populate environment variables in the autoscaler container.
 	EnvFrom []v1.EnvFromSource `json:"envFrom,omitempty"`
+	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
 	// SecurityContext defines the security options the container should be run with.
 	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -151,15 +153,15 @@ const (
 )
 
 // RayCluster is the Schema for the RayClusters API
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
-//+kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0
-//+kubebuilder:printcolumn:name="status",type="string",JSONPath=".status.state",priority=0
-//+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
-//+kubebuilder:printcolumn:name="head pod IP",type="string",JSONPath=".status.head.podIP",priority=1
-//+kubebuilder:printcolumn:name="head service IP",type="string",JSONPath=".status.head.serviceIP",priority=1
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
+// +kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0
+// +kubebuilder:printcolumn:name="status",type="string",JSONPath=".status.state",priority=0
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
+// +kubebuilder:printcolumn:name="head pod IP",type="string",JSONPath=".status.head.podIP",priority=1
+// +kubebuilder:printcolumn:name="head service IP",type="string",JSONPath=".status.head.serviceIP",priority=1
+// +genclient
 type RayCluster struct {
 	// Standard object metadata.
 	metav1.TypeMeta   `json:",inline"`

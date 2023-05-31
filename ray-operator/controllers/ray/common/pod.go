@@ -9,7 +9,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -52,7 +52,7 @@ func GetHeadPort(headStartParams map[string]string) string {
 }
 
 // rayClusterHAEnabled check if RayCluster enabled FT in annotations
-func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
+func rayClusterHAEnabled(instance rayv1alpha1.RayCluster) bool {
 	if instance.Annotations == nil {
 		return false
 	}
@@ -64,7 +64,7 @@ func rayClusterHAEnabled(instance rayiov1alpha1.RayCluster) bool {
 	return false
 }
 
-func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.PodTemplateSpec) {
+func initTemplateAnnotations(instance rayv1alpha1.RayCluster, podTemplate *v1.PodTemplateSpec) {
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}
@@ -89,7 +89,7 @@ func initTemplateAnnotations(instance rayiov1alpha1.RayCluster, podTemplate *v1.
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1alpha1.HeadGroupSpec, podName string, headPort string) v1.PodTemplateSpec {
+func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha1.HeadGroupSpec, podName string, headPort string) v1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -103,8 +103,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayiov1alpha1.HeadNode, headPort, "")
+	podTemplate.Labels = labelPod(rayv1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1alpha1.HeadNode, headPort, "")
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -112,6 +112,8 @@ func DefaultHeadPodTemplate(instance rayiov1alpha1.RayCluster, headSpec rayiov1a
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
+		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
+		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
@@ -185,7 +187,7 @@ func getEnableInitContainerInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayiov1alpha1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1alpha1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) v1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -227,8 +229,8 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayiov1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayiov1alpha1.WorkerNode, headPort, fqdnRayIP)
+	podTemplate.Labels = labelPod(rayv1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
+	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
 	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -246,10 +248,10 @@ func DefaultWorkerPodTemplate(instance rayiov1alpha1.RayCluster, workerSpec rayi
 	return podTemplate
 }
 
-func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
 	if probe.Exec == nil {
 		// we only create the probe if user did not specify any.
-		if rayNodeType == rayiov1alpha1.HeadNode {
+		if rayNodeType == rayv1alpha1.HeadNode {
 			// head node liveness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
@@ -269,10 +271,10 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNode
 	}
 }
 
-func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNodeType) {
+func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
 	if probe.Exec == nil {
 		// we only create the probe if user did not specify any.
-		if rayNodeType == rayiov1alpha1.HeadNode {
+		if rayNodeType == rayv1alpha1.HeadNode {
 			// head node readiness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
@@ -293,7 +295,7 @@ func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayiov1alpha1.RayNod
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string) (aPod v1.Pod) {
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -306,7 +308,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayiov1alpha1.RayN
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
-	if rayNodeType == rayiov1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
+	if rayNodeType == rayv1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
@@ -451,7 +453,7 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 }
 
 // Merge the user overrides from autoscalerOptions into the autoscaler container config.
-func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptions *rayiov1alpha1.AutoscalerOptions) {
+func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptions *rayv1alpha1.AutoscalerOptions) {
 	if autoscalerOptions != nil {
 		if autoscalerOptions.Resources != nil {
 			autoscalerContainer.Resources = *autoscalerOptions.Resources
@@ -467,6 +469,9 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 		}
 		if len(autoscalerOptions.EnvFrom) > 0 {
 			autoscalerContainer.EnvFrom = append(autoscalerContainer.EnvFrom, autoscalerOptions.EnvFrom...)
+		}
+		if len(autoscalerOptions.VolumeMounts) > 0 {
+			autoscalerContainer.VolumeMounts = append(autoscalerContainer.VolumeMounts, autoscalerOptions.VolumeMounts...)
 		}
 		if autoscalerOptions.SecurityContext != nil {
 			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext.DeepCopy()
@@ -520,7 +525,7 @@ func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
+func labelPod(rayNodeType rayv1alpha1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -539,7 +544,7 @@ func labelPod(rayNodeType rayiov1alpha1.RayNodeType, rayClusterName string, grou
 	for k, v := range ret {
 		if k == string(rayNodeType) {
 			// overriding invalid values for this label
-			if v != string(rayiov1alpha1.HeadNode) && v != string(rayiov1alpha1.WorkerNode) {
+			if v != string(rayv1alpha1.HeadNode) && v != string(rayv1alpha1.WorkerNode) {
 				labels[k] = v
 			}
 		}
@@ -571,7 +576,7 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
+func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[rayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
@@ -581,7 +586,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 	// case 1: head   => Use LOCAL_HOST
 	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
 	ip := LOCAL_HOST
-	if rayNodeType == rayiov1alpha1.WorkerNode {
+	if rayNodeType == rayv1alpha1.WorkerNode {
 		ip = fqdnRayIP
 		container.Env = append(container.Env,
 			v1.EnvVar{Name: FQ_RAY_IP, Value: ip},
@@ -653,7 +658,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayiov1
 			}
 		}
 	}
-	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayiov1alpha1.WorkerNode {
+	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1alpha1.WorkerNode {
 		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
 		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
 		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
@@ -676,19 +681,29 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 }
 
 // TODO auto complete params
-func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1alpha1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
-	// Note: The argument headPort is unused for nodeType == rayiov1alpha1.HeadNode.
-	if nodeType == rayiov1alpha1.WorkerNode {
+func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1alpha1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
+	// Note: The argument headPort is unused for nodeType == rayv1alpha1.HeadNode.
+	if nodeType == rayv1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
 			address := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 			rayStartParams["address"] = address
 		}
 	}
 
-	if nodeType == rayiov1alpha1.HeadNode {
-		// allow incoming connections from all network interfaces for the dashboard by default.
+	if nodeType == rayv1alpha1.HeadNode {
+		// Allow incoming connections from all network interfaces for the dashboard by default.
+		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
 			rayStartParams["dashboard-host"] = "0.0.0.0"
+		}
+
+		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
+		// will be used to initialize the monitor with a READONLY autoscaler which only mirrors what the GCS tells it.
+		// See `monitor.py` in Ray repository for more details.
+		if _, ok := rayStartParams["autoscaling-config"]; ok {
+			log.Info("Detect autoscaling-config in head Pod's rayStartParams. " +
+				"The monitor process will initialize the monitor with the provided config. " +
+				"Please ensure the autoscaler is set to READONLY mode.")
 		}
 	}
 
@@ -705,7 +720,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayiov1
 	return rayStartParams
 }
 
-func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
+func setAgentListPortStartParams(instance rayv1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
 	// add dashboard listen port for serve endpoints to RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
 		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
@@ -717,7 +732,7 @@ func setAgentListPortStartParams(instance rayiov1alpha1.RayCluster, rayStartPara
 }
 
 // concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
+func concatenateContainerCommand(nodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -746,9 +761,9 @@ func concatenateContainerCommand(nodeType rayiov1alpha1.RayNodeType, rayStartPar
 	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
 	switch nodeType {
-	case rayiov1alpha1.HeadNode:
+	case rayv1alpha1.HeadNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
-	case rayiov1alpha1.WorkerNode:
+	case rayv1alpha1.WorkerNode:
 		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
@@ -877,7 +892,7 @@ func findMemoryReqOrLimit(container v1.Container) (res *resource.Quantity) {
 // Return a bool indicating the validity of RayStartParams and an err with additional information.
 // If isValid is true, RayStartParams are valid. Any errors will only affect performance.
 // If isValid is false, RayStartParams are invalid will result in an unhealthy or failed Ray cluster.
-func ValidateHeadRayStartParams(rayHeadGroupSpec rayiov1alpha1.HeadGroupSpec) (isValid bool, err error) {
+func ValidateHeadRayStartParams(rayHeadGroupSpec rayv1alpha1.HeadGroupSpec) (isValid bool, err error) {
 	// TODO (dxia): if you add more validation, please split checks into separate subroutines.
 	var objectStoreMemory int64
 	rayStartParams := rayHeadGroupSpec.RayStartParams

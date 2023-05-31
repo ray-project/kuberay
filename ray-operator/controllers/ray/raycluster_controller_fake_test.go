@@ -23,7 +23,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	. "github.com/onsi/ginkgo"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -57,7 +57,7 @@ var (
 	expectReplicaNum        int32
 	testPods                []runtime.Object
 	testPodsNoHeadIP        []runtime.Object
-	testRayCluster          *rayiov1alpha1.RayCluster
+	testRayCluster          *rayv1alpha1.RayCluster
 	headSelector            labels.Selector
 	headNodeIP              string
 	testServices            []runtime.Object
@@ -87,7 +87,7 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayNodeLabelKey:      "yes",
 					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+					common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
@@ -235,7 +235,7 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayNodeLabelKey:      "yes",
 					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+					common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
@@ -245,15 +245,15 @@ func setupTest(t *testing.T) {
 			},
 		},
 	}
-	testRayCluster = &rayiov1alpha1.RayCluster{
+	testRayCluster = &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instanceName,
 			Namespace: namespaceStr,
 		},
-		Spec: rayiov1alpha1.RayClusterSpec{
+		Spec: rayv1alpha1.RayClusterSpec{
 			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
-			HeadGroupSpec: rayiov1alpha1.HeadGroupSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
@@ -286,7 +286,7 @@ func setupTest(t *testing.T) {
 					},
 				},
 			},
-			WorkerGroupSpecs: []rayiov1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 				{
 					Replicas:    pointer.Int32Ptr(expectReplicaNum),
 					MinReplicas: pointer.Int32Ptr(0),
@@ -318,7 +318,7 @@ func setupTest(t *testing.T) {
 							},
 						},
 					},
-					ScaleStrategy: rayiov1alpha1.ScaleStrategy{
+					ScaleStrategy: rayv1alpha1.ScaleStrategy{
 						WorkersToDelete: workersToDelete,
 					},
 				},
@@ -935,7 +935,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 	newScheme := runtime.NewScheme()
-	_ = rayiov1alpha1.AddToScheme(newScheme)
+	_ = rayv1alpha1.AddToScheme(newScheme)
 
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
 
@@ -943,7 +943,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 		Name:      instanceName,
 		Namespace: namespaceStr,
 	}
-	cluster := rayiov1alpha1.RayCluster{}
+	cluster := rayv1alpha1.RayCluster{}
 	err := fakeClient.Get(context.Background(), namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.Reason, "Cluster reason should be empty")
@@ -1001,7 +1001,7 @@ func TestGetHeadPodIP(t *testing.T) {
 			Namespace: namespaceStr,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:   instanceName,
-				common.RayNodeTypeLabelKey:  string(rayiov1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
 				common.RayNodeGroupLabelKey: headGroupNameStr,
 			},
 		},
@@ -1132,7 +1132,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayiov1alpha1.AddToScheme(newScheme)
+	_ = rayv1alpha1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// To update the status of RayCluster with `r.Status().Update()`,
@@ -1159,7 +1159,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 		Name:      instanceName,
 		Namespace: namespaceStr,
 	}
-	cluster := rayiov1alpha1.RayCluster{}
+	cluster := rayv1alpha1.RayCluster{}
 	err = fakeClient.Get(context.Background(), namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
