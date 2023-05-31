@@ -267,13 +267,6 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
-	// The user-provided namespace should be ignored, but the name should be respected
-	if headService.ObjectMeta.Namespace != testRayClusterWithHeadService.ObjectMeta.Namespace {
-		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", testRayClusterWithHeadService.ObjectMeta.Namespace, headService.ObjectMeta.Namespace)
-	}
-	if headService.ObjectMeta.Name != userName {
-		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, headService.ObjectMeta.Name)
-	}
 
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
@@ -336,11 +329,6 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 			t.Errorf("Final labels should contain key=%s", k)
 		}
 	}
-	for k := range userLabels {
-		if _, ok := headService.ObjectMeta.Labels[k]; !ok {
-			t.Errorf("Final labels should contain key=%s", k)
-		}
-	}
 
 	// Test merged annotations. In the case of overlap (HeadServiceAnnotationKey1) the user annotation should be ignored.
 	for k, v := range userAnnotations {
@@ -378,18 +366,9 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		}
 	}
 
-	// Test name and namespace are generated if not specified
-	if headService.ObjectMeta.Name == "" {
-		t.Errorf("Generated head service name is empty")
-	}
-	if headService.ObjectMeta.Namespace == "" {
-		t.Errorf("Generated head service namespace is empty")
-	}
-
-	// Test that the user service type takes priority over the default service type (ClusterIP)
-	if headService.Spec.Type != userType {
-		t.Errorf("Generated head service type is not %s", userType)
-	}
+	validateServiceTypeForUserSpecifiedService(headService, userType, t)
+	validateLabelsForUserSpecifiedService(headService, userLabels, t)
+	validateNameAndNamespaceForUserSpecifiedService(headService, testRayClusterWithHeadService.ObjectMeta.Namespace, userName, t)
 }
 
 func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
@@ -479,27 +458,6 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		t.Errorf("failed to build serve service: %v", err)
 	}
 
-	// The user-provided namespace should be ignored, but the name should be respected
-	if svc.ObjectMeta.Namespace != testRayServiceWithServeService.ObjectMeta.Namespace {
-		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", testRayServiceWithServeService.ObjectMeta.Namespace, svc.ObjectMeta.Namespace)
-	}
-	if svc.ObjectMeta.Name != userName {
-		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)
-	}
-
-	// Check that every key from the userLabels is in the final labels.
-	for k := range userLabels {
-		if _, ok := svc.ObjectMeta.Labels[k]; !ok {
-			t.Errorf("Final labels should contain key=%s", k)
-		}
-
-		if k == RayClusterLabelKey {
-			if svc.Labels[RayServiceLabelKey] == "userClusterName" {
-				t.Errorf("User-provided label should not override default albel: expected label value=%s, actual label value=%s", testRayServiceWithServeService.ObjectMeta.Name, "userClusterName")
-			}
-		}
-	}
-
 	// Check every annotation is in the service annotation
 	for k := range userAnnotations {
 		if _, ok := svc.ObjectMeta.Annotations[k]; !ok {
@@ -518,18 +476,48 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterServingServiceLabelKey, EnableRayClusterServingServiceTrue, svc.Spec.Selector[RayClusterServingServiceLabelKey])
 	}
 
-	// Test that the user service type takes priority over the default service type (ClusterIP)
-	if svc.Spec.Type != userType {
-		t.Errorf("Generated serve service type is not %s", userType)
-	}
-
 	// ports should only have DefaultServePort
 	ports := svc.Spec.Ports
 	expectedPortName := DefaultServingPortName
 	for _, port := range ports {
-		fmt.Println(*&port.Port)
-		if *&port.Name != DefaultServingPortName {
-			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, *&port.Name)
+		if port.Name != DefaultServingPortName {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
+		}
+	}
+
+	validateServiceTypeForUserSpecifiedService(svc, userType, t)
+	validateLabelsForUserSpecifiedService(svc, userLabels, t)
+	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
+}
+
+func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {
+	// Test that the user service type takes priority over the default service type (example: ClusterIP)
+	if svc.Spec.Type != userType {
+		t.Errorf("Generated service type is not %s", userType)
+	}
+}
+
+func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, default_namespace string, userName string, t *testing.T) {
+	// Test name and namespace are generated if not specified
+	if svc.ObjectMeta.Name == "" {
+		t.Errorf("Generated service name is empty")
+	}
+	if svc.ObjectMeta.Namespace == "" {
+		t.Errorf("Generated service namespace is empty")
+	}
+	// The user-provided namespace should be ignored, but the name should be respected
+	if svc.ObjectMeta.Namespace != default_namespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", default_namespace, svc.ObjectMeta.Namespace)
+	}
+	if svc.ObjectMeta.Name != userName {
+		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)
+	}
+}
+
+func validateLabelsForUserSpecifiedService(svc *corev1.Service, userLabels map[string]string, t *testing.T) {
+	for k := range userLabels {
+		if _, ok := svc.ObjectMeta.Labels[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
 		}
 	}
 }

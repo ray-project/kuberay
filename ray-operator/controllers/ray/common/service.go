@@ -68,12 +68,6 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// Deep copy the HeadService to avoid modifying the original object
 		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
 
-		// For the Labels field, merge labels_for_service with custom HeadService labels.
-		// If there are overlaps, ignore the custom HeadService labels.
-		for k, v := range labels_for_service {
-			headService.ObjectMeta.Labels[k] = v
-		}
-
 		// For the selector, ignore any custom HeadService selectors or labels.
 		headService.Spec.Selector = selector
 
@@ -93,37 +87,10 @@ func BuildServiceForHeadPod(cluster rayiov1alpha1.RayCluster, labels map[string]
 		// Append default ports.
 		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
 
-		// If the user has not specified a name, generate one
-		if headService.ObjectMeta.Name == "" {
-			headService.ObjectMeta.Name = default_name
-			log.Info("Using default name for head service.", "default_name", default_name)
-		} else {
-			log.Info("Overriding default name for head service with provided name in HeadGroupSpec.HeadService",
-				"default_name", default_name,
-				"provided_name", headService.ObjectMeta.Name)
-		}
-		// If the user has specified a namespace, ignore it and raise a warning
-		if headService.ObjectMeta.Namespace != "" && headService.ObjectMeta.Namespace != default_namespace {
-			log.Info("Ignoring namespace provided in HeadGroupSpec.HeadService",
-				"provided_namespace", headService.ObjectMeta.Namespace,
-				"headService_name", headService.ObjectMeta.Name,
-				"default_namespace", default_namespace)
-		}
-		headService.ObjectMeta.Namespace = default_namespace
-
-		// If the user has not specified a service type, use the cluster's service type
-		if headService.Spec.Type == "" {
-			headService.Spec.Type = default_type
-			log.Info("Using HeadGroupSpec.ServiceType for head service",
-				"HeadGroupSpec.ServiceType", default_type,
-				"headService.ObjectMeta.Name", headService.ObjectMeta.Name)
-		} else {
-			log.Info("Overriding HeadGroupSpec.ServiceType for head service with provided type in HeadGroupSpec.HeadService.Spec.Type",
-				"HeadGroupSpec.ServiceType", default_type,
-				"headService.ObjectMeta.Name", headService.ObjectMeta.Name,
-				"HeadGroupSpec.ServiceType", default_type,
-				"HeadGroupSpec.HeadService.Spec.Type", headService.Spec.Type)
-		}
+		setLabelsforUserProvidedService(headService, labels_for_service)
+		setNameforUserProvidedService(headService, default_name)
+		setNamespaceforUserProvidedService(headService, default_namespace)
+		setServiceTypeForUserProvidedService(headService, default_type)
 
 		return headService, nil
 	}
@@ -204,12 +171,6 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 		// Deep copy the ServeService to avoid modifying the original object
 		serveService := rayService.Spec.ServeService.DeepCopy()
 
-		// For the Labels field, merge labels with custom ServeService labels.
-		// If there are overlaps, ignore the custom ServeService labels.
-		for k, v := range labels {
-			serveService.ObjectMeta.Labels[k] = v
-		}
-
 		// For the selector, ignore any custom ServeService selectors or labels.
 		serveService.Spec.Selector = selectorLabels
 
@@ -220,8 +181,8 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 		} else {
 			ports := []corev1.ServicePort{}
 			for _, port := range serveService.Spec.Ports {
-				if *&port.Name == DefaultServingPortName {
-					svcPort := corev1.ServicePort{Name: *&port.Name, Port: *&port.Port}
+				if port.Name == DefaultServingPortName {
+					svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
 					ports = append(ports, svcPort)
 					break
 				}
@@ -229,38 +190,10 @@ func BuildServeServiceForRayService(rayService rayiov1alpha1.RayService, rayClus
 			serveService.Spec.Ports = ports
 		}
 
-		// If the user has not specified a name, generate one
-		if serveService.ObjectMeta.Name == "" {
-			serveService.ObjectMeta.Name = default_name
-			log.Info("Using default name for serve service.", "default_name", default_name)
-		} else {
-			log.Info("Overriding default name for serve service with provided name in rayService.Spec.ServeService.",
-				"default_name", default_name,
-				"provided_name", serveService.ObjectMeta.Name)
-		}
-
-		// If the user has specified a namespace, ignore it and raise a warning
-		if serveService.ObjectMeta.Namespace != "" && serveService.ObjectMeta.Namespace != default_namespace {
-			log.Info("Ignoring namespace provided in rayService.Spec.ServeService",
-				"provided_namespace", serveService.ObjectMeta.Namespace,
-				"serveService_name", serveService.ObjectMeta.Name,
-				"default_namespace", default_namespace)
-		}
-		serveService.ObjectMeta.Namespace = default_namespace
-
-		// If the user has not specified a service type, use the cluster's service type
-		if serveService.Spec.Type == "" {
-			serveService.Spec.Type = default_type
-			log.Info("Using rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType for serve service",
-				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
-				"serveService.ObjectMeta.Name", serveService.ObjectMeta.Name)
-		} else {
-			log.Info("Overriding rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType for serve service with provided type in rayService.Spec.ServeService.Spec.Type",
-				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
-				"serveService.ObjectMeta.Name", serveService.ObjectMeta.Name,
-				"rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType", default_type,
-				"rayService.Spec.ServeService.Spec.Type", serveService.Spec.Type)
-		}
+		setLabelsforUserProvidedService(serveService, labels)
+		setNameforUserProvidedService(serveService, default_name)
+		setNamespaceforUserProvidedService(serveService, default_namespace)
+		setServiceTypeForUserProvidedService(serveService, default_type)
 
 		return serveService, nil
 	}
@@ -313,6 +246,54 @@ func BuildDashboardService(cluster rayiov1alpha1.RayCluster) (*corev1.Service, e
 	}
 
 	return service, nil
+}
+
+func setServiceTypeForUserProvidedService(service *corev1.Service, default_type corev1.ServiceType) {
+	// If the user has not specified a service type, use the default service type
+	if service.Spec.Type == "" {
+		log.Info("Using default serviceType passed for the user provided service",
+			"default_type passed", default_type,
+			"service.ObjectMeta.Name", service.ObjectMeta.Name)
+		service.Spec.Type = default_type
+	} else {
+		log.Info("Overriding default serviceType with user provided serviceType",
+			"default_type passed", default_type,
+			"service.ObjectMeta.Name", service.ObjectMeta.Name,
+			"default_type passed", default_type,
+			"service.Spec.Type", service.Spec.Type)
+	}
+}
+
+func setNamespaceforUserProvidedService(service *corev1.Service, default_namespace string) {
+	// If the user has specified a namespace, ignore it and raise a warning
+	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != default_namespace {
+		log.Info("Ignoring namespace in user provided service",
+			"provided_namespace", service.ObjectMeta.Namespace,
+			"service_name", service.ObjectMeta.Name,
+			"default_namespace", default_namespace)
+	}
+
+	service.ObjectMeta.Namespace = default_namespace
+}
+
+func setNameforUserProvidedService(service *corev1.Service, default_name string) {
+	// If the user has not specified a name, use the default name passed
+	if service.ObjectMeta.Name == "" {
+		log.Info("Using default name for user provided service.", "default_name", default_name)
+		service.ObjectMeta.Name = default_name
+	} else {
+		log.Info("Overriding default name for user provided service with name in service.ObjectMeta.Name.",
+			"default_name", default_name,
+			"provided_name", service.ObjectMeta.Name)
+	}
+}
+
+func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]string) {
+	// For the Labels field, merge labels with user provided labels.
+	// If there are overlaps, ignore the user provided Service labels.
+	for k, v := range labels {
+		service.ObjectMeta.Labels[k] = v
+	}
 }
 
 // getServicePorts will either user passing ports or default ports to create service.
