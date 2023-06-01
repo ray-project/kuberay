@@ -145,10 +145,9 @@ type ServeDeploymentStatus struct {
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:storageversion
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`

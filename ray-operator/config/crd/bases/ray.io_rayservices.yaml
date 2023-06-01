@@ -38,8 +38,7 @@ spec:
                 format: int32
                 type: integer
               rayClusterConfig:
-                description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                  NOTE: json tags are required.'
+                description: RayClusterSpec defines the desired state of RayCluster
                 properties:
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration
@@ -12392,7 +12391,7 @@ spec:
             type: object
         type: object
     served: true
-    storage: false
+    storage: true
     subresources:
       status: {}
   - name: v1beta1
@@ -24770,7 +24769,7 @@ spec:
             type: object
         type: object
     served: true
-    storage: true
+    storage: false
     subresources:
       status: {}
 status:
