@@ -642,6 +642,9 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.Resources = customResources
 	expectedContainer.EnvFrom = customEnvFrom
 	expectedContainer.Env = append(expectedContainer.Env, customEnv...)
+	// DefaultHeadPodTemplate sets any overrides from autoscalerOptions. When adding any volumeMounts in the
+	// autoscaler, they are placed at the beginning of the VolumeMounts slice. Therefore the ordering is crucial here;
+	// expectedContainer.VolumeMounts must begin with customVolumeMounts for a successful test.
 	expectedContainer.VolumeMounts = append(customVolumeMounts, expectedContainer.VolumeMounts...)
 	expectedContainer.SecurityContext = &customSecurityContext
 	index := getAutoscalerContainerIndex(pod)

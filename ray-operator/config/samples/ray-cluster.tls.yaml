@@ -6,6 +6,56 @@ metadata:
   name: raycluster-tls
 spec:
   rayVersion: '2.4.0'
+  # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
+  # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
+  # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
+  enableInTreeAutoscaling: true
+  # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
+  # The example configuration shown below below represents the DEFAULT values.
+  # (You may delete autoscalerOptions if the defaults are suitable.)
+  autoscalerOptions:
+    # upscalingMode is "Default" or "Aggressive."
+    # Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+    # Default: Upscaling is not rate-limited.
+    # Aggressive: An alias for Default; upscaling is not rate-limited.
+    upscalingMode: Default
+    # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+    idleTimeoutSeconds: 60
+    # image optionally overrides the autoscaler's container image.
+    # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will default to the same image as
+    # the ray container. For older Ray versions, the autoscaler will default to using the Ray 2.0.0 image.
+    ## image: "my-repo/my-custom-autoscaler-image:tag"
+    # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
+    imagePullPolicy: IfNotPresent
+    # Optionally specify the autoscaler container's securityContext.
+    securityContext: {}
+    # Environment variables for Ray TLS authentication.
+    env:
+      - name: RAY_USE_TLS
+        value: "1"
+      - name: RAY_TLS_SERVER_CERT
+        value: "/etc/ray/tls/tls.crt"
+      - name: RAY_TLS_SERVER_KEY
+        value: "/etc/ray/tls/tls.key"
+      - name: RAY_TLS_CA_CERT
+        value: "/etc/ca/tls/ca.crt"
+    envFrom: []
+    # Use volumeMounts to mount the volumes where the TLS certs exist.
+    volumeMounts:
+      - mountPath: /etc/ca/tls
+        name: ca-tls
+      - mountPath: /etc/ray/tls
+        name: ray-tls
+    # resources specifies optional resource request and limit overrides for the autoscaler container.
+    # The default autoscaler resource limits and requests should be sufficient for production use-cases.
+    # However, for large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
   # Ray head pod configuration
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
