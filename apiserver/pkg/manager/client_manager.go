@@ -5,7 +5,7 @@ import (
 
 	"github.com/ray-project/kuberay/apiserver/pkg/client"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 )
 
 type ClientManagerInterface interface {

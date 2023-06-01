@@ -2,10 +2,11 @@ package model
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -13,6 +14,79 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
+
+// Default annotations used by Ray nodes
+func getNodeDefaultAnnotations() []string {
+	return []string{
+		"ray.io/compute-image",
+		"openshift.io/scc",
+		"cni.projectcalico.org/podIP",
+		"ray.io/health-state",
+		"ray.io/ft-enabled",
+		"cni.projectcalico.org/podIPs",
+		"cni.projectcalico.org/containerID",
+		"ray.io/compute-template",
+		"k8s.v1.cni.cncf.io/network-status",
+		"k8s.v1.cni.cncf.io/networks-status",
+	}
+}
+
+// Default labels used by Ray nodes
+func getNodeDefaultLabels() []string {
+	return []string{
+		"app.kubernetes.io/created-by",
+		"app.kubernetes.io/name",
+		"ray.io/cluster",
+		"ray.io/cluster-dashboard",
+		"ray.io/group",
+		"ray.io/identifier",
+		"ray.io/is-ray-node",
+		"ray.io/node-type",
+	}
+}
+
+// Default env used by Ray head nodes
+func getHeadNodeEnv() []string {
+	return []string{
+		"MY_POD_IP",
+		"RAY_CLUSTER_NAME",
+		"RAY_PORT",
+		"RAY_ADDRESS",
+		"RAY_USAGE_STATS_KUBERAY_IN_USE",
+		"REDIS_PASSWORD",
+	}
+}
+
+// Default env used by Ray worker nodes
+func getWorkNodeEnv() []string {
+	return []string{
+		"RAY_DISABLE_DOCKER_CPU_WARNING",
+		"TYPE",
+		"CPU_REQUEST",
+		"CPU_LIMITS",
+		"MEMORY_REQUESTS",
+		"MEMORY_LIMITS",
+		"MY_POD_NAME",
+		"MY_POD_IP",
+		"FQ_RAY_IP",
+		"RAY_IP",
+		"RAY_CLUSTER_NAME",
+		"RAY_PORT",
+		"RAY_ADDRESS",
+		"RAY_USAGE_STATS_KUBERAY_IN_USE",
+		"REDIS_PASSWORD",
+	}
+}
+
+// Check if an array contains string
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
 
 func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster, clusterEventsMap map[string][]v1.Event) []*api.Cluster {
 	apiClusters := make([]*api.Cluster, 0)
@@ -74,6 +148,31 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
 	}
 
+	for _, annotation := range getNodeDefaultAnnotations() {
+		delete(spec.Template.Annotations, annotation)
+	}
+	if len(spec.Template.Annotations) > 0 {
+		headNodeSpec.Annotations = spec.Template.Annotations
+	}
+
+	for _, label := range getNodeDefaultLabels() {
+		delete(spec.Template.Labels, label)
+	}
+	if len(spec.Template.Labels) > 0 {
+		headNodeSpec.Labels = spec.Template.Labels
+	}
+
+	// Here we update environment only for a container named 'ray-head'
+	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
+		env := make(map[string]string)
+		for _, kv := range container.Env {
+			if !contains(getHeadNodeEnv(), kv.Name) {
+				env[kv.Name] = kv.Value
+			}
+		}
+		headNodeSpec.Environment = env
+	}
+
 	return headNodeSpec
 }
 
@@ -89,6 +188,31 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 			GroupName:       spec.GroupName,
 			Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
 			ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
+		}
+
+		for _, annotation := range getNodeDefaultAnnotations() {
+			delete(spec.Template.Annotations, annotation)
+		}
+		if len(spec.Template.Annotations) > 0 {
+			workerNodeSpec.Annotations = spec.Template.Annotations
+		}
+
+		for _, label := range getNodeDefaultLabels() {
+			delete(spec.Template.Labels, label)
+		}
+		if len(spec.Template.Labels) > 0 {
+			workerNodeSpec.Labels = spec.Template.Labels
+		}
+
+		// Here we update environment only for a container named 'ray-worker'
+		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
+			env := make(map[string]string)
+			for _, kv := range container.Env {
+				if !contains(getWorkNodeEnv(), kv.Name) {
+					env[kv.Name] = kv.Value
+				}
+			}
+			workerNodeSpec.Environment = env
 		}
 		// Resources.
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
@@ -109,6 +233,14 @@ func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate 
 	runtime.Memory = uint32(memory)
 	runtime.Gpu = uint32(gpu)
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
+	val, ok := configMap.Data["tolerations"]
+	if ok {
+		err := json.Unmarshal([]byte(val), &runtime.Tolerations)
+		if err != nil {
+			klog.Errorf("failed to unmarshall tolerations for compute template ", runtime.Name, " value ",
+				runtime.Tolerations, " error ", err)
+		}
+	}
 	return runtime
 }
 
