@@ -20,6 +20,9 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# Container Engine to be used for building images
+ENGINE ?= "docker"
+
 all: build
 
 ##@ General
@@ -82,12 +85,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-image: ## Build image only
-	docker build -t ${IMG} .
+	${ENGINE} build -t ${IMG} .
 
-docker-build: test docker-image ## Build docker image with the manager.
+docker-build: test docker-image ## Build image with the manager.
 
-docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+docker-push: ## Push image with the manager.
+	${ENGINE} push ${IMG}
 
 ##@ Deployment
 
