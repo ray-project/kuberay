@@ -43,8 +43,13 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=kuberay-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen conversion-gen 
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONVERSION_GEN) \
+        --input-dirs "./apis/ray/v1beta1" \
+        --go-header-file "./hack/boilerplate.go.txt" \
+        --output-file-base "zz_generated.conversion" --v 2
 
 helm: manifests kustomize ## Sync the CRDs into the Helm chart
 	rm -r ../helm-chart/kuberay-operator/crds/
@@ -116,6 +121,10 @@ kustomize: ## Download kustomize locally if necessary.
 GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.
 	$(call go-get-tool,$(GOFUMPT),mvdan.cc/gofumpt@latest)
+
+CONVERSION_GEN = $(shell pwd)/bin/conversion-gen
+conversion-gen: ## Download conversion-gen locally if necessary.
+	$(call go-get-tool,$(CONVERSION_GEN),k8s.io/code-generator/cmd/conversion-gen@v0.26.1)
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
