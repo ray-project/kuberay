@@ -27,6 +27,9 @@ resources:
   kind: RayService
   path: github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1
   version: v1alpha1
+  webhooks:
+    conversion: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
