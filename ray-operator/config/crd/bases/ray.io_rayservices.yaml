@@ -12417,8 +12417,7 @@ spec:
                 format: int32
                 type: integer
               rayClusterConfig:
-                description: 'EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                  NOTE: json tags are required.'
+                description: RayClusterSpec defines the desired state of RayCluster
                 properties:
                   autoscalerOptions:
                     description: AutoscalerOptions specifies optional configuration

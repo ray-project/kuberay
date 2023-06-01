@@ -1,7 +1,6 @@
 package v1beta1
 
 import (
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,10 +51,10 @@ var DeploymentStatusEnum = struct {
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec   `json:"serveConfig,omitempty"`
-	RayClusterSpec                     rayv1alpha1.RayClusterSpec `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32                     `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                     `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
+	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
 }
 
 type ServeDeploymentGraphSpec struct {
@@ -108,11 +107,11 @@ type RayServiceStatuses struct {
 
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ApplicationStatus AppStatus                    `json:"appStatus,omitempty"`
-	ServeStatuses     []ServeDeploymentStatus      `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus   DashboardStatus              `json:"dashboardStatus,omitempty"`
-	RayClusterName    string                       `json:"rayClusterName,omitempty"`
-	RayClusterStatus  rayv1alpha1.RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
+	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
+	RayClusterName    string                  `json:"rayClusterName,omitempty"`
+	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
