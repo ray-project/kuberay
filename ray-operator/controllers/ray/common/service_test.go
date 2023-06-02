@@ -453,7 +453,6 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	}
 
 	svc, err := BuildServeServiceForRayService(*testRayServiceWithServeService, *instanceWithWrongSvc)
-
 	if err != nil {
 		t.Errorf("failed to build serve service: %v", err)
 	}
