@@ -20,12 +20,11 @@ cleanup
 mkdir -p "${TMP_DIFFROOT}"
 cp -a "${DIFFROOT}"/* "${TMP_DIFFROOT}"
 
-#"${SCRIPT_ROOT}/hack/update-codegen.sh"
 make generate
 echo "diffing ${DIFFROOT} against freshly generated deepcopy files"
 ret=0
 diff -Naupr "${DIFFROOT}" "${TMP_DIFFROOT}" || ret=$?
-cp -a "${TMP_DIFFROOT}"/* "${DIFFROOT}"
+# cp -a "${TMP_DIFFROOT}"/* "${DIFFROOT}"
 if [[ $ret -eq 0 ]]
 then
   echo "${DIFFROOT} up to date."
