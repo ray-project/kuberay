@@ -129,7 +129,7 @@ func main() {
 		LeaderElectionID:       "ray-operator-leader",
 	}
 
-	if len(watchNamespaces) == 1 {
+	if len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")`` is still 1.
 		options.Namespace = watchNamespaces[0]
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
