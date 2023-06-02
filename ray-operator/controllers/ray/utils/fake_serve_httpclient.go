@@ -12,10 +12,11 @@ import (
 )
 
 type FakeRayDashboardClient struct {
-	client        http.Client
-	dashboardURL  string
-	serveStatuses SingleAppStatusV1
-	serveDetails  ServeDetails
+	client           http.Client
+	dashboardURL     string
+	singleAppStatus  ServeApplicationStatus
+	multiAppStatuses map[string]*ServeApplicationStatus
+	serveDetails     ServeDetails
 }
 
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
@@ -34,8 +35,12 @@ func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, specs rayv
 	return nil
 }
 
-func (r *FakeRayDashboardClient) GetDeploymentsStatus(_ context.Context) (*SingleAppStatusV1, error) {
-	return &r.serveStatuses, nil
+func (r *FakeRayDashboardClient) GetSingleApplicationStatus(_ context.Context) (*ServeApplicationStatus, error) {
+	return &r.singleAppStatus, nil
+}
+
+func (r *FakeRayDashboardClient) GetMultiApplicationStatus(_ context.Context) (map[string]*ServeApplicationStatus, error) {
+	return r.multiAppStatuses, nil
 }
 
 func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetails, error) {
@@ -84,8 +89,8 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 	return serveConfigToSend
 }
 
-func (r *FakeRayDashboardClient) SetServeStatus(status SingleAppStatusV1) {
-	r.serveStatuses = status
+func (r *FakeRayDashboardClient) SetServeStatus(status ServeApplicationStatus) {
+	r.singleAppStatus = status
 }
 
 func (r *FakeRayDashboardClient) GetJobInfo(_ context.Context, jobId string) (*RayJobInfo, error) {

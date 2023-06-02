@@ -669,105 +669,35 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // updates health timestamps, and checks if the RayCluster is overall healthy.
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
-func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType rayv1alpha1.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
+func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
-	if serveConfigType == rayv1alpha1.SINGLE_APP {
-		return r.getApplicationStatusesV1(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
-	} else if serveConfigType == rayv1alpha1.MULTI_APP {
-		return r.getApplicationStatusesV2(ctx, dashboardClient, rayServiceServeStatus, serviceUnhealthySecondThreshold)
+	var serveAppStatuses map[string]*utils.ServeApplicationStatus
+	var err error
+	if serveConfigType == utils.SINGLE_APP {
+		var singleApplicationStatus *utils.ServeApplicationStatus
+		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
+			r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+			return false, false, err
+		}
+		serveAppStatuses = map[string]*utils.ServeApplicationStatus{"default": singleApplicationStatus}
+	} else if serveConfigType == utils.MULTI_APP {
+		serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx)
 	} else {
 		return false, false, fmt.Errorf("Unrecognized serve config type %s", string(serveConfigType))
 	}
-}
 
-func (r *RayServiceReconciler) getApplicationStatusesV1(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
-	var serveStatuses *utils.SingleAppStatusV1
-	var err error
-	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(ctx); err != nil {
-		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
-		return false, false, err
-	}
-
-	isHealthy := true
-	isReady := true
-	timeNow := metav1.Now()
-
-	oldDefaultAppStatus, ok := rayServiceServeStatus.Applications["default"]
-	if !ok {
-		oldDefaultAppStatus = rayv1alpha1.AppStatus{}
-	}
-	newDefaultAppStatus := rayv1alpha1.AppStatus{
-		Message:              serveStatuses.ApplicationStatus.Message,
-		Status:               serveStatuses.ApplicationStatus.Status,
-		LastUpdateTime:       &timeNow,
-		HealthLastUpdateTime: &timeNow,
-		Deployments:          make(map[string]rayv1alpha1.ServeDeploymentStatus),
-	}
-	r.Log.V(1).Info("getAndCheckServeStatus", "previous default app status", oldDefaultAppStatus)
-
-	for _, deployment := range serveStatuses.DeploymentStatuses {
-		deploymentStatus := rayv1alpha1.ServeDeploymentStatus{
-			Status:               deployment.Status,
-			Message:              deployment.Message,
-			LastUpdateTime:       &timeNow,
-			HealthLastUpdateTime: &timeNow,
-		}
-		if deployment.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-			prevStatus, exist := oldDefaultAppStatus.Deployments[deployment.Name]
-			if exist {
-				if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-					deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
-
-					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-						isHealthy = false
-					}
-				}
-			}
-			isReady = false
-		}
-
-		newDefaultAppStatus.Deployments[deployment.Name] = deploymentStatus
-	}
-
-	// Check app status
-	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-		// Check previous app status
-		if oldDefaultAppStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-			if oldDefaultAppStatus.HealthLastUpdateTime != nil {
-				newDefaultAppStatus.HealthLastUpdateTime = oldDefaultAppStatus.HealthLastUpdateTime
-
-				if time.Since(oldDefaultAppStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-					isHealthy = false
-				}
-			}
-		}
-		isReady = false
-	}
-
-	rayServiceServeStatus.Applications = map[string]rayv1alpha1.AppStatus{"default": newDefaultAppStatus}
-	r.Log.V(1).Info("getAndCheckServeStatus", "new default app status", newDefaultAppStatus)
-	return isHealthy, isReady, nil
-}
-
-func (r *RayServiceReconciler) getApplicationStatusesV2(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serviceUnhealthySecondThreshold float64) (bool, bool, error) {
-	var serveDetails *utils.ServeDetails
-	var err error
-	if serveDetails, err = dashboardClient.GetServeDetails(ctx); err != nil {
-		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
-		return false, false, err
-	}
-	r.Log.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serveDetails", serveDetails)
+	r.Log.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isHealthy := true
 	isReady := true
 	timeNow := metav1.Now()
 
 	rayServiceServeStatus.Applications = make(map[string]rayv1alpha1.AppStatus)
-	for appName, app := range serveDetails.Applications {
+	for appName, app := range serveAppStatuses {
 		if appName == "" {
 			appName = "default"
 		}
@@ -981,7 +911,13 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient.InitClient(clientURL)
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServeConfigType, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	var serveConfigType utils.RayServeConfigType
+	if rayServiceInstance.Spec.ServeConfigV2 == (rayv1alpha1.ServeConfigV2{}) {
+		serveConfigType = utils.SINGLE_APP
+	} else {
+		serveConfigType = utils.MULTI_APP
+	}
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, serveConfigType, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -1056,7 +992,13 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServeConfigType, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
+	var serveConfigType utils.RayServeConfigType
+	if rayServiceInstance.Spec.ServeConfigV2 == (rayv1alpha1.ServeConfigV2{}) {
+		serveConfigType = utils.SINGLE_APP
+	} else {
+		serveConfigType = utils.MULTI_APP
+	}
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, serveConfigType, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
