@@ -12144,6 +12144,8 @@ spec:
                 required:
                 - importPath
                 type: object
+              serveConfigV2:
+                type: object
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
@@ -12153,21 +12155,44 @@ spec:
             properties:
               activeServiceStatus:
                 properties:
-                  appStatus:
+                  applicationStatuses:
+                    additionalProperties:
+                      properties:
+                        healthLastUpdateTime:
+                          description: Keep track of how long the service is healthy.
+                          format: date-time
+                          type: string
+                        lastUpdateTime:
+                          format: date-time
+                          type: string
+                        message:
+                          type: string
+                        serveDeploymentStatuses:
+                          additionalProperties:
+                            description: ServeDeploymentStatus defines the current
+                              state of a Serve deployment
+                            properties:
+                              healthLastUpdateTime:
+                                description: Keep track of how long the service is
+                                  healthy.
+                                format: date-time
+                                type: string
+                              lastUpdateTime:
+                                format: date-time
+                                type: string
+                              message:
+                                type: string
+                              status:
+                                description: Name, Status, Message are from Ray Dashboard
+                                  and represent a Serve deployment's state.
+                                type: string
+                            type: object
+                          type: object
+                        status:
+                          type: string
+                      type: object
                     description: 'Important: Run "make" to regenerate code after modifying
                       this file'
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
-                        format: date-time
-                        type: string
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                      message:
-                        type: string
-                      status:
-                        type: string
                     type: object
                   dashboardStatus:
                     description: DashboardStatus defines the current states of Ray
@@ -12241,29 +12266,6 @@ spec:
                           state of cluster Important: Run "make" to regenerat'
                         type: string
                     type: object
-                  serveDeploymentStatuses:
-                    items:
-                      description: ServeDeploymentStatus defines the current state
-                        of a Serve deployment
-                      properties:
-                        healthLastUpdateTime:
-                          description: Keep track of how long the service is healthy.
-                          format: date-time
-                          type: string
-                        lastUpdateTime:
-                          format: date-time
-                          type: string
-                        message:
-                          type: string
-                        name:
-                          description: Name, Status, Message are from Ray Dashboard
-                            and represent a Serve deployment's state.
-                          type: string
-                        status:
-                          description: 'TODO: change status type to enum'
-                          type: string
-                      type: object
-                    type: array
                 type: object
               observedGeneration:
                 description: observedGeneration is the most recent generation observed
@@ -12274,21 +12276,44 @@ spec:
                 description: Pending Service Status indicates a RayCluster will be
                   created or is being created.
                 properties:
-                  appStatus:
+                  applicationStatuses:
+                    additionalProperties:
+                      properties:
+                        healthLastUpdateTime:
+                          description: Keep track of how long the service is healthy.
+                          format: date-time
+                          type: string
+                        lastUpdateTime:
+                          format: date-time
+                          type: string
+                        message:
+                          type: string
+                        serveDeploymentStatuses:
+                          additionalProperties:
+                            description: ServeDeploymentStatus defines the current
+                              state of a Serve deployment
+                            properties:
+                              healthLastUpdateTime:
+                                description: Keep track of how long the service is
+                                  healthy.
+                                format: date-time
+                                type: string
+                              lastUpdateTime:
+                                format: date-time
+                                type: string
+                              message:
+                                type: string
+                              status:
+                                description: Name, Status, Message are from Ray Dashboard
+                                  and represent a Serve deployment's state.
+                                type: string
+                            type: object
+                          type: object
+                        status:
+                          type: string
+                      type: object
                     description: 'Important: Run "make" to regenerate code after modifying
                       this file'
-                    properties:
-                      healthLastUpdateTime:
-                        description: Keep track of how long the service is healthy.
-                        format: date-time
-                        type: string
-                      lastUpdateTime:
-                        format: date-time
-                        type: string
-                      message:
-                        type: string
-                      status:
-                        type: string
                     type: object
                   dashboardStatus:
                     description: DashboardStatus defines the current states of Ray
@@ -12362,29 +12387,6 @@ spec:
                           state of cluster Important: Run "make" to regenerat'
                         type: string
                     type: object
-                  serveDeploymentStatuses:
-                    items:
-                      description: ServeDeploymentStatus defines the current state
-                        of a Serve deployment
-                      properties:
-                        healthLastUpdateTime:
-                          description: Keep track of how long the service is healthy.
-                          format: date-time
-                          type: string
-                        lastUpdateTime:
-                          format: date-time
-                          type: string
-                        message:
-                          type: string
-                        name:
-                          description: Name, Status, Message are from Ray Dashboard
-                            and represent a Serve deployment's state.
-                          type: string
-                        status:
-                          description: 'TODO: change status type to enum'
-                          type: string
-                      type: object
-                    type: array
                 type: object
               serviceStatus:
                 description: ServiceStatus indicates the current RayService status.

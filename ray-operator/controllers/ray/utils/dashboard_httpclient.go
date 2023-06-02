@@ -29,42 +29,11 @@ const (
 )
 
 var (
-	DeployPath = "/api/serve/deployments/"
-	StatusPath = "/api/serve/deployments/status"
-	JobPath    = "/api/jobs/"
+	DeployPath       = "/api/serve/deployments/"
+	StatusPath       = "/api/serve/deployments/status"
+	ServeDetailsPath = "/api/serve/applications/"
+	JobPath          = "/api/jobs/"
 )
-
-// ServeConfigSpec defines the desired state of RayService, used by Ray Dashboard.
-type ServeConfigSpec struct {
-	Name                      string                 `json:"name"`
-	NumReplicas               *int32                 `json:"num_replicas,omitempty"`
-	RoutePrefix               string                 `json:"route_prefix,omitempty"`
-	MaxConcurrentQueries      *int32                 `json:"max_concurrent_queries,omitempty"`
-	UserConfig                map[string]interface{} `json:"user_config,omitempty"`
-	AutoscalingConfig         map[string]interface{} `json:"autoscaling_config,omitempty"`
-	GracefulShutdownWaitLoopS *int32                 `json:"graceful_shutdown_wait_loop_s,omitempty"`
-	GracefulShutdownTimeoutS  *int32                 `json:"graceful_shutdown_timeout_s,omitempty"`
-	HealthCheckPeriodS        *int32                 `json:"health_check_period_s,omitempty"`
-	HealthCheckTimeoutS       *int32                 `json:"health_check_timeout_s,omitempty"`
-	RayActorOptions           RayActorOptionSpec     `json:"ray_actor_options,omitempty"`
-}
-
-// RayActorOptionSpec defines the desired state of RayActor, used by Ray Dashboard.
-type RayActorOptionSpec struct {
-	RuntimeEnv        map[string]interface{} `json:"runtime_env,omitempty"`
-	NumCpus           *float64               `json:"num_cpus,omitempty"`
-	NumGpus           *float64               `json:"num_gpus,omitempty"`
-	Memory            *int32                 `json:"memory,omitempty"`
-	ObjectStoreMemory *int32                 `json:"object_store_memory,omitempty"`
-	Resources         map[string]interface{} `json:"resources,omitempty"`
-	AcceleratorType   string                 `json:"accelerator_type,omitempty"`
-}
-
-// ServeDeploymentStatuses defines the current states of all Serve Deployments.
-type ServeDeploymentStatuses struct {
-	ApplicationStatus  rayv1alpha1.AppStatus               `json:"app_status,omitempty"`
-	DeploymentStatuses []rayv1alpha1.ServeDeploymentStatus `json:"deployment_statuses,omitempty"`
-}
 
 // ServingClusterDeployments defines the request sent to the dashboard api server.
 // See https://docs.ray.io/en/master/_modules/ray/serve/schema.html#ServeApplicationSchema for more details.
@@ -79,7 +48,11 @@ type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments(context.Context) (string, error)
 	UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error
-	GetDeploymentsStatus(context.Context) (*ServeDeploymentStatuses, error)
+	// V1/single-app Rest API
+	GetSingleApplicationStatus(context.Context) (*ServeApplicationStatus, error)
+	// V2/multi-app Rest API
+	GetServeDetails(ctx context.Context) (*ServeDetails, error)
+	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
 	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
@@ -230,7 +203,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, spec rayv1al
 }
 
 // GetDeploymentsStatus get the current deployment statuses in the Ray cluster.
-func (r *RayDashboardClient) GetDeploymentsStatus(ctx context.Context) (*ServeDeploymentStatuses, error) {
+func (r *RayDashboardClient) GetSingleApplicationStatus(ctx context.Context) (*ServeApplicationStatus, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+StatusPath, nil)
 	if err != nil {
 		return nil, err
@@ -248,12 +221,77 @@ func (r *RayDashboardClient) GetDeploymentsStatus(ctx context.Context) (*ServeDe
 		return nil, fmt.Errorf("GetDeploymentsStatus fail: %s %s", resp.Status, string(body))
 	}
 
-	var serveStatuses ServeDeploymentStatuses
-	if err = json.Unmarshal(body, &serveStatuses); err != nil {
+	var status ServeSingleApplicationStatusV1
+	if err = json.Unmarshal(body, &status); err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal bytes into application status object: %s", string(body))
+	}
+
+	defaultAppStatus := ServeApplicationStatus{
+		Name:        "default",
+		Message:     status.ApplicationStatus.Message,
+		Status:      status.ApplicationStatus.Status,
+		Deployments: make(map[string]ServeDeploymentStatus),
+	}
+
+	for _, deployment := range status.DeploymentStatuses {
+		deploymentStatus := ServeDeploymentStatus{
+			Status:  deployment.Status,
+			Message: deployment.Message,
+		}
+
+		defaultAppStatus.Deployments[deployment.Name] = deploymentStatus
+	}
+	return &defaultAppStatus, nil
+}
+
+func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
+	serveDetails, err := r.GetServeDetails(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get serve details: %v", err)
+	}
+
+	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
+}
+
+// GetServeDetails gets details on all live applications on the Ray cluster.
+func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+ServeDetailsPath, nil)
+	if err != nil {
 		return nil, err
 	}
 
-	return &serveStatuses, nil
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
+	}
+
+	var serveDetails ServeDetails
+	if err = json.Unmarshal(body, &serveDetails); err != nil {
+		return nil, fmt.Errorf("GetServeDetails failed. Failed to unmarshal bytes: %s", string(body))
+	}
+
+	return &serveDetails, nil
+}
+
+func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *ServeDetails) (map[string]*ServeApplicationStatus, error) {
+	detailsJson, err := json.Marshal(serveDetails.Applications)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to marshal serve details: %v.", serveDetails.Applications)
+	}
+
+	applicationStatuses := map[string]*ServeApplicationStatus{}
+	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %v. Bytes: %s", err, string(detailsJson))
+	}
+
+	return applicationStatuses, nil
 }
 
 func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {

@@ -1762,18 +1762,18 @@
       "properties": {
         "applicationStatus": {
           "type": "string",
-          "description": "The ray serve application status."
+          "description": "NOTE(zcin): the first three fields are deprecated in favor of serve_application_status.\n(Deprecated) The ray serve application status."
         },
         "applicationMessage": {
           "type": "string",
-          "description": "A human-readable description of the status of this operation."
+          "description": "(Deprecated) A human-readable description of the status of this operation."
         },
         "serveDeploymentStatus": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoServeDeploymentStatus"
           },
-          "description": "The status for each deployment."
+          "description": "(Deprecated) The status for each deployment."
         },
         "rayServiceEvents": {
           "type": "array",
@@ -1796,6 +1796,37 @@
             "type": "string"
           },
           "description": "The service endpoint of the cluster and service."
+        },
+        "serveApplicationStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoServeApplicationStatus"
+          },
+          "title": "All ray serve application statuses"
+        }
+      }
+    },
+    "protoServeApplicationStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Application name"
+        },
+        "status": {
+          "type": "string",
+          "title": "Application status"
+        },
+        "message": {
+          "type": "string",
+          "description": "Details about the application status."
+        },
+        "serveDeploymentStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoServeDeploymentStatus"
+          },
+          "title": "All ray serve deployment statuses in this application"
         }
       }
     },
