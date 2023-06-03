@@ -15,7 +15,8 @@ var myRayCluster = &RayCluster{
 		Namespace: "default",
 	},
 	Spec: RayClusterSpec{
-		RayVersion: "1.0",
+		RayVersion:         "1.0",
+		ServiceAccountName: "foo",
 		HeadGroupSpec: HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{

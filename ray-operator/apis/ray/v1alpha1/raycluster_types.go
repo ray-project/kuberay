@@ -12,6 +12,8 @@ import (
 type RayClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	// ServiceAccount under which all of the cluster nodes run, if omitted, cluster name is used as service account name
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 	// HeadGroupSpecs are the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods

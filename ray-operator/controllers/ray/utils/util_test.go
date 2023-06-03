@@ -120,25 +120,19 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		input *rayv1alpha1.RayCluster
 		want  string
 	}{
-		"Ray cluster with head group service account": {
+		"Ray cluster with service account": {
 			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
 				Spec: rayv1alpha1.RayClusterSpec{
-					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								ServiceAccountName: "my-service-account",
-							},
-						},
-					},
+					ServiceAccountName: "my-service-account",
 				},
 			},
 			want: "my-service-account",
 		},
-		"Ray cluster without head group service account": {
+		"Ray cluster without service account": {
 			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -158,7 +152,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			got := GetHeadGroupServiceAccountName(tc.input)
+			got := GetServiceAccountName(tc.input)
 			if got != tc.want {
 				t.Fatalf("got %s, want %s", got, tc.want)
 			}

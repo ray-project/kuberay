@@ -1070,7 +1070,7 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(instance *rayv1alpha1.Ra
 	}
 
 	if len(podList.Items) != 1 {
-		return false, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+		return false, fmt.Errorf("found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
 	}
 
 	return utils.IsRunningAndReady(&podList.Items[0]), nil

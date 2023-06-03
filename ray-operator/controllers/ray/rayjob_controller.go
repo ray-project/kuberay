@@ -489,7 +489,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		// TODO: If both ClusterSelector and RayClusterSpec are not set, we avoid should attempting to retrieve a RayCluster instance.
 		// Consider moving this logic to a more appropriate location.
 		if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
-			err := fmt.Errorf("Both ClusterSelector and RayClusterSpec are undefined")
+			err := fmt.Errorf("both ClusterSelector and RayClusterSpec are undefined")
 			r.Log.Error(err, "Failed to configure RayCluster instance due to missing configuration")
 			return nil, err
 		}

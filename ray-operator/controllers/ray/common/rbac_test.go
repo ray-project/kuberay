@@ -18,25 +18,24 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 		input *rayv1alpha1.RayCluster
 		want  []string
 	}{
-		"Ray cluster with head group service account": {
+		"Ray cluster with service account": {
 			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
 				Spec: rayv1alpha1.RayClusterSpec{
+					ServiceAccountName: "my-service-account",
 					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								ServiceAccountName: "my-service-account",
-							},
+							Spec: corev1.PodSpec{},
 						},
 					},
 				},
 			},
 			want: []string{"my-service-account", "raycluster-sample"},
 		},
-		"Ray cluster without head group service account": {
+		"Ray cluster without service account": {
 			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -52,7 +51,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			},
 			want: []string{"raycluster-sample", "raycluster-sample"},
 		},
-		"Ray cluster with a long name and without head group service account": {
+		"Ray cluster with a long name and without service account": {
 			input: &rayv1alpha1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      longString(t), // 200 chars long

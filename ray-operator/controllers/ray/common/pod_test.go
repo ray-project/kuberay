@@ -685,10 +685,8 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 // the head pod's service account should be an empty string.
 func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 	cluster := instance.DeepCopy()
-	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	actualResult := pod.Spec.ServiceAccountName
+	actualResult := cluster.Spec.ServiceAccountName
 	expectedResult := ""
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -700,11 +698,9 @@ func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
 	cluster := instance.DeepCopy()
 	serviceAccount := "head-service-account"
-	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
-	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	cluster.Spec.ServiceAccountName = serviceAccount
 
-	actualResult := pod.Spec.ServiceAccountName
+	actualResult := cluster.Spec.ServiceAccountName
 	expectedResult := serviceAccount
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -716,12 +712,10 @@ func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
 func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	cluster := instance.DeepCopy()
 	serviceAccount := "head-service-account"
-	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
+	cluster.Spec.ServiceAccountName = serviceAccount
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
-	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	actualResult := pod.Spec.ServiceAccountName
+	actualResult := cluster.Spec.ServiceAccountName
 	expectedResult := serviceAccount
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)

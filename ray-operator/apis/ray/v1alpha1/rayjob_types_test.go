@@ -23,7 +23,8 @@ var expectedRayJob = RayJob{
 			"owner": "userA",
 		},
 		RayClusterSpec: &RayClusterSpec{
-			RayVersion: "1.12.1",
+			RayVersion:         "1.12.1",
+			ServiceAccountName: "foo",
 			HeadGroupSpec: HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
@@ -145,6 +146,7 @@ var testRayJobJSON = `{
             "owner":"userA"
         },
         "rayClusterSpec": {
+			"serviceAccountName": "foo",
             "headGroupSpec": {
                 "replicas": 1,
                 "rayStartParams": {

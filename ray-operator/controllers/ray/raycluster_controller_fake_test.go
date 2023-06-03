@@ -252,6 +252,7 @@ func setupTest(t *testing.T) {
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
 			RayVersion:              "1.0",
+			ServiceAccountName:      headGroupServiceAccount,
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
@@ -264,7 +265,6 @@ func setupTest(t *testing.T) {
 				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
-						ServiceAccountName: headGroupServiceAccount,
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
@@ -893,7 +893,7 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(testRayCluster)
+	err = testRayClusterReconciler.reconcileServiceAccount(testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile autoscaler ServiceAccount")
 
 	err = fakeClient.Get(context.Background(), saNamespacedName, &sa)

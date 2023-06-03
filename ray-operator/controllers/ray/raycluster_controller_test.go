@@ -169,7 +169,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should create the head group's specified K8s ServiceAccount if it doesn't exist", func() {
-			saName := utils.GetHeadGroupServiceAccountName(myRayCluster)
+			saName := utils.GetServiceAccountName(myRayCluster)
 			sa := &corev1.ServiceAccount{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: saName, Namespace: "default"}, sa),

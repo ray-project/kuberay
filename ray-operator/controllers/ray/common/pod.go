@@ -106,6 +106,9 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 	podTemplate.Labels = labelPod(rayv1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1alpha1.HeadNode, headPort, "")
 	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
+	// set custom service account with proper roles bound.
+	// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
+	podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetServiceAccountName(&instance))
 
 	initTemplateAnnotations(instance, &podTemplate)
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
@@ -115,9 +118,6 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
 		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
-		// set custom service account with proper roles bound.
-		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
-		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
 		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
 		// Determine the default image to use for the Ray container.
 		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
@@ -194,6 +194,10 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 		podTemplate.ObjectMeta.Namespace = instance.Namespace
 		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
 	}
+
+	// set custom service account with proper roles bound.
+	// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
+	podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetServiceAccountName(&instance))
 
 	// The Ray worker should only start once the GCS server is ready.
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)

@@ -12,7 +12,7 @@ import (
 func BuildServiceAccount(cluster *rayv1alpha1.RayCluster) (*v1.ServiceAccount, error) {
 	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GetHeadGroupServiceAccountName(cluster),
+			Name:      utils.GetServiceAccountName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				RayClusterLabelKey:                cluster.Name,
@@ -56,7 +56,7 @@ func BuildRole(cluster *rayv1alpha1.RayCluster) (*rbacv1.Role, error) {
 
 // BuildRole
 func BuildRoleBinding(cluster *rayv1alpha1.RayCluster) (*rbacv1.RoleBinding, error) {
-	serviceAccountName := utils.GetHeadGroupServiceAccountName(cluster)
+	serviceAccountName := utils.GetServiceAccountName(cluster)
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,

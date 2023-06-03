@@ -328,10 +328,10 @@ func FilterContainerByName(containers []corev1.Container, name string) (corev1.C
 
 // GetHeadGroupServiceAccountName returns the head group service account if it exists.
 // Otherwise, it returns the name of the cluster itself.
-func GetHeadGroupServiceAccountName(cluster *rayv1alpha1.RayCluster) string {
-	headGroupServiceAccountName := cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName
-	if headGroupServiceAccountName != "" {
-		return headGroupServiceAccountName
+func GetServiceAccountName(cluster *rayv1alpha1.RayCluster) string {
+	serviceAccountName := cluster.Spec.ServiceAccountName
+	if serviceAccountName != "" {
+		return serviceAccountName
 	}
 	return cluster.Name
 }

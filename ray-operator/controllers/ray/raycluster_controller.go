@@ -205,23 +205,27 @@ func (r *RayClusterReconciler) rayClusterReconcile(request ctrl.Request, instanc
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
-	if err := r.reconcileAutoscalerServiceAccount(instance); err != nil {
+	if err := r.reconcileServiceAccount(instance); err != nil {
 		if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileAutoscalerRole(instance); err != nil {
-		if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
-			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+
+	// Role and role binding are only required if an autoscaling is enabled
+	if instance.Spec.EnableInTreeAutoscaling != nil || *instance.Spec.EnableInTreeAutoscaling {
+		if err := r.reconcileAutoscalerRole(instance); err != nil {
+			if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
+				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-	}
-	if err := r.reconcileAutoscalerRoleBinding(instance); err != nil {
-		if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
-			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+		if err := r.reconcileAutoscalerRoleBinding(instance); err != nil {
+			if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
+				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	if err := r.reconcileIngress(instance); err != nil {
 		if updateErr := r.updateClusterState(instance, rayv1alpha1.Failed); updateErr != nil {
@@ -1013,13 +1017,9 @@ func (r *RayClusterReconciler) updateHeadInfo(instance *rayv1alpha1.RayCluster) 
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayv1alpha1.RayCluster) error {
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
-		return nil
-	}
-
+func (r *RayClusterReconciler) reconcileServiceAccount(instance *rayv1alpha1.RayCluster) error {
 	serviceAccount := &corev1.ServiceAccount{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetHeadGroupServiceAccountName(instance)}
+	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetServiceAccountName(instance)}
 
 	if err := r.Get(context.TODO(), namespacedName, serviceAccount); err != nil {
 		if !errors.IsNotFound(err) {
@@ -1056,10 +1056,6 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayv1
 }
 
 func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayv1alpha1.RayCluster) error {
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
-		return nil
-	}
-
 	role := &rbacv1.Role{}
 	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
 	if err := r.Get(context.TODO(), namespacedName, role); err != nil {
@@ -1097,10 +1093,6 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(instance *rayv1alpha1.Ray
 }
 
 func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(instance *rayv1alpha1.RayCluster) error {
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
-		return nil
-	}
-
 	roleBinding := &rbacv1.RoleBinding{}
 	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
 	if err := r.Get(context.TODO(), namespacedName, roleBinding); err != nil {
