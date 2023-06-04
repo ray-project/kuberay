@@ -1032,8 +1032,9 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(instance *rayio
 		// for more details.
 		if instance.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName == namespacedName.Name {
 			r.Log.Error(err, fmt.Sprintf(
-				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves."+
-					"However, ServiceAccount %s is not found. Please create one.", namespacedName.Name), "ServiceAccount", namespacedName)
+				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
+					"However, ServiceAccount %s is not found. Please create one. "+
+					"See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name), "ServiceAccount", namespacedName)
 			return err
 		}
 
