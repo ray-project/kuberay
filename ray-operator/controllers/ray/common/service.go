@@ -189,7 +189,7 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 		// Add DefaultServePort if it is already not added and ignore any custom ports
 		// Keeping this consistentent with adding only serve port in serve service
 		if len(ports) != 0 {
-      log.Info("Ignoring user provided ports for serve service as default serve port already added")
+                        log.Info("Ignoring user provided ports for serve service as default serve port already added")
 			serveService.Spec.Ports = ports
 		} else {
 			ports := []corev1.ServicePort{}
