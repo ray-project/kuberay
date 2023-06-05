@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
@@ -13,6 +14,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 
 	"go.uber.org/zap/zapcore"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,7 +60,7 @@ func main() {
 		&watchNamespace,
 		"watch-namespace",
 		"",
-		"Watch custom resources in the namespace, ignore other namespaces. If empty, all namespaces will be watched.")
+		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
 	flag.BoolVar(&ray.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", true,
 		"Temporary feature flag - to be deleted after testing")
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
@@ -117,15 +119,29 @@ func main() {
 		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	watchNamespaces := strings.Split(watchNamespace, ",")
+	options := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ray-operator-leader",
-		Namespace:              watchNamespace,
-	})
+	}
+
+	if len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")`` is still 1.
+		options.Namespace = watchNamespaces[0]
+		if watchNamespaces[0] == "" {
+			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
+		} else {
+			setupLog.Info(fmt.Sprintf("Only watch custom resources in the namespace: %s", watchNamespaces[0]))
+		}
+	} else {
+		options.NewCache = cache.MultiNamespacedCacheBuilder(watchNamespaces)
+		setupLog.Info(fmt.Sprintf("Only watch custom resources in multiple namespaces: %v", watchNamespaces))
+	}
+	setupLog.Info("Setup manager")
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)

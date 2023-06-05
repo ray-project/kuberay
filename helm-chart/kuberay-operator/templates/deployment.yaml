@@ -42,10 +42,10 @@ spec:
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
             {{- end -}}
             {{- $watchNamespace := "" -}}
-            {{- if .Values.singleNamespaceInstall -}}
+            {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
             {{- $watchNamespace = .Release.Namespace -}}
             {{- else if .Values.watchNamespace -}}
-            {{- $watchNamespace = .Values.watchNamespace -}}
+            {{- $watchNamespace = join "," .Values.watchNamespace -}}
             {{- end -}}
             {{- if $watchNamespace -}}
             {{- $argList = append $argList "--watch-namespace" -}}
