@@ -220,6 +220,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Initialize a fake client with newScheme and runtimeObjects.
 	runtimeObjects := []runtime.Object{}
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
 
 	// Initialize RayCluster reconciler.
 	r := &RayServiceReconciler{
@@ -231,7 +232,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 
 	// Test 1: There is no head pod. `isHeadPodRunningAndReady` should return false.
 	// In addition, an error should be returned if the number of head pods is not 1.
-	isReady, err := r.isHeadPodRunningAndReady(&cluster)
+	isReady, err := r.isHeadPodRunningAndReady(ctx, &cluster)
 	assert.NotNil(t, err)
 	assert.False(t, isReady)
 
@@ -240,7 +241,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	runtimeObjects = []runtime.Object{headPod}
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
-	isReady, err = r.isHeadPodRunningAndReady(&cluster)
+	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
 	assert.Nil(t, err)
 	assert.False(t, isReady)
 
@@ -259,7 +260,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	runtimeObjects = []runtime.Object{runningHeadPod}
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
-	isReady, err = r.isHeadPodRunningAndReady(&cluster)
+	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
 	assert.Nil(t, err)
 	assert.True(t, isReady)
 }
@@ -311,12 +312,13 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
+	ctx := context.TODO()
 	// Create a head service.
-	err := r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err := r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList := corev1.ServiceList{}
-	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	oldSvc := svcList.Items[0].DeepCopy()
@@ -328,22 +330,22 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			ContainerPort: 9999,
 		},
 	}
-	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
-	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
-	err = r.reconcileServices(context.TODO(), &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
-	err = fakeClient.List(context.TODO(), &svcList, client.InNamespace(namespace))
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))

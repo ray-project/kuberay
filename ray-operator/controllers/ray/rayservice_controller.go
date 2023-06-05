@@ -933,7 +933,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
 	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
 	// This is not an issue since `UpdateDeployments` is an idempotent operation.
-	if isRunningAndReady, err := r.isHeadPodRunningAndReady(rayClusterInstance); err != nil || !isRunningAndReady {
+	if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
 		if err != nil {
 			logger.Error(err, "Failed to check if head pod is running and ready!")
 		} else {
@@ -1060,11 +1060,11 @@ func compareRayClusterJsonHash(spec1 rayv1alpha1.RayClusterSpec, spec2 rayv1alph
 }
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
-func (r *RayServiceReconciler) isHeadPodRunningAndReady(instance *rayv1alpha1.RayCluster) (bool, error) {
+func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1alpha1.RayCluster) (bool, error) {
 	podList := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
 
-	if err := r.List(context.TODO(), &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Failed to list the head Pod of the RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
 		return false, err
 	}
