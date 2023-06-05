@@ -211,6 +211,12 @@ message HeadGroupSpec {
   map<string, string> ray_start_params = 4;
   // Optional. The volumes mount to head pod
   repeated Volume volumes = 5;
+  // Optional. Environment variables for head pod
+  map<string, string> environment = 6;
+  // Optional. Annotations for the head pod
+  map<string, string> annotations = 7;
+  // Optional. Labels for the head pod
+  map<string, string> labels = 8;
 }
 
 message WorkerGroupSpec {
@@ -230,6 +236,12 @@ message WorkerGroupSpec {
   map<string, string> ray_start_params = 7;
   // Optional. The volumes mount to worker pods
   repeated Volume volumes = 8;
+  // Optional. Environment variables for worker pod
+  map<string, string> environment = 9;
+  // Optional. Annotations for the worker pod
+  map<string, string> annotations = 10;
+  // Optional. Labels for the worker pod
+  map<string, string> labels = 11;
 }
 
 message ClusterEvent {

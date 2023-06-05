@@ -99,6 +99,18 @@ message DeleteComputeTemplateRequest {
   string namespace = 2;
 }
 
+// Toleration for the compute template
+message PodToleration{
+  // key created by the node's taint
+  string key = 1;
+  // operator to apply
+  string operator = 2;
+  // optional string
+  string value = 3;
+  // Effect
+  string effect = 4;
+}
+
 // ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
 message ComputeTemplate {
   // The name of the compute template
@@ -113,6 +125,8 @@ message ComputeTemplate {
   uint32 gpu = 5;
   // The detail gpu accelerator type
   string gpu_accelerator = 6;
+  // Optional pod tolerations
+  repeated PodToleration tolerations = 7;
 }
 
 

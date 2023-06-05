@@ -68,11 +68,23 @@ func BuildServiceForHeadPod(cluster rayv1alpha1.RayCluster, labels map[string]st
 		// Deep copy the HeadService to avoid modifying the original object
 		headService := cluster.Spec.HeadGroupSpec.HeadService.DeepCopy()
 
+		// For the Labels field, merge labels_for_service with custom HeadService labels.
+		// If there are overlaps, ignore the custom HeadService labels.
+		if headService.ObjectMeta.Labels == nil {
+			headService.ObjectMeta.Labels = make(map[string]string)
+		}
+		for k, v := range labels_for_service {
+			headService.ObjectMeta.Labels[k] = v
+		}
+
 		// For the selector, ignore any custom HeadService selectors or labels.
 		headService.Spec.Selector = selector
 
 		// Merge annotations with custom HeadService annotations. If there are overlaps,
 		// ignore the custom HeadService annotations.
+		if headService.ObjectMeta.Annotations == nil {
+			headService.ObjectMeta.Annotations = make(map[string]string)
+		}
 		for k, v := range annotations {
 			// if the key is present, log a warning message
 			if _, ok := headService.ObjectMeta.Annotations[k]; ok {
@@ -174,9 +186,10 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 		// For the selector, ignore any custom ServeService selectors or labels.
 		serveService.Spec.Selector = selectorLabels
 
-		// Add DeafultServePort if it is already not added and ignore any custom ports
+		// Add DefaultServePort if it is already not added and ignore any custom ports
 		// Keeping this consistentent with adding only serve port in serve service
 		if len(ports) != 0 {
+      log.Info("Ignoring user provided ports for serve service as default serve port already added")
 			serveService.Spec.Ports = ports
 		} else {
 			ports := []corev1.ServicePort{}

@@ -9,7 +9,7 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"google.golang.org/protobuf/types/known/emptypb"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 )
 
 type ServiceServerOptions struct {

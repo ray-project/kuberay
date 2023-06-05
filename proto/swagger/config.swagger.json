@@ -390,6 +390,13 @@
         "gpuAccelerator": {
           "type": "string",
           "title": "The detail gpu accelerator type"
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoPodToleration"
+          },
+          "title": "Optional pod tolerations"
         }
       },
       "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc"
@@ -481,6 +488,28 @@
           "description": "A list of Compute returned."
         }
       }
+    },
+    "protoPodToleration": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "title": "key created by the node's taint"
+        },
+        "operator": {
+          "type": "string",
+          "title": "operator to apply"
+        },
+        "value": {
+          "type": "string",
+          "title": "optional string"
+        },
+        "effect": {
+          "type": "string",
+          "title": "Effect"
+        }
+      },
+      "title": "Toleration for the compute template"
     },
     "protobufAny": {
       "type": "object",

@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
