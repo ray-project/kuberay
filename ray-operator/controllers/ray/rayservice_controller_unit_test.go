@@ -93,7 +93,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 					HealthLastUpdateTime: &timeNow,
 					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               "unhealthy",
+							Status:               rayv1alpha1.DeploymentStatusEnum.UNHEALTHY,
 							Message:              "error",
 							LastUpdateTime:       &timeNow,
 							HealthLastUpdateTime: &timeNow,
@@ -117,7 +117,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 					HealthLastUpdateTime: &timeNow,
 					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               "healthy",
+							Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
 							Message:              "Serve is healthy",
 							LastUpdateTime:       &timeNow,
 							HealthLastUpdateTime: &timeNow,
@@ -160,7 +160,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 				HealthLastUpdateTime: &timeNow,
 				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
 					"serve-1": {
-						Status:               "healthy",
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
 						Message:              "Serve is healthy",
 						LastUpdateTime:       &timeNow,
 						HealthLastUpdateTime: &timeNow,
