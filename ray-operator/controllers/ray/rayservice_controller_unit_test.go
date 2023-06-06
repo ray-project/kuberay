@@ -153,7 +153,21 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 			HealthLastUpdateTime: &timeNow,
 		},
 		Applications: map[string]rayv1alpha1.AppStatus{
-			common.DefaultServeAppName: {
+			"app1": {
+				Status:               "running",
+				Message:              "Application is running",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
+			},
+			"app2": {
 				Status:               "running",
 				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
@@ -177,6 +191,11 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	// Test 1: Only LastUpdateTime and HealthLastUpdateTime are updated.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+	for appName, application := range newStatus.Applications{
+		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+		application.LastUpdateTime = &metav1.Time{Time: timeNow.Add(2)}
+		newStatus.Applications[appName] = application
+	}
 	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 
 	// Test 2: Not only LastUpdateTime and HealthLastUpdateTime are updated.
