@@ -233,6 +233,11 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		}
 	}
 
+	// If service account is specified, add it to the pod spec. Required in the case of autoscaling
+	if len(spec.ServiceAccount) > 1 {
+		podTemplateSpec.Spec.ServiceAccountName = spec.ServiceAccount
+	}
+
 	return podTemplateSpec
 }
 
@@ -435,6 +440,11 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
 		}
+	}
+
+	// If service account is specified, add it to the pod spec. Required in the case of autoscaling
+	if len(spec.ServiceAccount) > 1 {
+		podTemplateSpec.Spec.ServiceAccountName = spec.ServiceAccount
 	}
 
 	return podTemplateSpec

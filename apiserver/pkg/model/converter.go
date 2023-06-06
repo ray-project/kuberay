@@ -173,6 +173,10 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.Environment = env
 	}
 
+	if len(spec.Template.Spec.ServiceAccountName) > 1 {
+		headNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
+	}
+
 	return headNodeSpec
 }
 
@@ -214,7 +218,12 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 			}
 			workerNodeSpec.Environment = env
 		}
-		// Resources.
+
+		// If
+		if len(spec.Template.Spec.ServiceAccountName) > 1 {
+			workerNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
+		}
+
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}
 
