@@ -686,7 +686,12 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
+	// If the unhealthySecondThreshold value is non-nil, then we will use that value.
+	// Otherwise, we will use the value ServiceUnhealthySecondThreshold which can be set in a test
+	// This is used for testing purposes.
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
+	// If serveConfigTypeForTesting is set to a non-nil value by a test, then it will override
+	// the serveConfigType value passed into the function. Used for testing purposes
 	if serveConfigTypeForTesting != nil {
 		serveConfigType = *serveConfigTypeForTesting
 	}
