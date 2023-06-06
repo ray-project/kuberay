@@ -538,7 +538,7 @@ var _ = Context("Inside the default namespace", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
 
 			// The cluster shouldn't switch until deployments are finished updating
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus("UPDATING"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UPDATING))
 
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(

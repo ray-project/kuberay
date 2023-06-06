@@ -87,7 +87,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			},
 			Applications: map[string]rayv1alpha1.AppStatus{
 				common.DefaultServeAppName: {
-					Status:               "running",
+					Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
 					Message:              "OK",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
@@ -111,8 +111,8 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			},
 			Applications: map[string]rayv1alpha1.AppStatus{
 				common.DefaultServeAppName: {
-					Status:               "stopped",
-					Message:              "stopped",
+					Status:               rayv1alpha1.ApplicationStatusEnum.NOT_STARTED,
+					Message:              "application not started yet",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
 					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
@@ -154,7 +154,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		},
 		Applications: map[string]rayv1alpha1.AppStatus{
 			"app1": {
-				Status:               "running",
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
 				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
@@ -168,7 +168,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 				},
 			},
 			"app2": {
-				Status:               "running",
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
 				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
