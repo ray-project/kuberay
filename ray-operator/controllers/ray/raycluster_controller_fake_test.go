@@ -607,21 +607,40 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Set the workersToDelete to empty.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+	// This test makes some assumptions about the testPods object.
+	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+	assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+	numHeadPods := 1
+	oldNumWorkerPods := len(testPods) - numHeadPods
+
+	// Initialize a fake client with newScheme and runtimeObjects.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
 
+	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
 	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	// Simulate 2 pod container got deleted.
+	// Simulate the deletion of 2 worker Pods. After the deletion, the number of worker Pods should be 3.
 	err = fakeClient.Delete(ctx, &podList.Items[3])
 	assert.Nil(t, err, "Fail to delete pod")
 	err = fakeClient.Delete(ctx, &podList.Items[4])
 	assert.Nil(t, err, "Fail to delete pod")
 
+	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
@@ -629,6 +648,8 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
+	// Since the desired state of the workerGroup is 3 replicas,
+	// the controller will not create or delete any worker Pods.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
@@ -636,35 +657,47 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
-
-	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
-		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
-	}
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
+		"Replica number is wrong after reconcile expect %d actual %d", expectedNumWorkerPods, len(podList.Items))
 }
 
 func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Set the workersToDelete to empty.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+	// This test makes some assumptions about the testPods object.
+	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+	assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+	numHeadPods := 1
+	oldNumWorkerPods := len(testPods) - numHeadPods
+
+	// Initialize a fake client with newScheme and runtimeObjects.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
-	ctx := context.Background()
+
+	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
+	ctx := context.Background()
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
 	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	// Simulate 1 pod container got deleted.
+	// Simulate the deletion of 2 worker Pods. After the deletion, the number of worker Pods should be 4.
 	err = fakeClient.Delete(ctx, &podList.Items[3])
 	assert.Nil(t, err, "Fail to delete pod")
 
+	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
@@ -672,6 +705,8 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
+	// Since the desired state of the workerGroup is 3 replicas,
+	// the controller will delete a worker Pod to reach the goal state.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
@@ -679,33 +714,48 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
+	// The number of worker Pods should be 3.
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
-
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
-	}
 }
 
-func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
+func TestReconcile_PodDCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup
+	// (2) The goal state of the workerGroup is 3 replicas.
+	// (3) The workersToDelete has 2 worker Pods (pod3 and pod4). => Simulate the autoscaler scale-down.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{"pod3", "pod4"}
+
+	// This test makes some assumptions about the testPods object.
+	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+	assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+	numHeadPods := 1
+	oldNumWorkerPods := len(testPods) - numHeadPods
+
+	// Initialize a fake client with newScheme and runtimeObjects.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
 
+	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
 	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	// Simulate 2 pod container crash.
+	// Simulate 2 Pod fails. Because the workersToDelete also contains pod3 and pod4, the controller will
+	// delete these two Pods. After the deletion, the number of worker Pods should be 3.
 	podList.Items[3].Status.Phase = corev1.PodFailed
 	podList.Items[4].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[3])
@@ -713,6 +763,7 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 	err = fakeClient.Update(ctx, &podList.Items[4])
 	assert.Nil(t, err, "Fail to get update pod status")
 
+	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
@@ -720,6 +771,8 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
+	// Since the desired state of the workerGroup is 3 replicas, the controller
+	// will not create or delete any worker Pods.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
@@ -727,37 +780,55 @@ func TestReconcile_PodDCrash_Diff0_OK(t *testing.T) {
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	assert.Equal(t, int(expectReplicaNum), getNotFailedPodItemNum(podList),
+	// Failed Pods (pod3, pod4) should be deleted because of the workersToDelete.
+	// Hence, no failed Pods should exist in `podList`.
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+	assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
-
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
-	}
 }
 
 func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 	defer tearDown(t)
 
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup
+	// (2) The goal state of the workerGroup is 3 replicas.
+	// (3) The workersToDelete has 1 worker Pod (pod3). => Simulate the autoscaler scale-down.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{"pod3"}
+
+	// This test makes some assumptions about the testPods object.
+	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+	assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+	numHeadPods := 1
+	oldNumWorkerPods := len(testPods) - numHeadPods
+
+	// Initialize a fake client with newScheme and runtimeObjects.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
 
+	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
 	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	// Simulate 1 pod container crash.
+	// Simulate 1 Pod fails. Because the workersToDelete also contains pod3, the controller will
+	// delete pod3. After the deletion, the number of worker Pods should be 4.
 	podList.Items[3].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[3])
 	assert.Nil(t, err, "Fail to get update pod status")
 
+	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
@@ -765,6 +836,8 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
+	// Since the desired state of the workerGroup is 3 replicas, the controller
+	// will delete a worker Pod.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
@@ -772,17 +845,13 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	assert.Equal(t, int(expectReplicaNum), getNotFailedPodItemNum(podList),
+	// Failed Pods (pod3) should be deleted because of the workersToDelete.
+	// Hence, no failed Pods should exist in `podList`.
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+	assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
-
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Errorf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
-	}
 }
 
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
@@ -823,39 +892,6 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 	assert.Equal(t, 0, len(podList.Items),
 		"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
-}
-
-func TestReconcile_UpdateLocalWorkersToDelete_OK(t *testing.T) {
-	setupTest(t)
-	defer tearDown(t)
-
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
-	ctx := context.Background()
-
-	podList := corev1.PodList{}
-	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
-	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
-
-	// Simulate 1 pod container crash.
-	podList.Items[1].Status.Phase = corev1.PodFailed
-	runningPodsItems := append(podList.Items[:1], podList.Items[2:]...)
-
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-	}
-
-	testWorker := testRayCluster.Spec.WorkerGroupSpecs[0]
-
-	// this should remove `pod1` from testWorker.ScaleStrategy.WorkersToDelete
-	testRayClusterReconciler.updateLocalWorkersToDelete(&testWorker, runningPodsItems)
-
-	assert.Len(t, testWorker.ScaleStrategy.WorkersToDelete, 1, "updateLocalWorkersToDelete does not update WorkersToDelete properly")
-	assert.Equal(t, testWorker.ScaleStrategy.WorkersToDelete[0], "pod2")
 }
 
 func contains(slice []string, item string) bool {

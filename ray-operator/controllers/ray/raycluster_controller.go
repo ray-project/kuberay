@@ -534,14 +534,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 
 		runningPods := corev1.PodList{}
-		for _, aPod := range workerPods.Items {
-			if (aPod.Status.Phase == corev1.PodRunning || aPod.Status.Phase == corev1.PodPending) && aPod.ObjectMeta.DeletionTimestamp == nil {
-				runningPods.Items = append(runningPods.Items, aPod)
+		for _, pod := range workerPods.Items {
+			// TODO (kevin85421): We also need to have a clear story of all the Pod status phases, especially for PodFailed.
+			if isPodRunningOrPendingAndNotDeleting(pod) {
+				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
-		r.updateLocalWorkersToDelete(&worker, runningPods.Items)
 		diff := workerReplicas - int32(len(runningPods.Items))
-
 		if PrioritizeWorkersToDelete {
 			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
 			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
@@ -557,7 +556,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					}
 					r.Log.Info("reconcilePods", "unable to delete worker ", pod.Name)
 				} else {
-					diff++
+					// For example, the failed Pod (Status: corev1.PodFailed) is not counted in the `runningPods` variable.
+					// Therefore, we should not update `diff` when we delete a failed Pod.
+					if isPodRunningOrPendingAndNotDeleting(pod) {
+						diff++
+					}
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 				}
 			}
@@ -651,23 +654,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	return nil
 }
 
-func (r *RayClusterReconciler) updateLocalWorkersToDelete(worker *rayv1alpha1.WorkerGroupSpec, runningItems []corev1.Pod) {
-	var actualWorkersToDelete []string
-	itemMap := make(map[string]int)
-
-	// Create a map for quick lookup.
-	for _, item := range runningItems {
-		itemMap[item.Name] = 1
-	}
-
-	// Build actualWorkersToDelete to only include running items.
-	for _, workerToDelete := range worker.ScaleStrategy.WorkersToDelete {
-		if _, ok := itemMap[workerToDelete]; ok {
-			actualWorkersToDelete = append(actualWorkersToDelete, workerToDelete)
-		}
-	}
-
-	worker.ScaleStrategy.WorkersToDelete = actualWorkersToDelete
+func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
+	return (pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending) && pod.ObjectMeta.DeletionTimestamp == nil
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
