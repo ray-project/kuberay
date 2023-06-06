@@ -962,6 +962,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	// Case 1: There is no ServiceAccount "my-sa" in the Kubernetes cluster
 	runtimeObjects := []runtime.Object{}
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
 
 	// Initialize the reconciler
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -975,7 +976,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	// However, if KubeRay creates a ServiceAccount for users, the autoscaler may encounter permission issues during
 	// zero-downtime rolling updates when RayService is performed. See https://github.com/ray-project/kuberay/pull/1128
 	// for more details.
-	err := testRayClusterReconciler.reconcileAutoscalerServiceAccount(cluster)
+	err := testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, cluster)
 	assert.NotNil(t, err,
 		"When users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
 			"If the ServiceAccount does not exist, the reconciler should return an error. However, err is nil.")
@@ -992,7 +993,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(cluster)
+	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, cluster)
 	assert.Nil(t, err)
 }
 
