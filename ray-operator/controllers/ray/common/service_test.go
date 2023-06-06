@@ -425,17 +425,8 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
 	}
 
-	actualName := svc.Name
 	expectedName := fmt.Sprintf("%s-%s-%s", serviceInstance.Name, "serve", "svc")
-	if !reflect.DeepEqual(expectedName, actualName) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedName, actualName)
-	}
-
-	actualNamespace := svc.Namespace
-	expectedNamespace := serviceInstance.Namespace
-	if !reflect.DeepEqual(expectedNamespace, actualNamespace) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedNamespace, actualNamespace)
-	}
+	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
 
 func TestUserSpecifiedServeService(t *testing.T) {
@@ -493,9 +484,13 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	// ports should only have DefaultServePort
 	ports := svc.Spec.Ports
 	expectedPortName := DefaultServingPortName
+	expectedPortNumber := int32(8000)
 	for _, port := range ports {
 		if port.Name != DefaultServingPortName {
 			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
+		}
+		if port.Port != expectedPortNumber {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortNumber, port.Port)
 		}
 	}
 
