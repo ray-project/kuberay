@@ -191,7 +191,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	// Test 1: Only LastUpdateTime and HealthLastUpdateTime are updated.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
-	for appName, application := range newStatus.Applications{
+	for appName, application := range newStatus.Applications {
 		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 		application.LastUpdateTime = &metav1.Time{Time: timeNow.Add(2)}
 		newStatus.Applications[appName] = application
