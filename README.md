@@ -6,7 +6,7 @@
 KubeRay is a powerful, open-source Kubernetes operator that simplifies the deployment and management of [Ray](https://github.com/ray-project/ray) applications on Kubernetes. It offers several key components:
 
 **KubeRay core**: This is the official, fully-maintained component of KubeRay that provides three custom resource definitions, RayCluster, RayJob, and RayService. These resources are designed to help you run a wide range of workloads with ease.
-    
+
 * **RayCluster**: KubeRay fully manages the lifecycle of RayCluster, including cluster creation/deletion, autoscaling, and ensuring fault tolerance.
 
 * **RayJob**: With RayJob, KubeRay automatically creates a RayCluster and submits a job when the cluster is ready. You can also configure RayJob to automatically delete the RayCluster once the job finishes.
@@ -26,10 +26,15 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * [AWS Application Load Balancer](docs/guidance/ingress.md)
 * [Nginx](docs/guidance/ingress.md)
-* [Prometheus and Grafana](docs/guidance/prometheus-grafana.md) 
+* [Prometheus and Grafana](docs/guidance/prometheus-grafana.md)
 * [Volcano](docs/guidance/volcano-integration.md)
 * [MCAD](docs/guidance/kuberay-with-MCAD.md)
 * [Kubeflow](docs/guidance/kubeflow-integration.md)
+
+## Blogs
+
+* [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023).
+* [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023).
 
 ## Documentation
 
