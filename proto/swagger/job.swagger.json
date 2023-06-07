@@ -280,6 +280,10 @@
           },
           "title": "Optional. The volumes mount to head pod"
         },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by head pod\nNote that the service account has to be created prior to usage here"
+        },
         "environment": {
           "type": "object",
           "additionalProperties": {
@@ -473,6 +477,10 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by head pod\nNote that the service account has to be created prior to usage here"
         },
         "environment": {
           "type": "object",

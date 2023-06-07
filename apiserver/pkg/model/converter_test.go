@@ -48,6 +48,7 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 			Namespace: "max",
 		},
 		Spec: v1.PodSpec{
+			ServiceAccountName: "account",
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -144,6 +145,7 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 			Namespace: "max",
 		},
 		Spec: v1.PodSpec{
+			ServiceAccountName: "account",
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -209,6 +211,9 @@ var expectedTolerations = api.PodToleration{
 func TestPopulateHeadNodeSpec(t *testing.T) {
 	groupSpec := PopulateHeadNodeSpec(headSpecTest)
 
+	if groupSpec.ServiceAccount != "account" {
+		t.Errorf("failed to convert service account")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -223,6 +228,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 func TestPopulateWorkerNodeSpec(t *testing.T) {
 	groupSpec := PopulateWorkerNodeSpec([]v1alpha1.WorkerGroupSpec{workerSpecTest})[0]
 
+	if groupSpec.ServiceAccount != "account" {
+		t.Errorf("failed to convert service account")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
