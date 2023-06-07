@@ -228,6 +228,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}
 
+	// return result
 	return workerNodeSpecs
 }
 
