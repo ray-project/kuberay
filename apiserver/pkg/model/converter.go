@@ -177,6 +177,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
 	}
 
+	// return result
 	return headNodeSpec
 }
 

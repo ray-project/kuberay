@@ -213,7 +213,7 @@ message HeadGroupSpec {
   repeated Volume volumes = 5;
   // Optional. ServiceAccount used by head pod
   // Note that the service account has to be created prior to usage here
-  string serviceAccount = 6;  
+  string service_account = 6;  
   // Optional. Environment variables for head pod
   map<string, string> environment = 7;
   // Optional. Annotations for the head pod
@@ -241,7 +241,7 @@ message WorkerGroupSpec {
   repeated Volume volumes = 8;
   // Optional. ServiceAccount used by head pod
   // Note that the service account has to be created prior to usage here
-  string serviceAccount = 9;  
+  string service_account = 9;  
   // Optional. Environment variables for worker pod
   map<string, string> environment = 10;
   // Optional. Annotations for the worker pod
