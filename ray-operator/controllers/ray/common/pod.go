@@ -210,7 +210,22 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 			ImagePullPolicy: podTemplate.Spec.Containers[rayContainerIndex].ImagePullPolicy,
 			Command:         []string{"/bin/bash", "-lc", "--"},
 			Args: []string{
-				fmt.Sprintf("until ray health-check --address %s:%s > /dev/null 2>&1; do echo wait for GCS to be ready; sleep 5; done", fqdnRayIP, headPort),
+				fmt.Sprintf(`
+					SECONDS=0
+					while true; do
+						if (( SECONDS <= 60 )); then
+							if ray health-check --address %s:%s > /dev/null 2>&1; then
+								break
+							fi
+						else
+							if ray health-check --address %s:%s; then
+								break
+							fi
+						fi
+						echo "$SECONDS seconds elapsed: Waiting for GCS to be ready."
+						sleep 5
+					done
+				`, fqdnRayIP, headPort, fqdnRayIP, headPort),
 			},
 			SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
 			// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
