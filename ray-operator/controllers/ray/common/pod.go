@@ -213,12 +213,14 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 				fmt.Sprintf(`
 					SECONDS=0
 					while true; do
-						if (( SECONDS <= 60 )); then
+						if (( SECONDS <= 120 )); then
 							if ray health-check --address %s:%s > /dev/null 2>&1; then
+								echo "GCS is ready."
 								break
 							fi
 						else
 							if ray health-check --address %s:%s; then
+								echo "GCS is ready. Any error messages above can be safely ignored."
 								break
 							fi
 						fi
