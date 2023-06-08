@@ -13,11 +13,11 @@ Welcome to the Frequently Asked Questions page for Kuberay. This document addres
 
 ### How can I disable the default worker init container injection?
 
-The default worker init container is described [here](https://github.com/ray-project/kuberay/blob/2de3fe5ca3cf206c4ebb9912e128295e5cc5db45/ray-operator/controllers/ray/common/pod.go#L207). To disable this injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the Kuberay operator to `false`. For Helm chart users, this adjustment can be made [here](https://github.com/ray-project/kuberay/blob/2de3fe5ca3cf206c4ebb9912e128295e5cc5db45/helm-chart/kuberay-operator/values.yaml#L74). After disabling, remember to add your own init container to the worker pod template. More details are provided in [PR 1069](https://github.com/ray-project/kuberay/pull/1069).
+The default worker init container is described [here](https://github.com/ray-project/kuberay/blob/2de3fe5ca3cf206c4ebb9912e128295e5cc5db45/ray-operator/controllers/ray/common/pod.go#L207). To disable this injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the Kuberay operator to `false`(nightly version only). For Helm chart users, this adjustment can be made [here](https://github.com/ray-project/kuberay/blob/2de3fe5ca3cf206c4ebb9912e128295e5cc5db45/helm-chart/kuberay-operator/values.yaml#L74). After disabling, remember to add your own init container to the worker pod template. More details are provided in [PR 1069](https://github.com/ray-project/kuberay/pull/1069).
 
 ### How to troubleshoot the worker init container failure?
 
-Please note that the worker init container will not output any logs. To troubleshoot, follow these steps:
+Please note that the worker init container will not output any logs for version 0.5.0. To troubleshoot, follow these steps:
 - Check the head pod logs for any errors about GCS server.
 - Verify that Ray is in the `$PATH`.
 - The worker init container shares the same ImagePullPolicy, SecurityContext, Env, VolumeMounts, and Resources as the worker pod template. Check these settings, as any that require a sidecar container could lead to deadlock. See [issue 1130](https://github.com/ray-project/kuberay/issues/1130) for more details.
