@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,6 +53,8 @@ type RayServiceSpec struct {
 	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
+	ServeService *v1.Service `json:"serveService,omitempty"`
 }
 
 type ServeDeploymentGraphSpec struct {
@@ -142,9 +145,9 @@ type ServeDeploymentStatus struct {
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`

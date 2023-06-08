@@ -21,7 +21,21 @@ var (
 	headServiceAnnotationValue1 = "HeadServiceAnnotationValue1"
 	headServiceAnnotationKey2   = "HeadServiceAnnotationKey2"
 	headServiceAnnotationValue2 = "HeadServiceAnnotationValue2"
-	instanceWithWrongSvc        = &rayv1alpha1.RayCluster{
+	serviceInstance             = &rayv1alpha1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rayservice-sample",
+			Namespace: "default",
+		},
+		Spec: rayv1alpha1.RayServiceSpec{
+			RayClusterSpec: rayv1alpha1.RayClusterSpec{
+				RayVersion: "1.0",
+				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+					ServiceType: corev1.ServiceTypeClusterIP,
+				},
+			},
+		},
+	}
+	instanceWithWrongSvc = &rayv1alpha1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
@@ -60,6 +74,10 @@ var (
 									},
 									{
 										ContainerPort: 8265,
+									},
+									{
+										ContainerPort: 8000,
+										Name:          "serve",
 									},
 								},
 								Command: []string{"python"},
@@ -249,13 +267,6 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
-	// The user-provided namespace should be ignored, but the name should be respected
-	if headService.ObjectMeta.Namespace != testRayClusterWithHeadService.ObjectMeta.Namespace {
-		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", testRayClusterWithHeadService.ObjectMeta.Namespace, headService.ObjectMeta.Namespace)
-	}
-	if headService.ObjectMeta.Name != userName {
-		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, headService.ObjectMeta.Name)
-	}
 
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
@@ -318,11 +329,6 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 			t.Errorf("Final labels should contain key=%s", k)
 		}
 	}
-	for k := range userLabels {
-		if _, ok := headService.ObjectMeta.Labels[k]; !ok {
-			t.Errorf("Final labels should contain key=%s", k)
-		}
-	}
 
 	// Test merged annotations. In the case of overlap (HeadServiceAnnotationKey1) the user annotation should be ignored.
 	for k, v := range userAnnotations {
@@ -360,18 +366,9 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		}
 	}
 
-	// Test name and namespace are generated if not specified
-	if headService.ObjectMeta.Name == "" {
-		t.Errorf("Generated head service name is empty")
-	}
-	if headService.ObjectMeta.Namespace == "" {
-		t.Errorf("Generated head service namespace is empty")
-	}
-
-	// Test that the user service type takes priority over the default service type (ClusterIP)
-	if headService.Spec.Type != userType {
-		t.Errorf("Generated head service type is not %s", userType)
-	}
+	validateServiceTypeForUserSpecifiedService(headService, userType, t)
+	validateLabelsForUserSpecifiedService(headService, userLabels, t)
+	validateNameAndNamespaceForUserSpecifiedService(headService, testRayClusterWithHeadService.ObjectMeta.Namespace, userName, t)
 }
 
 func TestNilMapDoesntErrorInUserSpecifiedHeadService(t *testing.T) {
@@ -403,5 +400,133 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	for i := 0; i < len(ports1); i++ {
 		// name should be same
 		assert.Equal(t, ports1[i].Name, ports2[i].Name)
+	}
+}
+
+func TestBuildServeServiceForRayService(t *testing.T) {
+	svc, err := BuildServeServiceForRayService(*serviceInstance, *instanceWithWrongSvc)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	expectedResult := string(instanceWithWrongSvc.Name)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLabel := svc.Labels[RayServiceLabelKey]
+	expectedLabel := string(serviceInstance.Name)
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualType := svc.Spec.Type
+	expectedType := corev1.ServiceTypeClusterIP
+	if !reflect.DeepEqual(expectedType, actualType) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
+	}
+
+	expectedName := fmt.Sprintf("%s-%s-%s", serviceInstance.Name, "serve", "svc")
+	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
+}
+
+func TestUserSpecifiedServeService(t *testing.T) {
+	// Use any RayService instance as a base for the test.
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	userName := "user-custom-name"
+	userNamespace := "user-custom-namespace"
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", "userAnnotationKey2": "userAnnotationValue2"}
+	userPort := corev1.ServicePort{Name: "serve", Port: 12345}
+	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
+	userPorts := []corev1.ServicePort{userPort, userPortOverride}
+	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
+	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
+	userType := corev1.ServiceTypeLoadBalancer
+
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        userName,
+			Namespace:   userNamespace,
+			Labels:      userLabels,
+			Annotations: userAnnotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports:    userPorts,
+			Selector: userSelector,
+			Type:     userType,
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(*testRayServiceWithServeService, *instanceWithWrongSvc)
+	if err != nil {
+		t.Errorf("failed to build serve service: %v", err)
+	}
+
+	// Check every annotation is in the service annotation
+	for k := range userAnnotations {
+		if _, ok := svc.ObjectMeta.Annotations[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
+	}
+
+	// Check that selectors only have default selectors
+	if len(svc.Spec.Selector) != 2 {
+		t.Errorf("Selectors should have just 2 keys %s and %s", RayClusterLabelKey, RayClusterServingServiceLabelKey)
+	}
+	if svc.Spec.Selector[RayClusterLabelKey] != instanceWithWrongSvc.Name {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterLabelKey, instanceWithWrongSvc.Name, svc.Spec.Selector[RayClusterLabelKey])
+	}
+	if svc.Spec.Selector[RayClusterServingServiceLabelKey] != EnableRayClusterServingServiceTrue {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterServingServiceLabelKey, EnableRayClusterServingServiceTrue, svc.Spec.Selector[RayClusterServingServiceLabelKey])
+	}
+
+	// ports should only have DefaultServePort
+	ports := svc.Spec.Ports
+	expectedPortName := DefaultServingPortName
+	expectedPortNumber := int32(8000)
+	for _, port := range ports {
+		if port.Name != DefaultServingPortName {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
+		}
+		if port.Port != expectedPortNumber {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortNumber, port.Port)
+		}
+	}
+
+	validateServiceTypeForUserSpecifiedService(svc, userType, t)
+	validateLabelsForUserSpecifiedService(svc, userLabels, t)
+	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
+}
+
+func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {
+	// Test that the user service type takes priority over the default service type (example: ClusterIP)
+	if svc.Spec.Type != userType {
+		t.Errorf("Generated service type is not %s", userType)
+	}
+}
+
+func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, default_namespace string, userName string, t *testing.T) {
+	// Test name and namespace are generated if not specified
+	if svc.ObjectMeta.Name == "" {
+		t.Errorf("Generated service name is empty")
+	}
+	if svc.ObjectMeta.Namespace == "" {
+		t.Errorf("Generated service namespace is empty")
+	}
+	// The user-provided namespace should be ignored, but the name should be respected
+	if svc.ObjectMeta.Namespace != default_namespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", default_namespace, svc.ObjectMeta.Namespace)
+	}
+	if svc.ObjectMeta.Name != userName {
+		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)
+	}
+}
+
+func validateLabelsForUserSpecifiedService(svc *corev1.Service, userLabels map[string]string, t *testing.T) {
+	for k := range userLabels {
+		if _, ok := svc.ObjectMeta.Labels[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
 	}
 }
