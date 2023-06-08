@@ -94,7 +94,7 @@ var myRayService = &RayService{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.4.0",
+								Image: "rayproject/ray:2.5.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -160,7 +160,7 @@ var myRayService = &RayService{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.4.0",
+									Image:   "rayproject/ray:2.5.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -260,7 +260,7 @@ var expected = `{
                   "containers":[
                      {
                         "name":"ray-head",
-                        "image":"rayproject/ray:2.4.0",
+                        "image":"rayproject/ray:2.5.0",
                         "ports":[
                            {
                               "name":"gcs-server",
@@ -327,7 +327,7 @@ var expected = `{
                      "containers":[
                         {
                            "name":"ray-worker",
-                           "image":"rayproject/ray:2.4.0",
+                           "image":"rayproject/ray:2.5.0",
                            "command":[
                               "echo"
                            ],

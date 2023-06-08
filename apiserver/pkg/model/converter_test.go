@@ -58,7 +58,7 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "ray-head",
-					Image: "blublinsky1/ray310:2.4.0",
+					Image: "blublinsky1/ray310:2.5.0",
 					Env: []v1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -154,7 +154,7 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "ray-worker",
-					Image: "blublinsky1/ray310:2.4.0",
+					Image: "blublinsky1/ray310:2.5.0",
 					Env: []v1.EnvVar{
 						{
 							Name:  "AWS_KEY",

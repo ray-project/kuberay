@@ -42,7 +42,7 @@ spec:
         rayActorOptions:
           numCpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.4.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
     enableInTreeAutoscaling: true
     autoscalerOptions:
@@ -68,7 +68,7 @@ spec:
           # serviceAccountName: my-sa
           containers:
             - name: ray-head
-              image: rayproject/ray:2.4.0
+              image: rayproject/ray:2.5.0
               resources:
                 limits:
                   cpu: 200m
@@ -101,7 +101,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.4.0
+                image: rayproject/ray:2.5.0
                 lifecycle:
                   preStop:
                     exec:

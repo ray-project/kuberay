@@ -42,7 +42,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.4.0'
+  rayVersion: '2.5.0'
   headGroupSpec:
     rayStartParams: {}
     replicas: 1
@@ -50,7 +50,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.4.0
+          image: rayproject/ray:2.5.0
           resources:
             limits:
               cpu: "1"
@@ -104,7 +104,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.4.0'
+  rayVersion: '2.5.0'
   headGroupSpec:
     rayStartParams: {}
     replicas: 1
@@ -112,7 +112,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.4.0
+          image: rayproject/ray:2.5.0
           resources:
             limits:
               cpu: "1"
@@ -130,7 +130,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.4.0
+            image: rayproject/ray:2.5.0
             resources:
               limits:
                 cpu: "1"
@@ -215,7 +215,7 @@ metadata:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.4.0'
+  rayVersion: '2.5.0'
   headGroupSpec:
     rayStartParams: {}
     replicas: 1
@@ -223,7 +223,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.4.0
+          image: rayproject/ray:2.5.0
           resources:
             limits:
               cpu: "1"
@@ -241,7 +241,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.4.0
+            image: rayproject/ray:2.5.0
             resources:
               limits:
                 cpu: "1"
