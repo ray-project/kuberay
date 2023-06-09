@@ -229,7 +229,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 
 		if len(spec.Template.Spec.ImagePullSecrets) > 0 {
 			workerNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
-		}	
+		}
 
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}

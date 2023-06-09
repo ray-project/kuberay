@@ -238,7 +238,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		podTemplateSpec.Spec.ServiceAccountName = spec.ServiceAccount
 	}
 
-	// If image pull secret is specified, add it to the pod spec.	
+	// If image pull secret is specified, add it to the pod spec.
 	if len(spec.ImagePullSecret) > 1 {
 		podTemplateSpec.Spec.ImagePullSecrets = []v1.LocalObjectReference{
 			{
@@ -246,7 +246,6 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 			},
 		}
 	}
-
 
 	return podTemplateSpec
 }

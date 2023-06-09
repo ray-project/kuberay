@@ -45,7 +45,7 @@ var headGroup = api.HeadGroupSpec{
 		"metrics-export-port": "8080",
 		"num-cpus":            "0",
 	},
-	ServiceAccount: "account",
+	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
@@ -68,7 +68,7 @@ var workerGroup = api.WorkerGroupSpec{
 	RayStartParams: map[string]string{
 		"node-ip-address": "$MY_POD_IP",
 	},
-	ServiceAccount: "account",
+	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
