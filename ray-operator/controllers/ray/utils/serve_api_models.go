@@ -55,6 +55,15 @@ type ServeDetails struct {
 	DeployMode   string                             `json:"deploy_mode,omitempty"`
 }
 
+// ServingClusterDeployments defines the request sent to the dashboard api server.
+// See https://docs.ray.io/en/master/_modules/ray/serve/schema.html#ServeApplicationSchema for more details.
+type ServingClusterDeployments struct {
+	ImportPath  string                 `json:"import_path"`
+	RuntimeEnv  map[string]interface{} `json:"runtime_env,omitempty"`
+	Deployments []ServeConfigSpec      `json:"deployments,omitempty"`
+	Port        int                    `json:"port,omitempty"`
+}
+
 // ServeConfigSpec defines the (single-application) desired state of RayService, used by Ray Dashboard.
 // Serve schema details: https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html
 type ServeConfigSpec struct {

@@ -12145,7 +12145,7 @@ spec:
                 - importPath
                 type: object
               serveConfigV2:
-                type: object
+                type: string
               serveService:
                 description: ServeService is the Kubernetes service for head node
                   and worker nodes who have healthy http proxy to

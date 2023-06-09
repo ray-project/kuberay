@@ -50,15 +50,13 @@ var DeploymentStatusEnum = struct {
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	ServeConfigV2                      ServeConfigV2            `json:"serveConfigV2,omitempty"`
+	ServeConfigV2                      string                   `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }
-
-type ServeConfigV2 struct{}
 
 type ServeDeploymentGraphSpec struct {
 	ImportPath       string            `json:"importPath"`

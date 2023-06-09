@@ -30,7 +30,7 @@ func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, erro
 	panic("Fake GetDeployments not implemented")
 }
 
-func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, specs rayv1alpha1.ServeDeploymentGraphSpec) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
 }
@@ -47,10 +47,13 @@ func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetai
 	return &r.serveDetails, nil
 }
 
-func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
-	serveConfigToSend := make([]ServeConfigSpec, len(specs))
+func (r *FakeRayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
+	runtimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &runtimeEnv)
 
-	for i, config := range specs {
+	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
+
+	for i, config := range configV1Spec.ServeConfigSpecs {
 		userConfig := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfig)
 
@@ -63,7 +66,7 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 		resources := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resources)
 
-		serveConfigToSend[i] = ServeConfigSpec{
+		convertedDeploymentSpecs[i] = ServeConfigSpec{
 			Name:                      config.Name,
 			NumReplicas:               config.NumReplicas,
 			RoutePrefix:               config.RoutePrefix,
@@ -86,7 +89,14 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 		}
 	}
 
-	return serveConfigToSend
+	servingClusterDeployments := ServingClusterDeployments{
+		ImportPath:  configV1Spec.ImportPath,
+		RuntimeEnv:  runtimeEnv,
+		Deployments: convertedDeploymentSpecs,
+		Port:        configV1Spec.Port,
+	}
+
+	return servingClusterDeployments
 }
 
 func (r *FakeRayDashboardClient) SetSingleApplicationStatus(status ServeApplicationStatus) {
