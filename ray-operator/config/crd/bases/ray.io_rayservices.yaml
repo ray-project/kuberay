@@ -12068,7 +12068,6 @@ spec:
                       - maxReplicas
                       - minReplicas
                       - rayStartParams
-                      - replicas
                       - template
                       type: object
                     type: array

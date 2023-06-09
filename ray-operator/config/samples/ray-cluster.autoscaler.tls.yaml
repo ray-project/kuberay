@@ -145,8 +145,7 @@ spec:
                 path: gencert_head.sh
   workerGroupSpecs:
   # the pod replicas in this group typed worker
-  - replicas: 1
-    minReplicas: 1
+  - minReplicas: 1
     maxReplicas: 10
     groupName: small-group
     # The `rayStartParams` are used to configure the `ray start` command.

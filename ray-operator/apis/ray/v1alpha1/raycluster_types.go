@@ -47,7 +47,7 @@ type WorkerGroupSpec struct {
 	GroupName string `json:"groupName"`
 	// Replicas Number of desired pods in this pod group. This is a pointer to distinguish between explicit
 	// zero and not specified. Defaults to 1.
-	Replicas *int32 `json:"replicas"`
+	Replicas *int32 `json:"replicas,omitempty"`
 	// MinReplicas defaults to 1
 	MinReplicas *int32 `json:"minReplicas"`
 	// MaxReplicas defaults to maxInt32

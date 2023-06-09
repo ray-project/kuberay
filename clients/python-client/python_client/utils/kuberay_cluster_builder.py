@@ -125,7 +125,7 @@ class ClusterBuilder(IClusterBuilder):
         memory_requests: str = "1G",
         cpu_limits: str = "2",
         memory_limits: str = "2G",
-        replicas: int = 1,
+        replicas: int = 0,
         min_replicas: int = -1,
         max_replicas: int = -1,
         ray_start_params: dict = {},
@@ -143,7 +143,7 @@ class ClusterBuilder(IClusterBuilder):
         - memory_requests (str, optional): Memory requests for the worker pods. Default is "1G".
         - cpu_limits (str, optional): CPU limits for the worker pods. Default is "2".
         - memory_limits (str, optional): Memory limits for the worker pods. Default is "2G".
-        - replicas (int, optional): Number of worker pods to run. Default is 1.
+        - replicas (int, optional): Number of worker pods to run. Default is 0.
         - min_replicas (int, optional): Minimum number of worker pods to run. Default is -1.
         - max_replicas (int, optional): Maximum number of worker pods to run. Default is -1.
         - ray_start_params (dict, optional): Additional parameters to pass to the ray start command. Default is {}.
