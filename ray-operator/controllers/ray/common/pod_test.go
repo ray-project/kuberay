@@ -359,6 +359,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "127.0.0.1:6379")
 	checkContainerEnv(t, rayContainer, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -410,6 +411,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
 	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
