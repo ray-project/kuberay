@@ -46,6 +46,7 @@ var headGroup = api.HeadGroupSpec{
 		"num-cpus":            "0",
 	},
 	ServiceAccount: "account",
+	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -68,6 +69,7 @@ var workerGroup = api.WorkerGroupSpec{
 		"node-ip-address": "$MY_POD_IP",
 	},
 	ServiceAccount: "account",
+	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -216,6 +218,9 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")
 	}
+	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
+		t.Errorf("failed to propagate image pull secret")
+	}
 	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
 		t.Errorf("failed to propagate environment")
 	}
@@ -239,6 +244,9 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")
+	}
+	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
+		t.Errorf("failed to propagate image pull secret")
 	}
 	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
 		t.Errorf("failed to propagate environment")

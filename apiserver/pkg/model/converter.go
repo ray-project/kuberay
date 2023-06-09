@@ -177,6 +177,10 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
 	}
 
+	if len(spec.Template.Spec.ImagePullSecrets) > 0 {
+		headNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
+	}
+
 	return headNodeSpec
 }
 
@@ -222,6 +226,10 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 		if len(spec.Template.Spec.ServiceAccountName) > 1 {
 			workerNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
 		}
+
+		if len(spec.Template.Spec.ImagePullSecrets) > 0 {
+			workerNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
+		}	
 
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}

@@ -49,6 +49,9 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 		},
 		Spec: v1.PodSpec{
 			ServiceAccountName: "account",
+			ImagePullSecrets: []v1.LocalObjectReference{
+				{Name: "foo"},
+			},
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -146,6 +149,9 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 		},
 		Spec: v1.PodSpec{
 			ServiceAccountName: "account",
+			ImagePullSecrets: []v1.LocalObjectReference{
+				{Name: "foo"},
+			},
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -214,6 +220,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	if groupSpec.ServiceAccount != "account" {
 		t.Errorf("failed to convert service account")
 	}
+	if groupSpec.ImagePullSecret != "foo" {
+		t.Errorf("failed to convert image pull secret")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -230,6 +239,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 
 	if groupSpec.ServiceAccount != "account" {
 		t.Errorf("failed to convert service account")
+	}
+	if groupSpec.ImagePullSecret != "foo" {
+		t.Errorf("failed to convert image pull secret")
 	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
