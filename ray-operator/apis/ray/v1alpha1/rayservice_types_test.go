@@ -235,6 +235,7 @@ var expected = `{
             }
          ]
       },
+      "serveConfigV2": {},
       "rayClusterConfig":{
          "headGroupSpec":{
             "replicas":1,
@@ -361,9 +362,6 @@ var expected = `{
    },
    "status":{
       "activeServiceStatus":{
-         "appStatus":{
-
-         },
          "dashboardStatus":{
 
          },
@@ -372,9 +370,6 @@ var expected = `{
          }
       },
       "pendingServiceStatus":{
-         "appStatus":{
-
-         },
          "dashboardStatus":{
 
          },

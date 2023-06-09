@@ -85,19 +85,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: rayv1alpha1.AppStatus{
-				Status:               "running",
-				Message:              "OK",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "unhealthy",
-					Message:              "error",
+			Applications: map[string]rayv1alpha1.AppStatus{
+				common.DefaultServeAppName: {
+					Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+					Message:              "OK",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               rayv1alpha1.DeploymentStatusEnum.UNHEALTHY,
+							Message:              "error",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -108,19 +109,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: rayv1alpha1.AppStatus{
-				Status:               "stopped",
-				Message:              "stopped",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "healthy",
-					Message:              "Serve is healthy",
+			Applications: map[string]rayv1alpha1.AppStatus{
+				common.DefaultServeAppName: {
+					Status:               rayv1alpha1.ApplicationStatusEnum.NOT_STARTED,
+					Message:              "application not started yet",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+							Message:              "Serve is healthy",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -150,19 +152,34 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
-		ApplicationStatus: rayv1alpha1.AppStatus{
-			Status:               "running",
-			Message:              "Application is running",
-			LastUpdateTime:       &timeNow,
-			HealthLastUpdateTime: &timeNow,
-		},
-		ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-			{
-				Name:                 "serve-1",
-				Status:               "healthy",
-				Message:              "Serve is healthy",
+		Applications: map[string]rayv1alpha1.AppStatus{
+			"app1": {
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
+				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
+			},
+			"app2": {
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+				Message:              "Application is running",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
 			},
 		},
 	}
@@ -174,6 +191,11 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	// Test 1: Only LastUpdateTime and HealthLastUpdateTime are updated.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+	for appName, application := range newStatus.Applications {
+		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+		application.LastUpdateTime = &metav1.Time{Time: timeNow.Add(2)}
+		newStatus.Applications[appName] = application
+	}
 	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 
 	// Test 2: Not only LastUpdateTime and HealthLastUpdateTime are updated.

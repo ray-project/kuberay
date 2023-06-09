@@ -1,6 +1,9 @@
 package common
 
 const (
+
+	// Default application name
+	DefaultServeAppName = "default"
 	// Belows used as label key
 	RayServiceLabelKey                 = "ray.io/service"
 	RayClusterLabelKey                 = "ray.io/cluster"

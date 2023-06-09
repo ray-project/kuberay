@@ -50,12 +50,15 @@ var DeploymentStatusEnum = struct {
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
+	ServeConfigV2                      ServeConfigV2            `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }
+
+type ServeConfigV2 struct{}
 
 type ServeDeploymentGraphSpec struct {
 	ImportPath       string            `json:"importPath"`
@@ -107,11 +110,10 @@ type RayServiceStatuses struct {
 
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
-	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
-	RayClusterName    string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	Applications     map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	DashboardStatus  DashboardStatus      `json:"dashboardStatus,omitempty"`
+	RayClusterName   string               `json:"rayClusterName,omitempty"`
+	RayClusterStatus RayClusterStatus     `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
@@ -129,13 +131,13 @@ type AppStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time                     `json:"healthLastUpdateTime,omitempty"`
+	Deployments          map[string]ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
-	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
 	Status         string       `json:"status,omitempty"`
 	Message        string       `json:"message,omitempty"`
