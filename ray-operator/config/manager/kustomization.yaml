@@ -7,3 +7,7 @@ kind: Kustomization
 commonLabels:
   app.kubernetes.io/component: kuberay-operator
   app.kubernetes.io/name: kuberay
+images:
+- name: kuberay/operator
+  newName: controller
+  newTag: latest

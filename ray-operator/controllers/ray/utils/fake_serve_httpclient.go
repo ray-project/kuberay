@@ -30,7 +30,7 @@ func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, erro
 	panic("Fake GetDeployments not implemented")
 }
 
-func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, specs rayv1alpha1.ServeDeploymentGraphSpec) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
 }
@@ -47,10 +47,13 @@ func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetai
 	return &r.serveDetails, nil
 }
 
-func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
-	serveConfigToSend := make([]ServeConfigSpec, len(specs))
+func (r *FakeRayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
+	runtimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &runtimeEnv)
 
-	for i, config := range specs {
+	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
+
+	for i, config := range configV1Spec.ServeConfigSpecs {
 		userConfig := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfig)
 
@@ -63,7 +66,7 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 		resources := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resources)
 
-		serveConfigToSend[i] = ServeConfigSpec{
+		convertedDeploymentSpecs[i] = ServeConfigSpec{
 			Name:                      config.Name,
 			NumReplicas:               config.NumReplicas,
 			RoutePrefix:               config.RoutePrefix,
@@ -86,7 +89,72 @@ func (r *FakeRayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeCon
 		}
 	}
 
-	return serveConfigToSend
+	servingClusterDeployments := ServingClusterDeployments{
+		ImportPath:  configV1Spec.ImportPath,
+		RuntimeEnv:  runtimeEnv,
+		Deployments: convertedDeploymentSpecs,
+		Port:        configV1Spec.Port,
+	}
+
+	return servingClusterDeployments
+}
+
+func (r *FakeRayDashboardClient) ConvertServeConfigV2(configV2Spec rayv1alpha1.ServeConfigV2Spec) ServeConfigV2SpecConverted {
+	applicationsConverted := make([]ServeApplicationV2SpecConverted, len(configV2Spec.ApplicationSpecs))
+
+	for i, applicationSpec := range configV2Spec.ApplicationSpecs {
+		applicationRuntimeEnvConverted := make(map[string]interface{})
+		_ = yaml.Unmarshal([]byte(applicationSpec.RuntimeEnv), &applicationRuntimeEnvConverted)
+
+		convertedDeploymentSpecs := make([]ServeDeploymentV2SpecConverted, len(applicationSpec.DeploymentSpecs))
+		for j, config := range applicationSpec.DeploymentSpecs {
+			userConfigConverted := make(map[string]interface{})
+			_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfigConverted)
+
+			runtimeEnvConverted := make(map[string]interface{})
+			_ = yaml.Unmarshal([]byte(config.RayActorOptions.RuntimeEnv), &runtimeEnvConverted)
+
+			resourcesConverted := make(map[string]interface{})
+			_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resourcesConverted)
+
+			convertedDeploymentSpecs[j] = ServeDeploymentV2SpecConverted{
+				Name:                      config.Name,
+				NumReplicas:               config.NumReplicas,
+				RoutePrefix:               config.RoutePrefix,
+				MaxConcurrentQueries:      config.MaxConcurrentQueries,
+				UserConfig:                userConfigConverted,
+				AutoscalingConfig:         &config.AutoscalingConfig,
+				GracefulShutdownWaitLoopS: config.GracefulShutdownWaitLoopS,
+				GracefulShutdownTimeoutS:  config.GracefulShutdownTimeoutS,
+				HealthCheckPeriodS:        config.HealthCheckPeriodS,
+				HealthCheckTimeoutS:       config.GracefulShutdownTimeoutS,
+				RayActorOptions: &RayActorOptionV2SpecConverted{
+					RuntimeEnv:        runtimeEnvConverted,
+					NumCpus:           config.RayActorOptions.NumCpus,
+					NumGpus:           config.RayActorOptions.NumGpus,
+					Memory:            config.RayActorOptions.Memory,
+					ObjectStoreMemory: config.RayActorOptions.ObjectStoreMemory,
+					Resources:         resourcesConverted,
+					AcceleratorType:   config.RayActorOptions.AcceleratorType,
+				},
+			}
+		}
+
+		applicationsConverted[i] = ServeApplicationV2SpecConverted{
+			Name:            applicationSpec.Name,
+			RoutePrefix:     applicationSpec.RoutePrefix,
+			ImportPath:      applicationSpec.ImportPath,
+			RuntimeEnv:      applicationRuntimeEnvConverted,
+			DeploymentSpecs: convertedDeploymentSpecs,
+		}
+	}
+
+	return ServeConfigV2SpecConverted{
+		ApplicationSpecs: applicationsConverted,
+		HTTPOptions: ServeHTTPOptionsV2SpecConverted{
+			Port: configV2Spec.HTTPOptions.Port,
+		},
+	}
 }
 
 func (r *FakeRayDashboardClient) SetSingleApplicationStatus(status ServeApplicationStatus) {

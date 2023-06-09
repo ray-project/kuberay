@@ -50,15 +50,13 @@ var DeploymentStatusEnum = struct {
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	ServeConfigV2                      ServeConfigV2            `json:"serveConfigV2,omitempty"`
+	ServeConfigV2                      ServeConfigV2Spec        `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }
-
-type ServeConfigV2 struct{}
 
 type ServeDeploymentGraphSpec struct {
 	ImportPath       string            `json:"importPath"`
@@ -92,6 +90,62 @@ type RayActorOptionSpec struct {
 	ObjectStoreMemory *int32   `json:"objectStoreMemory,omitempty"`
 	Resources         string   `json:"resources,omitempty"`
 	AcceleratorType   string   `json:"acceleratorType,omitempty"`
+}
+
+// V2 Specs
+
+type ServeConfigV2Spec struct {
+	ApplicationSpecs []ServeApplicationV2Spec `json:"applications,omitempty"`
+	HTTPOptions      ServeHTTPOptionsV2Spec   `json:"http_options,omitempty"`
+}
+
+type ServeHTTPOptionsV2Spec struct {
+	Port int `json:"port,omitempty"`
+}
+
+type ServeApplicationV2Spec struct {
+	Name            string                  `json:"name,omitempty"`
+	RoutePrefix     string                  `json:"route_prefix,omitempty"`
+	ImportPath      string                  `json:"import_path"`
+	RuntimeEnv      string                  `json:"runtime_env,omitempty"`
+	DeploymentSpecs []ServeDeploymentV2Spec `json:"deployments,omitempty"`
+}
+
+type ServeDeploymentV2Spec struct {
+	Name                      string                  `json:"name"`
+	NumReplicas               *int32                  `json:"num_replicas,omitempty"`
+	RoutePrefix               string                  `json:"route_prefix,omitempty"`
+	MaxConcurrentQueries      *int32                  `json:"max_concurrent_queries,omitempty"`
+	UserConfig                string                  `json:"user_config,omitempty"`
+	AutoscalingConfig         AutoscalingConfigV2Spec `json:"autoscaling_config,omitempty"`
+	GracefulShutdownWaitLoopS *int32                  `json:"graceful_shutdown_wait_loop_s,omitempty"`
+	GracefulShutdownTimeoutS  *int32                  `json:"graceful_shutdown_timeout_s,omitempty"`
+	HealthCheckPeriodS        *int32                  `json:"health_check_period_s,omitempty"`
+	HealthCheckTimeoutS       *int32                  `json:"health_check_timeout_s,omitempty"`
+	RayActorOptions           RayActorOptionV2Spec    `json:"ray_actor_options,omitempty"`
+}
+
+// RayActorOptionSpec defines the desired state of RayActor
+type RayActorOptionV2Spec struct {
+	RuntimeEnv        string   `json:"runtime_env,omitempty"`
+	NumCpus           *float64 `json:"num_cpus,omitempty"`
+	NumGpus           *float64 `json:"num_gpus,omitempty"`
+	Memory            *int32   `json:"memory,omitempty"`
+	ObjectStoreMemory *int32   `json:"object_store_memory,omitempty"`
+	Resources         string   `json:"resources,omitempty"`
+	AcceleratorType   string   `json:"accelerator_type,omitempty"`
+}
+
+type AutoscalingConfigV2Spec struct {
+	MinReplicas                        string   `json:"min_replicas,omitempty"`
+	InitialReplicas                    *float64 `json:"initial_replicas,omitempty"`
+	MaxReplicas                        *float64 `json:"max_replicas,omitempty"`
+	TargetNumOngoingRequestsPerReplica *int32   `json:"target_num_ongoing_requests_per_replica,omitempty"`
+	MetricsIntervalS                   *int32   `json:"metrics_interval_s,omitempty"`
+	LookBackPeriodS                    string   `json:"look_back_period_s,omitempty"`
+	SmoothingFactor                    string   `json:"smoothing_factor,omitempty"`
+	DownscaleDelayS                    string   `json:"downscale_delay_s,omitempty"`
+	UpscaleDelayS                      string   `json:"upscale_delay_s,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService

@@ -12145,6 +12145,102 @@ spec:
                 - importPath
                 type: object
               serveConfigV2:
+                properties:
+                  applications:
+                    items:
+                      properties:
+                        deployments:
+                          items:
+                            properties:
+                              autoscaling_config:
+                                properties:
+                                  downscale_delay_s:
+                                    type: string
+                                  initial_replicas:
+                                    type: number
+                                  look_back_period_s:
+                                    type: string
+                                  max_replicas:
+                                    type: number
+                                  metrics_interval_s:
+                                    format: int32
+                                    type: integer
+                                  min_replicas:
+                                    type: string
+                                  smoothing_factor:
+                                    type: string
+                                  target_num_ongoing_requests_per_replica:
+                                    format: int32
+                                    type: integer
+                                  upscale_delay_s:
+                                    type: string
+                                type: object
+                              graceful_shutdown_timeout_s:
+                                format: int32
+                                type: integer
+                              graceful_shutdown_wait_loop_s:
+                                format: int32
+                                type: integer
+                              health_check_period_s:
+                                format: int32
+                                type: integer
+                              health_check_timeout_s:
+                                format: int32
+                                type: integer
+                              max_concurrent_queries:
+                                format: int32
+                                type: integer
+                              name:
+                                type: string
+                              num_replicas:
+                                format: int32
+                                type: integer
+                              ray_actor_options:
+                                description: RayActorOptionSpec defines the desired
+                                  state of RayActor
+                                properties:
+                                  accelerator_type:
+                                    type: string
+                                  memory:
+                                    format: int32
+                                    type: integer
+                                  num_cpus:
+                                    type: number
+                                  num_gpus:
+                                    type: number
+                                  object_store_memory:
+                                    format: int32
+                                    type: integer
+                                  resources:
+                                    type: string
+                                  runtime_env:
+                                    type: string
+                                type: object
+                              route_prefix:
+                                type: string
+                              user_config:
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        import_path:
+                          type: string
+                        name:
+                          type: string
+                        route_prefix:
+                          type: string
+                        runtime_env:
+                          type: string
+                      required:
+                      - import_path
+                      type: object
+                    type: array
+                  http_options:
+                    properties:
+                      port:
+                        type: integer
+                    type: object
                 type: object
               serveService:
                 description: ServeService is the Kubernetes service for head node
