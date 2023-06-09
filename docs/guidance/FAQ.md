@@ -23,6 +23,7 @@ Worker pods might be stuck in `Init:0/1` status for several reasons. The default
 - The GCS server process failed in the head pod. Inspect the head pod logs for errors related to the GCS server.
 - Ray is not included in the `$PATH` in the worker init container. Ensure Ray is in the `$PATH`.
 - The worker init container shares the same ImagePullPolicy, SecurityContext, Env, VolumeMounts, and Resources as the worker pod template. Any setting requiring a sidecar container could lead to a deadlock. Refer to [issue 1130](https://github.com/ray-project/kuberay/issues/1130) for additional details.  
+
 If none of the above reasons apply, you can troubleshoot by disabling the default worker init container injection, adding your test init container to the worker pod template.
 
 ### How can I set the custom cluster domain if mine is not `cluster.local`?
