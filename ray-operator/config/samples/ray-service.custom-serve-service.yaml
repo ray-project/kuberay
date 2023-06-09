@@ -9,6 +9,19 @@ metadata:
 spec:
   serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
   deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
+  serveService:
+    metadata:
+      name: custom-ray-serve-service-name
+      labels:
+        custom-label: custom-ray-serve-service-label
+      annotations:
+        custom-annotation: custom-ray-serve-service-annotation
+    spec:
+      type: LoadBalancer
+      ports:
+      - port: 12345
+        targetPort: 12345
+        name: custom-ray-serve-service-port
   serveConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |
@@ -19,7 +32,7 @@ spec:
         userConfig: |
           price: 3
         rayActorOptions:
-          numCpus: 1
+          numCpus: 0.1
       - name: OrangeStand
         numReplicas: 1
         userConfig: |
@@ -43,38 +56,26 @@ spec:
           numCpus: 0.1
   rayClusterConfig:
     rayVersion: '2.4.0' # should match the Ray version in the image of the containers
-    ## raycluster autoscaling config
-    enableInTreeAutoscaling: true
-    autoscalerOptions:
-      upscalingMode: Default
-      resources:
-        limits:
-          cpu: "1"
-          memory: "1000Mi"
-        requests:
-          cpu: "1"
-          memory: "1000Mi"
     ######################headGroupSpecs#################################
+    # Ray head pod template.
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
       # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams: {"num-cpus": "0"}
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
       #pod template
       template:
         spec:
-          # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
-          # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
-          # serviceAccountName: my-sa
           containers:
             - name: ray-head
               image: rayproject/ray:2.4.0
               resources:
                 limits:
-                  cpu: 200m
+                  cpu: 2
                   memory: 2Gi
                 requests:
-                  cpu: 200m
+                  cpu: 2
                   memory: 2Gi
               ports:
                 - containerPort: 6379
@@ -111,5 +112,5 @@ spec:
                     cpu: "1"
                     memory: "2Gi"
                   requests:
-                    cpu: "1"
+                    cpu: "500m"
                     memory: "2Gi"

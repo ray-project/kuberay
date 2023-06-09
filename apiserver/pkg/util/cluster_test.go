@@ -28,6 +28,13 @@ var testFileVolume = &api.Volume{
 	ReadOnly:             true,
 }
 
+var testPVCVolume = &api.Volume{
+	Name:       "test-pvc",
+	VolumeType: api.Volume_PERSISTENT_VOLUME_CLAIM,
+	MountPath:  "/pvc/dir",
+	ReadOnly:   true,
+}
+
 // Spec for testing
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
@@ -113,6 +120,16 @@ func TestBuildVolumes(t *testing.T) {
 			},
 		},
 	}
+
+	targetPVCVolume := v1.Volume{
+		Name: testPVCVolume.Name,
+		VolumeSource: v1.VolumeSource{
+			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: testPVCVolume.Name,
+				ReadOnly:  testPVCVolume.ReadOnly,
+			},
+		},
+	}
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -124,6 +141,11 @@ func TestBuildVolumes(t *testing.T) {
 				testVolume, testFileVolume,
 			},
 			[]v1.Volume{targetVolume, targetFileVolume},
+		},
+		{
+			"pvc test",
+			[]*api.Volume{testPVCVolume},
+			[]v1.Volume{targetPVCVolume},
 		},
 	}
 	for _, tt := range tests {
@@ -149,6 +171,11 @@ func TestBuildVolumeMounts(t *testing.T) {
 		MountPath:        testFileVolume.MountPath,
 		MountPropagation: &hostToContainer,
 	}
+	targetPVCVolumeMount := v1.VolumeMount{
+		Name:      testPVCVolume.Name,
+		ReadOnly:  testPVCVolume.ReadOnly,
+		MountPath: testPVCVolume.MountPath,
+	}
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -164,6 +191,11 @@ func TestBuildVolumeMounts(t *testing.T) {
 				targetVolumeMount,
 				targetFileVolumeMount,
 			},
+		},
+		{
+			"pvc test",
+			[]*api.Volume{testPVCVolume},
+			[]v1.VolumeMount{targetPVCVolumeMount},
 		},
 	}
 	for _, tt := range tests {

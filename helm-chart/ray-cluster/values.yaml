@@ -46,6 +46,8 @@ head:
     #     cpu: "500m"
     #     memory: "512Mi"
   labels: {}
+  # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
+  # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'

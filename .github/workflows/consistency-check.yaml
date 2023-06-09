@@ -30,6 +30,10 @@ jobs:
       - name: Verify Codegen
         working-directory: ./ray-operator
         run: ./hack/verify-codegen.sh
+
+      - name: Verify Generated Files
+        working-directory: ./ray-operator
+        run: ./hack/verify-generated-files.sh
   # 1. Check consistency between types.go and CRD YAML files.
   # 2. Check consistency between kubebuilder markers and RBAC.
   ray-operator-verify-crd-rbac:

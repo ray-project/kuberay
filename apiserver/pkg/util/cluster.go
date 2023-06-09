@@ -494,7 +494,18 @@ func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 			}
 			vols = append(vols, vol)
 		}
-		// TODO(Jeffwan@): handle PVC in the future
+		if rayVol.VolumeType == api.Volume_PERSISTENT_VOLUME_CLAIM {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+						ClaimName: rayVol.Name,
+						ReadOnly:  rayVol.ReadOnly,
+					},
+				},
+			}
+			vols = append(vols, vol)
+		}
 	}
 
 	return vols

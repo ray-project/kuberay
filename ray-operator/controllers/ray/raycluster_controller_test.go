@@ -62,7 +62,6 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
-						ServiceAccountName: "head-service-account",
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
@@ -166,14 +165,6 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: pod.Name, Namespace: "default"}, pod),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My head pod = %v", pod)
 			Expect(pod.Status.Phase).Should(Or(Equal(corev1.PodPending), Equal(corev1.PodRunning)))
-		})
-
-		It("should create the head group's specified K8s ServiceAccount if it doesn't exist", func() {
-			saName := utils.GetHeadGroupServiceAccountName(myRayCluster)
-			sa := &corev1.ServiceAccount{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: saName, Namespace: "default"}, sa),
-				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head group ServiceAccount = %v", saName)
 		})
 
 		It("should create the autoscaler K8s RoleBinding if it doesn't exist", func() {

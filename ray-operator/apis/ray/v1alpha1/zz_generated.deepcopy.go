@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -539,6 +539,11 @@ func (in *RayServiceSpec) DeepCopyInto(out *RayServiceSpec) {
 		in, out := &in.DeploymentUnhealthySecondThreshold, &out.DeploymentUnhealthySecondThreshold
 		*out = new(int32)
 		**out = **in
+	}
+	if in.ServeService != nil {
+		in, out := &in.ServeService, &out.ServeService
+		*out = new(v1.Service)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

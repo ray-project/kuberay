@@ -441,7 +441,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Hence, all the ServeStatuses[i].Status should be updated to UNHEALTHY.
 			//
 			// Note: LastUpdateTime/HealthLastUpdateTime will be overwritten via metav1.Now() in rayservice_controller.go.
-			// Hence, we cannot use `newTime`` to check whether the status is updated or not.
+			// Hence, we cannot use `newTime` to check whether the status is updated or not.
 			Eventually(
 				checkAllDeploymentStatusesUnhealthy(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
