@@ -47,8 +47,8 @@ var _ = Context("Inside the default namespace", func() {
 	var numReplicas int32 = 1
 	var numCpus float64 = 0.1
 
-	var testServeAppName = "app1"
-	var testServeConfigV2 = fmt.Sprintf(`
+	testServeAppName := "app1"
+	testServeConfigV2 := fmt.Sprintf(`
 applications:
   - name: %s
     import_path: fruit.deployment_graph
