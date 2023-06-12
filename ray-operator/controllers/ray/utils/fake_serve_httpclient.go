@@ -48,8 +48,8 @@ func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetai
 }
 
 func (r *FakeRayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
-	runtimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &runtimeEnv)
+	applicationRuntimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
 
 	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
 
@@ -91,7 +91,7 @@ func (r *FakeRayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.S
 
 	servingClusterDeployments := ServingClusterDeployments{
 		ImportPath:  configV1Spec.ImportPath,
-		RuntimeEnv:  runtimeEnv,
+		RuntimeEnv:  applicationRuntimeEnv,
 		Deployments: convertedDeploymentSpecs,
 		Port:        configV1Spec.Port,
 	}
