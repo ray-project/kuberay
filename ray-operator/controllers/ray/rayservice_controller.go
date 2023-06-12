@@ -36,8 +36,7 @@ import (
 
 // This variable is mutable for unit testing purpose.
 var (
-	ServiceUnhealthySecondThreshold                                 = 60.0 // Serve deployment related health check.
-	serveConfigTypeForTesting       *rayv1alpha1.RayServeConfigType = nil
+	ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
 )
 
 const (
@@ -723,11 +722,6 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	// Otherwise, we will use the value ServiceUnhealthySecondThreshold which can be set in a test
 	// This is used for testing purposes.
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
-	// If serveConfigTypeForTesting is set to a non-nil value by a test, then it will override
-	// the serveConfigType value passed into the function. Used for testing purposes
-	if serveConfigTypeForTesting != nil {
-		serveConfigType = *serveConfigTypeForTesting
-	}
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}

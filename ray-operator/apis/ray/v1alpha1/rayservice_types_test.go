@@ -24,6 +24,7 @@ var myRayService = &RayService{
 		Namespace: "default",
 	},
 	Spec: RayServiceSpec{
+		ServeConfigType: SINGLE_APP,
 		ServeDeploymentGraphSpec: ServeDeploymentGraphSpec{
 			ImportPath: "fruit.deployment_graph",
 			RuntimeEnv: runtimeEnvStr,
@@ -235,6 +236,7 @@ var expected = `{
             }
          ]
       },
+      "serveConfigType": "SINGLE_APP",
       "rayClusterConfig":{
          "headGroupSpec":{
             "replicas":1,
