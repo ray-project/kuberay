@@ -58,7 +58,7 @@ type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
-	ServeConfigV2            string                   `json:"serveConfigV2,omitempty"`
+	ServeConfigV2 string `json:"serveConfigV2,omitempty"`
 	// Defines which Ray Serve config schema is used for `serveConfigV2`; can be SINGLE_APP or MULTI_APP. Please see the Ray Serve docs
 	// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html and
 	// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeDeploySchema.html for the
