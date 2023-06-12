@@ -46,14 +46,23 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
+type RayServeConfigType string
+
+const (
+	MULTI_APP  RayServeConfigType = "MULTI_APP"
+	SINGLE_APP RayServeConfigType = "SINGLE_APP"
+)
+
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	ServeConfigV2                      string                   `json:"serveConfigV2,omitempty"`
-	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
+	ServeConfigV2            string                   `json:"serveConfigV2,omitempty"`
+	// +kubebuilder:default:=SINGLE_APP
+	ServeConfigType                    RayServeConfigType `json:"serveConfigType,omitempty"`
+	RayClusterSpec                     RayClusterSpec     `json:"rayClusterConfig,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32             `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32             `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }

@@ -570,7 +570,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should reconcile status correctly when multi-app config type is used.", func() {
-			ctMultiApp := utils.MULTI_APP
+			ctMultiApp := rayv1alpha1.MULTI_APP
 			serveConfigTypeForTesting = &ctMultiApp
 
 			// Set multi-application status to healthy.

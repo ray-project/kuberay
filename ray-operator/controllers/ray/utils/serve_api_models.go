@@ -1,10 +1,10 @@
 package utils
 
-type RayServeConfigType string
+type RayServiceServeConfigVersion string
 
 const (
-	MULTI_APP  RayServeConfigType = "MULTI_APP"
-	SINGLE_APP RayServeConfigType = "SINGLE_APP"
+	RayServiceServeConfigV1 RayServiceServeConfigVersion = "v1"
+	RayServiceServeConfigV2 RayServiceServeConfigVersion = "v2"
 )
 
 // V1 Serve API Response format

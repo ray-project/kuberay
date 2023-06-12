@@ -12144,6 +12144,9 @@ spec:
                 required:
                 - importPath
                 type: object
+              serveConfigType:
+                default: SINGLE_APP
+                type: string
               serveConfigV2:
                 type: string
               serveService:

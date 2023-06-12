@@ -30,7 +30,7 @@ func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, erro
 	panic("Fake GetDeployments not implemented")
 }
 
-func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte, serveConfigType rayv1alpha1.RayServeConfigType) error {
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
 }

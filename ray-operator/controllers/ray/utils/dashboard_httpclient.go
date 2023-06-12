@@ -42,7 +42,7 @@ var (
 type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments(context.Context) (string, error)
-	UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error
+	UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType rayv1alpha1.RayServeConfigType) error
 	// V1/single-app Rest API
 	GetSingleApplicationStatus(context.Context) (*ServeApplicationStatus, error)
 	// V2/multi-app Rest API
@@ -161,14 +161,14 @@ func (r *RayDashboardClient) GetDeployments(ctx context.Context) (string, error)
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
-func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
+func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType rayv1alpha1.RayServeConfigType) error {
 	var req *http.Request
 	var err error
-	if serveConfigType == SINGLE_APP {
+	if serveConfigType == rayv1alpha1.SINGLE_APP {
 		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(configJson)); err != nil {
 			return err
 		}
-	} else if serveConfigType == MULTI_APP {
+	} else if serveConfigType == rayv1alpha1.MULTI_APP {
 		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
 			return err
 		}
