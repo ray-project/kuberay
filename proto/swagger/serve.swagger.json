@@ -444,6 +444,14 @@
           },
           "title": "Optional. The volumes mount to head pod"
         },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by head pod\nNote that the service account has to be created prior to usage here"
+        },
+        "imagePullSecret": {
+          "type": "string",
+          "title": "Optional. image pull secret used by head pod"
+        },
         "environment": {
           "type": "object",
           "additionalProperties": {
@@ -821,6 +829,14 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by worker pod\nNote that the service account has to be created prior to usage here"
+        },
+        "imagePullSecret": {
+          "type": "string",
+          "title": "Optional. image pull secret used by worker pod"
         },
         "environment": {
           "type": "object",

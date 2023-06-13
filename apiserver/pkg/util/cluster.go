@@ -233,6 +233,20 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		}
 	}
 
+	// If service account is specified, add it to the pod spec.
+	if len(spec.ServiceAccount) > 1 {
+		podTemplateSpec.Spec.ServiceAccountName = spec.ServiceAccount
+	}
+
+	// If image pull secret is specified, add it to the pod spec.
+	if len(spec.ImagePullSecret) > 1 {
+		podTemplateSpec.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+			{
+				Name: spec.ImagePullSecret,
+			},
+		}
+	}
+
 	return podTemplateSpec
 }
 
@@ -434,6 +448,20 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, v1.Toleration{
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
+		}
+	}
+
+	// If service account is specified, add it to the pod spec.
+	if len(spec.ServiceAccount) > 1 {
+		podTemplateSpec.Spec.ServiceAccountName = spec.ServiceAccount
+	}
+
+	// If image pull secret is specified, add it to the pod spec.
+	if len(spec.ImagePullSecret) > 1 {
+		podTemplateSpec.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+			{
+				Name: spec.ImagePullSecret,
+			},
 		}
 	}
 

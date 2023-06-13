@@ -211,12 +211,17 @@ message HeadGroupSpec {
   map<string, string> ray_start_params = 4;
   // Optional. The volumes mount to head pod
   repeated Volume volumes = 5;
+  // Optional. ServiceAccount used by head pod
+  // Note that the service account has to be created prior to usage here
+  string service_account = 6;  
+  // Optional. image pull secret used by head pod
+  string image_pull_secret = 7;  
   // Optional. Environment variables for head pod
-  map<string, string> environment = 6;
+  map<string, string> environment = 8;
   // Optional. Annotations for the head pod
-  map<string, string> annotations = 7;
+  map<string, string> annotations = 9;
   // Optional. Labels for the head pod
-  map<string, string> labels = 8;
+  map<string, string> labels = 10;
 }
 
 message WorkerGroupSpec {
@@ -236,12 +241,17 @@ message WorkerGroupSpec {
   map<string, string> ray_start_params = 7;
   // Optional. The volumes mount to worker pods
   repeated Volume volumes = 8;
+  // Optional. ServiceAccount used by worker pod
+  // Note that the service account has to be created prior to usage here
+  string service_account = 9;  
+  // Optional. image pull secret used by worker pod
+  string image_pull_secret = 10;  
   // Optional. Environment variables for worker pod
-  map<string, string> environment = 9;
+  map<string, string> environment = 11;
   // Optional. Annotations for the worker pod
-  map<string, string> annotations = 10;
+  map<string, string> annotations = 12;
   // Optional. Labels for the worker pod
-  map<string, string> labels = 11;
+  map<string, string> labels = 13;
 }
 
 message ClusterEvent {
