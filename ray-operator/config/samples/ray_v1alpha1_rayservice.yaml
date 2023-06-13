@@ -55,10 +55,14 @@ spec:
             num_replicas: 1
             user_config:
               increment: 3
+            ray_actor_options:
+              num_cpus: 0.1
           - name: Multiplier
             num_replicas: 1
             user_config:
               factor: 5
+            ray_actor_options:
+              num_cpus: 0.1
           - name: Router
             num_replicas: 1
           - name: create_order
