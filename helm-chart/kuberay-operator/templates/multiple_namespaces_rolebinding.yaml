@@ -1,6 +1,6 @@
 # Install RoleBinding for namespaces listed in watchNamespace.
 # This should be consistent with `rolebinding.yaml`, except for the `kind` field.
-{{- if and .Values.rbacEnable .Values.singleNamespaceInstall }}
+{{- if and .Values.rbacEnable .Values.singleNamespaceInstall .Values.crNamespacedRbacEnable }}
 {{- $watchNamespaces := default (list .Release.Namespace) .Values.watchNamespace }}
 {{- range $namespace := $watchNamespaces }}
 ---
