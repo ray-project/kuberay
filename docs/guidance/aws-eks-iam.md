@@ -27,7 +27,7 @@ The root cause is that the version of `boto3` in the Ray image is too old. To el
 a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`).
 
 ```shell
-# image: rayproject/ray:2.4.0
+# image: rayproject/ray:2.5.0
 pip freeze | grep boto
 # boto3==1.4.8
 # botocore==1.8.50

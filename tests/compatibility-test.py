@@ -31,10 +31,10 @@ logging.basicConfig(
 )
 
 # Default Ray version
-ray_version = '2.4.0'
+ray_version = '2.5.0'
 
 # Default docker images
-ray_image = 'rayproject/ray:2.4.0'
+ray_image = 'rayproject/ray:2.5.0'
 kuberay_operator_image = 'kuberay/operator:nightly'
 
 
