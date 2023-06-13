@@ -16,6 +16,12 @@
     ```
     git log v0.3.0..v0.4.0 --oneline
     ```
+    
+    You may need to run the following command first:
+
+    ```
+    git fetch --tags
+    ```
 
 1. Copy the above commit history to `scripts/changelog-generator.py` and replace `<your_github_token>` with your Github token.
 Run the script to generate changelogs.
