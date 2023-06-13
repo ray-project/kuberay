@@ -669,6 +669,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 			container.Env = append(container.Env, gcsTimeout)
 		}
 	}
+	if !envVarExists(RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
+		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
+		container.Env = append(container.Env, v1.EnvVar{Name: RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})
+	}
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
