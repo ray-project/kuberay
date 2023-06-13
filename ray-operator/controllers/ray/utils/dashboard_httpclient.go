@@ -54,6 +54,11 @@ type RayDashboardClientInterface interface {
 	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
 }
 
+type BaseDashboardClient struct {
+	client       http.Client
+	dashboardURL string
+}
+
 // GetRayDashboardClientFunc Used for unit tests.
 var GetRayDashboardClientFunc = GetRayDashboardClient
 
@@ -62,8 +67,7 @@ func GetRayDashboardClient() RayDashboardClientInterface {
 }
 
 type RayDashboardClient struct {
-	client       http.Client
-	dashboardURL string
+	BaseDashboardClient
 }
 
 func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
@@ -284,7 +288,7 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
-func (r *RayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
+func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
 	applicationRuntimeEnv := make(map[string]interface{})
 	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
 

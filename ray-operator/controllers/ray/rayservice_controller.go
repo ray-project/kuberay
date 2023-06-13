@@ -634,20 +634,20 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 		cachedServeConfig, isServeConfig := cachedConfigObj.(rayv1alpha1.ServeDeploymentGraphSpec)
 		if !isServeConfig {
 			shouldUpdate = true
-			reason = fmt.Sprintf("No Serve config has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+			reason = fmt.Sprintf("No V1 Serve Config of type ServeDeploymentGraphSpec has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 		} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
 			shouldUpdate = true
-			reason = fmt.Sprintf("Current Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 		}
 		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
 	} else if serveConfigVersion == utils.RayServiceServeConfigV2 {
 		cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
 		if !isServeConfigV2 {
 			shouldUpdate = true
-			reason = fmt.Sprintf("No Serve config has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+			reason = fmt.Sprintf("No V2 Serve Config of type string has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 		} else if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
 			shouldUpdate = true
-			reason = fmt.Sprintf("Current Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 		}
 		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 	}
@@ -655,6 +655,9 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	return shouldUpdate
 }
 
+// Defines whether the user is using `serveConfig` or `serveConfigV2` in the spec to define their Ray Serve config.
+// `serveConfig` is of type rayv1alpha1.ServeDeploymentSpec, while `serveConfigV2` is of type string, and we need
+// to do separate processing of the config depending on which field is being used.
 func (r *RayServiceReconciler) determineServeConfigVersion(rayServiceInstance *rayv1alpha1.RayService) utils.RayServiceServeConfigVersion {
 	if rayServiceInstance.Spec.ServeConfigV2 == "" {
 		return utils.RayServiceServeConfigV1

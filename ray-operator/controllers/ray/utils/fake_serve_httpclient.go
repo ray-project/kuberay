@@ -6,14 +6,12 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/util/yaml"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 )
 
 type FakeRayDashboardClient struct {
-	client           http.Client
-	dashboardURL     string
+	BaseDashboardClient
 	singleAppStatus  ServeApplicationStatus
 	multiAppStatuses map[string]*ServeApplicationStatus
 	serveDetails     ServeDetails
@@ -45,58 +43,6 @@ func (r *FakeRayDashboardClient) GetMultiApplicationStatus(_ context.Context) (m
 
 func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetails, error) {
 	return &r.serveDetails, nil
-}
-
-func (r *FakeRayDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
-	applicationRuntimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
-
-	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
-
-	for i, config := range configV1Spec.ServeConfigSpecs {
-		userConfig := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfig)
-
-		autoscalingConfig := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.AutoscalingConfig), &autoscalingConfig)
-
-		runtimeEnv := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.RayActorOptions.RuntimeEnv), &runtimeEnv)
-
-		resources := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resources)
-
-		convertedDeploymentSpecs[i] = ServeConfigSpec{
-			Name:                      config.Name,
-			NumReplicas:               config.NumReplicas,
-			RoutePrefix:               config.RoutePrefix,
-			MaxConcurrentQueries:      config.MaxConcurrentQueries,
-			UserConfig:                userConfig,
-			AutoscalingConfig:         autoscalingConfig,
-			GracefulShutdownWaitLoopS: config.GracefulShutdownWaitLoopS,
-			GracefulShutdownTimeoutS:  config.GracefulShutdownTimeoutS,
-			HealthCheckPeriodS:        config.HealthCheckPeriodS,
-			HealthCheckTimeoutS:       config.GracefulShutdownTimeoutS,
-			RayActorOptions: RayActorOptionSpec{
-				RuntimeEnv:        runtimeEnv,
-				NumCpus:           config.RayActorOptions.NumCpus,
-				NumGpus:           config.RayActorOptions.NumGpus,
-				Memory:            config.RayActorOptions.Memory,
-				ObjectStoreMemory: config.RayActorOptions.ObjectStoreMemory,
-				Resources:         resources,
-				AcceleratorType:   config.RayActorOptions.AcceleratorType,
-			},
-		}
-	}
-
-	servingClusterDeployments := ServingClusterDeployments{
-		ImportPath:  configV1Spec.ImportPath,
-		RuntimeEnv:  applicationRuntimeEnv,
-		Deployments: convertedDeploymentSpecs,
-		Port:        configV1Spec.Port,
-	}
-
-	return servingClusterDeployments
 }
 
 func (r *FakeRayDashboardClient) SetSingleApplicationStatus(status ServeApplicationStatus) {

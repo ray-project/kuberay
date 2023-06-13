@@ -1,5 +1,7 @@
 package utils
 
+// Defines whether the user is using `serveConfig` or `serveConfigV2` in the spec to define their Ray Serve config.
+// `serveConfig` is of type rayv1alpha1.ServeDeploymentSpec, while `serveConfigV2` is of type string.
 type RayServiceServeConfigVersion string
 
 const (
