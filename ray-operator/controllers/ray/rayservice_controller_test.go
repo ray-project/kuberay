@@ -89,7 +89,6 @@ applications:
 			Namespace: "default",
 		},
 		Spec: rayv1alpha1.RayServiceSpec{
-			ServeConfigType: rayv1alpha1.SINGLE_APP,
 			ServeDeploymentGraphSpec: rayv1alpha1.ServeDeploymentGraphSpec{
 				ImportPath: "fruit.deployment_graph",
 				RuntimeEnv: runtimeEnvStr,
@@ -612,7 +611,6 @@ applications:
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 
-				myRayService.Spec.ServeConfigType = rayv1alpha1.MULTI_APP
 				myRayService.Spec.ServeDeploymentGraphSpec = rayv1alpha1.ServeDeploymentGraphSpec{}
 				myRayService.Spec.ServeConfigV2 = testServeConfigV2
 				return k8sClient.Update(ctx, myRayService)
@@ -702,7 +700,7 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1alpha1.RayService)
 		}
 
 		for _, appStatus := range rayService.Status.ActiveServiceStatus.Applications {
-			if len(appStatus.Deployments) != 3 {
+			if appStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 				return false, nil
 			}
 			for _, deploymentStatus := range appStatus.Deployments {

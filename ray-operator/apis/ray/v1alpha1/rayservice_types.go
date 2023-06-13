@@ -46,28 +46,15 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
-type RayServeConfigType string
-
-const (
-	MULTI_APP  RayServeConfigType = "MULTI_APP"
-	SINGLE_APP RayServeConfigType = "SINGLE_APP"
-)
-
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
-	ServeConfigV2 string `json:"serveConfigV2,omitempty"`
-	// Defines which Ray Serve config schema is used for `serveConfigV2`; can be SINGLE_APP or MULTI_APP. Please see the Ray Serve docs
-	// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html and
-	// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeDeploySchema.html for the
-	// single-application schema and multi-application schema, respectively.
-	// +kubebuilder:default:=SINGLE_APP
-	ServeConfigType                    RayServeConfigType `json:"serveConfigType,omitempty"`
-	RayClusterSpec                     RayClusterSpec     `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32             `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32             `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeConfigV2                      string         `json:"serveConfigV2,omitempty"`
+	RayClusterSpec                     RayClusterSpec `json:"rayClusterConfig,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32         `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32         `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }

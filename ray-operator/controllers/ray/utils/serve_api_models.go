@@ -1,12 +1,14 @@
 package utils
 
-// Defines whether the user is using `serveConfig` or `serveConfigV2` in the spec to define their Ray Serve config.
-// `serveConfig` is of type rayv1alpha1.ServeDeploymentSpec, while `serveConfigV2` is of type string.
-type RayServiceServeConfigVersion string
+// Defines which Ray Serve config schema is used for `serveConfigV2`; can be SINGLE_APP or MULTI_APP. Please see the Ray Serve docs
+// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html and
+// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeDeploySchema.html for the
+// single-application schema and multi-application schema, respectively.
+type RayServeConfigType string
 
 const (
-	RayServiceServeConfigV1 RayServiceServeConfigVersion = "v1"
-	RayServiceServeConfigV2 RayServiceServeConfigVersion = "v2"
+	MULTI_APP  RayServeConfigType = "MULTI_APP"
+	SINGLE_APP RayServeConfigType = "SINGLE_APP"
 )
 
 // V1 Serve API Response format

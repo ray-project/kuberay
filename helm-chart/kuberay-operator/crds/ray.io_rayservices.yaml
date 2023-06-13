@@ -12144,11 +12144,6 @@ spec:
                 required:
                 - importPath
                 type: object
-              serveConfigType:
-                default: SINGLE_APP
-                description: Defines which Ray Serve config schema is used for `serveConfigV2`;
-                  can be SINGLE_APP or MULTI_APP.
-                type: string
               serveConfigV2:
                 description: Defines the applications and deployments to deploy, should
                   be a YAML multi-line scalar string.
