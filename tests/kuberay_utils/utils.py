@@ -8,7 +8,7 @@ import yaml
 
 from framework.prototype import (
     RayClusterAddCREvent,
-    RayServiceAddCREvent
+    RayServiceFullCREvent
 )
 
 from framework.utils import (
@@ -81,7 +81,7 @@ def create_ray_service(template_name, ray_version, ray_image):
                 break
 
         # Create a RayService
-        ray_service_add_event = RayServiceAddCREvent(
+        ray_service_add_event = RayServiceFullCREvent(
             custom_resource_object = context['cr'],
             rulesets = [],
             timeout = 90,

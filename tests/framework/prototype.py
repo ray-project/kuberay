@@ -1,5 +1,5 @@
 """Configuration test framework for KubeRay"""
-from typing import List
+from typing import Dict, List, Optional
 import unittest
 import time
 import jsonpatch
@@ -8,7 +8,9 @@ from framework.utils import (
     create_custom_object,
     delete_custom_object,
     get_custom_object,
+    get_pod,
     get_head_pod,
+    start_curl_pod,
     logger,
     pod_exec_command,
     shell_subprocess_run,
@@ -17,6 +19,8 @@ from framework.utils import (
     K8S_CLUSTER_MANAGER,
     OperatorManager
 )
+
+from kubernetes import client
 
 # Utility functions
 def search_path(yaml_object, steps, default_value = None):
@@ -145,8 +149,14 @@ class CREvent:
     CREvent: Custom Resource Event can be mainly divided into 3 categories.
     (1) Add (create) CR (2) Update CR (3) Delete CR
     """
-    def __init__(self, custom_resource_object,
-        rulesets: List[RuleSet], timeout, namespace, filepath = None):
+    def __init__(
+        self,
+        custom_resource_object,
+        rulesets: List[RuleSet] = [],
+        timeout: int = 90,
+        namespace: str = "default",
+        filepath: Optional[str] = None,
+    ):
         self.rulesets = rulesets
         self.timeout = timeout
         self.namespace = namespace
@@ -223,27 +233,26 @@ class EasyJobRule(Rule):
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
-    """"Using curl to access the deployed application on Ray service"""
+    """"Using curl to access the deployed application(s) on Ray service"""
+
+    def __init__(self, queries: Dict[str, str]):
+        self.custom_resource = None
+        self.cr_namespace: Optional[str] = None
+        self.queries = queries
+
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        # Create a pod for running curl command, because the service is not exposed.
-        shell_subprocess_run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
-            "--command -- /bin/sh -c \"while true; do sleep 10;done\"")
-        success_create = False
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        for _ in range(30):
-            resp = k8s_v1_api.read_namespaced_pod(name="curl", namespace=cr_namespace)
-            if resp.status.phase != 'Pending':
-                success_create = True
-                break
-            time.sleep(1)
-        if not success_create:
-            raise Exception("CurlServiceRule create curl pod timeout")
-        output = shell_subprocess_check_output(f"kubectl exec curl -n {cr_namespace} "
-            "-- curl -X POST -H 'Content-Type: application/json' "
-            f"{custom_resource['metadata']['name']}-serve-svc.{cr_namespace}.svc.cluster.local:8000"
-            " -d '[\"MANGO\", 2]'")
-        assert output == b'6'
-        shell_subprocess_run(f"kubectl delete pod curl -n {cr_namespace}")
+        self.custom_resource = custom_resource
+        self.cr_namespace = cr_namespace
+
+        # If curl pod doesn't exist, create one
+        curl_pod = get_pod("default", "run=curl")
+        logger.info(f"curl pod: {curl_pod}")
+        if curl_pod is None:
+            start_curl_pod("curl", self.cr_namespace, timeout_s=30)
+        
+        for cmd, expected_output in self.queries.items():
+            output = shell_subprocess_check_output(cmd)
+            assert output.decode('utf-8') == expected_output
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
@@ -306,7 +315,7 @@ class RayClusterAddCREvent(CREvent):
             show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
 
-class RayServiceAddCREvent(CREvent):
+class RayServiceFullCREvent(CREvent):
     """CREvent for RayService addition"""
     def wait(self):
         """Wait for RayService to converge"""""
@@ -495,3 +504,34 @@ class GeneralTestCase(unittest.TestCase):
         except Exception as ex:
             logger.error(str(ex))
             K8S_CLUSTER_MANAGER.delete_kind_cluster()
+
+class SeriesTestCase(unittest.TestCase):
+    """Test a series of cr events"""
+    def __init__(self, methodName, docker_image_dict: Dict, cr_events: List[CREvent], start_curl_pod: bool = False):
+        super().__init__(methodName)
+        self.cr_events = cr_events
+        self.operator_manager = OperatorManager(docker_image_dict)
+        self.start_curl_pod = start_curl_pod
+
+    @classmethod
+    def setUpClass(cls):
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+
+    def setUp(self):
+        if not K8S_CLUSTER_MANAGER.check_cluster_exist():
+            K8S_CLUSTER_MANAGER.create_kind_cluster()
+            self.operator_manager.prepare_operator()
+        
+        if self.start_curl_pod:
+            start_curl_pod("curl", "default")
+
+    def runtest(self):
+        """Run a configuration test"""
+        for cr_event in self.cr_events:
+            cr_event.trigger()
+            cr_event.clean_up()
+
+    def tearDown(self) -> None:
+        print("teardown")
+        if self.start_curl_pod:
+            shell_subprocess_run(f"kubectl delete pod curl -n default")
