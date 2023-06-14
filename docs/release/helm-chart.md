@@ -27,7 +27,8 @@ You can validate the charts as follows:
 * Install charts from Helm repository.
     ```sh
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-
+    helm repo update
+    
     # List all charts
     helm search repo kuberay
 
