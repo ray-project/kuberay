@@ -47,6 +47,42 @@ var _ = Context("Inside the default namespace", func() {
 	var numReplicas int32 = 1
 	var numCpus float64 = 0.1
 
+	testServeAppName := "app1"
+	testServeConfigV2 := fmt.Sprintf(`
+applications:
+  - name: %s
+    import_path: fruit.deployment_graph
+    runtime_env:
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+    deployments:
+      - name: MangoStand
+        num_replicas: 1
+        user_config:
+          price: 3
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: OrangeStand
+        num_replicas: 1
+        user_config:
+          price: 2
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: PearStand
+        num_replicas: 1
+        user_config:
+          price: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: FruitMarket
+        num_replicas: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: DAGDriver
+        num_replicas: 1
+        route_prefix: "/"
+        ray_actor_options:
+          num_cpus: 0.1`, testServeAppName)
+
 	myRayService := &rayv1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayservice-sample",
@@ -570,12 +606,20 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should reconcile status correctly when multi-app config type is used.", func() {
-			ctMultiApp := utils.MULTI_APP
-			serveConfigTypeForTesting = &ctMultiApp
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+
+				myRayService.Spec.ServeDeploymentGraphSpec = rayv1alpha1.ServeDeploymentGraphSpec{}
+				myRayService.Spec.ServeConfigV2 = testServeConfigV2
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService serve config")
 
 			// Set multi-application status to healthy.
 			healthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY)
-			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{common.DefaultServeAppName: &healthyStatus})
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			// Set single-application status to unhealthy.
 			unhealthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY)
 			fakeRayDashboardClient.SetSingleApplicationStatus(unhealthyStatus)
@@ -589,7 +633,6 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*5, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// reset states to healthy for following test cases
-			serveConfigTypeForTesting = nil
 			fakeRayDashboardClient.SetSingleApplicationStatus(healthyStatus)
 		})
 	})
@@ -656,17 +699,14 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1alpha1.RayService)
 			return false, nil
 		}
 
-		defaultAppStatus, ok := rayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName]
-		if !ok {
-			return false, fmt.Errorf("default app not found in ActiveServiceStatus")
-		}
-
-		if len(defaultAppStatus.Deployments) != 3 {
-			return false, nil
-		}
-		for _, deploymentStatus := range defaultAppStatus.Deployments {
-			if deploymentStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+		for _, appStatus := range rayService.Status.ActiveServiceStatus.Applications {
+			if appStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 				return false, nil
+			}
+			for _, deploymentStatus := range appStatus.Deployments {
+				if deploymentStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+					return false, nil
+				}
 			}
 		}
 

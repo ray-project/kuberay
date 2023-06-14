@@ -12145,7 +12145,9 @@ spec:
                 - importPath
                 type: object
               serveConfigV2:
-                type: object
+                description: Defines the applications and deployments to deploy, should
+                  be a YAML multi-line scalar string.
+                type: string
               serveService:
                 description: ServeService is the Kubernetes service for head node
                   and worker nodes who have healthy http proxy to

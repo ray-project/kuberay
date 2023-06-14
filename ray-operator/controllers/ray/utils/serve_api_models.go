@@ -1,5 +1,9 @@
 package utils
 
+// Defines which Ray Serve config schema is used for `serveConfigV2`; can be SINGLE_APP or MULTI_APP. Please see the Ray Serve docs
+// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html and
+// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeDeploySchema.html for the
+// single-application schema and multi-application schema, respectively.
 type RayServeConfigType string
 
 const (
@@ -53,6 +57,15 @@ type ServeApplicationDetails struct {
 type ServeDetails struct {
 	Applications map[string]ServeApplicationDetails `json:"applications"`
 	DeployMode   string                             `json:"deploy_mode,omitempty"`
+}
+
+// ServingClusterDeployments defines the request sent to the dashboard api server.
+// See https://docs.ray.io/en/master/_modules/ray/serve/schema.html#ServeApplicationSchema for more details.
+type ServingClusterDeployments struct {
+	ImportPath  string                 `json:"import_path"`
+	RuntimeEnv  map[string]interface{} `json:"runtime_env,omitempty"`
+	Deployments []ServeConfigSpec      `json:"deployments,omitempty"`
+	Port        int                    `json:"port,omitempty"`
 }
 
 // ServeConfigSpec defines the (single-application) desired state of RayService, used by Ray Dashboard.

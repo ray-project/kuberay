@@ -235,7 +235,6 @@ var expected = `{
             }
          ]
       },
-      "serveConfigV2": {},
       "rayClusterConfig":{
          "headGroupSpec":{
             "replicas":1,

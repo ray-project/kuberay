@@ -29,34 +29,34 @@ const (
 )
 
 var (
-	DeployPath       = "/api/serve/deployments/"
-	StatusPath       = "/api/serve/deployments/status"
+	// Single-application URL paths
+	DeployPath = "/api/serve/deployments/"
+	StatusPath = "/api/serve/deployments/status"
+	// Multi-application URL paths
 	ServeDetailsPath = "/api/serve/applications/"
-	JobPath          = "/api/jobs/"
+	DeployPathV2     = "/api/serve/applications/"
+	// Job URL paths
+	JobPath = "/api/jobs/"
 )
-
-// ServingClusterDeployments defines the request sent to the dashboard api server.
-// See https://docs.ray.io/en/master/_modules/ray/serve/schema.html#ServeApplicationSchema for more details.
-type ServingClusterDeployments struct {
-	ImportPath  string                 `json:"import_path"`
-	RuntimeEnv  map[string]interface{} `json:"runtime_env,omitempty"`
-	Deployments []ServeConfigSpec      `json:"deployments,omitempty"`
-	Port        int                    `json:"port,omitempty"`
-}
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
 	GetDeployments(context.Context) (string, error)
-	UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error
+	UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error
 	// V1/single-app Rest API
 	GetSingleApplicationStatus(context.Context) (*ServeApplicationStatus, error)
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
-	ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec
+	ConvertServeConfigV1(rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
 	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
+}
+
+type BaseDashboardClient struct {
+	client       http.Client
+	dashboardURL string
 }
 
 // GetRayDashboardClientFunc Used for unit tests.
@@ -67,8 +67,7 @@ func GetRayDashboardClient() RayDashboardClientInterface {
 }
 
 type RayDashboardClient struct {
-	client       http.Client
-	dashboardURL string
+	BaseDashboardClient
 }
 
 func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
@@ -166,26 +165,21 @@ func (r *RayDashboardClient) GetDeployments(ctx context.Context) (string, error)
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
-func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, spec rayv1alpha1.ServeDeploymentGraphSpec) error {
-	runtimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(spec.RuntimeEnv), &runtimeEnv)
-
-	servingClusterDeployments := ServingClusterDeployments{
-		ImportPath:  spec.ImportPath,
-		RuntimeEnv:  runtimeEnv,
-		Deployments: r.ConvertServeConfig(spec.ServeConfigSpecs),
-		Port:        spec.Port,
+func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
+	var req *http.Request
+	var err error
+	if serveConfigType == SINGLE_APP {
+		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(configJson)); err != nil {
+			return err
+		}
+	} else if serveConfigType == MULTI_APP {
+		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("Unrecognized config type: %s", serveConfigType)
 	}
 
-	deploymentJson, err := json.Marshal(servingClusterDeployments)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(deploymentJson))
-	if err != nil {
-		return err
-	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := r.client.Do(req)
@@ -294,10 +288,13 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
-func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigSpec) []ServeConfigSpec {
-	serveConfigToSend := make([]ServeConfigSpec, len(specs))
+func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
+	applicationRuntimeEnv := make(map[string]interface{})
+	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
 
-	for i, config := range specs {
+	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
+
+	for i, config := range configV1Spec.ServeConfigSpecs {
 		userConfig := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfig)
 
@@ -310,7 +307,7 @@ func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigS
 		resources := make(map[string]interface{})
 		_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resources)
 
-		serveConfigToSend[i] = ServeConfigSpec{
+		convertedDeploymentSpecs[i] = ServeConfigSpec{
 			Name:                      config.Name,
 			NumReplicas:               config.NumReplicas,
 			RoutePrefix:               config.RoutePrefix,
@@ -333,7 +330,14 @@ func (r *RayDashboardClient) ConvertServeConfig(specs []rayv1alpha1.ServeConfigS
 		}
 	}
 
-	return serveConfigToSend
+	servingClusterDeployments := ServingClusterDeployments{
+		ImportPath:  configV1Spec.ImportPath,
+		RuntimeEnv:  applicationRuntimeEnv,
+		Deployments: convertedDeploymentSpecs,
+		Port:        configV1Spec.Port,
+	}
+
+	return servingClusterDeployments
 }
 
 // RayJobInfo is the response of "ray job status" api.
