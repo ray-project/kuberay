@@ -196,7 +196,7 @@ class CREvent:
 
     def clean_up(self):
         """Cleanup the CR."""
-        raise NotImplementedError
+        pass
 
 # My implementations
 class HeadPodNameRule(Rule):
@@ -233,23 +233,16 @@ class EasyJobRule(Rule):
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
-    """"Using curl to access the deployed application(s) on Ray service"""
+    """Using curl to access the deployed application(s) on Ray service"""
 
     def __init__(self, queries: Dict[str, str]):
-        self.custom_resource = None
-        self.cr_namespace: Optional[str] = None
         self.queries = queries
 
-    def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        self.custom_resource = custom_resource
-        self.cr_namespace = cr_namespace
-
+    def assert_rule(self, *args):
         # If curl pod doesn't exist, create one
-        curl_pod = get_pod("default", "run=curl")
-        logger.info(f"curl pod: {curl_pod}")
-        if curl_pod is None:
-            start_curl_pod("curl", self.cr_namespace, timeout_s=30)
-        
+        if get_pod("default", "run=curl") is None:
+            start_curl_pod("curl", "default", timeout_s=30)
+
         for cmd, expected_output in self.queries.items():
             output = shell_subprocess_check_output(cmd)
             assert output.decode('utf-8') == expected_output
@@ -504,34 +497,3 @@ class GeneralTestCase(unittest.TestCase):
         except Exception as ex:
             logger.error(str(ex))
             K8S_CLUSTER_MANAGER.delete_kind_cluster()
-
-class SeriesTestCase(unittest.TestCase):
-    """Test a series of cr events"""
-    def __init__(self, methodName, docker_image_dict: Dict, cr_events: List[CREvent], start_curl_pod: bool = False):
-        super().__init__(methodName)
-        self.cr_events = cr_events
-        self.operator_manager = OperatorManager(docker_image_dict)
-        self.start_curl_pod = start_curl_pod
-
-    @classmethod
-    def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-
-    def setUp(self):
-        if not K8S_CLUSTER_MANAGER.check_cluster_exist():
-            K8S_CLUSTER_MANAGER.create_kind_cluster()
-            self.operator_manager.prepare_operator()
-        
-        if self.start_curl_pod:
-            start_curl_pod("curl", "default")
-
-    def runtest(self):
-        """Run a configuration test"""
-        for cr_event in self.cr_events:
-            cr_event.trigger()
-            cr_event.clean_up()
-
-    def tearDown(self) -> None:
-        print("teardown")
-        if self.start_curl_pod:
-            shell_subprocess_run(f"kubectl delete pod curl -n default")
