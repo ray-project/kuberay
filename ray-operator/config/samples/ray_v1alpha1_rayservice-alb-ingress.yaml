@@ -8,7 +8,8 @@ metadata:
     # See `ingress.md` for more details about how to choose subnets.
     alb.ingress.kubernetes.io/subnets: subnet-d9d4ff92, subnet-0c0209db843c9fd72
     alb.ingress.kubernetes.io/target-type: ip
-    # Health Check Settings
+    # Health Check Settings. Health check is needed for
+    # ALB to route traffic to the healthy pod.
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-port: traffic-port
     alb.ingress.kubernetes.io/healthcheck-path: /-/routes
