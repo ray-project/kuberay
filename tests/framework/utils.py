@@ -193,6 +193,10 @@ def get_pod(namespace, label_selector):
         return None
     return pods.items[0]
 
+def get_pod_by_name(namespace, name):
+    k8s_v1_api: client.CoreV1Api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    k8s_v1_api.list_namespaced_pod
+
 def get_head_pod(namespace):
     """Gets a head pod in the `namespace`. Returns None if there are no matches."""
     return get_pod(namespace, 'ray.io/node-type=head')

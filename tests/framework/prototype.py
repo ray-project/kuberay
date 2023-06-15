@@ -21,8 +21,6 @@ from framework.utils import (
     OperatorManager
 )
 
-from kubernetes import client
-
 # Utility functions
 def search_path(yaml_object, steps, default_value = None):
     """
@@ -257,7 +255,10 @@ class CurlServiceRule(Rule):
                 json=json.dumps(query["json_args"]),
             )
             output = shell_subprocess_check_output(cmd)
-            assert output.decode('utf-8') == query["expected_output"]
+            if hasattr(query["expected_output"], "__iter__"):
+                assert output.decode('utf-8') in query["expected_output"]
+            else:
+                assert output.decode('utf-8') == query["expected_output"]
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""

@@ -25,7 +25,6 @@ from framework.utils import (
     start_curl_pod,
     logger,
     shell_subprocess_run,
-    shell_subprocess_check_output,
     CONST,
     K8S_CLUSTER_MANAGER,
     OperatorManager
@@ -47,6 +46,7 @@ CURL_CMD_FMT = (
 
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
+
     def exec(self):
         shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
@@ -58,6 +58,7 @@ class RayServiceAddCREvent(CREvent):
           (2) All head pods and worker pods are "Running".
           (3) Service named "rayservice-sample-serve" presents
         """
+
         logger.info("Waiting for pods in ray service to be running...")
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
 
@@ -91,6 +92,7 @@ class RayServiceAddCREvent(CREvent):
 
 class RayServiceUpdateCREvent(CREvent):
     """CREvent for RayService update"""
+
     def __init__(
         self,
         custom_resource_object,
@@ -104,24 +106,34 @@ class RayServiceUpdateCREvent(CREvent):
         self.name = self.custom_resource_object["metadata"]["name"]
         self.query_rule = None
         if query_while_updating:
-            self.query_rule = CurlServiceRule(queries=self.query_while_updating)
+            self.query_rule = CurlServiceRule(queries=query_while_updating)
+    
+    def get_ray_service_info(self):
+        k8s_cr_api: client.CustomObjectsApi = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+        return k8s_cr_api.get_namespaced_custom_object_status(
+            group="ray.io",
+            namespace=self.namespace,
+            name=self.name,
+            version="v1alpha1",
+            plural="rayservices",
+        )
+    
+    def get_active_ray_cluster_name(self):
+        rayservice_info = self.get_ray_service_info()
+        return rayservice_info["status"]["activeServiceStatus"]["rayClusterName"]
 
     def exec(self):
         """Update a CR by a `kubectl apply` command."""
+        self.old_cluster_name = self.get_active_ray_cluster_name()
+
         self.start = time.time()
         shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
     
     def wait_for_status(self, status: str):
         """Helper function to check for service status."""
-        k8s_cr_api: client.CustomObjectsApi = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+
         while time.time() - self.start < self.timeout:
-            rayservice_info = k8s_cr_api.get_namespaced_custom_object_status(
-                group="ray.io",
-                namespace=self.namespace,
-                name=self.name,
-                version="v1alpha1",
-                plural="rayservices",
-            )
+            rayservice_info = self.get_ray_service_info()
             if rayservice_info["status"]["serviceStatus"] == status:
                 break
 
@@ -142,6 +154,10 @@ class RayServiceUpdateCREvent(CREvent):
         logger.info("Ray service transitioned to status WaitForServeDeploymentReady.")
         self.wait_for_status("Running")
         logger.info("Ray service transitioned to status Running.")
+
+        current_cluster_name = self.get_active_ray_cluster_name()
+        assert current_cluster_name != self.old_cluster_name
+        logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
 
 class RayServiceDeleteCREvent(CREvent):
     """CREvent for RayService deletion"""
@@ -183,11 +199,9 @@ class TestRayService:
             {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"15 pizzas please!"'},
         ]
 
-        if K8S_CLUSTER_MANAGER.check_cluster_exist():
-            K8S_CLUSTER_MANAGER.delete_kind_cluster()
-
-        operator_manager = OperatorManager(DEFAULT_IMAGE_DICT)
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
         K8S_CLUSTER_MANAGER.create_kind_cluster()
+        operator_manager = OperatorManager(DEFAULT_IMAGE_DICT)
         operator_manager.prepare_operator()
         start_curl_pod("curl", "default")
         logger.info(DEFAULT_IMAGE_DICT)
@@ -248,8 +262,22 @@ class TestRayService:
     def test_zero_downtime_rollout(self, set_up_cluster):
         # Modify the cluster spec to trigger a rollout
         updated_cr = deepcopy(self.cr)
+
+        config = yaml.safe_load(self.cr["spec"]["serveConfigV2"])
+        config["applications"][0]["deployments"][0]["user_config"]["price"] = 4
+        config["applications"][1]["deployments"][1]["user_config"]["factor"] = 3
+        updated_cr["spec"]["serveConfigV2"] = yaml.safe_dump(config)
+
         env = [{"name": "SAMPLE_ENV_VAR", "value": "SAMPLE_VALUE"}]
         updated_cr["spec"]["rayClusterConfig"]["headGroupSpec"]["template"]["spec"]["containers"][0]["env"] = env
+
+        updated_queries = [
+            {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+        ]
+        allowed_queries_during_update = deepcopy(self.default_queries)
+        allowed_queries_during_update[0]["expected_output"] = {"6", "8"}
+        allowed_queries_during_update[1]["expected_output"] = {'"15 pizzas please!"', '"9 pizzas please!"'}
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
             logger.info(f"Writing modified RayService yaml to {yaml_copy.name}.")
@@ -264,18 +292,15 @@ class TestRayService:
                 ), 
                 RayServiceUpdateCREvent(
                     custom_resource_object=self.cr,
-                    rulesets=[RuleSet([CurlServiceRule(queries=self.default_queries)])],
+                    rulesets=[RuleSet([CurlServiceRule(queries=updated_queries)])],
                     filepath=yaml_copy.name,
-                    query_while_updating=self.default_queries,
+                    query_while_updating=allowed_queries_during_update,
                 ), 
                 RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
             ]
 
             for cr_event in cr_events:
                 cr_event.trigger()
-
-    # def test_autoscaling(self):
-    #     pass
 
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", "-s", __file__]))
