@@ -52,6 +52,7 @@ kind create cluster --image=kindest/node:v1.24.0
 #         This command will copy the source code directory into the image, and build it.
 # Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
+
 # To skip running unit tests, run the following command instead:
 # IMG=kuberay/operator:nightly make docker-image
 
