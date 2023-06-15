@@ -1,5 +1,5 @@
 ''' Test sample RayService YAML files to catch invalid and outdated ones. '''
-import json
+from copy import deepcopy
 from kubernetes import client
 import logging
 import os
@@ -45,34 +45,26 @@ CURL_CMD_FMT = (
     "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
 )
 
-def curl_cmd(name: str, namespace: str, path: str, json_args: Any):
-    return CURL_CMD_FMT.format(
-        name=name,
-        namespace=namespace,
-        path=path,
-        json=json.dumps(json_args),
-    )
-
-
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
     def exec(self):
         shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
 
     def wait(self):
-        """Wait for RayService to converge"""
+        """Wait for RayService to converge
+
+        Wait until:
+          (1) The number of head pods and worker pods are as expected.
+          (2) All head pods and worker pods are "Running".
+          (3) Service named "rayservice-sample-serve" presents
+        """
         logger.info("Waiting for pods in ray service to be running...")
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
 
         start_time = time.time()
         expected_head_pods = get_expected_head_pods(self.custom_resource_object)
         expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
-        # Wait until:
-        #   (1) The number of head pods and worker pods are as expected.
-        #   (2) All head pods and worker pods are "Running".
-        #   (3) Service named "rayservice-sample-serve" presents
-        converge = False
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        for _ in range(self.timeout):
+        while time.time() - start_time < self.timeout:
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
@@ -80,21 +72,22 @@ class RayServiceAddCREvent(CREvent):
             head_services = k8s_v1_api.list_namespaced_service(
                 namespace = self.namespace, label_selector =
                 f"ray.io/serve={self.custom_resource_object['metadata']['name']}-serve")
+
             if (len(head_services.items) == 1 and len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
-                converge = True
                 logger.info("--- RayServiceAddCREvent %s seconds ---", time.time() - start_time)
-                break
+                return
+
             time.sleep(1)
 
-        if not converge:
-            logger.info("RayServiceAddCREvent wait() failed to converge in %d seconds.",
-                self.timeout)
-            logger.info("expected_head_pods: %d, expected_worker_pods: %d",
-                expected_head_pods, expected_worker_pods)
-            show_cluster_info(self.namespace)
-            raise Exception("RayServiceAddCREvent wait() timeout")
+        logger.info(f"RayServiceAddCREvent wait() failed to converge in {self.timeout}s.")
+        logger.info(
+            f"expected_head_pods: {expected_head_pods}, "
+            f"expected_worker_pods: {expected_worker_pods}"
+        )
+        show_cluster_info(self.namespace)
+        raise TimeoutError(f"RayServiceAddCREvent didn't finish in {self.timeout}s")
 
 class RayServiceUpdateCREvent(CREvent):
     """CREvent for RayService update"""
@@ -109,13 +102,9 @@ class RayServiceUpdateCREvent(CREvent):
     ):
         super().__init__(custom_resource_object, rulesets, timeout, namespace, filepath)
         self.name = self.custom_resource_object["metadata"]["name"]
-        self.query_while_updating = query_while_updating
-
-    def query(self):
-        if self.query_while_updating:
-            for cmd, expected_output in self.query_while_updating.items():
-                output = shell_subprocess_check_output(cmd)
-                assert output.decode('utf-8') == expected_output
+        self.query_rule = None
+        if query_while_updating:
+            self.query_rule = CurlServiceRule(queries=self.query_while_updating)
 
     def exec(self):
         """Update a CR by a `kubectl apply` command."""
@@ -136,7 +125,9 @@ class RayServiceUpdateCREvent(CREvent):
             if rayservice_info["status"]["serviceStatus"] == status:
                 break
 
-            self.query()
+            if self.query_rule:
+                self.query_rule.assert_rule(self.custom_resource_object, self.namespace)
+
             time.sleep(0.1)
         else:
             raise TimeoutError(
@@ -168,7 +159,6 @@ class RayServiceDeleteCREvent(CREvent):
             workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector = 'ray.io/node-type=worker')
             if (len(headpods.items) == 0 and len(workerpods.items) == 0):
-                converge = True
                 logger.info("--- Cleanup RayService %s seconds ---", time.time() - start_time)
                 return
             time.sleep(1)
@@ -180,27 +170,18 @@ class RayServiceDeleteCREvent(CREvent):
 
 
 class TestRayService:
+    sample_path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath('ray_v1alpha1_rayservice.yaml')
+
     @pytest.fixture
     def set_up_cluster(self):
-        SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
-        YAMLs = ['ray_v1alpha1_rayservice.yaml']
+        with open(self.sample_path, encoding="utf-8") as cr_yaml:
+            self.cr = yaml.safe_load(cr_yaml)
 
-        sample_yaml_files = []
-        for filename in YAMLs:
-            filepath = SAMPLE_PATH.joinpath(filename)
-            with open(filepath, encoding="utf-8") as cr_yaml:
-                for k8s_object in yaml.safe_load_all(cr_yaml):
-                    sample_yaml_files.append(
-                        {'path': filepath, 'name': filename, 'cr': k8s_object}
-                    )
-        
-        self.cr = sample_yaml_files[0]['cr']
-        self.config_path = sample_yaml_files[0]['path']
         self.rayservice_name = self.cr["metadata"]["name"]
-        self.default_queries = {
-            curl_cmd(self.rayservice_name, NAMESPACE, "/fruit", ["MANGO", 2]): "6",
-            curl_cmd(self.rayservice_name, NAMESPACE, "/calc", ["MUL", 3]): '"15 pizzas please!"',
-        }
+        self.default_queries = [
+            {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "6"},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"15 pizzas please!"'},
+        ]
 
         if K8S_CLUSTER_MANAGER.check_cluster_exist():
             K8S_CLUSTER_MANAGER.delete_kind_cluster()
@@ -218,8 +199,8 @@ class TestRayService:
     def test_deploy_applications(self, set_up_cluster):
         rs = RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])
         cr_events: List[CREvent] = [
-            RayServiceAddCREvent(self.cr, [rs], 90, NAMESPACE, self.config_path),
-            RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, self.config_path)
+            RayServiceAddCREvent(self.cr, [rs], 90, NAMESPACE, self.sample_path),
+            RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, self.sample_path)
         ]
 
         for cr_event in cr_events:
@@ -227,19 +208,20 @@ class TestRayService:
     
     def test_in_place_update(self, set_up_cluster):
         # Modify the MangoStand price and Multiplier factor
-        with open(self.config_path, 'r') as file:
-            yaml_lines = file.readlines()
-            yaml_lines[24] = " " * 14 + "price: 4\n"
-            yaml_lines[62] = " " * 14 + "factor: 3\n"
+        updated_cr = deepcopy(self.cr)
+        config = yaml.safe_load(self.cr["spec"]["serveConfigV2"])
+        config["applications"][0]["deployments"][0]["user_config"]["price"] = 4
+        config["applications"][1]["deployments"][1]["user_config"]["factor"] = 3
+        updated_cr["spec"]["serveConfigV2"] = yaml.safe_dump(config)
 
-        updated_queries = {
-            curl_cmd(self.rayservice_name, NAMESPACE, "/fruit", ["MANGO", 2]): "8",
-            curl_cmd(self.rayservice_name, NAMESPACE, "/calc", ["MUL", 3]): '"9 pizzas please!"',
-        }
+        updated_queries = [
+            {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+        ]
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
             logger.info(f"Writing modified RayService yaml to {yaml_copy.name}.")
-            yaml_copy.writelines(yaml_lines)
+            yaml_copy.writelines(yaml.safe_dump(updated_cr))
             yaml_copy.flush()
 
             cr_events: List[CREvent] = [
@@ -248,7 +230,7 @@ class TestRayService:
                     rulesets=[RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])],
                     timeout=90,
                     namespace=NAMESPACE,
-                    filepath=self.config_path
+                    filepath=self.sample_path
                 ),
                 RayServiceUpdateCREvent(
                     custom_resource_object=self.cr,
@@ -257,7 +239,7 @@ class TestRayService:
                     namespace=NAMESPACE,
                     filepath=yaml_copy.name
                 ),
-                RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, self.config_path),
+                RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, self.sample_path),
             ]
 
             for cr_event in cr_events:
@@ -265,24 +247,20 @@ class TestRayService:
 
     def test_zero_downtime_rollout(self, set_up_cluster):
         # Modify the cluster spec to trigger a rollout
-        with open(self.config_path, 'r') as file:
-            yaml_lines = file.readlines()
-            yaml_lines[103:103] = [
-                " " * 14 + "env:\n",
-                " " * 16 + "- name: SAMPLE_ENV_VAR\n",
-                " " * 18 + 'value: SAMPLE_VALUE\n',
-            ]
+        updated_cr = deepcopy(self.cr)
+        env = [{"name": "SAMPLE_ENV_VAR", "value": "SAMPLE_VALUE"}]
+        updated_cr["spec"]["rayClusterConfig"]["headGroupSpec"]["template"]["spec"]["containers"][0]["env"] = env
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
             logger.info(f"Writing modified RayService yaml to {yaml_copy.name}.")
-            yaml_copy.writelines(yaml_lines)
+            yaml_copy.writelines(yaml.safe_dump(updated_cr))
             yaml_copy.flush()
 
             cr_events: List[CREvent] = [
                 RayServiceAddCREvent(
                     custom_resource_object=self.cr,
                     rulesets=[RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])],
-                    filepath=self.config_path
+                    filepath=self.sample_path
                 ), 
                 RayServiceUpdateCREvent(
                     custom_resource_object=self.cr,
@@ -290,11 +268,14 @@ class TestRayService:
                     filepath=yaml_copy.name,
                     query_while_updating=self.default_queries,
                 ), 
-                RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.config_path),
+                RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
             ]
 
             for cr_event in cr_events:
                 cr_event.trigger()
+
+    # def test_autoscaling(self):
+    #     pass
 
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", "-s", __file__]))

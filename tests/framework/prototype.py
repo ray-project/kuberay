@@ -1,8 +1,9 @@
 """Configuration test framework for KubeRay"""
+import json
+import jsonpatch
 from typing import Dict, List, Optional
 import unittest
 import time
-import jsonpatch
 
 from framework.utils import (
     create_custom_object,
@@ -234,18 +235,29 @@ class EasyJobRule(Rule):
 
 class CurlServiceRule(Rule):
     """Using curl to access the deployed application(s) on Ray service"""
+    CURL_CMD_FMT = (
+        "kubectl exec curl -n {namespace} -- "
+        "curl -X POST -H 'Content-Type: application/json' "
+        "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
+    )
 
     def __init__(self, queries: Dict[str, str]):
         self.queries = queries
 
-    def assert_rule(self, *args):
+    def assert_rule(self, custom_resource, cr_namespace):
         # If curl pod doesn't exist, create one
         if get_pod("default", "run=curl") is None:
             start_curl_pod("curl", "default", timeout_s=30)
-
-        for cmd, expected_output in self.queries.items():
+        
+        for query in self.queries:
+            cmd = self.CURL_CMD_FMT.format(
+                name=custom_resource["metadata"]["name"],
+                namespace=cr_namespace,
+                path=query["path"],
+                json=json.dumps(query["json_args"]),
+            )
             output = shell_subprocess_check_output(cmd)
-            assert output.decode('utf-8') == expected_output
+            assert output.decode('utf-8') == query["expected_output"]
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""

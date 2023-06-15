@@ -232,7 +232,8 @@ class RayServiceTestCase(unittest.TestCase):
         # for serving requests. This `sleep` function is a workaround, and should be removed
         # when https://github.com/ray-project/kuberay/pull/730 is merged.
         time.sleep(60)
-        cr_event.rulesets = [RuleSet([CurlServiceRule()])]
+        query = {"path": "/", "json_args": ["MANGO", 2], "expected_output": "6"}
+        cr_event.rulesets = [RuleSet([CurlServiceRule([query])])]
         cr_event.check_rule_sets()
 
 def parse_environment():
