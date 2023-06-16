@@ -12,10 +12,10 @@ spec:
   serveConfigV2: |
     applications:
       - name: app1
-        import_path: blocked.app
+        import_path: autoscaling_test.blocked.app
         route_prefix: /
         runtime_env:
-          working_dir: "https://github.com/zcin/sample-serve-applications/archive/refs/heads/main.zip"
+          working_dir: "https://github.com/ray-project/serve_workloads/archive/7a0daafdb86b55118534b04d122b1b79c9ae99f5.zip"
         deployments:
           - name: Blocked
             autoscaling_config:
@@ -30,10 +30,10 @@ spec:
             ray_actor_options:
               num_cpus: 0.5
       - name: signal
-        import_path: signaling.app
+        import_path: autoscaling_test.signaling.app
         route_prefix: /signal
         runtime_env:
-          working_dir: "https://github.com/zcin/sample-serve-applications/archive/refs/heads/main.zip"
+          working_dir: "https://github.com/ray-project/serve_workloads/archive/7a0daafdb86b55118534b04d122b1b79c9ae99f5.zip"
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config

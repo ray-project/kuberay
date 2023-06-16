@@ -195,7 +195,7 @@ class CREvent:
 
     def clean_up(self):
         """Cleanup the CR."""
-        pass
+        raise NotImplementedError
 
 # My implementations
 class HeadPodNameRule(Rule):
