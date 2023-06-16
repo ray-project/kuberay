@@ -21,7 +21,7 @@ spec:
             autoscaling_config:
               metrics_interval_s: 0.1
               min_replicas: 1
-              max_replicas: 10
+              max_replicas: 14
               look_back_period_s: 0.2
               downscale_delay_s: 0
               upscale_delay_s: 0
@@ -40,6 +40,13 @@ spec:
     enableInTreeAutoscaling: true
     autoscalerOptions:
       upscalingMode: Default
+      resources:
+        limits:
+          cpu: "1"
+          memory: "1000Mi"
+        requests:
+          cpu: "1"
+          memory: "1000Mi"
     ######################headGroupSpecs#################################
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
@@ -95,5 +102,5 @@ spec:
                     cpu: "1"
                     memory: "2Gi"
                   requests:
-                    cpu: "500m"
+                    cpu: "1"
                     memory: "2Gi"

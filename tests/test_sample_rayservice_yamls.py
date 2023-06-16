@@ -316,14 +316,14 @@ class TestRayService:
             query={"path": "/signal", "json_args": {}},
             num_repeat=1,
             expected_worker_pods=1,
-            timeout=200,
+            timeout=300,
             message="Releasing all blocked requests. Worker pods should start scaling down..."
         )
         cr_events: List[CREvent] = [
             RayServiceAddCREvent(
                 custom_resource_object=self.cr,
                 rulesets=[RuleSet([scale_up_rule, scale_down_rule])],
-                timeout=1000,
+                timeout=600,
                 namespace=NAMESPACE,
                 filepath=path,
             ),
