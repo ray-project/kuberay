@@ -228,7 +228,7 @@ def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
     start_time = time.time()
     while time.time() - start_time < timeout_s or timeout_s < 0:
         resp = k8s_v1_api.read_namespaced_pod(name=name, namespace=namespace)
-        if resp.status.phase != 'Pending':
+        if resp.status.phase == 'Running':
             return
 
     raise TimeoutError(f"Curl pod wasn't started in {timeout_s}s.")

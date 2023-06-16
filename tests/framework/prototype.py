@@ -245,7 +245,7 @@ class EasyJobRule(Rule):
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
-    """Using curl to access the deployed application(s) on Ray service"""
+    """Using curl to access the deployed application(s) on RayService"""
     CURL_CMD_FMT = (
         "kubectl exec curl -n {namespace} -- "
         "curl -X POST -H 'Content-Type: application/json' "
@@ -259,7 +259,7 @@ class CurlServiceRule(Rule):
     def assert_rule(self, custom_resource, cr_namespace):
         # If curl pod doesn't exist, create one
         if get_pod("default", "run=curl") is None:
-            start_curl_pod("curl", "default", timeout_s=30)
+            start_curl_pod("curl", cr_namespace, timeout_s=30)
         
         for query in self.queries:
             cmd = self.CURL_CMD_FMT.format(
