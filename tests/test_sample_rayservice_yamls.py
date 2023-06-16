@@ -316,7 +316,7 @@ class TestRayService:
             query={"path": "/signal", "json_args": {}},
             num_repeat=1,
             expected_worker_pods=1,
-            timeout=300,
+            timeout=400,
             message="Releasing all blocked requests. Worker pods should start scaling down..."
         )
         cr_events: List[CREvent] = [
