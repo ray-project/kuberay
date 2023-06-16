@@ -15,6 +15,7 @@ from framework.prototype import (
     CREvent,
     EasyJobRule,
     CurlServiceRule,
+    AutoscaleRule,
     get_expected_head_pods,
     get_expected_worker_pods,
     show_cluster_info,
@@ -37,12 +38,6 @@ DEFAULT_IMAGE_DICT = {
     CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.5.0'),
     CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
 }
-
-CURL_CMD_FMT = (
-    "kubectl exec curl -n {namespace} -- "
-    "curl -X POST -H 'Content-Type: application/json' "
-    "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
-)
 
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
@@ -100,14 +95,16 @@ class RayServiceUpdateCREvent(CREvent):
         timeout: int = 90,
         namespace: str = "default",
         filepath: Optional[str] = None,
+        switch_cluster: bool = False,
         query_while_updating: Optional[Dict[str, str]] = None,
     ):
         super().__init__(custom_resource_object, rulesets, timeout, namespace, filepath)
         self.name = self.custom_resource_object["metadata"]["name"]
         self.query_rule = None
+        self.switch_cluster = switch_cluster
         if query_while_updating:
             self.query_rule = CurlServiceRule(queries=query_while_updating)
-    
+
     def get_ray_service_info(self):
         k8s_cr_api: client.CustomObjectsApi = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         return k8s_cr_api.get_namespaced_custom_object_status(
@@ -117,7 +114,7 @@ class RayServiceUpdateCREvent(CREvent):
             version="v1alpha1",
             plural="rayservices",
         )
-    
+
     def get_active_ray_cluster_name(self):
         rayservice_info = self.get_ray_service_info()
         return rayservice_info["status"]["activeServiceStatus"]["rayClusterName"]
@@ -128,7 +125,7 @@ class RayServiceUpdateCREvent(CREvent):
 
         self.start = time.time()
         shell_subprocess_run(f"kubectl apply -n {self.namespace} -f {self.filepath}")
-    
+
     def wait_for_status(self, status: str):
         """Helper function to check for service status."""
 
@@ -155,9 +152,10 @@ class RayServiceUpdateCREvent(CREvent):
         self.wait_for_status("Running")
         logger.info("Ray service transitioned to status Running.")
 
-        current_cluster_name = self.get_active_ray_cluster_name()
-        assert current_cluster_name != self.old_cluster_name
-        logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
+        if self.switch_cluster:
+            current_cluster_name = self.get_active_ray_cluster_name()
+            assert current_cluster_name != self.old_cluster_name
+            logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
 
 class RayServiceDeleteCREvent(CREvent):
     """CREvent for RayService deletion"""
@@ -294,6 +292,7 @@ class TestRayService:
                     custom_resource_object=self.cr,
                     rulesets=[RuleSet([CurlServiceRule(queries=updated_queries)])],
                     filepath=yaml_copy.name,
+                    switch_cluster=True,
                     query_while_updating=allowed_queries_during_update,
                 ), 
                 RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
@@ -301,6 +300,39 @@ class TestRayService:
 
             for cr_event in cr_events:
                 cr_event.trigger()
+
+    def test_service_autoscaling(self, set_up_cluster):
+        filename = "ray-service.autoscaler.yaml"
+        path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath(filename)
+
+        scale_up_rule = AutoscaleRule(
+            query={"path": "/", "json_args": {}},
+            num_repeat=20,
+            expected_worker_pods=5,
+            timeout=30,
+            message="Sending a lot of requests. Worker pods should start scaling up..."
+        )
+        scale_down_rule = AutoscaleRule(
+            query={"path": "/signal", "json_args": {}},
+            num_repeat=1,
+            expected_worker_pods=1,
+            timeout=200,
+            message="Releasing all blocked requests. Worker pods should start scaling down..."
+        )
+        cr_events: List[CREvent] = [
+            RayServiceAddCREvent(
+                custom_resource_object=self.cr,
+                rulesets=[RuleSet([scale_up_rule, scale_down_rule])],
+                timeout=1000,
+                namespace=NAMESPACE,
+                filepath=path,
+            ),
+            RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, path),
+        ]
+
+        for cr_event in cr_events:
+            cr_event.trigger()
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", "-s", __file__]))

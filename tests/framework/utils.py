@@ -156,13 +156,27 @@ class OperatorManager:
                     f"--set image.repository={repo},image.tag={tag}"
                 )
 
-def shell_subprocess_run(command, check = True):
-    """
-    Command will be executed through the shell. If check=True, it will raise an error when
-    the returncode of the execution is not 0.
+def shell_subprocess_run(command, check=True, hide_output=False) -> int:
+    """Command will be executed through the shell.
+    
+    Args:
+        check: If true, an error will be raised if the returncode is nonzero
+        hide_output: If true, stdout and stderr of the command will be hidden
+    
+    Returns:
+        Return code of the subprocess.
     """
     logger.info("Execute command: %s", command)
-    return subprocess.run(command, shell = True, check = check).returncode
+    if hide_output:
+        return subprocess.run(
+            command,
+            shell=True,
+            check=check,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        ).returncode
+    else:
+        return subprocess.run(command, shell=True, check=check).returncode
 
 def shell_subprocess_check_output(command):
     """
@@ -192,10 +206,6 @@ def get_pod(namespace, label_selector):
         )
         return None
     return pods.items[0]
-
-def get_pod_by_name(namespace, name):
-    k8s_v1_api: client.CoreV1Api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-    k8s_v1_api.list_namespaced_pod
 
 def get_head_pod(namespace):
     """Gets a head pod in the `namespace`. Returns None if there are no matches."""

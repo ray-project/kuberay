@@ -239,8 +239,9 @@ class CurlServiceRule(Rule):
         "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
     )
 
-    def __init__(self, queries: Dict[str, str]):
+    def __init__(self, queries: List[Dict[str, str]], start_in_background: bool = False):
         self.queries = queries
+        self.start_in_background = start_in_background
 
     def assert_rule(self, custom_resource, cr_namespace):
         # If curl pod doesn't exist, create one
@@ -251,14 +252,62 @@ class CurlServiceRule(Rule):
             cmd = self.CURL_CMD_FMT.format(
                 name=custom_resource["metadata"]["name"],
                 namespace=cr_namespace,
-                path=query["path"],
+                path=query.get("path").rstrip("/"),
                 json=json.dumps(query["json_args"]),
             )
-            output = shell_subprocess_check_output(cmd)
-            if hasattr(query["expected_output"], "__iter__"):
-                assert output.decode('utf-8') in query["expected_output"]
+            if self.start_in_background:
+                shell_subprocess_run(f"{cmd} &", hide_output=True)
+
             else:
-                assert output.decode('utf-8') == query["expected_output"]
+                output = shell_subprocess_check_output(cmd)
+                if hasattr(query.get("expected_output"), "__iter__"):
+                    assert output.decode('utf-8') in query["expected_output"]
+                else:
+                    assert output.decode('utf-8') == query["expected_output"]
+
+class AutoscaleRule(Rule):
+    def __init__(
+        self,
+        query: Dict[str, str],
+        num_repeat: int,
+        expected_worker_pods: int,
+        timeout: int,
+        message: str = "",
+    ):
+        self.query: Dict[str, str] = query
+        self.num_repeat: int = num_repeat
+        self.expected_worker_pods = expected_worker_pods
+        self.query_rule = CurlServiceRule(queries=[query], start_in_background=True)
+        self.timeout = timeout
+        self.message = message
+
+    def assert_rule(self, custom_resource, cr_namespace):
+        logger.info(self.message)
+        for _ in range(self.num_repeat):
+            self.query_rule.assert_rule(custom_resource, cr_namespace)
+
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
+            k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+            pods = k8s_v1_api.list_namespaced_pod(
+                namespace=cr_namespace, label_selector='ray.io/node-type=worker'
+            )
+            if len(pods.items) == self.expected_worker_pods:
+                logger.info(
+                    "Cluster has successfully scaled to the expected number of "
+                    f"{self.expected_worker_pods} worker pods after "
+                    f"{time.time() - start_time} seconds."
+                )
+                break
+            
+            time.sleep(0.1)
+        else:
+            raise TimeoutError(
+                "Cluster did not scale to the expected number of "
+                f"{self.expected_worker_pods} worker pod(s) within {self.timeout} "
+                f"seconds. Cluster is currently at {len(pods.items)} worker pods."
+            )
+
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
