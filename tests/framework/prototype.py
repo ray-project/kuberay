@@ -86,6 +86,19 @@ def get_expected_worker_pods(custom_resource):
 
 def show_cluster_info(cr_namespace):
     """Show system information"""
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    head_pods = k8s_v1_api.list_namespaced_pod(
+        namespace=cr_namespace,
+        label_selector='ray.io/node-type=head'
+    )
+    worker_pods = k8s_v1_api.list_namespaced_pod(
+        namespace=cr_namespace,
+        label_selector='ray.io/node-type=worker'
+    )
+    logger.info(
+        f"Number of head pods: {len(head_pods.items)}, "
+        f"number of worker pods: {len(worker_pods.items)}"
+    )
     shell_subprocess_run(f'kubectl get all -n={cr_namespace}')
     shell_subprocess_run(f'kubectl describe pods -n={cr_namespace}')
     # With "--tail=-1", every line in the log will be printed. The default value of "tail" is not
