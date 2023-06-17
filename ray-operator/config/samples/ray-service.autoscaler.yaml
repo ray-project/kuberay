@@ -9,6 +9,11 @@ metadata:
 spec:
   serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
   deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
+  # The workload consists of two applications. The first application checks on an event in the second application.
+  # If the event isn't set, the first application will block on requests until the event is set. So, to test upscaling
+  # we can first send a bunch of requests to the first application, which will trigger Serve autoscaling to bring up
+  # more replicas since the existing replicas are blocked on requests. Worker pods should scale up. To test downscaling,
+  # set the event in the second application, releasing all blocked requests, and worker pods should scale down.
   serveConfigV2: |
     applications:
       - name: app1

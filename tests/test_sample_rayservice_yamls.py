@@ -302,6 +302,19 @@ class TestRayService:
                 cr_event.trigger()
 
     def test_service_autoscaling(self, set_up_cluster):
+        """This test uses a special workload that can allow us to
+        reliably test autoscaling.
+        
+        The workload consists of two applications. The first application
+        checks on an event in the second application. If the event isn't
+        set, the first application will block on requests until the
+        event is set. So, first we send a bunch of requests to the first
+        application, which will trigger Serve autoscaling to bring up
+        more replicas since the existing replicas are blocked on
+        requests. Worker pods should scale up. Then we set the event in
+        the second application, releasing all blocked requests. Worker
+        pods should scale down.
+        """
         filename = "ray-service.autoscaler.yaml"
         path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath(filename)
 
