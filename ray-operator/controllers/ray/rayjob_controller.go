@@ -172,7 +172,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	clientURL := rayJobInstance.Status.DashboardURL
 	if clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
-		if clientURL, err = utils.FetchDashboardURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
+		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardName); err != nil || clientURL == "" {
 			if clientURL == "" {
 				err = fmt.Errorf("empty dashboardURL")
 			}

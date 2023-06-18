@@ -129,7 +129,7 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateServiceName generates a ray head service name from cluster name
+// GenerateServiceName generates a Ray head service name from cluster name
 func GenerateServiceName(clusterName string) string {
 	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "svc"))
 }

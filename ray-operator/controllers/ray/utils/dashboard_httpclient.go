@@ -21,13 +21,6 @@ import (
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 )
 
-// TODO: currently the following constants are also declared in ray-operator/controllers/ray/common
-// We cannot import them to avoid cycles
-const (
-	DefaultDashboardName                = "dashboard"
-	DefaultDashboardAgentListenPortName = "dashboard-agent"
-)
-
 var (
 	// Single-application URL paths
 	DeployPath = "/api/serve/deployments/"
@@ -70,70 +63,38 @@ type RayDashboardClient struct {
 	BaseDashboardClient
 }
 
-func FetchDashboardAgentURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
-	dashboardAgentService := &corev1.Service{}
-	dashboardAgentServiceName := CheckName(GenerateDashboardServiceName(rayCluster.Name))
-	if err := cli.Get(ctx, client.ObjectKey{Name: dashboardAgentServiceName, Namespace: rayCluster.Namespace}, dashboardAgentService); err != nil {
-		return "", err
-	}
-
-	log.V(1).Info("fetchDashboardAgentURL ", "dashboard agent service found", dashboardAgentService.Name)
-	// TODO: compare diff and reconcile the object. For example. ServiceType might be changed or port might be modified
-	servicePorts := dashboardAgentService.Spec.Ports
-
-	dashboardPort := int32(-1)
-
-	for _, servicePort := range servicePorts {
-		if servicePort.Name == DefaultDashboardAgentListenPortName {
-			dashboardPort = servicePort.Port
-			break
-		}
-	}
-
-	if dashboardPort == int32(-1) {
-		return "", fmtErrors.Errorf("dashboard port not found")
-	}
-
-	domainName := GetClusterDomainName()
-	dashboardAgentURL := fmt.Sprintf("%s.%s.svc.%s:%v",
-		dashboardAgentService.Name,
-		dashboardAgentService.Namespace,
-		domainName,
-		dashboardPort)
-	log.V(1).Info("fetchDashboardAgentURL ", "dashboardURL", dashboardAgentURL)
-	return dashboardAgentURL, nil
-}
-
-func FetchDashboardURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster) (string, error) {
+// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
+// and the port with the given port name (defaultPortName).
+func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster, defaultPortName string) (string, error) {
 	headSvc := &corev1.Service{}
 	headSvcName := GenerateServiceName(rayCluster.Name)
 	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
 		return "", err
 	}
 
-	log.V(3).Info("fetchDashboardURL ", "dashboard service found", headSvc.Name)
+	log.V(3).Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
 	servicePorts := headSvc.Spec.Ports
-	dashboardPort := int32(-1)
+	port := int32(-1)
 
 	for _, servicePort := range servicePorts {
-		if servicePort.Name == DefaultDashboardName {
-			dashboardPort = servicePort.Port
+		if servicePort.Name == defaultPortName {
+			port = servicePort.Port
 			break
 		}
 	}
 
-	if dashboardPort == int32(-1) {
-		return "", fmtErrors.Errorf("dashboard port not found")
+	if port == int32(-1) {
+		return "", fmtErrors.Errorf("%s port is not found", defaultPortName)
 	}
 
 	domainName := GetClusterDomainName()
-	dashboardURL := fmt.Sprintf("%s.%s.svc.%s:%v",
+	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
 		headSvc.Name,
 		headSvc.Namespace,
 		domainName,
-		dashboardPort)
-	log.V(1).Info("fetchDashboardURL ", "dashboardURL", dashboardURL)
-	return dashboardURL, nil
+		port)
+	log.V(1).Info("FetchHeadServiceURL", "head service URL", headServiceURL, "port", defaultPortName)
+	return headServiceURL, nil
 }
 
 func (r *RayDashboardClient) InitClient(url string) {
