@@ -2,11 +2,13 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -371,4 +373,73 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
+}
+
+func TestFetchHeadServiceURL(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	namespace := "ray"
+	dashboardPort := int32(9999)
+	cluster := rayv1alpha1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: namespace,
+		},
+		Spec: rayv1alpha1.RayClusterSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{
+										Name:          common.DefaultDashboardName,
+										ContainerPort: dashboardPort,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// A head service for the RayCluster.
+	headSvc := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServiceName(cluster.Name),
+			Namespace: cluster.ObjectMeta.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name: common.DefaultDashboardName,
+					Port: dashboardPort,
+				},
+			},
+		},
+	}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{&headSvc}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayCluster reconciler.
+	ctx := context.TODO()
+	r := RayServiceReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
+	}
+
+	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DefaultDashboardName)
+	assert.Nil(t, err, "Fail to fetch head service url")
+	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }

@@ -72,7 +72,7 @@ func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Clien
 		return "", err
 	}
 
-	log.V(3).Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
+	log.Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
 	servicePorts := headSvc.Spec.Ports
 	port := int32(-1)
 
@@ -93,7 +93,7 @@ func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Clien
 		headSvc.Namespace,
 		domainName,
 		port)
-	log.V(1).Info("FetchHeadServiceURL", "head service URL", headServiceURL, "port", defaultPortName)
+	log.Info("FetchHeadServiceURL", "head service URL", headServiceURL, "port", defaultPortName)
 	return headServiceURL, nil
 }
 
