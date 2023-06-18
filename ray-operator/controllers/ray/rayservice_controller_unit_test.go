@@ -389,28 +389,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 			Name:      "test-cluster",
 			Namespace: namespace,
 		},
-		Spec: rayv1alpha1.RayClusterSpec{
-			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name: "ray-head",
-								Ports: []corev1.ContainerPort{
-									{
-										Name:          common.DefaultDashboardName,
-										ContainerPort: dashboardPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
-
-	// A head service for the RayCluster.
 	headSvc := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.GenerateServiceName(cluster.Name),
@@ -430,7 +409,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	runtimeObjects := []runtime.Object{&headSvc}
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 
-	// Initialize RayCluster reconciler.
+	// Initialize RayService reconciler.
 	ctx := context.TODO()
 	r := RayServiceReconciler{
 		Client:   fakeClient,
