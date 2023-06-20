@@ -279,7 +279,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
-	if jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
+	if jobInfo != nil && jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
 		r.Log.Info(fmt.Sprintf("Update status from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
 		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1alpha1.JobDeploymentStatusRunning, nil)
 		return ctrl.Result{}, err
