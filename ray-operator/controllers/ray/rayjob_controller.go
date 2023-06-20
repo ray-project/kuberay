@@ -2,17 +2,22 @@ package ray
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
-	"k8s.io/client-go/tools/record"
-
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
+	"github.com/google/shlex"
 	fmtErrors "github.com/pkg/errors"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -62,6 +67,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile reads that state of a RayJob object and makes changes based on it
@@ -192,7 +198,78 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	// Check the current status of ray jobs before submitting.
+	// // Check the current status of ray jobs before submitting.
+	// jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+	// if err != nil {
+	// 	err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedToGetJobStatus, err)
+	// 	// Dashboard service in head pod takes time to start, it's possible we get connection refused error.
+	// 	// Requeue after few seconds to avoid continuous connection errors.
+	// 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	// }
+
+	// r.Log.V(1).Info("RayJob information", "RayJob", rayJobInstance.Name, "jobInfo", jobInfo, "rayJobInstance", rayJobInstance.Status.JobStatus)
+	// if jobInfo == nil {
+	// 	// Submit the job if no id set
+	// 	jobId, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log)
+	// 	if err != nil {
+	// 		r.Log.Error(err, "failed to submit job")
+	// 		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedJobDeploy, err)
+	// 		return ctrl.Result{}, err
+	// 	}
+
+	// 	r.Log.Info("Job successfully submitted", "RayJob", rayJobInstance.Name, "jobId", jobId)
+	// 	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Submitted", "Submit Job %s", jobId)
+	// 	// Here, we directly update to PENDING and emit an event to trigger a new reconcile loop
+	// 	err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1alpha1.JobStatusPending, rayv1alpha1.JobDeploymentStatusRunning, nil)
+	// 	if err != nil {
+	// 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	// 	}
+	// 	return ctrl.Result{}, nil
+	// }
+
+	// Create k8s job
+	jobName, err := r.CreateK8sJob(ctx, rayJobInstance)
+	if err != nil {
+		r.Log.Error(err, "failed to create k8s job")
+		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedJobDeploy, err)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
+	r.Log.Info("K8s job successfully created", "RayJob", rayJobInstance.Name, "jobId", jobName)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created Job %s", jobName)
+
+	// Check the status of the k8s job and update the RayJobInstance status accordingly.
+	// If the k8s job is not found, then we assume it is deleted and update the RayJobInstance status accordingly.
+	// If the k8s job is found, then we check the status of the k8s job and update the RayJobInstance status accordingly.
+
+	// Get the k8s job
+	k8sJob := &batchv1.Job{}
+	err = r.Client.Get(ctx, types.NamespacedName{Name: jobName, Namespace: rayJobInstance.Namespace}, k8sJob)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("Job not found", "RayJob", rayJobInstance.Name, "jobId", jobName)
+			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusWaitForK8sJob, err)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		r.Log.Error(err, "failed to get k8s job")
+		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedToGetJobStatus, err)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
+	// TODO(archit): Check the status of the k8s job and decide what to do. Note that we should set the "message" field appropriately, otherwise
+	// it will retain a stale message.  e.g. status SUCCEDED message "Job is currently running.""
+	// if k8sJob.Status.Succeeded > 0 {
+	// 	r.Log.Info("Job succeeded", "RayJob", rayJobInstance.Name, "jobId", jobName)
+	// 	err = r.updateState(ctx, rayJobInstance, nil, rayv1alpha1.JobStatusSucceeded, rayv1alpha1.JobDeploymentStatusComplete, nil)
+	// 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	// }
+
+	// if k8sJob.Status.Failed > 0 {
+	// 	r.Log.Info("Job failed", "RayJob", rayJobInstance.Name, "jobId", jobName)
+	// 	err = r.updateState(ctx, rayJobInstance, nil, rayv1alpha1.JobStatusFailed, rayv1alpha1.JobDeploymentStatusComplete, nil)
+	// 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	// }
+
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 	if err != nil {
 		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedToGetJobStatus, err)
@@ -201,32 +278,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	r.Log.V(1).Info("RayJob information", "RayJob", rayJobInstance.Name, "jobInfo", jobInfo, "rayJobInstance", rayJobInstance.Status.JobStatus)
-	if jobInfo == nil {
-		// Submit the job if no id set
-		jobId, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log)
-		if err != nil {
-			r.Log.Error(err, "failed to submit job")
-			err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedJobDeploy, err)
-			return ctrl.Result{}, err
-		}
-
-		r.Log.Info("Job successfully submitted", "RayJob", rayJobInstance.Name, "jobId", jobId)
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Submitted", "Submit Job %s", jobId)
-		// Here, we directly update to PENDING and emit an event to trigger a new reconcile loop
-		err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1alpha1.JobStatusPending, rayv1alpha1.JobDeploymentStatusRunning, nil)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
 	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
 	if jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
 		r.Log.Info(fmt.Sprintf("Update status from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
 		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1alpha1.JobDeploymentStatusRunning, nil)
 		return ctrl.Result{}, err
 	}
+
+	// TODO(archit): update status from here
 
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1alpha1.JobDeploymentStatusRunning {
 		// If suspend flag is set AND
@@ -238,6 +297,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if !rayv1alpha1.IsJobTerminal(info.JobStatus) {
+				// TODO(archit): maybe delete this
 				err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
 				if err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -291,6 +351,119 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (string, error) {
+
+	// For simplicity, copy the RayCluster head pod template. We will modify the "name" and "command" fields
+	// to run the Ray job.
+	head_template := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.DeepCopy()
+	head_template.Name = rayJobInstance.Name + "-k8s-job"
+	// Because for now we're using the head pod template, and the restart policy is required
+	// to have value OnFailure or Never, we just set it to Never for now.
+	head_template.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	address := rayJobInstance.Status.DashboardURL
+	// add http:// if needed
+	if !strings.HasPrefix(address, "http://") {
+		address = "http://" + address
+	}
+
+	k8s_job_command := []string{"ray", "job", "submit", "--address", address}
+
+	// Add runtimeEnv to command
+	if(len(rayJobInstance.Spec.RuntimeEnv) > 0) {
+		decodedBytes, err := base64.StdEncoding.DecodeString(rayJobInstance.Spec.RuntimeEnv)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode runtimeEnv: %v: %v", rayJobInstance.Spec.RuntimeEnv, err)
+		}
+		runtimeEnv := string(decodedBytes)
+		k8s_job_command = append(k8s_job_command, "--runtime-env-json", runtimeEnv)
+	}
+
+	// Add metadata to command
+	if(len(rayJobInstance.Spec.Metadata) > 0) {
+		// Check that the Ray version is at least 2.6.0.
+		// If it is, we can use the --metadata-json flag.
+		// Otherwise, we need to raise an error.
+
+		rayVersion := rayJobInstance.Spec.RayClusterSpec.RayVersion
+		constraint, _ := semver.NewConstraint(">= 2.6.0")
+		v, err := semver.NewVersion(rayVersion)
+		
+		if err != nil {
+			return "", fmt.Errorf("failed to parse Ray version: %v: %v", rayVersion, err)
+		}
+		
+		if !constraint.Check(v) {
+			return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
+		}
+
+		// Convert the metadata map to a JSON string.
+		metadataBytes, err := json.Marshal(rayJobInstance.Spec.Metadata)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal metadata: %v: %v", rayJobInstance.Spec.Metadata, err)
+		}
+		metadata := string(metadataBytes)
+
+		k8s_job_command = append(k8s_job_command, "--metadata-json", metadata)
+	}
+
+	// Add jobid to command
+	if(len(rayJobInstance.Status.JobId) > 0) {
+		jobid := rayJobInstance.Status.JobId
+		k8s_job_command = append(k8s_job_command, "--job-id", jobid)
+	}
+
+	entrypoint := rayJobInstance.Spec.Entrypoint
+	commandSlice, err := shlex.Split(entrypoint)
+	if err != nil {
+		return "", err
+	}
+
+	// append command slice to ray job submit --
+	head_template.Spec.Containers[0].Command = append(k8s_job_command, commandSlice...)
+
+	// Print command for debugging
+	r.Log.Info("Using command for Ray job", "command", head_template.Spec.Containers[0].Command)
+
+	jobName := rayJobInstance.Name + "-k8s-job"
+	jobNamespace := rayJobInstance.Namespace
+
+	// Create a Job object with the specified name and namespace
+	job := &batchv1.Job{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: jobNamespace, Name: jobName}, job); err != nil {
+		if errors.IsNotFound(err) {
+			// Job doesn't exist, so we create it
+			job = &batchv1.Job{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      jobName,
+					Namespace: jobNamespace,
+					Labels: map[string]string{
+						"app": "ray",
+						// Other labels as necessary
+					},
+				},
+				Spec: batchv1.JobSpec{
+					Template: *head_template,
+				},
+			}
+
+			// Create the Kubernetes Job
+			if err := r.Client.Create(ctx, job); err != nil {
+				return "", err
+			}
+		} else {
+			// Some other error occurred while trying to get the Job
+			return "", err
+		}
+	} else {
+        // Job already exists, instead of returning an error we return a "success"
+        return jobName, nil
+	}
+
+	// Return the Job's name
+	return jobName, nil
 }
 
 func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (reconcile.Result, error) {
