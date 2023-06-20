@@ -35,7 +35,7 @@ const (
 	JobDeploymentStatusInitializing                  JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusFailedToGetOrCreateRayCluster JobDeploymentStatus = "FailedToGetOrCreateRayCluster"
 	JobDeploymentStatusWaitForDashboard              JobDeploymentStatus = "WaitForDashboard"
-	JobDeploymentStatusWaitForK8sJob				 JobDeploymentStatus = "WaitForK8sJob"
+	JobDeploymentStatusWaitForK8sJob                 JobDeploymentStatus = "WaitForK8sJob"
 	JobDeploymentStatusFailedJobDeploy               JobDeploymentStatus = "FailedJobDeploy"
 	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
 	JobDeploymentStatusFailedToGetJobStatus          JobDeploymentStatus = "FailedToGetJobStatus"

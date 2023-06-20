@@ -354,7 +354,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 }
 
 func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (string, error) {
-
 	// For simplicity, copy the RayCluster head pod template. We will modify the "name" and "command" fields
 	// to run the Ray job.
 	head_template := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.DeepCopy()
@@ -372,7 +371,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	k8s_job_command := []string{"ray", "job", "submit", "--address", address}
 
 	// Add runtimeEnv to command
-	if(len(rayJobInstance.Spec.RuntimeEnv) > 0) {
+	if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
 		decodedBytes, err := base64.StdEncoding.DecodeString(rayJobInstance.Spec.RuntimeEnv)
 		if err != nil {
 			return "", fmt.Errorf("failed to decode runtimeEnv: %v: %v", rayJobInstance.Spec.RuntimeEnv, err)
@@ -382,7 +381,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	}
 
 	// Add metadata to command
-	if(len(rayJobInstance.Spec.Metadata) > 0) {
+	if len(rayJobInstance.Spec.Metadata) > 0 {
 		// Check that the Ray version is at least 2.6.0.
 		// If it is, we can use the --metadata-json flag.
 		// Otherwise, we need to raise an error.
@@ -390,11 +389,10 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 		rayVersion := rayJobInstance.Spec.RayClusterSpec.RayVersion
 		constraint, _ := semver.NewConstraint(">= 2.6.0")
 		v, err := semver.NewVersion(rayVersion)
-		
 		if err != nil {
 			return "", fmt.Errorf("failed to parse Ray version: %v: %v", rayVersion, err)
 		}
-		
+
 		if !constraint.Check(v) {
 			return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
 		}
@@ -410,7 +408,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	}
 
 	// Add jobid to command
-	if(len(rayJobInstance.Status.JobId) > 0) {
+	if len(rayJobInstance.Status.JobId) > 0 {
 		jobid := rayJobInstance.Status.JobId
 		k8s_job_command = append(k8s_job_command, "--job-id", jobid)
 	}
@@ -458,8 +456,8 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 			return "", err
 		}
 	} else {
-        // Job already exists, instead of returning an error we return a "success"
-        return jobName, nil
+		// Job already exists, instead of returning an error we return a "success"
+		return jobName, nil
 	}
 
 	// Return the Job's name
