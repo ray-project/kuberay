@@ -1,6 +1,6 @@
 # RayService: MobileNet example
 
-Both Python scripts for Ray Serve and sending requests are in the repository [kevin85421/ray-serve-examples](https://github.com/kevin85421/ray-serve-examples).
+Both Python scripts for Ray Serve and sending requests are in the repository [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples).
 
 ## Step 1: Create a Kubernetes cluster with Kind.
 
@@ -33,8 +33,7 @@ Note that the Serve service will be created after the Serve applications are rea
 ## Step 5: Send a request to the ImageClassifier
 
 * Step 5.1: Prepare an image file (e.g. golden.png)
-* Step 5.2: Update `image_path` in [mobilenet_req.py](https://github.com/kevin85421/ray-serve-examples/blob/main/mobilenet_req.py
-)
+* Step 5.2: Update `image_path` in [mobilenet_req.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet_req.py)
 * Step 5.3: Send a request to the ImageClassifier.
   ```sh
   python3 mobilenet_req.py

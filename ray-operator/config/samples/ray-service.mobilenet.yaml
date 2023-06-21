@@ -6,9 +6,9 @@ spec:
   serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
   deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
   serveConfig:
-    importPath: mobilenet.graph
+    importPath: mobilenet.mobilenet:app
     runtimeEnv: |
-      working_dir: "https://github.com/kevin85421/ray-serve-examples/archive/main.zip"
+      working_dir: "https://github.com/ray-project/serve_config_examples/archive/master.zip"
       pip: ["python-multipart"]
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
