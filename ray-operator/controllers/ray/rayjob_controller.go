@@ -212,9 +212,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created Job %s", jobName)
 
 	// Check the status of the k8s job and update the RayJobInstance status accordingly.
-	// If the k8s job is not found, then we assume it is deleted and update the RayJobInstance status accordingly.
-	// If the k8s job is found, then we check the status of the k8s job and update the RayJobInstance status accordingly.
-
 	// Get the k8s job
 	k8sJob := &batchv1.Job{}
 	err = r.Client.Get(ctx, types.NamespacedName{Name: jobName, Namespace: rayJobInstance.Namespace}, k8sJob)
@@ -229,6 +226,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	// Check the current status of ray jobs
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 	if err != nil {
 		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusFailedToGetJobStatus, err)
