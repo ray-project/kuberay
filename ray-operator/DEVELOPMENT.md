@@ -113,6 +113,42 @@ IMG=kuberay/operator:nightly make deploy
 
 ## CI/CD
 
+### Linting
+
+KubeRay uses the gofumpt linter.
+
+Download gofumpt version **0.2.1**. 0.2.1 is the latest version still compatible with go1.17. Run this command to download it:
+
+```bash
+go install mvdan.cc/gofumpt@v0.2.1
+```
+
+As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
+
+Check that the `gofumpt` version is 0.2.1:
+
+```bash
+gofumpt --version
+# v0.2.1
+```
+
+Make sure your `go` version is still 1.17:
+
+```bash
+go version
+# go version go1.17.13 darwin/arm64
+```
+
+If your `go` version isn’t 1.17 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). gofumpt versions later than 0.2.1 are built on later go version and will update your go version. If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `go version`. It should be back to 1.17.
+
+Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
+
+```bash
+gofumpt -w .
+```
+
+The `-w` flag will overwrite any unformatted code.
+
 ### Helm chart linter
 
 We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
