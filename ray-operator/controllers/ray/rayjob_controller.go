@@ -337,7 +337,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	}
 
 	address := rayJobInstance.Status.DashboardURL
-	
+
 	// add http:// if needed
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + address
