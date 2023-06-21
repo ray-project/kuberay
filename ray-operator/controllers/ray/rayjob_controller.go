@@ -14,7 +14,9 @@ import (
 	fmtErrors "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -354,9 +356,33 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 }
 
 func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (string, error) {
-	// For simplicity, copy the RayCluster head pod template. We will modify the "name" and "command" fields
-	// to run the Ray job.
-	submitter_template := rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
+
+	var submitter_template v1.PodTemplateSpec
+	// Check if SubmitterPodTemplate is not provided
+	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
+		// Set the default value
+		submitter_template = v1.PodTemplateSpec{
+			Spec: v1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:  "ray-job-submitter",
+						Image: "rayproject/ray:2.5.0",
+						Resources: v1.ResourceRequirements{
+							Limits: v1.ResourceList{
+								v1.ResourceCPU: resource.MustParse("1"),
+							},
+							Requests: v1.ResourceList{
+								v1.ResourceCPU: resource.MustParse("200m"),
+							},
+						},
+					},
+				},
+				RestartPolicy: v1.RestartPolicyNever,
+			},
+		}
+	} else {
+		submitter_template = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
+	}
 
 	address := rayJobInstance.Status.DashboardURL
 	// add http:// if needed
@@ -442,7 +468,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 					},
 				},
 				Spec: batchv1.JobSpec{
-					Template: *submitter_template,
+					Template: submitter_template,
 				},
 			}
 

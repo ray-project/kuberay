@@ -14,17 +14,6 @@ spec:
   #    }
   #}'
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
-  submitterPodTemplate:
-    spec:
-      containers:
-        - name: ray-job-submitter
-          image: rayproject/ray:2.5.0
-          resources:
-            limits:
-              cpu: "1"
-            requests:
-              cpu: "200m"
-      restartPolicy: Never
   rayClusterSpec:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     # Ray head pod template

@@ -71,7 +71,7 @@ type RayJobSpec struct {
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
-	SubmitterPodTemplate v1.PodTemplateSpec `json:"submitterPodTemplate"`
+	SubmitterPodTemplate *v1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
