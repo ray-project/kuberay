@@ -8,7 +8,7 @@ spec:
   serveConfig:
     importPath: mobilenet.mobilenet:app
     runtimeEnv: |
-      working_dir: "https://github.com/ray-project/serve_config_examples/archive/master.zip"
+      working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
       pip: ["python-multipart==0.0.6"]
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
