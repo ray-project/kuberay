@@ -985,7 +985,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -1025,7 +1025,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
