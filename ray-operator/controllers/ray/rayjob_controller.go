@@ -209,7 +209,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	r.Log.Info("K8s job successfully created", "RayJob", rayJobInstance.Name, "jobId", jobName)
-	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created Job %s", jobName)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created k8s job %s", jobName)
 
 	// Check the status of the k8s job and update the RayJobInstance status accordingly.
 	// Get the k8s job
@@ -265,6 +265,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if err != nil && !errors.IsNotFound(err) {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
+			_, err = r.deleteK8sJob(ctx, rayJobInstance)
+			if err != nil && !errors.IsNotFound(err) {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			}
 			// Since RayCluster instance is gone, remove it status also
 			// on RayJob resource
 			rayJobInstance.Status.RayClusterStatus = rayv1alpha1.RayClusterStatus{}
@@ -301,7 +305,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 			r.Log.Info("shutdownAfterJobFinishes set to true, we will delete cluster",
 				"RayJob", rayJobInstance.Name, "clusterName", fmt.Sprintf("%s/%s", rayJobInstance.Namespace, rayJobInstance.Status.RayClusterName))
-			return r.deleteCluster(ctx, rayJobInstance)
+			_, err = r.deleteCluster(ctx, rayJobInstance)
+			if err != nil && !errors.IsNotFound(err) {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			}
+			_, err = r.deleteK8sJob(ctx, rayJobInstance)
+			if err != nil && !errors.IsNotFound(err) {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			}
 		}
 	}
 	return ctrl.Result{}, nil
@@ -396,7 +407,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 
 	submitter_template.Spec.Containers[0].Command = append(k8s_job_command, commandSlice...)
 
-	jobName := rayJobInstance.Name + "-k8s-job"
+	jobName := rayJobInstance.Name
 	jobNamespace := rayJobInstance.Namespace
 
 	// Create a Job object with the specified name and namespace
@@ -452,6 +463,33 @@ func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *ra
 			}
 			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *RayJobReconciler) deleteK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (reconcile.Result, error) {
+	jobIdentifier := types.NamespacedName{
+		Name:      rayJobInstance.Name,
+		Namespace: rayJobInstance.Namespace,
+	}
+	job := batchv1.Job{}
+	if err := r.Get(ctx, jobIdentifier, &job); err != nil {
+		if !errors.IsNotFound(err) {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		r.Log.Info("The associated k8s job has been already deleted and it can not be found", "Job", jobIdentifier)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	} else {
+		if job.DeletionTimestamp != nil {
+			r.Log.Info("The k8s job deletion is ongoing.", "rayjob", rayJobInstance.Name, "job", job.Name)
+		} else {
+			if err := r.Delete(ctx, &job); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			r.Log.Info("The associated k8s job is deleted", "Job", jobIdentifier)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted k8s job %s", rayJobInstance.Name)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 	}
