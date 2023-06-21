@@ -1,6 +1,6 @@
 # RayService: MobileNet example
 
-Both Python scripts for Ray Serve and sending requests are in the repository [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples).
+> **Note:** The Python files for the Ray Serve application and its client are in the repository [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples).
 
 ## Step 1: Create a Kubernetes cluster with Kind.
 
