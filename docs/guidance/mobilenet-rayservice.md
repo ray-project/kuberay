@@ -19,7 +19,7 @@ Follow [this document](../../helm-chart/kuberay-operator/README.md) to install t
 kubectl apply -f ray-service.mobilenet.yaml
 ```
 
-* The [mobilenet.py](https://github.com/kevin85421/ray-serve-examples/blob/main/mobilenet.py) requires `tensorflow` as a dependency. Hence, the YAML file uses `rayproject/ray-ml:2.5.0` instead of `rayproject/ray:2.5.0`.
+* The [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py) file requires `tensorflow` as a dependency. Hence, the YAML file uses `rayproject/ray-ml:2.5.0` instead of `rayproject/ray:2.5.0`.
 * `python-multipart` is required for the request parsing function `starlette.requests.form()`, so the YAML file includes `python-multipart` in the runtime environment.
 
 ## Step 4: Forward the port of Serve
@@ -36,6 +36,6 @@ Note that the Serve service will be created after the Serve applications are rea
 * Step 5.2: Update `image_path` in [mobilenet_req.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet_req.py)
 * Step 5.3: Send a request to the `ImageClassifier`.
   ```sh
-  python3 mobilenet_req.py
+  python mobilenet_req.py
   # sample output: {"prediction":["n02099601","golden_retriever",0.17944198846817017]}
   ```
