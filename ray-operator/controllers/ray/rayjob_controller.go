@@ -328,8 +328,9 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:  "ray-job-submitter",
-						Image: "rayproject/ray:2.5.0",
+						Name: "ray-job-submitter",
+						// Use the image of the Ray head to be defensive against version mismatch issues
+						Image: rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image,
 						Resources: v1.ResourceRequirements{
 							Limits: v1.ResourceList{
 								v1.ResourceCPU: resource.MustParse("1"),
