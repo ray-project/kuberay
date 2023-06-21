@@ -135,10 +135,10 @@ $ kubectl port-forward service/rayservice-sample-head-svc 8265
 ```
 Access the dashboard using a web browser at `localhost:8265`.
 
-### Update Ray Serve Deployment Graph
+### Update Ray Serve config
 
-You can update the `serveConfig` in your RayService config file.
-For example, update the price of mangos from `3` to `4` in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml):
+You can update the applications in the `serveConfig` in your RayService config file.
+For example, update the price of mangos from `3` to `4` for the fruit app in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml):
 ```shell
 - name: MangoStand
   num_replicas: 1
