@@ -10,7 +10,7 @@ kind create cluster --image=kindest/node:v1.23.0
 
 ## Step 2: Install KubeRay operator
 
-Follow this [document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
 ## Step 3: Install a RayService
 
