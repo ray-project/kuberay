@@ -34,7 +34,7 @@ Note that the Serve service will be created after the Serve applications are rea
 
 * Step 5.1: Prepare an image file (e.g. golden.png)
 * Step 5.2: Update `image_path` in [mobilenet_req.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet_req.py)
-* Step 5.3: Send a request to the ImageClassifier.
+* Step 5.3: Send a request to the `ImageClassifier`.
   ```sh
   python3 mobilenet_req.py
   # sample output: {"prediction":["n02099601","golden_retriever",0.17944198846817017]}
