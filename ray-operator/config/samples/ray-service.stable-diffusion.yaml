@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
-  name: multi-app
+  name: stable-diffusion
 spec:
   serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
   deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
@@ -10,7 +10,7 @@ spec:
       - name: stable_diffusion
         import_path: stable_diffusion.stable_diffusion:entrypoint
         runtime_env:
-          working_dir: "https://github.com/kevin85421/serve_config_examples/archive/stable-diffusion.zip"
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/d6acf9b99ef076a1848f506670e1290a11654ec2.zip"
           pip: ["diffusers==0.12.1"]
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
