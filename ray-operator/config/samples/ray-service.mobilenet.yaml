@@ -9,7 +9,7 @@ spec:
     importPath: mobilenet.mobilenet:app
     runtimeEnv: |
       working_dir: "https://github.com/ray-project/serve_config_examples/archive/master.zip"
-      pip: ["python-multipart"]
+      pip: ["python-multipart==0.0.6"]
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
