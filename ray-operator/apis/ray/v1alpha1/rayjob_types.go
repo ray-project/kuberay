@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -69,6 +70,8 @@ type RayJobSpec struct {
 	// If the RayCluster is already created, it will be deleted.
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
+	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	SubmitterPodTemplate v1.PodTemplateSpec `json:"submitterPodTemplate"`
 }
 
 // RayJobStatus defines the observed state of RayJob

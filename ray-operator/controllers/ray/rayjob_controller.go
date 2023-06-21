@@ -356,11 +356,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (string, error) {
 	// For simplicity, copy the RayCluster head pod template. We will modify the "name" and "command" fields
 	// to run the Ray job.
-	head_template := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.DeepCopy()
-	head_template.Name = rayJobInstance.Name + "-k8s-job"
-	// Because for now we're using the head pod template, and the restart policy is required
-	// to have value OnFailure or Never, we just set it to Never for now.
-	head_template.Spec.RestartPolicy = corev1.RestartPolicyNever
+	submitter_template := rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
 
 	address := rayJobInstance.Status.DashboardURL
 	// add http:// if needed
@@ -419,11 +415,14 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 		return "", err
 	}
 
+	// TODO: Raise warning if user specified command in template
 	// append command slice to ray job submit --
-	head_template.Spec.Containers[0].Command = append(k8s_job_command, commandSlice...)
+	submitter_template.Spec.Containers[0].Command = append(k8s_job_command, commandSlice...)
+	// Overwrite "args" to empty slice
+	submitter_template.Spec.Containers[0].Args = []string{}
 
 	// Print command for debugging
-	r.Log.Info("Using command for Ray job", "command", head_template.Spec.Containers[0].Command)
+	r.Log.Info("Using command for Ray job", "command", submitter_template.Spec.Containers[0].Command)
 
 	jobName := rayJobInstance.Name + "-k8s-job"
 	jobNamespace := rayJobInstance.Namespace
@@ -443,7 +442,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 					},
 				},
 				Spec: batchv1.JobSpec{
-					Template: *head_template,
+					Template: *submitter_template,
 				},
 			}
 
