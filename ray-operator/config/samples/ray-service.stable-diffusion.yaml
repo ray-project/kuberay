@@ -57,7 +57,7 @@ spec:
       maxReplicas: 10
       groupName: gpu-group
       rayStartParams: {}
-      # pod template
+      # Pod template
       template:
         spec:
           containers:
