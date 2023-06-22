@@ -36,12 +36,12 @@ eksctl get nodegroup --cluster ${YOUR_EKS_NAME}
 # ${YOUR_EKS_NAME}     gpu-node-group  ACTIVE  2023-06-05T22:01:44Z    0               1               1                       g5.12xlarge     BOTTLEROCKET_x86_64_NVIDIA      eks-gpu-node-group-...     managed
 ```
 
-## Step 4: Install the DaemonSet for NVIDIA device plugin for Kubernetes
+## Step 4: Install the DaemonSet for NVIDIA device plugin
 
 > **Note:** If you encounter permission issues with `kubectl`, you can follow "Step 2: Configure your computer to communicate with your cluster"
 in the [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#).
 
-You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
+Install the DaemonSet for NVIDIA device plugin to run GPU enabled containers in your Amazon EKS cluster. You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
 or [NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) repository for more details.
 
 ```sh
