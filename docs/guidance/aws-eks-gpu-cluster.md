@@ -7,7 +7,7 @@ to: (1) Create your Amazon EKS cluster (2) Configure your computer to communicat
 
 ## Step 2: Create node groups for the Amazon EKS cluster
 
-You can follow "Step 3: Create nodes" in this [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#) to create node groups. The following section provides more detailed information.
+You can follow "Step 3: Create nodes" in [this AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#) to create node groups. The following section provides more detailed information.
 
 ### Create a CPU node group
 
