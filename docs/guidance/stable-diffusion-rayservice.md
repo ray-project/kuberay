@@ -6,7 +6,7 @@ and [the Ray documentation](https://docs.ray.io/en/latest/serve/tutorials/stable
 ## Step 1: Create a Kubernetes cluster with GPUs
 
 You can follow [aws-eks-gpu-cluster.md](./aws-eks-gpu-cluster.md) to create an AWS EKS cluster with GPUs.
-Here is my configuration for the CPU node group and GPU node group:
+For this example, a working configuration for the CPU node group and GPU node group is:
 
 * CPU node group
   * Instance type: [**m5.xlarge**](https://aws.amazon.com/ec2/instance-types/m5/) (4 vCPU; 16 GB RAM)

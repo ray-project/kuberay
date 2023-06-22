@@ -1,4 +1,4 @@
-# Prepare Amazon EKS cluster with GPU for KubeRay examples
+# Start Amazon EKS Cluster with GPUs for KubeRay
 
 ## Step 1: Create a Kubernetes cluster on Amazon EKS
 
@@ -24,7 +24,7 @@ Next, **please follow Step 4 to install the NVIDIA device plugin.**
 
 ## Step 3: Verify the node groups
 
-If you encounter permission issues with `eksctl`, you can navigate to your AWS account's webpage and copy the
+> **Note:** If you encounter permission issues with `eksctl`, you can navigate to your AWS account's webpage and copy the
 credential environment variables, including `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`,
 from the "Command line or programmatic access" page.
 
@@ -38,7 +38,7 @@ eksctl get nodegroup --cluster ${YOUR_EKS_NAME}
 
 ## Step 4: Install the DaemonSet for NVIDIA device plugin for Kubernetes
 
-If you encounter permission issues with `kubectl`, you can follow "Step 2: Configure your computer to communicate with your cluster"
+> **Note:** If you encounter permission issues with `kubectl`, you can follow "Step 2: Configure your computer to communicate with your cluster"
 in the [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#).
 
 You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
