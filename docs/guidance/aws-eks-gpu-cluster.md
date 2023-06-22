@@ -16,9 +16,20 @@ workers, such as the KubeRay operator, Ray head, and CoreDNS Pods.
 
 ### Create a GPU node group
 
-Create a GPU node group for Ray GPU workers. Add a Kubernetes taint to prevent scheduling CPU Pods on this GPU node group. For KubeRay examples, we add the following taint to the GPU nodes: `Key: ray.io/node-type, Value: worker, Effect: NoSchedule`.
+Create a GPU node group for Ray GPU workers.
 
-Next, **please follow Step 4 to install the NVIDIA device plugin.**
+1. A common configuration working for most KubeRay examples:
+   * AMI type: Bottlerocket NVIDIA (BOTTLEROCKET_x86_64_NVIDIA)
+   * Instance type: [**g5.xlarge**](https://aws.amazon.com/ec2/instance-types/g5/) (1 GPU; 24 GB GPU Memory; 4 vCPUs; 16 GB RAM)
+   * Disk size: 1024 GB
+   * Desired size: 1, Min size: 0, Max size: 1
+
+2. **Please follow Step 4 to install the NVIDIA device plugin.**
+   * If you use `AMI type: Bottlerocket NVIDIA`, there is no need to install NVIDIA device plugin.
+   * For other AMI types, you may need to install the NVIDIA device plugin DaemonSet in order to run GPU-enabled containers in your Amazon EKS cluster.
+   If the GPU nodes have taints, you need to add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes."
+
+3. Add a Kubernetes taint to prevent scheduling CPU Pods on this GPU node group. For KubeRay examples, we add the following taint to the GPU nodes: `Key: ray.io/node-type, Value: worker, Effect: NoSchedule`, and include the corresponding `tolerations` for GPU Ray Pods.
 
 > Warning: GPU nodes are extremely expensive. Please remember to delete the cluster if you no longer need it.
 

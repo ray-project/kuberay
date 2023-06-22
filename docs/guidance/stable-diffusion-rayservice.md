@@ -17,7 +17,7 @@ For this example, a working configuration for the CPU node group and GPU node gr
   * Add a Kubernetes taint to prevent CPU Pods from being scheduled on this GPU node group
     * Key: ray.io/node-type, Value: worker, Effect: NoSchedule
   * AMI type: Bottlerocket NVIDIA (BOTTLEROCKET_x86_64_NVIDIA)
-  * Instance type: [**g5.12xlarge**](https://aws.amazon.com/ec2/instance-types/g5/) (4 GPU; 96 GB GPU Memory; 48 vCPUs; 192 GB RAM)
+  * Instance type: [**g5.xlarge**](https://aws.amazon.com/ec2/instance-types/g5/) (1 GPU; 24 GB GPU Memory; 4 vCPUs; 16 GB RAM)
   * Disk size: 1024 GB
   * Desired size: 1, Min size: 0, Max size: 1
 

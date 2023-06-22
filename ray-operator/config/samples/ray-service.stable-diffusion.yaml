@@ -65,13 +65,13 @@ spec:
             image: rayproject/ray-ml:2.5.0
             resources:
               limits:
-                cpu: "48"
-                memory: "192G"
-                nvidia.com/gpu: 4
+                cpu: 4
+                memory: "16G"
+                nvidia.com/gpu: 1
               requests:
-                cpu: "36"
-                memory: "128G"
-                nvidia.com/gpu: 4
+                cpu: 3
+                memory: "12G"
+                nvidia.com/gpu: 1
           # Please add the following taints to the GPU node.
           tolerations:
             - key: "ray.io/node-type"
