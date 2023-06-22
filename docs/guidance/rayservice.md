@@ -17,7 +17,7 @@ A RayService manages 2 things:
 ### What does the RayService provide?
 
 * **Kubernetes-native support for Ray clusters and Ray Serve applications:** After using a Kubernetes config to define a Ray cluster and its Ray Serve applications, you can use `kubectl` to create the cluster and its applications.
-* **In-place update for Ray Serve applications.** Users can update the Ray Serve config in the RayService CR config and use `kubectl apply` to update the applications.
+* **In-place update for Ray Serve applications:** Users can update the Ray Serve config in the RayService CR config and use `kubectl apply` to update the applications.
 * **Zero downtime upgrade for Ray clusters:** Users can update the Ray cluster config in the RayService CR config and use `kubectl apply` to update the cluster. RayService will temporarily create a pending cluster and wait for it to be ready, then switch traffic to the new cluster and terminate the old one.
 * **Services HA.** RayService will monitor the Ray cluster and Serve deployments' health statuses. If RayService detects an unhealthy status for a period of time, RayService will try to create a new Ray cluster and switch traffic to the new cluster when it is ready.
 
