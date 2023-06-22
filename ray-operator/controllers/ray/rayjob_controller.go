@@ -331,7 +331,7 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 			if err != nil {
 				return "", err
 			}
-			return r.createNewK8sJob(ctx, jobName, jobNamespace, submitterTemplate)
+			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
 
 		// Some other error occurred while trying to get the Job
@@ -430,15 +430,20 @@ func (r *RayJobReconciler) getK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) 
 }
 
 // createNewK8sJob creates a new Kubernetes Job.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, jobName, jobNamespace string, submitterTemplate v1.PodTemplateSpec) (string, error) {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob, submitterTemplate v1.PodTemplateSpec) (string, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: jobNamespace,
+			Name:      rayJobInstance.Name,
+			Namespace: rayJobInstance.Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			Template: submitterTemplate,
 		},
+	}
+
+	// Set the ownership in order to do the garbage collection by k8s.
+	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
+		return "", err
 	}
 
 	// Create the Kubernetes Job
@@ -447,7 +452,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, jobName, jobName
 	}
 
 	// Return the Job's name
-	return jobName, nil
+	return job.Name, nil
 }
 
 // getDecodedRuntimeEnv decodes the runtime environment for the Ray job from a base64-encoded string.
