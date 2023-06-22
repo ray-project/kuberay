@@ -16,9 +16,6 @@ workers, such as the KubeRay operator, Ray head, and CoreDNS Pods.
 
 ### Create a GPU node group
 
-Create a GPU node group for Ray GPU workers. Add a Kubernetes taint to prevent CPU Pods from being scheduled
-on this GPU node group. For KubeRay examples, we add the following taint to the GPU nodes: Key: ray.io/node-type, Value: worker, Effect: NoSchedule.
-
 Create a GPU node group for Ray GPU workers. Add a Kubernetes taint to prevent scheduling CPU Pods on this GPU node group. For KubeRay examples, we add the following taint to the GPU nodes: `Key: ray.io/node-type, Value: worker, Effect: NoSchedule`.
 
 Next, **please follow Step 4 to install the NVIDIA device plugin.**
