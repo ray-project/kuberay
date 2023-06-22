@@ -397,8 +397,11 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	// Add jobid to command
 	if len(rayJobInstance.Status.JobId) > 0 {
 		jobid := rayJobInstance.Status.JobId
-		k8s_job_command = append(k8s_job_command, "--job-id", jobid)
+		k8s_job_command = append(k8s_job_command, "--submission-id", jobid)
 	}
+
+	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
+	k8s_job_command = append(k8s_job_command, "--")
 
 	entrypoint := rayJobInstance.Spec.Entrypoint
 	commandSlice, err := shlex.Split(entrypoint)
@@ -407,6 +410,7 @@ func (r *RayJobReconciler) CreateK8sJob(ctx context.Context, rayJobInstance *ray
 	}
 
 	submitter_template.Spec.Containers[0].Command = append(k8s_job_command, commandSlice...)
+	r.Log.Info("Command to be executed", "command", submitter_template.Spec.Containers[0].Command)
 
 	jobName := rayJobInstance.Name
 	jobNamespace := rayJobInstance.Namespace
