@@ -54,11 +54,15 @@ Note that the Serve service will be created after the Serve applications are rea
 
 ## Step 5: Send a request to the text-to-image model
 
-* Step 5.1 Update `prompt` in [stable_diffusion_req.py](https://github.com/ray-project/serve_config_examples/blob/master/stable_diffusion/stable_diffusion_req.py).
-* Step 5.2: Send a request to the Stable Diffusion model.
-  ```sh
-  python stable_diffusion_req.py
-  # Check output.png
-  ```
+```sh
+# Step 5.1: Download `stable_diffusion_req.py` 
+curl -LO https://raw.githubusercontent.com/ray-project/serve_config_examples/master/stable_diffusion/stable_diffusion_req.py
+
+# Step 5.2: Update `prompt` in `stable_diffusion_req.py`.
+
+# Step 5.3: Send a request to the Stable Diffusion model.
+python stable_diffusion_req.py
+# Check output.png
+```
 
 ![image](../images/stable_diffusion_example.png)
