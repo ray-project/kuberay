@@ -320,11 +320,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 // getOrCreateK8sJob creates a Kubernetes Job for the Ray Job if it doesn't exist, otherwise return the existing one.
 func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (string, error) {
-	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance)
-	if err != nil {
-		return "", err
-	}
-
 	jobName := rayJobInstance.Name
 	jobNamespace := rayJobInstance.Namespace
 
@@ -332,6 +327,10 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 	job := &batchv1.Job{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: jobNamespace, Name: jobName}, job); err != nil {
 		if errors.IsNotFound(err) {
+			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance)
+			if err != nil {
+				return "", err
+			}
 			return r.createNewK8sJob(ctx, jobName, jobNamespace, submitterTemplate)
 		}
 
