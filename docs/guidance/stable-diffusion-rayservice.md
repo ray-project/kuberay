@@ -33,7 +33,7 @@ Helm. Note that the YAML file in Step 3 uses `serveConfigV2`, which is first sup
 kubectl apply -f ray-service.stable-diffusion.yaml
 ```
 
-* The `tolerations` for workers must match the taints on the GPU node group. Without the tolerations, worker Pods will not be able to be scheduled on the GPU nodes.
+* The `tolerations` for workers must match the taints on the GPU node group. Without the tolerations, worker Pods won't be scheduled on GPU nodes.
     ```yaml
     # Please add the following taints to the GPU node.
     tolerations:
