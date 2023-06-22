@@ -64,7 +64,7 @@ service:
 ingress:
   enabled: false
 route:
-  enabled: true
+  enabled: false
 
 rbacEnable: true
 
