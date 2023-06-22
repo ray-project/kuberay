@@ -1,0 +1,26 @@
+{{- if .Values.route.enabled -}}
+{{- $fullName := include "kuberay-apiserver.fullname" . -}}
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "kuberay-apiserver.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  subdomain: api-server-kuberay
+  to:
+    kind: Service
+    name: {{ .Values.name }}-service
+    weight: 100
+  port:
+    targetPort: http
+  {{- if .Values.route.tls -}}
+  tls:
+    termination: edge
+  {{- end }}
+  wildcardPolicy: None
+{{- end }}

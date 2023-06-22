@@ -33,21 +33,38 @@ resources:
   requests:
     cpu: 300m
     memory: 300Mi
-
+# Only one service type needs to be picked
 service:
-  type: NodePort
+# Nodeport service
+#  type: NodePort
+#  ports:
+#    - name: http
+#      port: 8888
+#      targetPort: 8888
+#      nodePort: 31888
+#    - name: rpc
+#      port: 8887
+#      targetPort: 8887
+#      nodePort: 31887
+# ClusterIP service
+  type: ClusterIP
   ports:
     - name: http
+      protocol: TCP
       port: 8888
       targetPort: 8888
-      nodePort: 31888
     - name: rpc
+      protocol: TCP
       port: 8887
       targetPort: 8887
-      nodePort: 31887
+
+# You can only enable an ingress or route, if you are using OpenShift cluster
+# Also note that in order to enable ingress or route you need to use ClusterIP service
 
 ingress:
   enabled: false
+route:
+  enabled: true
 
 rbacEnable: true
 
