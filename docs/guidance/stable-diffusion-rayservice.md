@@ -1,6 +1,6 @@
 # Serve a StableDiffusion text-to-image model using RayService
 
-> **Note:** The Python files for the Ray Serve application and its client are in [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples) 
+> **Note:** The Python files for the Ray Serve application and its client are in the [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples) repo 
 and [the Ray documentation](https://docs.ray.io/en/latest/serve/tutorials/stable-diffusion.html).
 
 ## Step 1: Create a Kubernetes cluster with GPUs
