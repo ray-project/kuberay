@@ -5,7 +5,7 @@
 ### Prerequisites
 
 * Ray 2.0 or newer.
-* KubeRay 0.3.0 or newer.
+* KubeRay 0.6.0 or newer.
 
 ### What is a RayService?
 
@@ -23,9 +23,9 @@ A RayService manages 2 things:
 
 ### Deploy the Operator
 
-```
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.5.0&timeout=90s"
-```
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the nightly KubeRay operator via 
+Helm. Note that sample RayService in this guide uses `serveConfigV2` to specify a multi-application Serve config.
+This will be first supported in Kuberay 0.6.0, and is currently supported only on the nightly KubeRay operator.
 
 Check that the controller is running.
 
@@ -41,23 +41,40 @@ ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 
 ### Run an Example Cluster
 
-An example config file to deploy RayService is included here:
-[ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml)
+In this guide we will be working with the sample RayService defined by [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml).
 
+Let's first take a look at the Ray Serve config embedded in the RayService yaml. At a high level (without digging too deep into the details about the deployments in each application), there are two applications: a fruit stand app and a calculator app. The fruit stand application is imported from the `fruit.py` file in the [test_dag](https://github.com/ray-project/test_dag/tree/master) repo, and it's hosted at the route prefix `/fruit`. Similarly, the calculator app is imported from the `conditional_dag.py` file in the same repo, and it's hosted at the route prefix `/calc`.
+```yaml
+serveConfigV2: |
+  applications:
+    - name: fruit_app
+      import_path: fruit.deployment_graph
+      route_prefix: /fruit
+      runtime_env:
+        working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+      deployments: ...
+    - name: math_app
+      import_path: conditional_dag.serve_dag
+      route_prefix: /calc
+      runtime_env:
+        working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+      deployments: ...
+```
+
+To start a RayService and deploy these two applications, run the following command:
 ```shell
-# Create a ray service and deploy two applications: a fruit stand, and a calculator app.
 $ kubectl apply -f config/samples/ray_v1alpha1_rayservice.yaml
 ```
 
+List running RayServices to check on your new service `rayservice-sample`.
 ```shell
-# List running RayServices.
 $ kubectl get rayservice
 NAME                AGE
 rayservice-sample   7s
 ```
 
+The created RayService should include a head pod, a worker pod, and four services.
 ```shell
-# The created RayService should include a head pod, a worker pod, and four services.
 $ kubectl get pods
 NAME                                                      READY   STATUS    RESTARTS   AGE
 ervice-sample-raycluster-qd2vl-worker-small-group-bxpp6   1/1     Running   0          24m
@@ -103,10 +120,13 @@ $ kubectl run curl --image=radial/busyboxplus:curl -i --tty
 
 Or if you already have a curl pod running, you can login using `kubectl exec -it curl sh`.
 
-For the fruit and calculator apps from the sample RayService, you can try the following requests:
+You can query the two applications in your service at their respective endpoints. Query the fruit stand app with the route prefix `/fruit`:
 ```shell
 [ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000/fruit/ -d '["MANGO", 2]'
 > 6
+```
+Query the calculator app with the route prefix `/calc`:
+```shell
 [ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000/calc/ -d '["MUL", 3]'
 > 15 pizzas please!
 ```
