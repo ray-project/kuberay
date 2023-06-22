@@ -14,6 +14,11 @@ You can follow "Step 3: Create nodes" in [this AWS documentation](https://docs.a
 Typically, we do not run GPU workloads on the Ray head. Create a CPU node group for all Pods except Ray GPU 
 workers, such as the KubeRay operator, Ray head, and CoreDNS Pods.
 
+* A common configuration working for most KubeRay examples:
+  * Instance type: [**m5.xlarge**](https://aws.amazon.com/ec2/instance-types/m5/) (4 vCPU; 16 GB RAM)
+  * Disk size: 256 GB
+  * Desired size: 1, Min size: 0, Max size: 1
+
 ### Create a GPU node group
 
 Create a GPU node group for Ray GPU workers.

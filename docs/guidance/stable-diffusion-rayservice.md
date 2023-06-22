@@ -5,21 +5,8 @@ and [the Ray documentation](https://docs.ray.io/en/latest/serve/tutorials/stable
 
 ## Step 1: Create a Kubernetes cluster with GPUs
 
-You can follow [aws-eks-gpu-cluster.md](./aws-eks-gpu-cluster.md) to create an AWS EKS cluster with GPUs.
-For this example, a working configuration for the CPU node group and GPU node group is:
-
-* CPU node group
-  * Instance type: [**m5.xlarge**](https://aws.amazon.com/ec2/instance-types/m5/) (4 vCPU; 16 GB RAM)
-  * Disk size: 256 GB
-  * Desired size: 1, Min size: 0, Max size: 1
-
-* GPU node group
-  * Add a Kubernetes taint to prevent CPU Pods from being scheduled on this GPU node group
-    * Key: ray.io/node-type, Value: worker, Effect: NoSchedule
-  * AMI type: Bottlerocket NVIDIA (BOTTLEROCKET_x86_64_NVIDIA)
-  * Instance type: [**g5.xlarge**](https://aws.amazon.com/ec2/instance-types/g5/) (1 GPU; 24 GB GPU Memory; 4 vCPUs; 16 GB RAM)
-  * Disk size: 1024 GB
-  * Desired size: 1, Min size: 0, Max size: 1
+You can follow [aws-eks-gpu-cluster.md](./aws-eks-gpu-cluster.md) to create an AWS EKS cluster with 1
+CPU (`m5.xlarge`) and 1 GPU (`g5.xlarge`) nodes.
 
 ## Step 2: Install KubeRay operator
 
