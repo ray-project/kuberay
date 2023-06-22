@@ -1,4 +1,4 @@
-# RayService: MobileNet example
+# Serve a MobileNet image classifier using RayService
 
 > **Note:** The Python files for the Ray Serve application and its client are in the repository [ray-project/serve_config_examples](https://github.com/ray-project/serve_config_examples).
 
