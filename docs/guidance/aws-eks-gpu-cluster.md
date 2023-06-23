@@ -23,7 +23,7 @@ Here's a common configuration that works for most KubeRay examples in the docs:
 
 Create a GPU node group for Ray GPU workers.
 
-1. A common configuration working for most KubeRay examples:
+1. Here's a common configuration that works for most KubeRay examples in the docs:
    * AMI type: Bottlerocket NVIDIA (BOTTLEROCKET_x86_64_NVIDIA)
    * Instance type: [**g5.xlarge**](https://aws.amazon.com/ec2/instance-types/g5/) (1 GPU; 24 GB GPU Memory; 4 vCPUs; 16 GB RAM)
    * Disk size: 1024 GB
