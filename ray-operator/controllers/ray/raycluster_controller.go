@@ -62,11 +62,6 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or OPenshift
 func getClusterType(logger logr.Logger) bool {
-	// The user can explicitely overwrite usage of Route when running on OpenShift
-	// In this case operator will create ingress even if running on OpenShift
-	if s := os.Getenv("USE_INGRESS_ON_OPENSHIFT"); strings.ToLower(s) == "true" {
-		return false
-	}
 	// The discovery package is used to discover APIs supported by a Kubernetes API server.
 	config, err := ctrl.GetConfig()
 	if err == nil && config != nil {
