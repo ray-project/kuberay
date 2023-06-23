@@ -32,7 +32,7 @@ Create a GPU node group for Ray GPU workers.
 2. **Please follow Step 4 to install the NVIDIA device plugin.**
    * If you use `AMI type: Bottlerocket NVIDIA`, there is no need to install NVIDIA device plugin.
    * For other AMI types, you may need to install the NVIDIA device plugin DaemonSet in order to run GPU-enabled containers in your Amazon EKS cluster.
-   If the GPU nodes have taints, you need to add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes."
+   If the GPU nodes have taints, add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes."
 
 3. Add a Kubernetes taint to prevent scheduling CPU Pods on this GPU node group. For KubeRay examples, we add the following taint to the GPU nodes: `Key: ray.io/node-type, Value: worker, Effect: NoSchedule`, and include the corresponding `tolerations` for GPU Ray worker Pods.
 
