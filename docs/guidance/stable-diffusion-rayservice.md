@@ -45,7 +45,7 @@ Note that the RayService's Kubernetes service will be created after the Serve ap
 # Step 5.1: Download `stable_diffusion_req.py` 
 curl -LO https://raw.githubusercontent.com/ray-project/serve_config_examples/master/stable_diffusion/stable_diffusion_req.py
 
-# Step 5.2: Update `prompt` in `stable_diffusion_req.py`.
+# Step 5.2: Set your `prompt` in `stable_diffusion_req.py`.
 
 # Step 5.3: Send a request to the Stable Diffusion model.
 python stable_diffusion_req.py
