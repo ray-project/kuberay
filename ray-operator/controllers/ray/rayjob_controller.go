@@ -83,7 +83,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	var err error
 	var rayJobInstance *rayv1alpha1.RayJob
 	if rayJobInstance, err = r.getRayJobInstance(ctx, request); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -93,7 +93,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
 			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
 			if err := r.Update(ctx, rayJobInstance); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
 	} else {
@@ -110,13 +110,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
 		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
 		err := r.Update(ctx, rayJobInstance)
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	// Do not reconcile the RayJob if the deployment status is marked as Complete
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1alpha1.JobDeploymentStatusComplete {
 		r.Log.Info("rayjob is complete, skip reconciliation", "rayjob", rayJobInstance.Name)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 
 	// Mark the deployment status as Complete if RayJob is succeed or failed
@@ -151,7 +151,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	err = r.setRayJobIdAndRayClusterNameIfNeed(ctx, rayJobInstance)
 	if err != nil {
 		r.Log.Error(err, "failed to set jobId or rayCluster name", "RayJob", request.NamespacedName)
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	var rayClusterInstance *rayv1alpha1.RayCluster
@@ -239,7 +239,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if jobInfo != nil && jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
 		r.Log.Info(fmt.Sprintf("Update status from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
 		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1alpha1.JobDeploymentStatusRunning, nil)
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1alpha1.JobDeploymentStatusRunning {
@@ -315,7 +315,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 // getOrCreateK8sJob creates a Kubernetes Job for the Ray Job if it doesn't exist, otherwise return the existing one.
@@ -526,7 +526,7 @@ func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *ra
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 func (r *RayJobReconciler) deleteK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (reconcile.Result, error) {
@@ -553,7 +553,7 @@ func (r *RayJobReconciler) deleteK8sJob(ctx context.Context, rayJobInstance *ray
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 // isJobSucceedOrFailed indicates whether the job comes into end status.
