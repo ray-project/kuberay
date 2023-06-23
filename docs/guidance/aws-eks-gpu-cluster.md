@@ -29,10 +29,27 @@ Create a GPU node group for Ray GPU workers.
    * Disk size: 1024 GB
    * Desired size: 1, Min size: 0, Max size: 1
 
-2. If you're using a different AMI type than `Bottlerocket NVIDIA`, you may need to install the NVIDIA device plugin.
-   * Please follow Step 4 to install the NVIDIA device plugin.
-   * The NVIDIA device plugin DaemonSet helps run GPU-enabled containers in your Amazon EKS cluster.
-   If the GPU nodes have taints, add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes."
+> **Note:** If you encounter permission issues with `kubectl`, follow "Step 2: Configure your computer to communicate with your cluster"
+in the [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#).
+
+2. Please install the NVIDIA device plugin.
+   * Install the DaemonSet for NVIDIA device plugin to run GPU enabled containers in your Amazon EKS cluster. You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
+   or [NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) repository for more details.
+   * If the GPU nodes have taints, add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes.
+
+```sh
+# Install the DaemonSet
+kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.9.0/nvidia-device-plugin.yml
+
+# Verify that your nodes have allocatable GPUs. If the GPU node fails to detect GPUs,
+# please verify whether the DaemonSet schedules the Pod on the GPU node.
+kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
+
+# Example output:
+# NAME                                GPU
+# ip-....us-west-2.compute.internal   4
+# ip-....us-west-2.compute.internal   <none>
+```
 
 3. Add a Kubernetes taint to prevent scheduling CPU Pods on this GPU node group. For KubeRay examples, add the following taint to the GPU nodes: `Key: ray.io/node-type, Value: worker, Effect: NoSchedule`, and include the corresponding `tolerations` for GPU Ray worker Pods.
 
@@ -50,25 +67,4 @@ eksctl get nodegroup --cluster ${YOUR_EKS_NAME}
 # CLUSTER         NODEGROUP       STATUS  CREATED                 MIN SIZE        MAX SIZE        DESIRED CAPACITY        INSTANCE TYPE   IMAGE ID                        ASG NAME                           TYPE
 # ${YOUR_EKS_NAME}     cpu-node-group  ACTIVE  2023-06-05T21:31:49Z    0               1               1                       m5.xlarge       AL2_x86_64                      eks-cpu-node-group-...     managed
 # ${YOUR_EKS_NAME}     gpu-node-group  ACTIVE  2023-06-05T22:01:44Z    0               1               1                       g5.12xlarge     BOTTLEROCKET_x86_64_NVIDIA      eks-gpu-node-group-...     managed
-```
-
-## Step 4: Install the DaemonSet for NVIDIA device plugin
-
-> **Note:** If you encounter permission issues with `kubectl`, follow "Step 2: Configure your computer to communicate with your cluster"
-in the [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#).
-
-Install the DaemonSet for NVIDIA device plugin to run GPU enabled containers in your Amazon EKS cluster. You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
-or [NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) repository for more details.
-
-```sh
-# Install the DaemonSet
-kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.9.0/nvidia-device-plugin.yml
-
-# Verify that your nodes have allocatable GPUs 
-kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
-
-# Example output:
-# NAME                                GPU
-# ip-....us-west-2.compute.internal   4
-# ip-....us-west-2.compute.internal   <none>
 ```
