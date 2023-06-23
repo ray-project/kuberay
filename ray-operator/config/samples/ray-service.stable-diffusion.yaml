@@ -22,7 +22,7 @@ spec:
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams:
         dashboard-host: '0.0.0.0'
-      #pod template
+      # Pod template
       template:
         spec:
           containers:
