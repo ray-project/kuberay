@@ -19,7 +19,7 @@ Helm. We're installing the nightly release here since this example's YAML file u
 # path: ray-operator/config/samples/
 kubectl apply -f ray-service.stable-diffusion.yaml
 ```
-
+This YAML file contains some important settings:
 * The `tolerations` for workers must match the taints on the GPU node group. Without the tolerations, worker Pods won't be scheduled on GPU nodes.
     ```yaml
     # Please add the following taints to the GPU node.
