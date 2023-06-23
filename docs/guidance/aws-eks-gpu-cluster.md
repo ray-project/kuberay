@@ -11,7 +11,7 @@ Follow "Step 3: Create nodes" in [this AWS documentation](https://docs.aws.amazo
 
 ### Create a CPU node group
 
-Typically, we do not run GPU workloads on the Ray head. Create a CPU node group for all Pods except Ray GPU 
+Typically, avoid running GPU workloads on the Ray head. Create a CPU node group for all Pods except Ray GPU 
 workers, such as the KubeRay operator, Ray head, and CoreDNS Pods.
 
 * A common configuration working for most KubeRay examples:
