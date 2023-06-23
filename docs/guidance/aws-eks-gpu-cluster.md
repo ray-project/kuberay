@@ -3,7 +3,7 @@
 ## Step 1: Create a Kubernetes cluster on Amazon EKS
 
 Follow the first two steps in [this AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#)
-to: (1) Create your Amazon EKS cluster (2) Configure your computer to communicate with your cluster.
+to: (1) create your Amazon EKS cluster and (2) configure your computer to communicate with your cluster.
 
 ## Step 2: Create node groups for the Amazon EKS cluster
 
