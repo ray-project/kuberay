@@ -5,27 +5,27 @@
 ### Prerequisites
 
 * Ray 2.0 or newer.
-* KubeRay 0.3.0 or newer.
+* KubeRay 0.6.0 or newer.
 
 ### What is a RayService?
 
 A RayService manages 2 things:
 
 * **Ray Cluster**: Manages resources in a Kubernetes cluster.
-* **Ray Serve Deployment Graph**: Manages users' deployment graphs.
+* **Ray Serve Applications**: Manages users' applications.
 
 ### What does the RayService provide?
 
-* **Kubernetes-native support for Ray clusters and Ray Serve deployment graphs.** After using a Kubernetes config to define a Ray cluster and its Ray Serve deployment graphs, you can use `kubectl` to create the cluster and its graphs.
-* **In-place update for Ray Serve deployment graph.** Users can update the Ray Serve deployment graph config in the RayService CR config and use `kubectl apply` to update the deployment graph.
-* **Zero downtime upgrade for Ray clusters.** Users can update the Ray cluster config in the RayService CR config and use `kubectl apply` to update the cluster. RayService will temporarily create a pending cluster and wait for it to be ready, then switch traffic to the new cluster and terminate the old one.
-* **Services HA.** RayService will monitor the Ray cluster and Serve deployments' health statuses. If RayService detects an unhealthy status for a period of time, RayService will try to create a new Ray cluster and switch traffic to the new cluster when it is ready.
+* **Kubernetes-native support for Ray clusters and Ray Serve applications:** After using a Kubernetes config to define a Ray cluster and its Ray Serve applications, you can use `kubectl` to create the cluster and its applications.
+* **In-place update for Ray Serve applications:** Users can update the Ray Serve config in the RayService CR config and use `kubectl apply` to update the applications.
+* **Zero downtime upgrade for Ray clusters:** Users can update the Ray cluster config in the RayService CR config and use `kubectl apply` to update the cluster. RayService will temporarily create a pending cluster and wait for it to be ready, then switch traffic to the new cluster and terminate the old one.
+* **Services HA:** RayService will monitor the Ray cluster and Serve deployments' health statuses. If RayService detects an unhealthy status for a period of time, RayService will try to create a new Ray cluster and switch traffic to the new cluster when it is ready.
 
 ### Deploy the Operator
 
-```
-$ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.5.0&timeout=90s"
-```
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the nightly KubeRay operator via 
+Helm. Note that sample RayService in this guide uses `serveConfigV2` to specify a multi-application Serve config.
+This will be first supported in Kuberay 0.6.0, and is currently supported only on the nightly KubeRay operator.
 
 Check that the controller is running.
 
@@ -41,23 +41,40 @@ ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 
 ### Run an Example Cluster
 
-An example config file to deploy RayService is included here:
-[ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml)
+In this guide we will be working with the sample RayService defined by [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml).
 
+Let's first take a look at the Ray Serve config embedded in the RayService yaml. At a high level (without digging too deep into the details about the deployments in each application), there are two applications: a fruit stand app and a calculator app. The fruit stand application is imported from the `fruit.py` file in the [test_dag](https://github.com/ray-project/test_dag/tree/master) repo, and it's hosted at the route prefix `/fruit`. Similarly, the calculator app is imported from the `conditional_dag.py` file in the same repo, and it's hosted at the route prefix `/calc`.
+```yaml
+serveConfigV2: |
+  applications:
+    - name: fruit_app
+      import_path: fruit.deployment_graph
+      route_prefix: /fruit
+      runtime_env:
+        working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+      deployments: ...
+    - name: math_app
+      import_path: conditional_dag.serve_dag
+      route_prefix: /calc
+      runtime_env:
+        working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+      deployments: ...
+```
+
+To start a RayService and deploy these two applications, run the following command:
 ```shell
-# Create a ray service and deploy fruit deployment graph.
 $ kubectl apply -f config/samples/ray_v1alpha1_rayservice.yaml
 ```
 
+List running RayServices to check on your new service `rayservice-sample`.
 ```shell
-# List running RayServices.
 $ kubectl get rayservice
 NAME                AGE
 rayservice-sample   7s
 ```
 
+The created RayService should include a head pod, a worker pod, and four services.
 ```shell
-# The created RayService should include a head pod, a worker pod, and four services.
 $ kubectl get pods
 NAME                                                      READY   STATUS    RESTARTS   AGE
 ervice-sample-raycluster-qd2vl-worker-small-group-bxpp6   1/1     Running   0          24m
@@ -103,22 +120,29 @@ $ kubectl run curl --image=radial/busyboxplus:curl -i --tty
 
 Or if you already have a curl pod running, you can login using `kubectl exec -it curl sh`.
 
-For the fruit example deployment, you can try the following request:
+You can query the two applications in your service at their respective endpoints. Query the fruit stand app with the route prefix `/fruit`:
 ```shell
-[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000 -d '["MANGO", 2]'
+[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000/fruit/ -d '["MANGO", 2]'
 > 6
 ```
-You should get the response `6`.
+Query the calculator app with the route prefix `/calc`:
+```shell
+[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000/calc/ -d '["MUL", 3]'
+> 15 pizzas please!
+```
+You should get the responses `6` and `15 pizzas please!`.
 
 #### Use Port Forwarding
 Set up Kubernetes port forwarding.
 ```shell
 $ kubectl port-forward service/rayservice-sample-serve-svc 8000
 ```
-For the fruit example deployment, you can try the following request:
+For the fruit example deployment, you can try the following requests:
 ```shell
-[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' localhost:8000 -d '["MANGO", 2]'
+[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' localhost:8000/fruit/ -d '["MANGO", 2]'
 > 6
+[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' localhost:8000/calc/ -d '["MUL", 3]'
+> 15 pizzas please!
 ```
 > Note:
 > `serve-svc` is HA in general. It will do traffic routing among all the workers which have serve deployments and will always try to point to the healthy cluster, even during upgrading or failing cases. 
@@ -131,15 +155,15 @@ $ kubectl port-forward service/rayservice-sample-head-svc 8265
 ```
 Access the dashboard using a web browser at `localhost:8265`.
 
-### Update Ray Serve Deployment Graph
+### Update Ray Serve config
 
-You can update the `serveConfig` in your RayService config file.
-For example, update the price of mangos to `4` in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml):
+You can update the applications in the `serveConfigV2` in your RayService config file.
+For example, update the price of mangos from `3` to `4` for the fruit app in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml):
 ```shell
 - name: MangoStand
-  numReplicas: 1
-  userConfig: |
-  price: 4
+  num_replicas: 1
+  user_config:
+    price: 4
 ```
 
 Use `kubectl apply` to update your RayService and `kubectl describe  rayservices rayservice-sample` to take a look at the RayService's information. It should look similar to:
@@ -153,12 +177,12 @@ serveDeploymentStatuses:
 
 After it finishes deployment, let's send a request again. In the curl pod from earlier, run:
 ```shell
-[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000 -d '["MANGO", 2]'
+[ root@curl:/ ]$ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc.default.svc.cluster.local:8000/fruit/ -d '["MANGO", 2]'
 > 8
 ```
 Or if using port forwarding:
 ```shell
-curl -X POST -H 'Content-Type: application/json' localhost:8000 -d '["MANGO", 2]'
+curl -X POST -H 'Content-Type: application/json' localhost:8000/fruit/ -d '["MANGO", 2]'
 > 8
 ```
 You should now get `8` as a result.
