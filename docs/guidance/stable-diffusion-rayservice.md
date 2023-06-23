@@ -10,7 +10,7 @@ CPU (`m5.xlarge`) node and 1 GPU (`g5.xlarge`) node.
 
 ## Step 2: Install the nightly KubeRay operator
 
-Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the nightly KubeRay operator via 
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the **nightly** KubeRay operator via 
 Helm. We're installing the nightly release here since this example's YAML file uses `serveConfigV2`, which uses features that will be released in KubeRay v0.6.0.
 
 ## Step 3: Install a RayService
