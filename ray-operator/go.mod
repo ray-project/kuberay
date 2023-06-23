@@ -16,7 +16,9 @@ require (
 	go.uber.org/zap v1.19.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	k8s.io/api v0.23.0
+	k8s.io/apiextensions-apiserver v0.23.0
 	k8s.io/apimachinery v0.23.0
+	k8s.io/apiserver v0.23.0
 	k8s.io/client-go v0.23.0
 	k8s.io/code-generator v0.23.0
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
@@ -52,6 +54,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
+	github.com/openshift/api v3.9.0+incompatible
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.28.0 // indirect
@@ -75,8 +78,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.23.0 // indirect
-	k8s.io/apiserver v0.23.0 // indirect
 	k8s.io/component-base v0.23.0 // indirect
 	k8s.io/gengo v0.0.0-20210813121822-485abfe95c7c // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect

@@ -170,6 +170,11 @@ func GenerateIngressName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "ingress")
 }
 
+// GenerateRouteName generates an ingress name from cluster name
+func GenerateRouteName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "route")
+}
+
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
 	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
