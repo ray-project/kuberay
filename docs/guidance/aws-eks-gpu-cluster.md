@@ -29,7 +29,7 @@ Create a GPU node group for Ray GPU workers.
    * Disk size: 1024 GB
    * Desired size: 1, Min size: 0, Max size: 1
 
-2. **Please follow Step 4 to install the NVIDIA device plugin.**
+2. If you're using a different AMI type than `Bottlerocket NVIDIA`, you may need to install the NVIDIA device plugin.
    * If you use `AMI type: Bottlerocket NVIDIA`, there is no need to install NVIDIA device plugin.
    * For other AMI types, you may need to install the NVIDIA device plugin DaemonSet in order to run GPU-enabled containers in your Amazon EKS cluster.
    If the GPU nodes have taints, add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes."
