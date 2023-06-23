@@ -19,11 +19,18 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
-	// Copy other configurations from cluster annotations to provide a generic way
-	// for user to customize their route settings.
+	// Copy other ingress configurations from cluster annotations to provide a generic way
+	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
+	// at the same time.
+	exclude_set := map[string]struct{}{
+		IngressClassAnnotationKey: {},
+	}
 	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
-		annotation[key] = value
+		if _, ok := exclude_set[key]; !ok {
+			annotation[key] = value
+		}
 	}
 
 	servicePorts := getServicePorts(cluster)
@@ -33,11 +40,6 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 	}
 
 	weight := int32(100)
-
-	serviceName, err := utils.GenerateHeadServiceName("RayCluster", cluster.Spec, cluster.Name)
-	if err != nil {
-		return nil, err
-	}
 
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
@@ -49,7 +51,7 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
 				Kind:   "Service",
-				Name:   serviceName,
+				Name:   utils.GenerateServiceName(cluster.Name),
 				Weight: &weight,
 			},
 			Port: &routev1.RoutePort{
@@ -62,7 +64,7 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 	return route, nil
 }
 
-// BuildRouteForRayService Builds the route for head service dashboard for RayService.
+// BuildRouteForRayService Builds the ingress for head service dashboard for RayService.
 // This is used to expose dashboard for external traffic.
 // RayService controller updates the ingress whenever a new RayCluster serves the traffic.
 func BuildRouteForRayService(service rayv1alpha1.RayService, cluster rayv1alpha1.RayCluster) (*routev1.Route, error) {
@@ -71,14 +73,12 @@ func BuildRouteForRayService(service rayv1alpha1.RayService, cluster rayv1alpha1
 		return nil, err
 	}
 
-	serviceName, err := utils.GenerateHeadServiceName("RayService", cluster.Spec, cluster.Name)
-	if err != nil {
-		return nil, err
-	}
-	route.ObjectMeta.Name = serviceName
+	route.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
 	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
-	route.ObjectMeta.Labels[RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode))
+	route.ObjectMeta.Labels = map[string]string{
+		RayServiceLabelKey: service.Name,
+		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode)),
+	}
 
 	return route, nil
 }
