@@ -10,7 +10,7 @@ import (
 )
 
 // BuildRouteForHeadService Builds the Route (OpenShift) for head service dashboard.
-// This is used to expose dashboard and ray job submission API for external traffic.
+// This is used to expose dashboard and remote submit service apis or external traffic.
 func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, error) {
 	labels := map[string]string{
 		RayClusterLabelKey:                cluster.Name,
@@ -19,16 +19,23 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
-	// Copy other route configurations from cluster annotations to provide a generic way
-	// for user to customize their route settings. 
+	// Copy other ingress configurations from cluster annotations to provide a generic way
+	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
+	// at the same time.
+	exclude_set := map[string]struct{}{
+		IngressClassAnnotationKey: {},
+	}
 	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
-		annotation[key] = value
+		if _, ok := exclude_set[key]; !ok {
+			annotation[key] = value
+		}
 	}
 
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := DefaultDashboardPort
-	if port, ok := servicePorts[DefaultDashboardName]; ok {
+	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = int(port)
 	}
 
@@ -68,8 +75,10 @@ func BuildRouteForRayService(service rayv1alpha1.RayService, cluster rayv1alpha1
 
 	route.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
 	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
-	route.ObjectMeta.Labels[RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode))
+	route.ObjectMeta.Labels = map[string]string{
+		RayServiceLabelKey: service.Name,
+		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode)),
+	}
 
 	return route, nil
 }

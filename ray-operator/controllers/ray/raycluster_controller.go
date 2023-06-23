@@ -58,12 +58,6 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or OPenshift
 func getClusterType(logger logr.Logger) bool {
-	// The user can explicitely overwrite usage of Route when running on OpenShift
-	// In this case operator will create ingress even if running on OpenShift
-	// This is a safety mechanism for people running on OPenShift, but wanting to use Ingress
-	if s := os.Getenv("USE_INGRESS_ON_OPENSHIFT"); strings.ToLower(s) == "true" {
-		return false
-	}
 	// The discovery package is used to discover APIs supported by a Kubernetes API server.
 	config, err := ctrl.GetConfig()
 	if err == nil && config != nil {
@@ -71,22 +65,25 @@ func getClusterType(logger logr.Logger) bool {
 		if err == nil && dclient != nil {
 			apiGroupList, err := dclient.ServerGroups()
 			if err != nil {
-				logger.Info("Error while querying ServerGroups, assuming we're not on OpenShift")
+				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
+				return false
+			} else {
+				for i := 0; i < len(apiGroupList.Groups); i++ {
+					if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
+						logger.Info("We detected being on OpenShift!")
+						return true
+					}
+				}
 				return false
 			}
-			for i := 0; i < len(apiGroupList.Groups); i++ {
-				if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
-					logger.Info("We detected being on OpenShift!")
-					return true
-				}
-			}
+		} else {
+			logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
 			return false
 		}
-		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're not on OpenShift")
+	} else {
+		logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
 		return false
 	}
-	logger.Info("Cannot retrieve config, assuming we're not on OpenShift")
-	return false
 }
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -286,7 +283,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	}
 
 	if r.IsOpenShift {
-		// This is OpenShift - create route
+		// This is open shift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
 	} else {
 		// plain vanilla kubernetes - create ingress
@@ -304,7 +301,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	}
 
 	if headRoutes.Items != nil && len(headRoutes.Items) == 1 {
-		r.Log.Info("reconcile Route", "head service route found", headRoutes.Items[0].Name)
+		r.Log.Info("reconcileIngresses", "head service route found", headRoutes.Items[0].Name)
 		return nil
 	}
 
@@ -397,7 +394,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			r.Log.Info("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
-			return fmt.Errorf("ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
+			return fmt.Errorf("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
 		}
 
 		if err != nil {
