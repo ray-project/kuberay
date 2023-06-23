@@ -41,7 +41,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1alpha1.AddToScheme(scheme))
 	batchscheduler.AddToScheme(scheme)
-	utilruntime.Must(routev1.AddToScheme(scheme))
+	routev1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
