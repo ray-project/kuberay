@@ -62,11 +62,6 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or OPenshift
 func getClusterType(logger logr.Logger) bool {
-	// The user can explicitely overwrite usage of Route when running on OpenShift
-	// In this case operator will create ingress even if running on OpenShift
-	if s := os.Getenv("USE_INGRESS_ON_OPENSHIFT"); strings.ToLower(s) == "true" {
-		return false
-	}
 	// The discovery package is used to discover APIs supported by a Kubernetes API server.
 	config, err := ctrl.GetConfig()
 	if err == nil && config != nil {
@@ -362,13 +357,14 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(oldStatus rayv1alpha
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+
 	r.Log.Info("Reconciling Ingress")
 	if instance.Spec.HeadGroupSpec.EnableIngress == nil || !*instance.Spec.HeadGroupSpec.EnableIngress {
 		return nil
 	}
 
 	if r.IsOpenShift {
-		// This is OpenShift - create route
+		// This is open shift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
 	} else {
 		// plain vanilla kubernetes - create ingress
@@ -377,6 +373,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 }
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+
 	headRoutes := routev1.RouteList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -411,6 +408,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 }
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+
 	headIngresses := networkingv1.IngressList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -735,6 +733,7 @@ func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
+
 	// making sure the name is valid
 	ingress.Name = utils.CheckName(ingress.Name)
 
@@ -752,6 +751,7 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 }
 
 func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *routev1.Route, instance *rayv1alpha1.RayCluster) error {
+
 	// making sure the name is valid
 	route.Name = utils.CheckName(route.Name)
 
