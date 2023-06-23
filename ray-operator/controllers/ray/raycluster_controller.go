@@ -23,11 +23,14 @@ import (
 	"github.com/go-logr/logr"
 	_ "k8s.io/api/apps/v1beta1"
 
+	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,6 +50,42 @@ var (
 	podUIDIndexField = "metadata.uid"
 )
 
+// getDiscoveryClient returns a discovery client for the current reconciler
+func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error) {
+	return discovery.NewDiscoveryClientForConfig(config)
+}
+
+// Check where we are running. We are trying to distinguish here whether
+// this is vanilla kubernetes cluster or OPenshift
+func getClusterType(logger logr.Logger) bool {
+	// The discovery package is used to discover APIs supported by a Kubernetes API server.
+	config, err := ctrl.GetConfig()
+	if err == nil && config != nil {
+		dclient, err := getDiscoveryClient(config)
+		if err == nil && dclient != nil {
+			apiGroupList, err := dclient.ServerGroups()
+			if err != nil {
+				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
+				return false
+			} else {
+				for i := 0; i < len(apiGroupList.Groups); i++ {
+					if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
+						logger.Info("We detected being on OpenShift!")
+						return true
+					}
+				}
+				return false
+			}
+		} else {
+			logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
+			return false
+		}
+	} else {
+		logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+		return false
+	}
+}
+
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
@@ -56,12 +95,17 @@ func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 		panic(err)
 	}
 
+	log := ctrl.Log.WithName("controllers").WithName("RayCluster")
+	log.Info("Starting Reconciler")
+	isOpenShift := getClusterType(log)
+
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controllers").WithName("RayCluster"),
+		Log:               log,
 		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
 		BatchSchedulerMgr: batchscheduler.NewSchedulerManager(mgr.GetConfig()),
+		IsOpenShift:       isOpenShift,
 	}
 }
 
@@ -74,6 +118,7 @@ type RayClusterReconciler struct {
 	Scheme            *runtime.Scheme
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
+	IsOpenShift       bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -91,6 +136,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
@@ -230,9 +276,57 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(oldStatus rayv1alpha
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+
+	r.Log.Info("Reconciling Ingress")
 	if instance.Spec.HeadGroupSpec.EnableIngress == nil || !*instance.Spec.HeadGroupSpec.EnableIngress {
 		return nil
 	}
+
+	if r.IsOpenShift {
+		// This is open shift - create route
+		return r.reconcileRouteOpenShift(ctx, instance)
+	} else {
+		// plain vanilla kubernetes - create ingress
+		return r.reconcileIngressKubernetes(ctx, instance)
+	}
+}
+
+func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+
+	headRoutes := routev1.RouteList{}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		r.Log.Error(err, "Route Listing error!", "Route.Error", err)
+		return err
+	}
+
+	if headRoutes.Items != nil && len(headRoutes.Items) == 1 {
+		r.Log.Info("reconcileIngresses", "head service route found", headRoutes.Items[0].Name)
+		return nil
+	}
+
+	if headRoutes.Items == nil || len(headRoutes.Items) == 0 {
+		route, err := common.BuildRouteForHeadService(*instance)
+		if err != nil {
+			r.Log.Error(err, "Failed building route!", "Route.Error", err)
+			return err
+		}
+
+		if err := ctrl.SetControllerReference(instance, route, r.Scheme); err != nil {
+			return err
+		}
+
+		err = r.createHeadRoute(ctx, route, instance)
+		if err != nil {
+			r.Log.Error(err, "Failed creating route!", "Route.Error", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
 
 	headIngresses := networkingv1.IngressList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
@@ -577,11 +671,9 @@ func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
+
 	// making sure the name is valid
 	ingress.Name = utils.CheckName(ingress.Name)
-	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-		return err
-	}
 
 	if err := r.Create(ctx, ingress); err != nil {
 		if errors.IsAlreadyExists(err) {
@@ -593,6 +685,24 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 	}
 	r.Log.Info("Ingress created successfully", "ingress name", ingress.Name)
 	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Created", "Created ingress %s", ingress.Name)
+	return nil
+}
+
+func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *routev1.Route, instance *rayv1alpha1.RayCluster) error {
+
+	// making sure the name is valid
+	route.Name = utils.CheckName(route.Name)
+
+	if err := r.Create(ctx, route); err != nil {
+		if errors.IsAlreadyExists(err) {
+			r.Log.Info("Route already exists, no need to create")
+			return nil
+		}
+		r.Log.Error(err, "Route create error!", "Route.Error", err)
+		return err
+	}
+	r.Log.Info("Route created successfully", "route name", route.Name)
+	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Created", "Created route %s", route.Name)
 	return nil
 }
 
