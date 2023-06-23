@@ -37,7 +37,7 @@ kubectl apply -f ray-service.stable-diffusion.yaml
 kubectl port-forward svc/stable-diffusion-serve-svc 8000
 ```
 
-Note that the Serve service will be created after the Serve applications are ready and running. This process may take approximately 1 minute after all Pods in the RayCluster are running.
+Note that the RayService's Kubernetes service will be created after the Serve applications are ready and running. This process may take approximately 1 minute after all Pods in the RayCluster are running.
 
 ## Step 5: Send a request to the text-to-image model
 
