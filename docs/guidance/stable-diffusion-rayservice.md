@@ -29,7 +29,7 @@ This YAML file contains some important settings:
         value: "worker"
         effect: "NoSchedule"
     ```
-* Install `diffusers` in `runtime_env` as it is not included by default in the `ray-ml` image.
+* It includes `diffusers` in `runtime_env` since this package is not included by default in the `ray-ml` image.
 
 ## Step 4: Forward the port of Serve
 
