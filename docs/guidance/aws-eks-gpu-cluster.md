@@ -40,7 +40,7 @@ Create a GPU node group for Ray GPU workers.
 
 ## Step 3: Verify the node groups
 
-> **Note:** If you encounter permission issues with `eksctl`, you can navigate to your AWS account's webpage and copy the
+> **Note:** If you encounter permission issues with `eksctl`, navigate to your AWS account's webpage and copy the
 credential environment variables, including `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`,
 from the "Command line or programmatic access" page.
 
