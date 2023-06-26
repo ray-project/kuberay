@@ -2,21 +2,15 @@ package ray
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
-	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
-	"github.com/google/shlex"
 	fmtErrors "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -348,13 +342,13 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitter_template = r.getDefaultSubmitterTemplate(rayJobInstance)
+		submitter_template = common.GetDefaultSubmitterTemplate(rayJobInstance)
 	} else {
 		submitter_template = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
 	}
 
 	// Set the command in the submitter pod template.
-	k8s_job_command, err := r.getK8sJobCommand(rayJobInstance)
+	k8s_job_command, err := common.GetK8sJobCommand(rayJobInstance)
 	if err != nil {
 		return v1.PodTemplateSpec{}, err
 	}
@@ -363,70 +357,6 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 	r.Log.Info("Command to be executed", "command", k8s_job_command)
 
 	return submitter_template, nil
-}
-
-// getDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func (r *RayJobReconciler) getDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTemplateSpec {
-	// Use the image of the Ray head to be defensive against version mismatch issues
-	return v1.PodTemplateSpec{
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:  "ray-job-submitter",
-					Image: rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image,
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU: resource.MustParse("1"),
-						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU: resource.MustParse("200m"),
-						},
-					},
-				},
-			},
-			RestartPolicy: v1.RestartPolicyNever,
-		},
-	}
-}
-
-// getK8sJobCommand builds the K8s job command for the Ray job.
-func (r *RayJobReconciler) getK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
-	k8sJobCommand := r.getBaseRayJobCommand(rayJobInstance)
-
-	if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
-		runtimeEnv, err := r.getDecodedRuntimeEnv(rayJobInstance)
-		if err != nil {
-			return nil, err
-		}
-
-		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", runtimeEnv)
-	}
-
-	if len(rayJobInstance.Spec.Metadata) > 0 {
-		metadata, err := r.getMetadataJson(rayJobInstance)
-		if err != nil {
-			return nil, err
-		}
-
-		k8sJobCommand = append(k8sJobCommand, "--metadata-json", metadata)
-	}
-
-	if len(rayJobInstance.Status.JobId) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--submission-id", rayJobInstance.Status.JobId)
-	}
-
-	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	k8sJobCommand = append(k8sJobCommand, "--")
-
-	entrypoint := rayJobInstance.Spec.Entrypoint
-	commandSlice, err := shlex.Split(entrypoint)
-	if err != nil {
-		return nil, err
-	}
-
-	k8sJobCommand = append(k8sJobCommand, commandSlice...)
-
-	return k8sJobCommand, nil
 }
 
 // createNewK8sJob creates a new Kubernetes Job.
@@ -453,53 +383,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 	// Return the Job's name
 	return job.Name, nil
-}
-
-// getDecodedRuntimeEnv decodes the runtime environment for the Ray job from a base64-encoded string.
-func (r *RayJobReconciler) getDecodedRuntimeEnv(rayJobInstance *rayv1alpha1.RayJob) (string, error) {
-	decodedBytes, err := base64.StdEncoding.DecodeString(rayJobInstance.Spec.RuntimeEnv)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode runtimeEnv: %v: %v", rayJobInstance.Spec.RuntimeEnv, err)
-	}
-
-	return string(decodedBytes), nil
-}
-
-// getBaseRayJobCommand returns the first part of the Ray Job command up to and including the address, e.g. "ray job submit --address http://..."
-func (r *RayJobReconciler) getBaseRayJobCommand(rayJobInstance *rayv1alpha1.RayJob) []string {
-	address := rayJobInstance.Status.DashboardURL
-
-	// add http:// if needed
-	if !strings.HasPrefix(address, "http://") {
-		address = "http://" + address
-	}
-
-	return []string{"ray", "job", "submit", "--address", address}
-}
-
-// getMetadataJson returns the JSON string of the metadata for the Ray job.
-func (r *RayJobReconciler) getMetadataJson(rayJobInstance *rayv1alpha1.RayJob) (string, error) {
-	// Check that the Ray version is at least 2.6.0.
-	// If it is, we can use the --metadata-json flag.
-	// Otherwise, we need to raise an error.
-	rayVersion := rayJobInstance.Spec.RayClusterSpec.RayVersion
-	constraint, _ := semver.NewConstraint(">= 2.6.0")
-	v, err := semver.NewVersion(rayVersion)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse Ray version: %v: %v", rayVersion, err)
-	}
-
-	if !constraint.Check(v) {
-		return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
-	}
-
-	// Convert the metadata map to a JSON string.
-	metadataBytes, err := json.Marshal(rayJobInstance.Spec.Metadata)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal metadata: %v: %v", rayJobInstance.Spec.Metadata, err)
-	}
-
-	return string(metadataBytes), nil
 }
 
 func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob) (reconcile.Result, error) {
