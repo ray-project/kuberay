@@ -338,25 +338,31 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
 func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) (v1.PodTemplateSpec, error) {
-	var submitter_template v1.PodTemplateSpec
+	var submitterTemplate v1.PodTemplateSpec
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitter_template = common.GetDefaultSubmitterTemplate(rayJobInstance)
+		submitterTemplate = common.GetDefaultSubmitterTemplate(rayJobInstance)
+		r.Log.Info("default submitter template is used")
 	} else {
-		submitter_template = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
+		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
+		r.Log.Info("user-provided submitter template is used")
+		r.Log.Info("the first container is assumed to be the submitter")
 	}
 
-	// Set the command in the submitter pod template.
-	k8s_job_command, err := common.GetK8sJobCommand(rayJobInstance)
-	if err != nil {
-		return v1.PodTemplateSpec{}, err
+	// If the command in the submitter pod template isn't set, use the default command.
+	if len(submitterTemplate.Spec.Containers[0].Command) == 0 {
+		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
+		if err != nil {
+			return v1.PodTemplateSpec{}, err
+		}
+		submitterTemplate.Spec.Containers[0].Command = k8sJobCommand
+		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
+	} else {
+		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[0].Command)
 	}
 
-	submitter_template.Spec.Containers[0].Command = k8s_job_command
-	r.Log.Info("Command to be executed", "command", k8s_job_command)
-
-	return submitter_template, nil
+	return submitterTemplate, nil
 }
 
 // createNewK8sJob creates a new Kubernetes Job.
