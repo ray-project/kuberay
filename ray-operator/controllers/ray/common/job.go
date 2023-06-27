@@ -104,6 +104,7 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 	}
 
 	if len(image) == 0 {
+		// If we can't find the image of the Ray head, fall back to the latest stable release.
 		image = "rayproject/ray:latest"
 	}
 	return v1.PodTemplateSpec{
