@@ -75,9 +75,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	// Get RayJob instance
 	var err error
-	var rayJobInstance *rayv1alpha1.RayJob
-	if rayJobInstance, err = r.getRayJobInstance(ctx, request); err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, client.IgnoreNotFound(err)
+	rayJobInstance := &rayv1alpha1.RayJob{}
+	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
+			r.Log.Info("RayJob resource not found. Ignoring since object must be deleted", "name", request.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		r.Log.Error(err, "Failed to get RayJob")
+		return ctrl.Result{}, err
 	}
 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -87,7 +94,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
 			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
 			if err := r.Update(ctx, rayJobInstance); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				r.Log.Error(err, "Failed to update RayJob with finalizer")
+				return ctrl.Result{}, err
 			}
 		}
 	} else {
@@ -97,20 +105,24 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
 			if err != nil {
-				r.Log.Info("Failed to stop job", "error", err)
+				r.Log.Info("Failed to stop job for RayJob", "error", err)
 			}
 		}
 
 		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
 		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
 		err := r.Update(ctx, rayJobInstance)
+		if err != nil {
+			r.Log.Error(err, "Failed to remove finalizer for RayJob")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	// Do not reconcile the RayJob if the deployment status is marked as Complete
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1alpha1.JobDeploymentStatusComplete {
 		r.Log.Info("rayjob is complete, skip reconciliation", "rayjob", rayJobInstance.Name)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		return ctrl.Result{}, nil
 	}
 
 	// Mark the deployment status as Complete if RayJob is succeed or failed
@@ -433,20 +445,6 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rayv1alpha1.RayCluster{}).
 		Owns(&corev1.Service{}).
 		Complete(r)
-}
-
-func (r *RayJobReconciler) getRayJobInstance(ctx context.Context, request ctrl.Request) (*rayv1alpha1.RayJob, error) {
-	rayJobInstance := &rayv1alpha1.RayJob{}
-	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("Read request instance not found error!", "name", request.NamespacedName)
-		} else {
-			r.Log.Error(err, "Read request instance error!")
-		}
-		// Error reading the object - requeue the request.
-		return nil, err
-	}
-	return rayJobInstance, nil
 }
 
 func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Context, rayJob *rayv1alpha1.RayJob) error {
