@@ -84,7 +84,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		// Error reading the object - requeue the request.
 		r.Log.Error(err, "Failed to get RayJob")
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -95,7 +95,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
 			if err := r.Update(ctx, rayJobInstance); err != nil {
 				r.Log.Error(err, "Failed to update RayJob with finalizer")
-				return ctrl.Result{}, err
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
 	} else {
@@ -114,7 +114,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		err := r.Update(ctx, rayJobInstance)
 		if err != nil {
 			r.Log.Error(err, "Failed to remove finalizer for RayJob")
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
