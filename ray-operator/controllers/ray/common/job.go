@@ -114,10 +114,12 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 					Image: image,
 					Resources: v1.ResourceRequirements{
 						Limits: v1.ResourceList{
-							v1.ResourceCPU: resource.MustParse("1"),
+							v1.ResourceCPU:    resource.MustParse("1"),
+							v1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 						Requests: v1.ResourceList{
-							v1.ResourceCPU: resource.MustParse("200m"),
+							v1.ResourceCPU:    resource.MustParse("1"),
+							v1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 				},
