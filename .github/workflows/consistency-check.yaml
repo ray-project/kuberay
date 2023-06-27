@@ -124,3 +124,8 @@ jobs:
       - name: Check rbac consistency
         run: |
           python3 scripts/rbac-check.py
+
+      - name: Check rbac configuration
+        run: |
+          cd helm-chart/script/
+          pytest -s
