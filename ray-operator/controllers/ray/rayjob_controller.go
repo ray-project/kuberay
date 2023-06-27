@@ -343,8 +343,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 		r.Log.Info("default submitter template is used")
 	} else {
 		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
-		r.Log.Info("user-provided submitter template is used")
-		r.Log.Info("the first container is assumed to be the submitter")
+		r.Log.Info("user-provided submitter template is used; the first container is assumed to be the submitter")
 	}
 
 	// If the command in the submitter pod template isn't set, use the default command.
