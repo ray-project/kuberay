@@ -70,14 +70,6 @@ func TestGetOrCreateK8sJob(t *testing.T) {
 	assert.Equal(t, "test-rayjob", retrievedJobName)
 }
 
-// For the function getSubmitterTemplate, you could have the following tests:
-
-// Test that it correctly uses the default submitter template when no template is provided.
-// Test that it correctly uses the provided submitter template.
-// Test that it correctly uses the default command when no command is provided in the template.
-// Test that it correctly uses the command provided in the template.
-// Test that it handles errors when trying to get the K8s job command properly.
-
 func TestGetSubmitterTemplate(t *testing.T) {
 	// RayJob instance with user-provided submitter pod template.
 	rayJobInstanceWithTemplate := &rayv1alpha1.RayJob{
