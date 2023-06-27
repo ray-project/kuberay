@@ -15,26 +15,27 @@ def generate_config_patch(config):
     """
     Set `crNamespacedRbacEnable`, `singleNamespaceInstall`, and `watchNamespace` of the Helm chart.
     """
-    patch = jsonpatch.JsonPatch(
-        [
-            {
-                "op": "replace",
-                "path": "/crNamespacedRbacEnable",
-                "value": config["crNamespacedRbacEnable"],
-            },
-            {
-                "op": "replace",
-                "path": "/singleNamespaceInstall",
-                "value": config["singleNamespaceInstall"],
-            },
+    actions = [
+        {
+            "op": "replace",
+            "path": "/crNamespacedRbacEnable",
+            "value": config["crNamespacedRbacEnable"],
+        },
+        {
+            "op": "replace",
+            "path": "/singleNamespaceInstall",
+            "value": config["singleNamespaceInstall"],
+        },
+    ]
+    if "watchNamespace" in config:
+        actions.append(
             {
                 "op": "add",
                 "path": "/watchNamespace",
                 "value": config["watchNamespace"],
             },
-        ]
-    )
-    return patch
+        )
+    return jsonpatch.JsonPatch(actions)
 
 
 def helm_template_render(values_yaml):
