@@ -69,3 +69,77 @@ func TestGetOrCreateK8sJob(t *testing.T) {
 	assert.True(t, wasCreated)
 	assert.Equal(t, "test-rayjob", retrievedJobName)
 }
+
+// For the function getSubmitterTemplate, you could have the following tests:
+
+// Test that it correctly uses the default submitter template when no template is provided.
+// Test that it correctly uses the provided submitter template.
+// Test that it correctly uses the default command when no command is provided in the template.
+// Test that it correctly uses the command provided in the template.
+// Test that it handles errors when trying to get the K8s job command properly.
+
+func TestGetSubmitterTemplate(t *testing.T) {
+	// RayJob instance with user-provided submitter pod template.
+	rayJobInstanceWithTemplate := &rayv1alpha1.RayJob{
+		Spec: rayv1alpha1.RayJobSpec{
+			Entrypoint: "echo hello world",
+			SubmitterPodTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Command: []string{"user-command"},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1alpha1.RayJobStatus{
+			DashboardURL: "test-url",
+		},
+	}
+
+	// RayJob instance without user-provided submitter pod template.
+	// In this case we should use the image of the Ray Head, so specify the image so we can test it.
+	rayJobInstanceWithoutTemplate := &rayv1alpha1.RayJob{
+		Spec: rayv1alpha1.RayJobSpec{
+			Entrypoint: "echo hello world",
+			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
+				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:custom-version",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1alpha1.RayJobStatus{
+			DashboardURL: "test-url",
+		},
+	}
+
+	r := &RayJobReconciler{
+		Log: ctrl.Log.WithName("controllers").WithName("RayJob"),
+	}
+
+	// Test 1: User provided template with command
+	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstanceWithTemplate)
+	assert.NoError(t, err)
+	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[0].Command[0])
+
+	// Test 2: User provided template without command
+	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[0].Command = []string{}
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate)
+	assert.NoError(t, err)
+	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[0].Command)
+
+	// Test 3: User did not provide template, should use the image of the Ray Head
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
+	assert.NoError(t, err)
+	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[0].Command)
+	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[0].Image)
+}
