@@ -9,11 +9,11 @@ If you don't find an answer to your question here, please don't hesitate to conn
 
 ### Worker Init Container
 
-When starting a RayCluster, the worker pod needs to wait until the head pod is started in order to connect to the head successfully.
-To achieve this, the KubeRay operator will automatically inject an [init container](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) into the worker pod to wait for the head pod to be ready before starting the worker container. The init container will continuously check if the head's GCS server is ready or not.
+When starting a RayCluster, the worker Pod needs to wait until the head Pod is started in order to connect to the head successfully.
+To achieve this, the KubeRay operator will automatically inject an [init container](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) into the worker Pod to wait for the head Pod to be ready before starting the worker container. The init container will continuously check if the head's GCS server is ready or not.
 
 Related questions:
-- [Why are my worker pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?](#why-are-my-worker-pods-stuck-in-init01-status-how-can-i-troubleshoot-the-worker-init-container)
+- [Why are my worker Pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?](#why-are-my-worker-pods-stuck-in-init01-status-how-can-i-troubleshoot-the-worker-init-container)
 - [I do not want to use the default worker init container, how can I disable the auto-injection and add my own?](#i-do-not-want-to-use-the-default-worker-init-container-how-can-i-disable-the-auto-injection-and-add-my-own)
 
 ### Cluster Domain
@@ -28,20 +28,20 @@ Related questions:
 
 ## Questions
 
-### Why are my worker pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?
+### Why are my worker Pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?
 
-Worker pods might be stuck in `Init:0/1` status for several reasons. The default worker init container only progresses when the GCS server in the head pod is ready. Here are some common causes for the issue:
-- The GCS server process failed in the head pod. Inspect the head pod logs for errors related to the GCS server.
+Worker Pods might be stuck in `Init:0/1` status for several reasons. The default worker init container only progresses when the GCS server in the head Pod is ready. Here are some common causes for the issue:
+- The GCS server process failed in the head Pod. Inspect the head Pod logs for errors related to the GCS server.
 - Ray is not included in the `$PATH` in the worker init container. The init container uses `ray health-check` to check the GCS server status.
 - The cluster domain is not set correctly. See [cluster-domain](#cluster-domain) for more details. The init container uses the Fully Qualified Domain Name (FQDN) of the head service to connect to the GCS server.
-- The worker init container shares the same ImagePullPolicy, SecurityContext, Env, VolumeMounts, and Resources as the worker pod template. Any setting requiring a sidecar container could lead to a deadlock. Refer to [issue 1130](https://github.com/ray-project/kuberay/issues/1130) for additional details.
+- The worker init container shares the same ImagePullPolicy, SecurityContext, Env, VolumeMounts, and Resources as the worker Pod template. Any setting requiring a sidecar container could lead to a deadlock. Refer to [issue 1130](https://github.com/ray-project/kuberay/issues/1130) for additional details.
 
-If none of the above reasons apply, you can troubleshoot by disabling the default worker init container injection and adding your test init container to the worker pod template.
+If none of the above reasons apply, you can troubleshoot by disabling the default worker init container injection and adding your test init container to the worker Pod template.
 
 
 ### I do not want to use the default worker init container, how can I disable the auto-injection and add my own?
 
-The default worker init container is used to wait for the GCS server in the head pod to be ready. It is defined [here](https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/common/pod.go#L207). To disable the injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the KubeRay operator to `false` (applicable only for versions after 0.5.0). Helm chart users can make this change [here](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/values.yaml#L74). Once disabled, you can add your custom init container to the worker pod template. More details can be found in [PR 1069](https://github.com/ray-project/kuberay/pull/1069).
+The default worker init container is used to wait for the GCS server in the head Pod to be ready. It is defined [here](https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/common/pod.go#L207). To disable the injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the KubeRay operator to `false` (applicable only for versions after 0.5.0). Helm chart users can make this change [here](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/values.yaml#L74). Once disabled, you can add your custom init container to the worker Pod template. More details can be found in [PR 1069](https://github.com/ray-project/kuberay/pull/1069).
 
 
 ### How can I set the custom cluster domain if mine is not `cluster.local`?
