@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -35,6 +36,7 @@ const (
 	JobDeploymentStatusInitializing                  JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusFailedToGetOrCreateRayCluster JobDeploymentStatus = "FailedToGetOrCreateRayCluster"
 	JobDeploymentStatusWaitForDashboard              JobDeploymentStatus = "WaitForDashboard"
+	JobDeploymentStatusWaitForK8sJob                 JobDeploymentStatus = "WaitForK8sJob"
 	JobDeploymentStatusFailedJobDeploy               JobDeploymentStatus = "FailedJobDeploy"
 	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
 	JobDeploymentStatusFailedToGetJobStatus          JobDeploymentStatus = "FailedToGetJobStatus"
@@ -68,6 +70,8 @@ type RayJobSpec struct {
 	// If the RayCluster is already created, it will be deleted.
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
+	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	SubmitterPodTemplate *v1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
