@@ -10,7 +10,6 @@ import (
 	"github.com/google/shlex"
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // GetDecodedRuntimeEnv decodes the runtime environment for the Ray job from a base64-encoded string.
@@ -113,16 +112,6 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 				{
 					Name:  "ray-job-submitter",
 					Image: image,
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("1"),
-							v1.ResourceMemory: resource.MustParse("1Gi"),
-						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("1"),
-							v1.ResourceMemory: resource.MustParse("1Gi"),
-						},
-					},
 				},
 			},
 			RestartPolicy: v1.RestartPolicyNever,
