@@ -230,13 +230,11 @@ rules:
   resources:
   - routes
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
+  - create
+  - delete
 {{- if .Values.batchScheduler.enabled }}
 - apiGroups:
   - scheduling.volcano.sh
