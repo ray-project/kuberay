@@ -334,16 +334,8 @@ func setupTest(t *testing.T) {
 	for i, port := range headService.Spec.Ports {
 		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
 	}
-	dashboardService, err := common.BuildDashboardService(*testRayCluster)
-	if err != nil {
-		t.Errorf("failed to build dashboard service: %v", err)
-	}
-	for i, port := range dashboardService.Spec.Ports {
-		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
-	}
 	testServices = []runtime.Object{
 		headService,
-		dashboardService,
 	}
 
 	instanceReqValue := []string{instanceName}
@@ -892,6 +884,90 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 	assert.Equal(t, 0, len(podList.Items),
 		"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+}
+
+func TestReconcileHeadService(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	cluster := testRayCluster.DeepCopy()
+	headService1 := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "head-svc-1",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:  cluster.Name,
+				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+			},
+		},
+	}
+	headService2 := headService1.DeepCopy()
+	headService2.Name = "head-svc-2"
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{cluster}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+	headServiceSelector := labels.SelectorFromSet(map[string]string{
+		common.RayClusterLabelKey:  cluster.Name,
+		common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+	})
+
+	// Initialize RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Case 1: Head service does not exist.
+	err := r.reconcileHeadService(ctx, cluster)
+	assert.Nil(t, err, "Fail to reconcile head service")
+
+	// One head service should be created.
+	serviceList := corev1.ServiceList{}
+	err = fakeClient.List(ctx, &serviceList, &client.ListOptions{
+		LabelSelector: headServiceSelector,
+		Namespace:     cluster.Namespace,
+	})
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
+
+	// Case 2: One head service exists.
+	err = r.reconcileHeadService(ctx, cluster)
+	assert.Nil(t, err, "Fail to reconcile head service")
+
+	// The namespace should still have only one head service.
+	serviceList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &serviceList, &client.ListOptions{
+		LabelSelector: headServiceSelector,
+		Namespace:     cluster.Namespace,
+	})
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
+
+	// Case 3: Two head services exist. This case only happens when users manually create a head service.
+	runtimeObjects = []runtime.Object{headService1, headService2}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	serviceList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &serviceList, &client.ListOptions{
+		LabelSelector: headServiceSelector,
+		Namespace:     cluster.Namespace,
+	})
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 2, len(serviceList.Items), "Service list len is wrong")
+	r.Client = fakeClient
+
+	// When there are two head services, the reconciler should report an error.
+	err = r.reconcileHeadService(ctx, cluster)
+	assert.NotNil(t, err, "Reconciler should report an error when there are two head services")
 }
 
 func contains(slice []string, item string) bool {

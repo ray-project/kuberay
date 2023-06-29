@@ -231,20 +231,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	if err := r.reconcileServices(ctx, instance, common.HeadService); err != nil {
+	if err := r.reconcileHeadService(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1alpha1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-	}
-	if common.IsAgentServiceEnabled(instance) {
-		// Reconcile agent service only when enabled in annotation.
-		if err := r.reconcileServices(ctx, instance, common.AgentService); err != nil {
-			if updateErr := r.updateClusterState(ctx, instance, rayv1alpha1.Failed); updateErr != nil {
-				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
-			}
-			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-		}
 	}
 	if err := r.reconcilePods(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1alpha1.Failed); updateErr != nil {
@@ -313,69 +304,50 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	return nil
 }
 
-func (r *RayClusterReconciler) reconcileServices(ctx context.Context, instance *rayv1alpha1.RayCluster, serviceType common.ServiceType) error {
+// Return nil only when the head service successfully created or already exists.
+func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
 	services := corev1.ServiceList{}
-	var filterLabels client.MatchingLabels
-	if serviceType == common.HeadService {
-		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	} else if serviceType == common.AgentService {
-		filterLabels = client.MatchingLabels{common.RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(instance.Name)}
-	}
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
 
 	if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	if services.Items != nil {
+	// Check if there's existing head service in the cluster.
+	if len(services.Items) != 0 {
 		if len(services.Items) == 1 {
-			r.Log.Info("reconcileServices ", string(serviceType)+" service found", services.Items[0].Name)
-			// TODO: compare diff and reconcile the object
-			// For example. ServiceType might be changed or port might be modified
+			r.Log.Info("reconcileHeadService", "1 head service found", services.Items[0].Name)
 			return nil
 		}
-
-		// This should never happen.
-		// We add the protection here just in case controller has race issue or user manually create service with same label.
+		// This should never happen. This protects against the case that users manually create service with the same label.
 		if len(services.Items) > 1 {
-			r.Log.Info("reconcileServices ", "Duplicates "+string(serviceType)+" service found", len(services.Items))
-			return nil
+			r.Log.Info("reconcileHeadService", "Duplicate head service found", services.Items)
+			return fmt.Errorf("%d head service found %v", len(services.Items), services.Items)
 		}
-	}
-
-	// Create head service if there's no existing one in the cluster.
-	if services.Items == nil || len(services.Items) == 0 {
-		var raySvc *corev1.Service
-		var err error
-		if serviceType == common.HeadService {
-			labels := make(map[string]string)
-			if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
-				labels[common.KubernetesApplicationNameLabelKey] = val
-			}
-			annotations := make(map[string]string)
-			for k, v := range instance.Spec.HeadServiceAnnotations {
-				annotations[k] = v
-			}
-			raySvc, err = common.BuildServiceForHeadPod(*instance, labels, annotations)
-		} else if serviceType == common.AgentService {
-			raySvc, err = common.BuildDashboardService(*instance)
+	} else {
+		// Create head service if there's no existing one in the cluster.
+		labels := make(map[string]string)
+		if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
+			labels[common.KubernetesApplicationNameLabelKey] = val
 		}
-
-		if raySvc == nil {
-			r.Log.Info("reconcileServices ", "Cannot create un-support service type ", serviceType)
-			return nil
+		annotations := make(map[string]string)
+		// TODO (kevin85421): KubeRay has already exposed the entire head service (#1040) to users.
+		// We may consider deprecating this field when we bump the CRD version.
+		for k, v := range instance.Spec.HeadServiceAnnotations {
+			annotations[k] = v
 		}
-		if len(raySvc.Spec.Ports) == 0 {
-			r.Log.Info("reconcileServices ", "Ray service has no ports set up.", raySvc.Spec)
-			return nil
+		headSvc, err := common.BuildServiceForHeadPod(*instance, labels, annotations)
+		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
+		if len(headSvc.Spec.Ports) == 0 {
+			r.Log.Info("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
+			return fmt.Errorf("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
 		}
 
 		if err != nil {
 			return err
 		}
 
-		err = r.createService(ctx, raySvc, instance)
-		// if the service cannot be created we return the error and requeue
-		if err != nil {
+		if err := r.createService(ctx, headSvc, instance); err != nil {
 			return err
 		}
 	}

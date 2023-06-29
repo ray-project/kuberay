@@ -126,6 +126,5 @@ type ServiceType string
 
 const (
 	HeadService    ServiceType = "headService"
-	AgentService   ServiceType = "agentService"
 	ServingService ServiceType = "serveService"
 )
