@@ -304,6 +304,22 @@ applications:
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
+				// All the worker Pods should have a port with the name "dashboard-agent"
+				for _, pod := range workerPods.Items {
+					// Worker Pod should have only one container.
+					Expect(len(pod.Spec.Containers)).Should(Equal(1))
+					// Each worker Pod should have a container port with the name "dashboard-agent"
+					exist := false
+					for _, port := range pod.Spec.Containers[0].Ports {
+						if port.Name == common.DefaultDashboardAgentListenPortName {
+							exist = true
+							break
+						}
+					}
+					if !exist {
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentListenPortName))
+					}
+				}
 			}
 		})
 
