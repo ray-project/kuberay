@@ -213,6 +213,16 @@ rules:
   - list
   - update
   - watch
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
 {{- if .Values.batchScheduler.enabled }}
 - apiGroups:
   - scheduling.volcano.sh
