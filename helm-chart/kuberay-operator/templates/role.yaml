@@ -8,18 +8,6 @@ metadata:
   name: {{ include "kuberay-operator.fullname" . }}
 rules:
 - apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
@@ -230,13 +218,11 @@ rules:
   resources:
   - routes
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
+  - create
+  - delete
 {{- if .Values.batchScheduler.enabled }}
 - apiGroups:
   - scheduling.volcano.sh
