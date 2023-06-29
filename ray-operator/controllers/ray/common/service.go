@@ -222,40 +222,6 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 	return serveService, nil
 }
 
-// BuildDashboardService Builds the service for dashboard agent and head node.
-func BuildDashboardService(cluster rayv1alpha1.RayCluster) (*corev1.Service, error) {
-	labels := map[string]string{
-		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
-	}
-	selectorLabels := map[string]string{
-		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(cluster.Name),
-	}
-
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateDashboardServiceName(cluster.Name),
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: selectorLabels,
-			Ports:    []corev1.ServicePort{},
-			Type:     cluster.Spec.HeadGroupSpec.ServiceType,
-		},
-	}
-
-	ports := getServicePorts(cluster)
-	for name, port := range ports {
-		if name == DefaultDashboardAgentListenPortName {
-			svcPort := corev1.ServicePort{Name: name, Port: port}
-			service.Spec.Ports = append(service.Spec.Ports, svcPort)
-			break
-		}
-	}
-
-	return service, nil
-}
-
 func setServiceTypeForUserProvidedService(service *corev1.Service, default_type corev1.ServiceType) {
 	// If the user has not specified a service type, use the default service type
 	if service.Spec.Type == "" {
@@ -358,13 +324,4 @@ func getDefaultPorts() map[string]int32 {
 		DefaultMetricsName:     DefaultMetricsPort,
 		DefaultServingPortName: DefaultServingPort,
 	}
-}
-
-// IsAgentServiceEnabled check if the agent service is enabled for RayCluster.
-func IsAgentServiceEnabled(instance *rayv1alpha1.RayCluster) bool {
-	enableAgentServiceValue, exist := instance.Annotations[EnableAgentServiceKey]
-	if exist && enableAgentServiceValue == EnableAgentServiceTrue {
-		return true
-	}
-	return false
 }

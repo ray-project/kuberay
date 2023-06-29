@@ -321,14 +321,6 @@ applications:
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
 		})
 
-		It("should create a new agent service resource", func() {
-			svc := &corev1.Service{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(myRayCluster.Name), Namespace: "default"}, svc),
-				time.Second*15, time.Millisecond*500).Should(BeNil(), "My agent service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayClusterDashboardServiceLabelKey]).Should(Equal(utils.GenerateDashboardAgentLabel(myRayCluster.Name)))
-		})
-
 		It("should create a new serve service resource", func() {
 			svc := &corev1.Service{}
 			Eventually(

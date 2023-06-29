@@ -334,16 +334,8 @@ func setupTest(t *testing.T) {
 	for i, port := range headService.Spec.Ports {
 		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
 	}
-	dashboardService, err := common.BuildDashboardService(*testRayCluster)
-	if err != nil {
-		t.Errorf("failed to build dashboard service: %v", err)
-	}
-	for i, port := range dashboardService.Spec.Ports {
-		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
-	}
 	testServices = []runtime.Object{
 		headService,
-		dashboardService,
 	}
 
 	instanceReqValue := []string{instanceName}
