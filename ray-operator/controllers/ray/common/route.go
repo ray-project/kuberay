@@ -10,7 +10,7 @@ import (
 )
 
 // BuildRouteForHeadService Builds the Route (OpenShift) for head service dashboard.
-// This is used to expose dashboard and remote submit service apis or external traffic.
+// This is used to expose dashboard and ray job submission API for external traffic.
 func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, error) {
 	labels := map[string]string{
 		RayClusterLabelKey:                cluster.Name,
@@ -19,8 +19,9 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
-	// Copy other ingress configurations from cluster annotations to provide a generic way
-	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+	// Copy other route configurations from cluster annotations to provide a generic way
+	// for user to customize their route settings. 
+	// The `exclude_set` is used to avoid setting
 	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
 	// at the same time.
 	exclude_set := map[string]struct{}{
@@ -35,7 +36,7 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := DefaultDashboardPort
-	if port, ok := servicePorts["dashboard"]; ok {
+	if port, ok := servicePorts[DefaultDashboardName]; ok {
 		dashboardPort = int(port)
 	}
 
