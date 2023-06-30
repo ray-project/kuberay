@@ -908,6 +908,7 @@ func (r *RayClusterReconciler) updateStatus(ctx context.Context, instance *rayv1
 
 	timeNow := metav1.Now()
 	instance.Status.LastUpdateTime = &timeNow
+	r.Log.Info("updateStatus", "r.Status().Update()", instance.Status)
 	if err := r.Status().Update(ctx, instance); err != nil {
 		return err
 	}
@@ -1142,10 +1143,12 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 
 func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance *rayv1alpha1.RayCluster, clusterState rayv1alpha1.ClusterState) error {
 	instance.Status.State = clusterState
+	r.Log.Info("updateClusterState", "r.Status().Update()", instance.Status.State)
 	return r.Status().Update(ctx, instance)
 }
 
 func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance *rayv1alpha1.RayCluster, clusterReason string) error {
 	instance.Status.Reason = clusterReason
+	r.Log.Info("updateClusterReason", "r.Status().Update()", instance.Status.Reason)
 	return r.Status().Update(ctx, instance)
 }

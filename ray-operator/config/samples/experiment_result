@@ -1,0 +1,114 @@
+2023-06-30T20:20:53.952Z	INFO	setup	the operator	{"version:": ""}
+2023-06-30T20:20:53.953Z	INFO	setup	Feature flag prioritize-workers-to-delete is enabled.
+2023-06-30T20:20:53.953Z	INFO	setup	Flag watchNamespace is not set. Watch custom resources in all namespaces.
+2023-06-30T20:20:53.953Z	INFO	setup	Setup manager
+2023-06-30T20:20:54.351Z	INFO	controller-runtime.metrics	Metrics server is starting to listen	{"addr": ":8080"}
+2023-06-30T20:20:54.351Z	INFO	setup	starting manager
+2023-06-30T20:20:54.445Z	INFO	Starting server	{"path": "/metrics", "kind": "metrics", "addr": "[::]:8080"}
+2023-06-30T20:20:54.445Z	INFO	Starting server	{"kind": "health probe", "addr": "[::]:8082"}
+I0630 20:20:54.546779       1 leaderelection.go:248] attempting to acquire leader lease default/ray-operator-leader...
+I0630 20:20:54.560822       1 leaderelection.go:258] successfully acquired lease default/ray-operator-leader
+2023-06-30T20:20:54.561Z	INFO	controller.raycluster-controller	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayCluster", "source": "kind source: *v1alpha1.RayCluster"}
+2023-06-30T20:20:54.561Z	INFO	controller.raycluster-controller	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayCluster", "source": "kind source: *v1.Pod"}
+2023-06-30T20:20:54.561Z	INFO	controller.raycluster-controller	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayCluster", "source": "kind source: *v1.Service"}
+2023-06-30T20:20:54.561Z	INFO	controller.raycluster-controller	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayCluster", "source": "kind source: *v1.Event"}
+2023-06-30T20:20:54.561Z	INFO	controller.raycluster-controller	Starting Controller	{"reconciler group": "ray.io", "reconciler kind": "RayCluster"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayservice	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayService", "source": "kind source: *v1alpha1.RayService"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayservice	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayService", "source": "kind source: *v1alpha1.RayCluster"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayservice	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayService", "source": "kind source: *v1.Service"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayservice	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayService", "source": "kind source: *v1.Ingress"}
+2023-06-30T20:20:54.560Z	DEBUG	events	Normal	{"object": {"kind":"ConfigMap","namespace":"default","name":"ray-operator-leader","uid":"82b8e546-01f1-411f-92ad-f5a295c5b549","apiVersion":"v1","resourceVersion":"916"}, "reason": "LeaderElection", "message": "kuberay-operator-6bc5c98d87-xtxv8_c83e9472-960a-4260-9333-40da402a74ab became leader"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayjob	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayJob", "source": "kind source: *v1alpha1.RayJob"}
+2023-06-30T20:20:54.561Z	DEBUG	events	Normal	{"object": {"kind":"Lease","namespace":"default","name":"ray-operator-leader","uid":"2dd0bbe0-bd68-4fc7-ac50-506de82bc508","apiVersion":"coordination.k8s.io/v1","resourceVersion":"917"}, "reason": "LeaderElection", "message": "kuberay-operator-6bc5c98d87-xtxv8_c83e9472-960a-4260-9333-40da402a74ab became leader"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayjob	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayJob", "source": "kind source: *v1alpha1.RayCluster"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayservice	Starting Controller	{"reconciler group": "ray.io", "reconciler kind": "RayService"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayjob	Starting EventSource	{"reconciler group": "ray.io", "reconciler kind": "RayJob", "source": "kind source: *v1.Service"}
+2023-06-30T20:20:54.561Z	INFO	controller.rayjob	Starting Controller	{"reconciler group": "ray.io", "reconciler kind": "RayJob"}
+2023-06-30T20:20:55.263Z	INFO	controller.rayjob	Starting workers	{"reconciler group": "ray.io", "reconciler kind": "RayJob", "worker count": 1}
+2023-06-30T20:20:55.263Z	INFO	controller.rayservice	Starting workers	{"reconciler group": "ray.io", "reconciler kind": "RayService", "worker count": 1}
+2023-06-30T20:20:55.263Z	INFO	controller.raycluster-controller	Starting workers	{"reconciler group": "ray.io", "reconciler kind": "RayCluster", "worker count": 1}
+2023-06-30T20:20:55.264Z	INFO	controllers.RayCluster	no ray node pod found for event	{"event": "&Event{ObjectMeta:{coredns-64897985d-q8qzb.176d892fef03009e  kube-system  f9634518-7207-44f8-a818-869042602e9b 539 0 2023-06-30 20:17:54 +0000 UTC <nil> <nil> map[] map[] [] []  [{kubelet Update v1 2023-06-30 20:17:54 +0000 UTC FieldsV1 {\"f:count\":{},\"f:firstTimestamp\":{},\"f:involvedObject\":{},\"f:lastTimestamp\":{},\"f:message\":{},\"f:reason\":{},\"f:source\":{\"f:component\":{},\"f:host\":{}},\"f:type\":{}} }]},InvolvedObject:ObjectReference{Kind:Pod,Namespace:kube-system,Name:coredns-64897985d-q8qzb,UID:77f8a8e7-1cd0-4c46-a367-985e8adb53a8,APIVersion:v1,ResourceVersion:520,FieldPath:spec.containers{coredns},},Reason:Unhealthy,Message:Readiness probe failed: HTTP probe failed with statuscode: 503,Source:EventSource{Component:kubelet,Host:kind-control-plane,},FirstTimestamp:2023-06-30 20:17:54 +0000 UTC,LastTimestamp:2023-06-30 20:17:54 +0000 UTC,Count:1,Type:Warning,EventTime:0001-01-01 00:00:00 +0000 UTC,Series:nil,Action:,Related:nil,ReportingController:,ReportingInstance:,}"}
+2023-06-30T20:21:53.552Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:21:53.565Z	INFO	controllers.RayCluster	Pod Service created successfully	{"service name": "raycluster-complete-head-svc"}
+2023-06-30T20:21:53.566Z	INFO	controllers.RayCluster	reconcilePods 	{"creating head pod for cluster": "raycluster-complete"}
+2023-06-30T20:21:53.566Z	INFO	RayCluster-Controller	Setting pod namespaces	{"namespace": "default"}
+2023-06-30T20:21:53.566Z	INFO	RayCluster-Controller	Head pod container with index 0 identified as Ray container.
+2023-06-30T20:21:53.566Z	INFO	controllers.RayCluster	head pod labels	{"labels": {"app.kubernetes.io/created-by":"kuberay-operator","app.kubernetes.io/name":"kuberay","ray.io/cluster":"raycluster-complete","ray.io/cluster-dashboard":"raycluster-complete-dashboard","ray.io/group":"headgroup","ray.io/identifier":"raycluster-complete-head","ray.io/is-ray-node":"yes","ray.io/node-type":"head"}}
+2023-06-30T20:21:53.566Z	INFO	RayCluster-Controller	Head pod container with index 0 identified as Ray container.
+2023-06-30T20:21:53.566Z	INFO	controllers.RayCluster	createHeadPod	{"head pod with name": "raycluster-complete-head-"}
+2023-06-30T20:21:53.567Z	DEBUG	events	Normal	{"object": {"kind":"RayCluster","namespace":"default","name":"raycluster-complete","uid":"08ffddc7-fb3f-4e1e-8c9d-8837ae29207a","apiVersion":"ray.io/v1alpha1","resourceVersion":"1084"}, "reason": "Created", "message": "Created service raycluster-complete-head-svc"}
+2023-06-30T20:21:53.585Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:21:53.645Z	INFO	controllers.RayCluster	reconcilePods	{"add workers for group": "small-group"}
+2023-06-30T20:21:53.645Z	INFO	controllers.RayCluster	reconcilePods	{"creating worker for group": "small-group", "index 0": "in total 1"}
+2023-06-30T20:21:53.645Z	INFO	RayCluster-Controller	Setting pod namespaces	{"namespace": "default"}
+2023-06-30T20:21:53.645Z	INFO	RayCluster-Controller	Head pod container with index 0 identified as Ray container.
+2023-06-30T20:21:53.588Z	DEBUG	events	Normal	{"object": {"kind":"RayCluster","namespace":"default","name":"raycluster-complete","uid":"08ffddc7-fb3f-4e1e-8c9d-8837ae29207a","apiVersion":"ray.io/v1alpha1","resourceVersion":"1084"}, "reason": "Created", "message": "Created head pod raycluster-complete-head-tg4bf"}
+2023-06-30T20:21:53.645Z	INFO	RayCluster-Controller	Head pod container with index 0 identified as Ray container.
+2023-06-30T20:21:53.749Z	INFO	controllers.RayCluster	Created pod	{"Pod ": "raycluster-complete-worker-small-group-"}
+2023-06-30T20:21:53.750Z	DEBUG	events	Normal	{"object": {"kind":"RayCluster","namespace":"default","name":"raycluster-complete","uid":"08ffddc7-fb3f-4e1e-8c9d-8837ae29207a","apiVersion":"ray.io/v1alpha1","resourceVersion":"1084"}, "reason": "Created", "message": "Created worker pod "}
+2023-06-30T20:21:53.750Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:21:53Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:21:53.855Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:21:53.855Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:21:53.855Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:21:53.856Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:21:53Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:21:53.866Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:21:53.866Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:22:48.968Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:48.968Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:22:48.969Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:48.969Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:48.969Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:22:48.969Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:22:48.970Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:22:48Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:22:48.998Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:48.998Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:22:48.998Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:48.999Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:22:49.045Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:49.045Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:49.045Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:22:49.045Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:22:49.046Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:22:49Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:22:49.145Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:49.145Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:22:58.016Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:22:58Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:22:58.029Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:58.029Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:22:59.000Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:59.000Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:22:59.001Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:59.001Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:22:59.001Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:22:59.001Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:22:59.001Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"state":"ready","availableWorkerReplicas":1,"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:22:59Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:22:59.013Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:22:59.013Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:26:53.856Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:26:53.857Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"state":"ready","availableWorkerReplicas":1,"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:26:53Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:26:53.869Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:26:53.869Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
+2023-06-30T20:31:53.870Z	INFO	controllers.RayCluster	reconciling RayCluster	{"cluster name": "raycluster-complete"}
+2023-06-30T20:31:53.870Z	INFO	controllers.RayCluster	reconcileServices 	{"headService service found": "raycluster-complete-head-svc"}
+2023-06-30T20:31:53.870Z	INFO	controllers.RayCluster	reconcilePods 	{"head pod found": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:31:53.870Z	INFO	controllers.RayCluster	reconcilePods	{"head pod is up and running... checking workers": "raycluster-complete-head-tg4bf"}
+2023-06-30T20:31:53.871Z	INFO	controllers.RayCluster	reconcilePods	{"removing the pods in the scaleStrategy of": "small-group"}
+2023-06-30T20:31:53.871Z	INFO	controllers.RayCluster	reconcilePods	{"all workers already exist for group": "small-group"}
+2023-06-30T20:31:53.871Z	INFO	controllers.RayCluster	updateStatus	{"r.Status().Update()": {"state":"ready","availableWorkerReplicas":1,"desiredWorkerReplicas":1,"minWorkerReplicas":1,"maxWorkerReplicas":10,"lastUpdateTime":"2023-06-30T20:31:53Z","endpoints":{"client":"10001","dashboard":"8265","gcs":"6379","metrics":"8080"},"head":{"podIP":"10.244.0.6","serviceIP":"10.96.140.249"},"observedGeneration":1}}
+2023-06-30T20:31:53.882Z	INFO	controllers.RayCluster	Environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is not set, using default value of 300 seconds	{"cluster name": "raycluster-complete"}
+2023-06-30T20:31:53.882Z	INFO	controllers.RayCluster	Unconditional requeue after	{"cluster name": "raycluster-complete", "seconds": 300}
