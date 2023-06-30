@@ -14,7 +14,7 @@ import (
 const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
-// This is used to expose dashboard and remote submit service apis for external traffic.
+// This is used to expose dashboard and ray job submission API for external traffic.
 func BuildIngressForHeadService(cluster rayv1alpha1.RayCluster) (*networkingv1.Ingress, error) {
 	labels := map[string]string{
 		RayClusterLabelKey:                cluster.Name,
