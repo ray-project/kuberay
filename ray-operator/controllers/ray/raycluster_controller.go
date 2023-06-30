@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -198,6 +199,9 @@ func (r *RayClusterReconciler) eventReconcile(ctx context.Context, request ctrl.
 }
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1alpha1.RayCluster) (ctrl.Result, error) {
+	// Please do NOT modify `originalRayClusterInstance` in the following code.
+	originalRayClusterInstance := instance.DeepCopy()
+
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
 
@@ -247,19 +251,28 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayv1alpha1.PodReconciliationError), err.Error())
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	// update the status if needed
-	if err := r.updateStatus(ctx, instance); err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("Update status not found error", "cluster name", request.Name)
-		} else {
-			r.Log.Error(err, "Update status error", "cluster name", request.Name)
+
+	// Calculate the new status for the RayCluster. Note that we must deep copy the RayCluster before
+	// calling the `calculateStatus` function because the `calculateStatus` function will mutate the
+	// RayCluster object.
+	newStatus, err := r.calculateStatus(ctx, instance.DeepCopy())
+	if err != nil {
+		r.Log.Info("Got error when calculating new status", "cluster name", request.Name, "error", err)
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	// Check if need to update the status.
+	if r.inconsistentRayClusterStatus(originalRayClusterInstance.Status, *newStatus) {
+		instance.Status = *newStatus
+		if err := r.Status().Update(ctx, instance); err != nil {
+			r.Log.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", instance)
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
 	}
 
 	// Unconditionally requeue after the number of seconds specified in the
 	// environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
 	// environment variable is not set, requeue after the default value.
-	var requeueAfterSeconds int
 	requeueAfterSeconds, err := strconv.Atoi(os.Getenv(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV))
 	if err != nil {
 		r.Log.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d seconds", common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS), "cluster name", request.Name)
@@ -267,6 +280,26 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 	r.Log.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
+}
+
+// Checks whether the old and new RayClusterStatus are inconsistent by comparing different fields. If the only
+// differences between the old and new status are the `LastUpdateTime` and `ObservedGeneration` fields, the
+// status update will not be triggered.
+//
+// TODO (kevin85421): The field `ObservedGeneration`` is not being well-maintained at the moment. In the future,
+// this field should be used to determine whether to update this CR or not.
+func (r *RayClusterReconciler) inconsistentRayClusterStatus(oldStatus rayv1alpha1.RayClusterStatus, newStatus rayv1alpha1.RayClusterStatus) bool {
+	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
+		return true
+	}
+	if oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas || oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
+		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas || oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
+		return true
+	}
+	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
+		return true
+	}
+	return false
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
@@ -841,20 +874,23 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Complete(r)
 }
 
-func (r *RayClusterReconciler) updateStatus(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
+func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1alpha1.RayCluster) (*rayv1alpha1.RayClusterStatus, error) {
+	// Please make sure the `instance` is deep copied before calling this function.
+	newStatus := instance.Status
+
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
-	instance.Status.ObservedGeneration = instance.ObjectMeta.Generation
+	newStatus.ObservedGeneration = instance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return err
+		return nil, err
 	}
 
-	instance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
-	instance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(instance)
-	instance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(instance)
-	instance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(instance)
+	newStatus.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	newStatus.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(instance)
+	newStatus.MinWorkerReplicas = utils.CalculateMinReplicas(instance)
+	newStatus.MaxWorkerReplicas = utils.CalculateMaxReplicas(instance)
 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)
@@ -863,28 +899,25 @@ func (r *RayClusterReconciler) updateStatus(ctx context.Context, instance *rayv1
 	}
 	// only in invalid status that we update the status to unhealthy.
 	if !isValid {
-		instance.Status.State = rayv1alpha1.Unhealthy
+		newStatus.State = rayv1alpha1.Unhealthy
 	} else {
 		if utils.CheckAllPodsRunning(runtimePods) {
-			instance.Status.State = rayv1alpha1.Ready
+			newStatus.State = rayv1alpha1.Ready
 		}
 	}
 
 	if err := r.updateEndpoints(ctx, instance); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := r.updateHeadInfo(ctx, instance); err != nil {
-		return err
+		return nil, err
 	}
 
 	timeNow := metav1.Now()
-	instance.Status.LastUpdateTime = &timeNow
-	if err := r.Status().Update(ctx, instance); err != nil {
-		return err
-	}
+	newStatus.LastUpdateTime = &timeNow
 
-	return nil
+	return &newStatus, nil
 }
 
 // Best effort to obtain the ip of the head node.
@@ -1113,11 +1146,17 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 }
 
 func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance *rayv1alpha1.RayCluster, clusterState rayv1alpha1.ClusterState) error {
+	if instance.Status.State == clusterState {
+		return nil
+	}
 	instance.Status.State = clusterState
 	return r.Status().Update(ctx, instance)
 }
 
 func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance *rayv1alpha1.RayCluster, clusterReason string) error {
+	if instance.Status.Reason == clusterReason {
+		return nil
+	}
 	instance.Status.Reason = clusterReason
 	return r.Status().Update(ctx, instance)
 }

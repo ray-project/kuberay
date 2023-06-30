@@ -1349,9 +1349,9 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	err = testRayClusterReconciler.updateStatus(ctx, testRayCluster)
+	newStatus, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
-	assert.Equal(t, cluster.ObjectMeta.Generation, cluster.Status.ObservedGeneration)
+	assert.Equal(t, cluster.ObjectMeta.Generation, newStatus.ObservedGeneration)
 }
