@@ -264,7 +264,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// Check if need to update the status.
 	if r.inconsistentRayClusterStatus(originalRayClusterInstance.Status, *newStatus) {
 		instance.Status = *newStatus
-		r.Log.Info("rayClusterReconcile", "r.Status().Update()", request.Name, "status", instance.Status)
+		r.Log.Info("rayClusterReconcile", "Update CR status", request.Name, "status", instance.Status)
 		if err := r.Status().Update(ctx, instance); err != nil {
 			r.Log.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", instance)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -1162,7 +1162,7 @@ func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance 
 		return nil
 	}
 	instance.Status.State = clusterState
-	r.Log.Info("updateClusterState", "r.Status().Update()", clusterState)
+	r.Log.Info("updateClusterState", "Update CR Status.State", clusterState)
 	return r.Status().Update(ctx, instance)
 }
 
@@ -1171,6 +1171,6 @@ func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance
 		return nil
 	}
 	instance.Status.Reason = clusterReason
-	r.Log.Info("updateClusterReason", "r.Status().Update()", clusterReason)
+	r.Log.Info("updateClusterReason", "Update CR Status.Reason", clusterReason)
 	return r.Status().Update(ctx, instance)
 }
