@@ -252,21 +252,18 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
-	// Calculate the new status for the RayCluster. Note that we must deep copy the RayCluster before
-	// calling the `calculateStatus` function because the `calculateStatus` function will mutate the
-	// RayCluster object.
-	newStatus, err := r.calculateStatus(ctx, instance.DeepCopy())
+	// Calculate the new status for the RayCluster. Note that the function will deep copy `instance` instead of mutating it.
+	newInstance, err := r.calculateStatus(ctx, instance)
 	if err != nil {
 		r.Log.Info("Got error when calculating new status", "cluster name", request.Name, "error", err)
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
 	// Check if need to update the status.
-	if r.inconsistentRayClusterStatus(originalRayClusterInstance.Status, *newStatus) {
-		instance.Status = *newStatus
-		r.Log.Info("rayClusterReconcile", "Update CR status", request.Name, "status", instance.Status)
-		if err := r.Status().Update(ctx, instance); err != nil {
-			r.Log.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", instance)
+	if r.inconsistentRayClusterStatus(originalRayClusterInstance.Status, newInstance.Status) {
+		r.Log.Info("rayClusterReconcile", "Update CR status", request.Name, "status", newInstance.Status)
+		if err := r.Status().Update(ctx, newInstance); err != nil {
+			r.Log.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", newInstance)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
 	}
@@ -886,50 +883,50 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Complete(r)
 }
 
-func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1alpha1.RayCluster) (*rayv1alpha1.RayClusterStatus, error) {
-	// Please make sure the `instance` is deep copied before calling this function.
-	newStatus := instance.Status
+func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1alpha1.RayCluster) (*rayv1alpha1.RayCluster, error) {
+	// Deep copy the instance, so we don't mutate the original object.
+	newInstance := instance.DeepCopy()
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
-	newStatus.ObservedGeneration = instance.ObjectMeta.Generation
+	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: newInstance.Name}
+	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
 		return nil, err
 	}
 
-	newStatus.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
-	newStatus.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(instance)
-	newStatus.MinWorkerReplicas = utils.CalculateMinReplicas(instance)
-	newStatus.MaxWorkerReplicas = utils.CalculateMaxReplicas(instance)
+	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(newInstance)
+	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
+	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 
 	// validation for the RayStartParam for the state.
-	isValid, err := common.ValidateHeadRayStartParams(instance.Spec.HeadGroupSpec)
+	isValid, err := common.ValidateHeadRayStartParams(newInstance.Spec.HeadGroupSpec)
 	if err != nil {
-		r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayv1alpha1.RayConfigError), err.Error())
+		r.Recorder.Event(newInstance, corev1.EventTypeWarning, string(rayv1alpha1.RayConfigError), err.Error())
 	}
 	// only in invalid status that we update the status to unhealthy.
 	if !isValid {
-		newStatus.State = rayv1alpha1.Unhealthy
+		newInstance.Status.State = rayv1alpha1.Unhealthy
 	} else {
 		if utils.CheckAllPodsRunning(runtimePods) {
-			newStatus.State = rayv1alpha1.Ready
+			newInstance.Status.State = rayv1alpha1.Ready
 		}
 	}
 
-	if err := r.updateEndpoints(ctx, instance); err != nil {
+	if err := r.updateEndpoints(ctx, newInstance); err != nil {
 		return nil, err
 	}
 
-	if err := r.updateHeadInfo(ctx, instance); err != nil {
+	if err := r.updateHeadInfo(ctx, newInstance); err != nil {
 		return nil, err
 	}
 
 	timeNow := metav1.Now()
-	newStatus.LastUpdateTime = &timeNow
+	newInstance.Status.LastUpdateTime = &timeNow
 
-	return &newStatus, nil
+	return newInstance, nil
 }
 
 // Best effort to obtain the ip of the head node.
