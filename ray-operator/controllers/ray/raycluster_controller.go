@@ -264,6 +264,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// Check if need to update the status.
 	if r.inconsistentRayClusterStatus(originalRayClusterInstance.Status, *newStatus) {
 		instance.Status = *newStatus
+		r.Log.Info("rayClusterReconcile", "r.Status().Update()", request.Name, "status", instance.Status)
 		if err := r.Status().Update(ctx, instance); err != nil {
 			r.Log.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", instance)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -286,17 +287,28 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 // differences between the old and new status are the `LastUpdateTime` and `ObservedGeneration` fields, the
 // status update will not be triggered.
 //
-// TODO (kevin85421): The field `ObservedGeneration`` is not being well-maintained at the moment. In the future,
+// TODO (kevin85421): The field `ObservedGeneration` is not being well-maintained at the moment. In the future,
 // this field should be used to determine whether to update this CR or not.
 func (r *RayClusterReconciler) inconsistentRayClusterStatus(oldStatus rayv1alpha1.RayClusterStatus, newStatus rayv1alpha1.RayClusterStatus) bool {
 	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
+		r.Log.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
+			"old State: %s, new State: %s, old Reason: %s, new Reason: %s",
+			oldStatus.State, newStatus.State, oldStatus.Reason, newStatus.Reason))
 		return true
 	}
 	if oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas || oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
 		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas || oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
+		r.Log.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
+			"old AvailableWorkerReplicas: %d, new AvailableWorkerReplicas: %d, old DesiredWorkerReplicas: %d, new DesiredWorkerReplicas: %d, "+
+				"old MinWorkerReplicas: %d, new MinWorkerReplicas: %d, old MaxWorkerReplicas: %d, new MaxWorkerReplicas: %d",
+			oldStatus.AvailableWorkerReplicas, newStatus.AvailableWorkerReplicas, oldStatus.DesiredWorkerReplicas, newStatus.DesiredWorkerReplicas,
+			oldStatus.MinWorkerReplicas, newStatus.MinWorkerReplicas, oldStatus.MaxWorkerReplicas, newStatus.MaxWorkerReplicas))
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
+		r.Log.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
+			"old Endpoints: %v, new Endpoints: %v, old Head: %v, new Head: %v",
+			oldStatus.Endpoints, newStatus.Endpoints, oldStatus.Head, newStatus.Head))
 		return true
 	}
 	return false
@@ -1150,6 +1162,7 @@ func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance 
 		return nil
 	}
 	instance.Status.State = clusterState
+	r.Log.Info("updateClusterState", "r.Status().Update()", clusterState)
 	return r.Status().Update(ctx, instance)
 }
 
@@ -1158,5 +1171,6 @@ func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance
 		return nil
 	}
 	instance.Status.Reason = clusterReason
+	r.Log.Info("updateClusterReason", "r.Status().Update()", clusterReason)
 	return r.Status().Update(ctx, instance)
 }
