@@ -1479,3 +1479,51 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
 }
+
+func TestCalculateStatus(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:  instanceName,
+				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			PodIP: headNodeIP,
+		},
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Test head information
+	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	assert.Nil(t, err)
+	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
+	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
+}
