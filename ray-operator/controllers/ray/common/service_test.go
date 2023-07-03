@@ -429,6 +429,35 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
 
+func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
+	// Create a RayCluster without a port with the name "serve" in the Ray head container.
+	cluster := rayv1alpha1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample",
+			Namespace: "default",
+		},
+		Spec: rayv1alpha1.RayClusterSpec{
+			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 6379, Name: "gcs"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	svc, err := BuildServeServiceForRayService(*serviceInstance, cluster)
+	assert.NotNil(t, err)
+	assert.Nil(t, svc)
+}
+
 func TestUserSpecifiedServeService(t *testing.T) {
 	// Use any RayService instance as a base for the test.
 	testRayServiceWithServeService := serviceInstance.DeepCopy()
