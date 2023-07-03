@@ -350,7 +350,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	}
 
 	if headRoutes.Items != nil && len(headRoutes.Items) == 1 {
-		r.Log.Info("reconcileRoute", "head service route found", headRoutes.Items[0].Name)
+		r.Log.Info("reconcile Route", "head service route found", headRoutes.Items[0].Name)
 		return nil
 	}
 
