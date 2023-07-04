@@ -349,12 +349,12 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 		return err
 	}
 
-	if headRoutes.Items != nil && len(headRoutes.Items) == 1 {
+	if len(headRoutes.Items) == 1 {
 		r.Log.Info("reconcileIngresses", "head service route found", headRoutes.Items[0].Name)
 		return nil
 	}
 
-	if headRoutes.Items == nil || len(headRoutes.Items) == 0 {
+	if len(headRoutes.Items) == 0 {
 		route, err := common.BuildRouteForHeadService(*instance)
 		if err != nil {
 			r.Log.Error(err, "Failed building route!", "Route.Error", err)
