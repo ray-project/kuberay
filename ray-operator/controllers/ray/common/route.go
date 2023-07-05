@@ -76,10 +76,8 @@ func BuildRouteForRayService(service rayv1alpha1.RayService, cluster rayv1alpha1
 
 	route.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
 	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels = map[string]string{
-		RayServiceLabelKey: service.Name,
-		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode)),
-	}
+	route.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
+	route.ObjectMeta.Labels[RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode))
 
 	return route, nil
 }
