@@ -379,13 +379,13 @@
           "description": "The number of GPUs required by the deployment's application per replica."
         },
         "memoryPerActor": {
-          "type": "integer",
-          "format": "int32",
+          "type": "string",
+          "format": "uint64",
           "description": "Restrict the heap memory usage of each replica."
         },
         "objectStoreMemoryPerActor": {
-          "type": "integer",
-          "format": "int32",
+          "type": "string",
+          "format": "uint64",
           "description": "Restrict the object store memory used per replica when creating objects."
         },
         "customResource": {
