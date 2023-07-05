@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -1349,9 +1350,180 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	err = testRayClusterReconciler.updateStatus(ctx, testRayCluster)
+	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
-	assert.Equal(t, cluster.ObjectMeta.Generation, cluster.Status.ObservedGeneration)
+	assert.Equal(t, cluster.ObjectMeta.Generation, newInstance.Status.ObservedGeneration)
+}
+
+func TestReconcile_UpdateClusterState(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
+	ctx := context.Background()
+
+	namespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+	cluster := rayv1alpha1.RayCluster{}
+	err := fakeClient.Get(ctx, namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.Empty(t, cluster.Status.State, "Cluster state should be empty")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	state := rayv1alpha1.Ready
+	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
+	assert.Nil(t, err, "Fail to update cluster state")
+
+	err = fakeClient.Get(ctx, namespacedName, &cluster)
+	assert.Nil(t, err, "Fail to get RayCluster after updating state")
+	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated")
+}
+
+func TestInconsistentRayClusterStatus(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects().Build()
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Mock data
+	timeNow := metav1.Now()
+	oldStatus := rayv1alpha1.RayClusterStatus{
+		State:                   rayv1alpha1.Ready,
+		AvailableWorkerReplicas: 1,
+		DesiredWorkerReplicas:   1,
+		MinWorkerReplicas:       1,
+		MaxWorkerReplicas:       10,
+		LastUpdateTime:          &timeNow,
+		Endpoints: map[string]string{
+			"client":    "10001",
+			"dashboard": "8265",
+			"gcs":       "6379",
+			"metrics":   "8080",
+		},
+		Head: rayv1alpha1.HeadInfo{
+			PodIP:     "10.244.0.6",
+			ServiceIP: "10.96.140.249",
+		},
+		ObservedGeneration: 1,
+		Reason:             "test reason",
+	}
+
+	// `inconsistentRayClusterStatus` is used to check whether the old and new RayClusterStatus are inconsistent
+	// by comparing different fields. If the only differences between the old and new status are the `LastUpdateTime`
+	// and `ObservedGeneration` fields (Case 9 and Case 10), the status update will not be triggered.
+
+	// Case 1: `State` is different => return true
+	newStatus := oldStatus.DeepCopy()
+	newStatus.State = rayv1alpha1.Failed
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 2: `Reason` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.Reason = "new reason"
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 3: `AvailableWorkerReplicas` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 4: `DesiredWorkerReplicas` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 5: `MinWorkerReplicas` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 6: `MaxWorkerReplicas` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 7: `Endpoints` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.Endpoints["fakeEndpoint"] = "10009"
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 8: `Head` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.Head.PodIP = "test head pod ip"
+	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 9: `LastUpdateTime` is different => return false
+	newStatus = oldStatus.DeepCopy()
+	newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
+	assert.False(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+
+	// Case 10: `ObservedGeneration` is different => return false
+	newStatus = oldStatus.DeepCopy()
+	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
+	assert.False(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
+}
+
+func TestCalculateStatus(t *testing.T) {
+	setupTest(t)
+	defer tearDown(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:  instanceName,
+				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			PodIP: headNodeIP,
+		},
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Test head information
+	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	assert.Nil(t, err)
+	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
+	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 }
