@@ -87,8 +87,8 @@ type RayActorOptionSpec struct {
 	RuntimeEnv        string   `json:"runtimeEnv,omitempty"`
 	NumCpus           *float64 `json:"numCpus,omitempty"`
 	NumGpus           *float64 `json:"numGpus,omitempty"`
-	Memory            *int32   `json:"memory,omitempty"`
-	ObjectStoreMemory *int32   `json:"objectStoreMemory,omitempty"`
+	Memory            *uint64  `json:"memory,omitempty"`
+	ObjectStoreMemory *uint64  `json:"objectStoreMemory,omitempty"`
 	Resources         string   `json:"resources,omitempty"`
 	AcceleratorType   string   `json:"acceleratorType,omitempty"`
 }
