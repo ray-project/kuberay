@@ -51,7 +51,7 @@ Some tips to help you debug the `serveConfigV2` field:
 
 * Check [the documentation](https://docs.ray.io/en/latest/serve/api/#put-api-serve-applications) for the schema about
 the Ray Serve Multi-application API `PUT "/api/serve/applications/"`.
-* Unlike `serveConfig`, `serveConfigV2` adhere to the snake case naming convention. For example, `numReplicas` in `serveConfig` should be `num_replicas` in `serveConfigV2`. 
+* Unlike `serveConfig`, `serveConfigV2` adheres to the snake case naming convention. For example, `numReplicas` is used in `serveConfig`, while `num_replicas` is used in `serveConfigV2`. 
 
 #### Issue 3: The Ray image does not include the required dependencies.
 
