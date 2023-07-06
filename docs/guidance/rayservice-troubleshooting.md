@@ -45,7 +45,7 @@ deploying it to a RayService. [TODO: https://github.com/ray-project/kuberay/issu
 
 #### Issue 2: `serveConfigV2` is incorrect.
 
-For the sake of flexibility, we have set `serveConfigV2` as a string in the RayService CR.
+For the sake of flexibility, we have set `serveConfigV2` as a YAML multi-line string in the RayService CR.
 This implies that there is no strict type checking for the Ray Serve configurations in `serveConfigV2` field.
 Some tips to help you debug the `serveConfigV2` field:
 
