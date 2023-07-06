@@ -61,3 +61,21 @@ You have two options to resolve this issue:
 * Specify the required dependencies via `runtime_env` in `serveConfigV2` field.
   * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.5.0`.
 Therefore, the YAML file includes `python-multipart` in the runtime environment. For more details, refer to [the MobileNet example](mobilenet-rayservice.md).
+
+#### Issue 4: Incorrect `import_path`.
+
+The format of the `import_path` is not very straightforward. You can refer to [the documentation](https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html#ray.serve.schema.ServeApplicationSchema.import_path) for more details.
+Taking [the MobileNet YAML file](../../ray-operator/config/samples/ray-service.mobilenet.yaml) as an example,
+the `import_path` is `mobilenet.mobilenet:app`. The first `mobilenet` is the name of the directory in the `working_dir`,
+the second `mobilenet` is the name of the Python file in the directory `mobilenet/`,
+and `app` is the name of the variable representing Ray Serve application within the Python file.
+
+```yaml
+  serveConfigV2: |
+    applications:
+      - name: mobilenet
+        import_path: mobilenet.mobilenet:app
+        runtime_env:
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
+          pip: ["python-multipart==0.0.6"]
+```
