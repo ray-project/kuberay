@@ -26,7 +26,7 @@ You can check the status and events of the RayService CR to see if there are any
 You can also check the Ray Serve logs directly by accessing the log files on the pods. These log files contain system level logs from the Serve controller and HTTP proxy as well as access logs and user-level logs. See [Ray Serve Logging](https://docs.ray.io/en/latest/serve/production-guide/monitoring.html#ray-logging) and [Ray Logging](https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#configure-logging) for more details.
 ```bash
 kubectl exec -it $RAY_POD -n $YOUR_NAMESPACE -- bash
-# Check the logs under /tmp/ray/session_latest/logs
+# Check the logs under /tmp/ray/session_latest/logs/serve/
 ```
 
 ### Method 4: Check Dashboard
