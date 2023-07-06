@@ -2,8 +2,7 @@
 
 RayService is a Custom Resource Definition (CRD) designed for Ray Serve. In KubeRay, it first creates a RayCluster and then proceeds to 
 create Ray Serve applications once the RayCluster is ready. If the issue pertains to the data plane, specifically your Ray Serve scripts 
-or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. This section provides some tips to help you debug these
-issues.
+or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. This section provides some tips to help you debug these issues.
 
 ## Observability
 
@@ -36,3 +35,29 @@ kubectl exec -it $RAY_POD -n $YOUR_NAMESPACE -- bash
 kubectl port-forward $RAY_POD -n $YOUR_NAMESPACE --address 0.0.0.0 8265:8265
 # Check $YOUR_IP:8265 in your browser
 ```
+
+### Common issues
+
+#### Issue 1: Ray Serve script is incorrect.
+
+We strongly recommend that you test your Ray Serve script locally or in a RayCluster before
+deploying it to a RayService. [TODO: https://github.com/ray-project/kuberay/issues/1176]
+
+#### Issue 2: `serveConfigV2` is incorrect.
+
+For the sake of flexibility, we have set `serveConfigV2` as a string in the RayService CR.
+This implies that there is no strict type checking for the Ray Serve configurations in `serveConfigV2` field.
+Some tips to help you debug the `serveConfigV2` field:
+
+* Check [the documentation](https://docs.ray.io/en/latest/serve/api/#put-api-serve-applications) for the schema about
+the Ray Serve Multi-application API `PUT "/api/serve/applications/"`.
+* Unlike `serveConfig`, `serveConfigV2` adhere to the snake case naming convention. For example, `numReplicas` in `serveConfig` should be `num_replicas` in `serveConfigV2`. 
+
+#### Issue 3: The Ray image does not include the required dependencies.
+
+You have two options to resolve this issue:
+
+* Build your own Ray image with the required dependencies.
+* Specify the required dependencies via `runtime_env` in `serveConfigV2` field.
+  * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.5.0`.
+Therefore, the YAML file includes `python-multipart` in the runtime environment. For more details, refer to [the MobileNet example](mobilenet-rayservice.md).
