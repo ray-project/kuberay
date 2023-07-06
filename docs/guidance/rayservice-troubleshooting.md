@@ -36,6 +36,8 @@ kubectl port-forward $RAY_POD -n $YOUR_NAMESPACE --address 0.0.0.0 8265:8265
 # Check $YOUR_IP:8265 in your browser
 ```
 
+For more details about Ray Serve observability on the dashboard, you can refer to [the documentation](https://docs.ray.io/en/latest/ray-observability/getting-started.html#serve-view) and [the YouTube video](https://youtu.be/eqXfwM641a4).
+
 ### Common issues
 
 #### Issue 1: Ray Serve script is incorrect.
@@ -64,7 +66,7 @@ Therefore, the YAML file includes `python-multipart` in the runtime environment.
 
 #### Issue 4: Incorrect `import_path`.
 
-The format of the `import_path` is not very straightforward. You can refer to [the documentation](https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html#ray.serve.schema.ServeApplicationSchema.import_path) for more details.
+You can refer to [the documentation](https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html#ray.serve.schema.ServeApplicationSchema.import_path) for more details about the format of `import_path`.
 Taking [the MobileNet YAML file](../../ray-operator/config/samples/ray-service.mobilenet.yaml) as an example,
 the `import_path` is `mobilenet.mobilenet:app`. The first `mobilenet` is the name of the directory in the `working_dir`,
 the second `mobilenet` is the name of the Python file in the directory `mobilenet/`,
