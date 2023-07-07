@@ -70,7 +70,7 @@ Therefore, the YAML file includes `python-multipart` in the runtime environment.
 > Note: We highly recommend testing your Ray Serve script locally or in a RayCluster before deploying it to a RayService. This helps identify any dependency issues in the early stages. [TODO: https://github.com/ray-project/kuberay/issues/1176]
 
 In the [MobileNet example](mobilenet-rayservice.md), the [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py) consists of two functions: `__init__()` and `__call__()`.
-The function `__call__()` will only be called when the Serve application receives a request. Hence, the dependency issue can only be observed when the application receives a request.
+The function `__call__()` will only be called when the Serve application receives a request.
 
 * Example 1: Remove `python-multipart` from the runtime environment in [the MobileNet YAML](../../ray-operator/config/samples/ray-service.mobilenet.yaml).
   * The `python-multipart` library is only required for the `__call__` method. Therefore, we can only observe the dependency issue when we send a request to the application.
