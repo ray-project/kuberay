@@ -220,9 +220,9 @@ message ActorOptions {
   // The number of GPUs required by the deployment's application per replica.
   double gpus_per_actor = 3;
   // Restrict the heap memory usage of each replica.
-  int32 memory_per_actor = 4;
+  uint64 memory_per_actor = 4;
   // Restrict the object store memory used per replica when creating objects.
-  int32 object_store_memory_per_actor = 5;
+  uint64 object_store_memory_per_actor = 5;
   // The custom resources required by each replica.
   string custom_resource = 6;
   // Forces replicas to run on nodes with the specified accelerator type.
