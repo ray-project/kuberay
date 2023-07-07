@@ -2,15 +2,13 @@
 
 ## Step 1: Create a Kubernetes cluster on GKE
 
-Run this command and all following commands on your local machine or on the [Google Cloud Shell](https://cloud.google.com/shell). If running from your local machine, you will need to install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
+Run this command and all following commands on your local machine or on the [Google Cloud Shell](https://cloud.google.com/shell). If running from your local machine, you will need to install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install). The following command creates a Kubernetes cluster named `kuberay-gpu-cluster` with 1 CPU node in the `us-west1-b` zone. In this example, we use the `e2-standard-4` machine type, which has 4 vCPUs and 16 GB RAM.
 
 ```sh
 gcloud container clusters create kuberay-gpu-cluster \
     --num-nodes=1 --min-nodes 0 --max-nodes 1 --enable-autoscaling \
     --zone=us-west1-b --machine-type e2-standard-4
 ```
-
-This command creates a Kubernetes cluster named `kuberay-gpu-cluster` with 1 CPU node in the `us-west1-b` zone. In this example, we use the `e2-standard-4` machine type, which has 4 vCPUs and 16 GB RAM.
 
 > Note: You can also create a cluster from the [Google Cloud Console](https://console.cloud.google.com/kubernetes/list).
 
@@ -70,7 +68,7 @@ kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container
 kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 
 # Example output:
-# NAME                                GPU
-# ...                                 1
-# ...                                 <none>
+# NAME                                          GPU
+# gke-kuberay-gpu-cluster-gpu-node-pool-xxxxx   1
+# gke-kuberay-gpu-cluster-default-pool-xxxxx    <none>
 ```
