@@ -23,6 +23,7 @@ kubectl describe rayservice $RAYSERVICE_NAME -n $YOUR_NAMESPACE
 You can check the status and events of the RayService CR to see if there are any errors.
 
 ### Method 3: Check logs of Ray Pods
+
 You can also check the Ray Serve logs directly by accessing the log files on the pods. These log files contain system level logs from the Serve controller and HTTP proxy as well as access logs and user-level logs. See [Ray Serve Logging](https://docs.ray.io/en/latest/serve/production-guide/monitoring.html#ray-logging) and [Ray Logging](https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#configure-logging) for more details.
 ```bash
 kubectl exec -it $RAY_POD -n $YOUR_NAMESPACE -- bash
@@ -55,7 +56,7 @@ Some tips to help you debug the `serveConfigV2` field:
 the Ray Serve Multi-application API `PUT "/api/serve/applications/"`.
 * Unlike `serveConfig`, `serveConfigV2` adheres to the snake case naming convention. For example, `numReplicas` is used in `serveConfig`, while `num_replicas` is used in `serveConfigV2`. 
 
-#### Issue 3: The Ray image does not include the required dependencies.
+#### Issue 3-1: The Ray image does not include the required dependencies.
 
 You have two options to resolve this issue:
 
@@ -63,6 +64,47 @@ You have two options to resolve this issue:
 * Specify the required dependencies via `runtime_env` in `serveConfigV2` field.
   * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.5.0`.
 Therefore, the YAML file includes `python-multipart` in the runtime environment. For more details, refer to [the MobileNet example](mobilenet-rayservice.md).
+
+#### Issue 3-2: Examples for troubleshooting dependency issues.
+
+> Note: We highly recommend testing your Ray Serve script locally or in a RayCluster before deploying it to a RayService. This helps identify any dependency issues in the early stages. [TODO: https://github.com/ray-project/kuberay/issues/1176]
+
+In the [MobileNet example](mobilenet-rayservice.md), the [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py) consists of two functions: `__init__()` and `__call__()`.
+The function `__call__()` will only be called when the Serve application receives a request. Hence, the dependency issue can only be observed when the application receives a request.
+
+* Example 1: Remove `python-multipart` from the runtime environment in [the MobileNet YAML](../../ray-operator/config/samples/ray-service.mobilenet.yaml).
+  * The `python-multipart` library is only required for the `__call__` method. Therefore, we can only observe the dependency issue when we send a request to the application.
+  * Example error message:
+    ```bash
+    Unexpected error, traceback: ray::ServeReplica:mobilenet_ImageClassifier.handle_request() (pid=226, ip=10.244.0.9)
+      .
+      .
+      .
+      File "...", line 24, in __call__
+        request = await http_request.form()
+      File "/home/ray/anaconda3/lib/python3.7/site-packages/starlette/requests.py", line 256, in _get_form
+        ), "The `python-multipart` library must be installed to use form parsing."
+    AssertionError: The `python-multipart` library must be installed to use form parsing..
+    ```
+
+* Example 2: Update the image from `rayproject/ray-ml:2.5.0` to `rayproject/ray:2.5.0` in [the MobileNet YAML](../../ray-operator/config/samples/ray-service.mobilenet.yaml). The latter image does not include `tensorflow`.
+  * The `tensorflow` library is imported in the [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py).
+  * Example error message:
+    ```bash
+    kubectl describe rayservices.ray.io rayservice-mobilenet
+
+    # Example error message:
+    Pending Service Status:
+      Application Statuses:
+        Mobilenet:
+          ...
+          Message:                  Deploying app 'mobilenet' failed:
+            ray::deploy_serve_application() (pid=279, ip=10.244.0.12)
+                ...
+              File ".../mobilenet/mobilenet.py", line 4, in <module>
+                from tensorflow.keras.preprocessing import image
+            ModuleNotFoundError: No module named 'tensorflow'
+    ```
 
 #### Issue 4: Incorrect `import_path`.
 
