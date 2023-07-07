@@ -50,7 +50,7 @@ For more on taints and tolerations, see the [Kubernetes documentation](https://k
 
 ## Step 3: Configure `kubectl` to connect to the cluster
 
-Run the following command to download credentials and configure the Kubernetes CLI to use them.
+Run the following command to download Google Cloud credentials and configure the Kubernetes CLI to use them.
 
 ```sh
 gcloud container clusters get-credentials kuberay-gpu-cluster --zone us-west1-b
