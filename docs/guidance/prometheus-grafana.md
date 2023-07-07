@@ -26,11 +26,11 @@ kubectl get all -n prometheus-system
 # deployment.apps/prometheus-kube-state-metrics         1/1     1            1           46s
 ```
 
-* KubeRay provides an [install.sh script](../../install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
+* KubeRay provides an [install.sh script](https://github.com/ray-project/kuberay/blob/master/install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
 
 ## Step 3: Install a KubeRay operator
 
-* Follow this [document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
+* Follow this [document](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
 ## Step 4: Install a RayCluster
 
@@ -94,7 +94,7 @@ spec:
   - ray.io/cluster
 ```
 
-* The YAML example above is [serviceMonitor.yaml](../../config/prometheus/serviceMonitor.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
+* The YAML example above is [serviceMonitor.yaml](https://github.com/ray-project/kuberay/blob/master/config/prometheus/serviceMonitor.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 * See [ServiceMonitor official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor) for more details about the configurations.
 * `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
 
@@ -208,7 +208,7 @@ spec:
 $$\frac{ number\ of\ update\ resource\ usage\ RPCs\ that\ have\ RTT\ smaller\ then\ 20ms\ in\ last\ 30\ days\ }{total\ number\ of\ update\ resource\ usage\ RPCs\ in\ last\ 30\ days\ }   \times 100 $$  
 
 
-* The recording rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
+* The recording rule above is one of rules defined in [prometheusRules.yaml](https://github.com/ray-project/kuberay/blob/master/config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 
 * See [PrometheusRule official document](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#prometheusrule) for more details about the configurations.
 
@@ -258,7 +258,7 @@ spec:
 
 * The PromQL expression above checks if there is no time series exist for `ray_gcs_update_resource_usage_time_bucket` metric. See [absent()](https://prometheus.io/docs/prometheus/latest/querying/functions/#absent) for more detail.
 
-* The alerting rule above is one of rules defined in [prometheusRules.yaml](../../config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
+* The alerting rule above is one of rules defined in [prometheusRules.yaml](https://github.com/ray-project/kuberay/blob/master/config/prometheus/rules/prometheusRules.yaml), and it is created by **install.sh**. Hence, no need to create anything here.
 
 * Alerting rules are configured in the same way as recording rules.
 
@@ -297,7 +297,7 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
   * Click "Dashboards" icon in the left panel.
   * Click "Import".
   * Click "Upload JSON file".
-  * Choose [config/grafana/dashboard_default.json](../../config/grafana/dashboard_default.json).
+  * Choose [config/grafana/dashboard_default.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/dashboard_default.json).
   * Click "Import".
 
 ![Grafana Ray Dashboard](../images/grafana_ray_dashboard.png)
