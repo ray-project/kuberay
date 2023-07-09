@@ -20,7 +20,7 @@ func BuildRouteForHeadService(cluster rayv1alpha1.RayCluster) (*routev1.Route, e
 	}
 
 	// Copy other route configurations from cluster annotations to provide a generic way
-	// for user to customize their route settings.
+	// for user to customize their route settings. 
 	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
 		annotation[key] = value
