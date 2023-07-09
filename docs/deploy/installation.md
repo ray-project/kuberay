@@ -43,8 +43,8 @@ Users can use the following commands to deploy KubeRay operator in a specific na
 export KUBERAY_NAMESPACE=<my-awesome-namespace>
 
 # Install CRDs (Executed by cluster admin)
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources" | envsubst | kubectl create -f -
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources?ref=v0.5.0" | envsubst | kubectl create -f -
 
 # Install KubeRay operator (Executed by user)
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace" | envsubst | kubectl apply -f -
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace?ref=v0.5.0" | envsubst | kubectl apply -f -
 ```

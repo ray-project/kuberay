@@ -926,7 +926,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		return fmt.Errorf("unknown service type %v", serviceType)
 	}
 
-	// TODO: This seems to be useless because BuildHeadServiceForRayService and BuildServeServiceForRayService will not return error.
 	if err != nil {
 		return err
 	}

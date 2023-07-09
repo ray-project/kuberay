@@ -304,6 +304,22 @@ applications:
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
+				// All the worker Pods should have a port with the name "dashboard-agent"
+				for _, pod := range workerPods.Items {
+					// Worker Pod should have only one container.
+					Expect(len(pod.Spec.Containers)).Should(Equal(1))
+					// Each worker Pod should have a container port with the name "dashboard-agent"
+					exist := false
+					for _, port := range pod.Spec.Containers[0].Ports {
+						if port.Name == common.DefaultDashboardAgentListenPortName {
+							exist = true
+							break
+						}
+					}
+					if !exist {
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentListenPortName))
+					}
+				}
 			}
 		})
 
@@ -319,14 +335,6 @@ applications:
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
-		})
-
-		It("should create a new agent service resource", func() {
-			svc := &corev1.Service{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(myRayCluster.Name), Namespace: "default"}, svc),
-				time.Second*15, time.Millisecond*500).Should(BeNil(), "My agent service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayClusterDashboardServiceLabelKey]).Should(Equal(utils.GenerateDashboardAgentLabel(myRayCluster.Name)))
 		})
 
 		It("should create a new serve service resource", func() {

@@ -59,6 +59,7 @@ service:
 #      targetPort: 8887
 
 # You can only enable an ingress or route, if you are using OpenShift cluster
+# Also note that in order to enable ingress or route you need to use ClusterIP service
 
 ingress:
   enabled: false

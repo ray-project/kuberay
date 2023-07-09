@@ -5,11 +5,13 @@ metadata:
 spec:
   serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
   deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
-  serveConfig:
-    importPath: mobilenet.mobilenet:app
-    runtimeEnv: |
-      working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
-      pip: ["python-multipart==0.0.6"]
+  serveConfigV2: |
+    applications:
+      - name: mobilenet
+        import_path: mobilenet.mobilenet:app
+        runtime_env:
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
+          pip: ["python-multipart==0.0.6"]
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
@@ -28,11 +30,11 @@ spec:
               image: rayproject/ray-ml:2.5.0
               resources:
                 limits:
-                  cpu: 2
-                  memory: 8Gi
+                  cpu: 1
+                  memory: 4Gi
                 requests:
-                  cpu: 2
-                  memory: 8Gi
+                  cpu: 1
+                  memory: 4Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -65,8 +67,8 @@ spec:
                       command: ["/bin/sh","-c","ray stop"]
                 resources:
                   limits:
-                    cpu: "2"
-                    memory: "8Gi"
+                    cpu: 1
+                    memory: 4Gi
                   requests:
-                    cpu: "2"
-                    memory: "8Gi"
+                    cpu: 1
+                    memory: 4Gi

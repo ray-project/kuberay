@@ -246,7 +246,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.TODO()
 
-	// Initialize RayCluster reconciler.
+	// Initialize RayService reconciler.
 	r := &RayServiceReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
