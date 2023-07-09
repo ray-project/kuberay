@@ -48,6 +48,10 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 			Namespace: "max",
 		},
 		Spec: v1.PodSpec{
+			ServiceAccountName: "account",
+			ImagePullSecrets: []v1.LocalObjectReference{
+				{Name: "foo"},
+			},
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -58,7 +62,7 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "ray-head",
-					Image: "blublinsky1/ray310:2.4.0",
+					Image: "blublinsky1/ray310:2.5.0",
 					Env: []v1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -144,6 +148,10 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 			Namespace: "max",
 		},
 		Spec: v1.PodSpec{
+			ServiceAccountName: "account",
+			ImagePullSecrets: []v1.LocalObjectReference{
+				{Name: "foo"},
+			},
 			Tolerations: []v1.Toleration{
 				{
 					Key:      "blah1",
@@ -154,7 +162,7 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "ray-worker",
-					Image: "blublinsky1/ray310:2.4.0",
+					Image: "blublinsky1/ray310:2.5.0",
 					Env: []v1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -209,6 +217,12 @@ var expectedTolerations = api.PodToleration{
 func TestPopulateHeadNodeSpec(t *testing.T) {
 	groupSpec := PopulateHeadNodeSpec(headSpecTest)
 
+	if groupSpec.ServiceAccount != "account" {
+		t.Errorf("failed to convert service account")
+	}
+	if groupSpec.ImagePullSecret != "foo" {
+		t.Errorf("failed to convert image pull secret")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -223,6 +237,12 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 func TestPopulateWorkerNodeSpec(t *testing.T) {
 	groupSpec := PopulateWorkerNodeSpec([]v1alpha1.WorkerGroupSpec{workerSpecTest})[0]
 
+	if groupSpec.ServiceAccount != "account" {
+		t.Errorf("failed to convert service account")
+	}
+	if groupSpec.ImagePullSecret != "foo" {
+		t.Errorf("failed to convert image pull secret")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}

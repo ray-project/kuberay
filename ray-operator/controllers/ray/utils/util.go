@@ -129,7 +129,7 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateServiceName generates a ray head service name from cluster name
+// GenerateServiceName generates a Ray head service name from cluster name
 func GenerateServiceName(clusterName string) string {
 	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "svc"))
 }
@@ -148,11 +148,6 @@ func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 // GenerateDashboardServiceName generates a ray head service name from cluster name
 func GenerateDashboardServiceName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
-}
-
-// GenerateDashboardAgentLabel generates label value for agent service selector.
-func GenerateDashboardAgentLabel(clusterName string) string {
-	return fmt.Sprintf("%s-%s", clusterName, DashboardName)
 }
 
 // GenerateServeServiceName generates name for serve service.

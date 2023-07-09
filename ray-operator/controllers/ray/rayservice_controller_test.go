@@ -47,6 +47,42 @@ var _ = Context("Inside the default namespace", func() {
 	var numReplicas int32 = 1
 	var numCpus float64 = 0.1
 
+	testServeAppName := "app1"
+	testServeConfigV2 := fmt.Sprintf(`
+applications:
+  - name: %s
+    import_path: fruit.deployment_graph
+    runtime_env:
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+    deployments:
+      - name: MangoStand
+        num_replicas: 1
+        user_config:
+          price: 3
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: OrangeStand
+        num_replicas: 1
+        user_config:
+          price: 2
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: PearStand
+        num_replicas: 1
+        user_config:
+          price: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: FruitMarket
+        num_replicas: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: DAGDriver
+        num_replicas: 1
+        route_prefix: "/"
+        ray_actor_options:
+          num_cpus: 0.1`, testServeAppName)
+
 	myRayService := &rayv1alpha1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rayservice-sample",
@@ -108,7 +144,7 @@ var _ = Context("Inside the default namespace", func() {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.4.0",
+									Image: "rayproject/ray:2.5.0",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -182,7 +218,7 @@ var _ = Context("Inside the default namespace", func() {
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.4.0",
+										Image:   "rayproject/ray:2.5.0",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
@@ -268,6 +304,22 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
+				// All the worker Pods should have a port with the name "dashboard-agent"
+				for _, pod := range workerPods.Items {
+					// Worker Pod should have only one container.
+					Expect(len(pod.Spec.Containers)).Should(Equal(1))
+					// Each worker Pod should have a container port with the name "dashboard-agent"
+					exist := false
+					for _, port := range pod.Spec.Containers[0].Ports {
+						if port.Name == common.DefaultDashboardAgentListenPortName {
+							exist = true
+							break
+						}
+					}
+					if !exist {
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentListenPortName))
+					}
+				}
 			}
 		})
 
@@ -283,14 +335,6 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
-		})
-
-		It("should create a new agent service resource", func() {
-			svc := &corev1.Service{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateDashboardServiceName(myRayCluster.Name), Namespace: "default"}, svc),
-				time.Second*15, time.Millisecond*500).Should(BeNil(), "My agent service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayClusterDashboardServiceLabelKey]).Should(Equal(utils.GenerateDashboardAgentLabel(myRayCluster.Name)))
 		})
 
 		It("should create a new serve service resource", func() {
@@ -364,7 +408,7 @@ var _ = Context("Inside the default namespace", func() {
 			// the RayService controller will consider the active RayCluster as unhealthy and prepare a new RayCluster.
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UNHEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "New pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -392,7 +436,7 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
 			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -414,24 +458,24 @@ var _ = Context("Inside the default namespace", func() {
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 500
 
-			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
-			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "UNHEALTHY"))
+			// Change serve status to be unhealthy
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
 
 			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
 			Consistently(
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
-			// Check if all the ServeStatuses[i].Status are UNHEALTHY.
-			checkAllServeStatusesUnhealthy := func(ctx context.Context, rayService *rayv1alpha1.RayService) bool {
+			// Check if all the deployment statuses are UNHEALTHY.
+			checkAllDeploymentStatusesUnhealthy := func(ctx context.Context, rayService *rayv1alpha1.RayService) bool {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
 					return false
 				}
-				for _, serveStatus := range rayService.Status.ActiveServiceStatus.ServeStatuses {
-					if serveStatus.Status != "UNHEALTHY" {
-						return false
+				for _, appStatus := range rayService.Status.ActiveServiceStatus.Applications {
+					for _, deploymentStatus := range appStatus.Deployments {
+						if deploymentStatus.Status != rayv1alpha1.DeploymentStatusEnum.UNHEALTHY {
+							return false
+						}
 					}
 				}
 				return true
@@ -443,10 +487,10 @@ var _ = Context("Inside the default namespace", func() {
 			// Note: LastUpdateTime/HealthLastUpdateTime will be overwritten via metav1.Now() in rayservice_controller.go.
 			// Hence, we cannot use `newTime` to check whether the status is updated or not.
 			Eventually(
-				checkAllServeStatusesUnhealthy(ctx, myRayService),
+				checkAllDeploymentStatusesUnhealthy(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "HEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 
 			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
 			Consistently(
@@ -469,9 +513,8 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime.DeepCopy()
-			newTime := oldTime.Add(time.Duration(5) * time.Minute) // 300 seconds
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(newTime), "HEALTHY"))
+			oldTime := myRayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 
 			// Confirm not switch to a new RayCluster
 			Consistently(
@@ -486,7 +529,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
 			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
 			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
-			Expect(myRayService.Status.ActiveServiceStatus.ServeStatuses[0].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
+			Expect(myRayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
 		})
 
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
@@ -516,7 +559,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Set deployment statuses to UNHEALTHY
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UNHEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
@@ -524,7 +567,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
@@ -539,7 +582,7 @@ var _ = Context("Inside the default namespace", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
 
 			// The cluster shouldn't switch until deployments are finished updating
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "UPDATING"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UPDATING))
 
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
@@ -562,12 +605,43 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// The cluster should switch once the deployments are finished updating
-			fakeRayDashboardClient.SetServeStatus(generateServeStatus(metav1.NewTime(time.Now().Add(time.Duration(-5)*time.Minute)), "HEALTHY"))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+		})
+
+		It("should reconcile status correctly when multi-app config type is used.", func() {
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+
+				myRayService.Spec.ServeDeploymentGraphSpec = rayv1alpha1.ServeDeploymentGraphSpec{}
+				myRayService.Spec.ServeConfigV2 = testServeConfigV2
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService serve config")
+
+			// Set multi-application status to healthy.
+			healthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
+			// Set single-application status to unhealthy.
+			unhealthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY)
+			fakeRayDashboardClient.SetSingleApplicationStatus(unhealthyStatus)
+
+			// The status should remain healthy, because we have set serveConfigTypeForTesting to MULTI_APP
+			// Then the rayservice controller should pull the deployment statuses from the multi-app API and not the single-app API
+			// So regardless of what the single-app API is returning, the status of the rayservice should remain healthy
+			// because the multi-app API is returning healthy statuses.
+			Consistently(
+				checkServiceHealth(ctx, myRayService),
+				time.Second*5, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+
+			// reset states to healthy for following test cases
+			fakeRayDashboardClient.SetSingleApplicationStatus(healthyStatus)
 		})
 	})
 })
@@ -575,44 +649,34 @@ var _ = Context("Inside the default namespace", func() {
 func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	client := utils.FakeRayDashboardClient{}
 
-	client.SetServeStatus(generateServeStatus(metav1.Now(), "HEALTHY"))
+	client.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
 
 	return client
 }
 
-func generateServeStatus(time metav1.Time, status string) utils.ServeDeploymentStatuses {
-	serveStatuses := utils.ServeDeploymentStatuses{
-		ApplicationStatus: rayv1alpha1.AppStatus{
-			Status:               "RUNNING",
-			LastUpdateTime:       &time,
-			HealthLastUpdateTime: &time,
-		},
-		DeploymentStatuses: []rayv1alpha1.ServeDeploymentStatus{
-			{
-				Name:                 "shallow",
-				Status:               status,
-				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+func generateServeStatus(status string) utils.ServeApplicationStatus {
+	appStatus := utils.ServeApplicationStatus{
+		Status: rayv1alpha1.ApplicationStatusEnum.RUNNING,
+		Deployments: map[string]utils.ServeDeploymentStatus{
+			"shallow": {
+				Name:    "shallow",
+				Status:  status,
+				Message: "",
 			},
-			{
-				Name:                 "deep",
-				Status:               status,
-				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+			"deep": {
+				Name:    "deep",
+				Status:  status,
+				Message: "",
 			},
-			{
-				Name:                 "one",
-				Status:               status,
-				Message:              "",
-				LastUpdateTime:       &time,
-				HealthLastUpdateTime: &time,
+			"one": {
+				Name:    "one",
+				Status:  status,
+				Message: "",
 			},
 		},
 	}
 
-	return serveStatuses
+	return appStatus
 }
 
 func getRayClusterNameFunc(ctx context.Context, rayService *rayv1alpha1.RayService) func() (string, error) {
@@ -639,15 +703,22 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1alpha1.RayService)
 			return false, err
 		}
 
-		healthy := true
+		if !rayService.Status.ActiveServiceStatus.DashboardStatus.IsHealthy {
+			return false, nil
+		}
 
-		healthy = healthy && rayService.Status.ActiveServiceStatus.DashboardStatus.IsHealthy
-		healthy = healthy && (len(rayService.Status.ActiveServiceStatus.ServeStatuses) == 3)
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[0].Status == "HEALTHY"
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[1].Status == "HEALTHY"
-		healthy = healthy && rayService.Status.ActiveServiceStatus.ServeStatuses[2].Status == "HEALTHY"
+		for _, appStatus := range rayService.Status.ActiveServiceStatus.Applications {
+			if appStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+				return false, nil
+			}
+			for _, deploymentStatus := range appStatus.Deployments {
+				if deploymentStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+					return false, nil
+				}
+			}
+		}
 
-		return healthy, nil
+		return true, nil
 	}
 }
 

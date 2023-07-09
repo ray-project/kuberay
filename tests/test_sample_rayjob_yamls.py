@@ -32,12 +32,12 @@ if __name__ == '__main__':
                         {'path': filepath, 'name': filename, 'cr': k8s_object}
                     )
                     break
-    # TODO(architkulkarni): Add RayJobSuccessRule. Currently fails with the following error:
-    # Failed to start Job Supervisor actor: The name _ray_internal_job_actor_rayjob-sample-8tzrb
-    # (namespace=SUPERVISOR_ACTOR_RAY_NAMESPACE) is already taken.
+    # NOTE: The Ray Job "SUCCEEDED" status is checked in the `RayJobAddCREvent` itself. 
+    # (The event is not considered "converged" until the job has succeeded.) The EasyJobRule
+    # is only used to additionally check that the Ray Cluster remains alive and functional.
     rs = RuleSet([EasyJobRule()])
     image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.4.0'),
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.5.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
     }
     logger.info(image_dict)

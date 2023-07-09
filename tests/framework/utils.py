@@ -7,6 +7,7 @@ import tempfile
 from urllib import request
 import yaml
 import jsonpatch
+import time
 from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
@@ -155,30 +156,49 @@ class OperatorManager:
                     f"--set image.repository={repo},image.tag={tag}"
                 )
 
-def shell_subprocess_run(command, check = True):
-    """
-    Command will be executed through the shell. If check=True, it will raise an error when
-    the returncode of the execution is not 0.
+def shell_subprocess_run(command, check=True, hide_output=False) -> int:
+    """Command will be executed through the shell.
+    
+    Args:
+        check: If true, an error will be raised if the returncode is nonzero
+        hide_output: If true, stdout and stderr of the command will be hidden
+    
+    Returns:
+        Return code of the subprocess.
     """
     logger.info("Execute command: %s", command)
-    return subprocess.run(command, shell = True, check = check).returncode
+    if hide_output:
+        return subprocess.run(
+            command,
+            shell=True,
+            check=check,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        ).returncode
+    else:
+        return subprocess.run(command, shell=True, check=check).returncode
 
 def shell_subprocess_check_output(command):
     """
     Run command and return STDOUT as encoded bytes.
     """
     logger.info("Execute command (check_output): %s", command)
-    output = subprocess.check_output(command, shell=True)
-    logger.info("Output: %s", output)
-    return output
+
+    try:
+        output = subprocess.check_output(command, shell=True)
+        logger.info("Output: %s", output)
+        return output
+    except subprocess.CalledProcessError as e:
+        logger.info("Exception: %s", e.output)
+        raise
 
 def get_pod(namespace, label_selector):
     """Gets pods in the `namespace`. Returns the first pod that has `label_filter`.
     Returns None if the number of matches is not equal to 1.
     """
     pods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
-            namespace = namespace, label_selector = label_selector
-        )
+        namespace = namespace, label_selector = label_selector
+    )
     if len(pods.items) != 1:
         logger.warning(
             "There are %d matches for selector %s in namespace %s, but the expected match is 1.",
@@ -196,6 +216,22 @@ def pod_exec_command(pod_name, namespace, exec_command, check = True):
     Both STDOUT and STDERR of `exec_command` will be printed.
     """
     return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
+
+def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
+    shell_subprocess_run(
+        f"kubectl run {name} --image=radial/busyboxplus:curl -n {namespace} "
+        "--command -- /bin/sh -c \"while true; do sleep 10;done\""
+    )
+
+    # Wait for curl pod to be created
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    start_time = time.time()
+    while time.time() - start_time < timeout_s or timeout_s < 0:
+        resp = k8s_v1_api.read_namespaced_pod(name=name, namespace=namespace)
+        if resp.status.phase == 'Running':
+            return
+
+    raise TimeoutError(f"Curl pod wasn't started in {timeout_s}s.")
 
 def create_custom_object(namespace, cr_object):
     """Create a custom resource based on `cr_object` in the given `namespace`."""

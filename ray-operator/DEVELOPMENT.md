@@ -53,9 +53,13 @@ kind create cluster --image=kindest/node:v1.24.0
 # Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
 
+# To skip running unit tests, run the following command instead:
+# IMG=kuberay/operator:nightly make docker-image
+
 # Step 4: Load the custom KubeRay image into the Kind cluster.
 # Command: kind load docker-image {IMG_REPO}:{IMG_TAG}
 kind load docker-image kuberay/operator:nightly
+
 
 # Step 5: Keep consistency
 # If you update RBAC or CRD, you need to synchronize them.
@@ -113,6 +117,42 @@ IMG=kuberay/operator:nightly make deploy
 
 ## CI/CD
 
+### Linting
+
+KubeRay uses the gofumpt linter.
+
+Download gofumpt version **0.2.1**. 0.2.1 is the latest version still compatible with go1.17. Run this command to download it:
+
+```bash
+go install mvdan.cc/gofumpt@v0.2.1
+```
+
+As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
+
+Check that the `gofumpt` version is 0.2.1:
+
+```bash
+gofumpt --version
+# v0.2.1
+```
+
+Make sure your `go` version is still 1.17:
+
+```bash
+go version
+# go version go1.17.13 darwin/arm64
+```
+
+If your `go` version isn’t 1.17 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). gofumpt versions later than 0.2.1 are built on later go version and will update your go version. If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `go version`. It should be back to 1.17.
+
+Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
+
+```bash
+gofumpt -w .
+```
+
+The `-w` flag will overwrite any unformatted code.
+
 ### Helm chart linter
 
 We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
@@ -166,7 +206,7 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
   # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE python3 tests/compatibility-test.py
   #          These 3 environment variables are optional.
   # [Example]:
-  RAY_IMAGE=rayproject/ray:2.4.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
+  RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
   ```
 ### Running configuration tests locally.
 
@@ -176,9 +216,9 @@ and `tests/test_sample_rayservice_yamls.py`. Currently, only a few of these samp
 
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.4.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.4.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 ```
 
 See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.

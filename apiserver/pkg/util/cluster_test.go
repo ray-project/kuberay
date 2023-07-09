@@ -45,6 +45,8 @@ var headGroup = api.HeadGroupSpec{
 		"metrics-export-port": "8080",
 		"num-cpus":            "0",
 	},
+	ServiceAccount:  "account",
+	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -66,6 +68,8 @@ var workerGroup = api.WorkerGroupSpec{
 	RayStartParams: map[string]string{
 		"node-ip-address": "$MY_POD_IP",
 	},
+	ServiceAccount:  "account",
+	ImagePullSecret: "foo",
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -210,6 +214,13 @@ func TestBuildVolumeMounts(t *testing.T) {
 
 func TestBuildHeadPodTemplate(t *testing.T) {
 	podSpec := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+
+	if podSpec.Spec.ServiceAccountName != "account" {
+		t.Errorf("failed to propagate service account")
+	}
+	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
+		t.Errorf("failed to propagate image pull secret")
+	}
 	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
 		t.Errorf("failed to propagate environment")
 	}
@@ -230,6 +241,13 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
 	podSpec := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+
+	if podSpec.Spec.ServiceAccountName != "account" {
+		t.Errorf("failed to propagate service account")
+	}
+	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
+		t.Errorf("failed to propagate image pull secret")
+	}
 	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
 		t.Errorf("failed to propagate environment")
 	}

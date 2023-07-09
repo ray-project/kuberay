@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,7 +36,9 @@ import (
 )
 
 // This variable is mutable for unit testing purpose.
-var ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
+var (
+	ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
+)
 
 const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
@@ -52,7 +55,7 @@ type RayServiceReconciler struct {
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
-	ServeDeploymentConfigs       cmap.ConcurrentMap
+	ServeConfigs                 cmap.ConcurrentMap
 	RayClusterDeletionTimestamps cmap.ConcurrentMap
 }
 
@@ -63,7 +66,7 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 		Scheme:                       mgr.GetScheme(),
 		Log:                          ctrl.Log.WithName("controllers").WithName("RayService"),
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeDeploymentConfigs:       cmap.New(),
+		ServeConfigs:                 cmap.New(),
 		RayClusterDeletionTimestamps: cmap.New(),
 	}
 }
@@ -106,6 +109,9 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Resolve the CR from request.
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	if rayServiceInstance.Spec.ServeConfigV2 != "" && !reflect.DeepEqual(rayServiceInstance.Spec.ServeDeploymentGraphSpec, rayv1alpha1.ServeDeploymentGraphSpec{}) {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, fmt.Errorf("Found non-nil specifications for both serveConfigV1 and serveConfigV2. Please specify only one of the fields.")
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
@@ -238,23 +244,44 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1alpha
 		return true
 	}
 
-	if oldStatus.ApplicationStatus.Status != newStatus.ApplicationStatus.Status ||
-		oldStatus.ApplicationStatus.Message != newStatus.ApplicationStatus.Message {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ApplicationStatus changed from %v to %v", oldStatus.ApplicationStatus, newStatus.ApplicationStatus))
+	if len(oldStatus.Applications) != len(newStatus.Applications) {
 		return true
 	}
 
-	if len(oldStatus.ServeStatuses) != len(newStatus.ServeStatuses) {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService number of ServeStatus changed from %v to %v", len(oldStatus.ServeStatuses), len(newStatus.ServeStatuses)))
-		return true
-	}
-
-	for i := 0; i < len(oldStatus.ServeStatuses); i++ {
-		if oldStatus.ServeStatuses[i].Name != newStatus.ServeStatuses[i].Name ||
-			oldStatus.ServeStatuses[i].Status != newStatus.ServeStatuses[i].Status ||
-			oldStatus.ServeStatuses[i].Message != newStatus.ServeStatuses[i].Message {
-			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServeDeploymentStatus changed from %v to %v", oldStatus.ServeStatuses[i], newStatus.ServeStatuses[i]))
+	var ok bool
+	for appName, newAppStatus := range newStatus.Applications {
+		var oldAppStatus rayv1alpha1.AppStatus
+		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new application %s found", appName))
 			return true
+		}
+
+		if oldAppStatus.Status != newAppStatus.Status {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status changed from %v to %v", appName, oldAppStatus.Status, newAppStatus.Status))
+			return true
+		} else if oldAppStatus.Message != newAppStatus.Message {
+			r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status message changed from %v to %v", appName, oldAppStatus.Message, newAppStatus.Message))
+			return true
+		}
+
+		if len(oldAppStatus.Deployments) != len(newAppStatus.Deployments) {
+			return true
+		}
+
+		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
+			var oldDeploymentStatus rayv1alpha1.ServeDeploymentStatus
+			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new deployment %s found in application %s", deploymentName, appName))
+				return true
+			}
+
+			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DeploymentStatus changed from %v to %v", oldDeploymentStatus.Status, newDeploymentStatus.Status))
+				return true
+			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
+				r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService deployment status message changed from %v to %v", oldDeploymentStatus.Message, newDeploymentStatus.Message))
+				return true
+			}
 		}
 	}
 
@@ -419,7 +446,7 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 	configPrefix := r.generateConfigKeyPrefix(rayServiceInstance)
 
 	// Clean up RayCluster serve deployment configs.
-	for key := range r.ServeDeploymentConfigs.Items() {
+	for key := range r.ServeConfigs.Items() {
 		if key == activeConfigKey || key == pendingConfigKey {
 			continue
 		}
@@ -428,7 +455,7 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 			continue
 		}
 		r.Log.V(1).Info("cleanUpServeConfigCache", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
-		r.ServeDeploymentConfigs.Remove(key)
+		r.ServeConfigs.Remove(key)
 	}
 }
 
@@ -585,7 +612,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1alpha1.RayService, rayClusterInstance *rayv1alpha1.RayCluster, serveStatus *rayv1alpha1.RayServiceStatus) bool {
 	// If the Serve config has not been cached, update the Serve config.
 	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
-	cachedConfigObj, exist := r.ServeDeploymentConfigs.Get(cacheKey)
+	cachedConfigObj, exist := r.ServeConfigs.Get(cacheKey)
 
 	if !exist {
 		r.Log.V(1).Info("shouldUpdate",
@@ -606,110 +633,190 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
 		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
 
-	cachedServeConfig, isServeConfig := cachedConfigObj.(rayv1alpha1.ServeDeploymentGraphSpec)
-	if !isServeConfig {
-		shouldUpdate = true
-		reason = fmt.Sprintf("No Serve config has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-	} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
-		shouldUpdate = true
-		reason = fmt.Sprintf("Current Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+	serveConfigType := r.determineServeConfigType(rayServiceInstance)
+	if serveConfigType == utils.SINGLE_APP {
+		cachedServeConfig, isServeConfig := cachedConfigObj.(rayv1alpha1.ServeDeploymentGraphSpec)
+		if !isServeConfig {
+			shouldUpdate = true
+			reason = fmt.Sprintf("No V1 Serve Config of type ServeDeploymentGraphSpec has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+		} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
+			shouldUpdate = true
+			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+		}
+		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+	} else if serveConfigType == utils.MULTI_APP {
+		cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
+		if !isServeConfigV2 {
+			shouldUpdate = true
+			reason = fmt.Sprintf("No V2 Serve Config of type string has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+		} else if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
+			shouldUpdate = true
+			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+		}
+		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 	}
-
-	r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
 
 	return shouldUpdate
 }
 
-func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
-	r.Log.V(1).Info("updateServeDeployment", "config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
-	runtimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeDeploymentGraphSpec.RuntimeEnv), &runtimeEnv)
-	servingClusterDeployments := utils.ServingClusterDeployments{
-		ImportPath:  rayServiceInstance.Spec.ServeDeploymentGraphSpec.ImportPath,
-		RuntimeEnv:  runtimeEnv,
-		Deployments: rayDashboardClient.ConvertServeConfig(rayServiceInstance.Spec.ServeDeploymentGraphSpec.ServeConfigSpecs),
+// Determines the serve config type from a ray service instance
+// If the user has set a value for `ServeConfigV2`, the config type is MULTI_APP
+// Otherwise, the user should have set a value for `ServeConfig`, in which case the config type is SINGLE_APP
+func (r *RayServiceReconciler) determineServeConfigType(rayServiceInstance *rayv1alpha1.RayService) utils.RayServeConfigType {
+	if rayServiceInstance.Spec.ServeConfigV2 == "" {
+		return utils.SINGLE_APP
+	} else {
+		return utils.MULTI_APP
 	}
-
-	deploymentJson, _ := json.Marshal(servingClusterDeployments)
-	r.Log.V(1).Info("updateServeDeployment", "json config", string(deploymentJson))
-	if err := rayDashboardClient.UpdateDeployments(ctx, rayServiceInstance.Spec.ServeDeploymentGraphSpec); err != nil {
-		r.Log.Error(err, "fail to update deployment")
-		return err
-	}
-
-	cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
-	r.ServeDeploymentConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeDeploymentGraphSpec)
-	r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
-
-	return nil
 }
 
-// getAndCheckServeStatus gets app and Serve deployments' statuses,
+func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1alpha1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
+	serveConfigType := r.determineServeConfigType(rayServiceInstance)
+
+	if serveConfigType == utils.SINGLE_APP {
+		r.Log.V(1).Info("updateServeDeployment", "V1 config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+
+		convertedConfig := rayDashboardClient.ConvertServeConfigV1(rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+		configJson, err := json.Marshal(convertedConfig)
+		if err != nil {
+			return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
+		}
+		r.Log.V(1).Info("updateServeDeployment", "SINGLE_APP json config", string(configJson))
+		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, utils.SINGLE_APP); err != nil {
+			r.Log.Error(err, "fail to update deployment")
+			return err
+		}
+
+		cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
+		r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+		r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
+		return nil
+	} else if serveConfigType == utils.MULTI_APP {
+		r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
+
+		serveConfig := make(map[string]interface{})
+		if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
+			return err
+		}
+
+		configJson, err := json.Marshal(serveConfig)
+		if err != nil {
+			return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
+		}
+		r.Log.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
+		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, serveConfigType); err != nil {
+			r.Log.Error(err, "fail to update deployment")
+			return err
+		}
+
+		cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
+		r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
+		r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
+		return nil
+	} else {
+		return fmt.Errorf("Serve config type should either be SINGLE_APP or MULTI_APP, but got unrecognized serve config type: %s", serveConfigType)
+	}
+}
+
+// getAndCheckServeStatus gets Serve applications' and deployments' statuses,
 // updates health timestamps, and checks if the RayCluster is overall healthy.
+// It takes as one of its inputs `serveConfigType`, which is used to decide whether
+// to query the single-application Serve REST API or the multi-application Serve REST API
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
-func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, unhealthySecondThreshold *int32) (bool, bool, error) {
+func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
+	// If the unhealthySecondThreshold value is non-nil, then we will use that value.
+	// Otherwise, we will use the value ServiceUnhealthySecondThreshold which can be set in a test
+	// This is used for testing purposes.
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
-	var serveStatuses *utils.ServeDeploymentStatuses
+	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
-	if serveStatuses, err = dashboardClient.GetDeploymentsStatus(ctx); err != nil {
-		r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
-		return false, false, err
+	if serveConfigType == utils.SINGLE_APP {
+		var singleApplicationStatus *utils.ServeApplicationStatus
+		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
+			r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+			return false, false, err
+		}
+		serveAppStatuses = map[string]*utils.ServeApplicationStatus{common.DefaultServeAppName: singleApplicationStatus}
+	} else if serveConfigType == utils.MULTI_APP {
+		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
+			r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+			return false, false, err
+		}
+	} else {
+		return false, false, fmt.Errorf("Unrecognized serve config type %s", string(serveConfigType))
 	}
 
-	statusMap := make(map[string]rayv1alpha1.ServeDeploymentStatus)
-
-	for _, status := range rayServiceServeStatus.ServeStatuses {
-		statusMap[status.Name] = status
-	}
+	r.Log.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isHealthy := true
 	isReady := true
 	timeNow := metav1.Now()
-	for i := 0; i < len(serveStatuses.DeploymentStatuses); i++ {
-		serveStatuses.DeploymentStatuses[i].LastUpdateTime = &timeNow
-		serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = &timeNow
-		if serveStatuses.DeploymentStatuses[i].Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-			prevStatus, exist := statusMap[serveStatuses.DeploymentStatuses[i].Name]
-			if exist {
-				if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
-					serveStatuses.DeploymentStatuses[i].HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-					if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+	newApplications := make(map[string]rayv1alpha1.AppStatus)
+	for appName, app := range serveAppStatuses {
+		if appName == "" {
+			appName = common.DefaultServeAppName
+		}
+
+		prevApplicationStatus := rayServiceServeStatus.Applications[appName]
+
+		applicationStatus := rayv1alpha1.AppStatus{
+			Message:              app.Message,
+			Status:               app.Status,
+			LastUpdateTime:       &timeNow,
+			HealthLastUpdateTime: &timeNow,
+			Deployments:          make(map[string]rayv1alpha1.ServeDeploymentStatus),
+		}
+
+		// Check app status
+		if app.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+			// Check previous app status
+			if prevApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+				if prevApplicationStatus.HealthLastUpdateTime != nil {
+					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
+
+					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
 						isHealthy = false
 					}
 				}
 			}
 			isReady = false
 		}
-	}
 
-	// Check app status
-	serveStatuses.ApplicationStatus.LastUpdateTime = &timeNow
-	serveStatuses.ApplicationStatus.HealthLastUpdateTime = &timeNow
-	if serveStatuses.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-		// Check previous app status
-		if rayServiceServeStatus.ApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-			if rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime != nil {
-				serveStatuses.ApplicationStatus.HealthLastUpdateTime = rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime
-
-				if time.Since(rayServiceServeStatus.ApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-					isHealthy = false
-				}
+		// Check deployment statuses
+		for deploymentName, deployment := range app.Deployments {
+			deploymentStatus := rayv1alpha1.ServeDeploymentStatus{
+				Status:               deployment.Status,
+				Message:              deployment.Message,
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
 			}
+
+			if deployment.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+				prevStatus, exist := prevApplicationStatus.Deployments[deploymentName]
+				if exist {
+					if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
+
+						if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+							isHealthy = false
+						}
+					}
+				}
+				isReady = false
+			}
+			applicationStatus.Deployments[deploymentName] = deploymentStatus
 		}
-		isReady = false
+		newApplications[appName] = applicationStatus
 	}
 
-	rayServiceServeStatus.ServeStatuses = serveStatuses.DeploymentStatuses
-	rayServiceServeStatus.ApplicationStatus = serveStatuses.ApplicationStatus
-
-	r.Log.V(1).Info("getAndCheckServeStatus", "statusMap", statusMap, "serveStatuses", serveStatuses)
-
+	rayServiceServeStatus.Applications = newApplications
+	r.Log.V(1).Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
 	return isHealthy, isReady, nil
 }
 
@@ -819,7 +926,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		return fmt.Errorf("unknown service type %v", serviceType)
 	}
 
-	// TODO: This seems to be useless because BuildHeadServiceForRayService and BuildServeServiceForRayService will not return error.
 	if err != nil {
 		return err
 	}
@@ -878,7 +984,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -887,7 +993,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient.InitClient(clientURL)
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -918,7 +1024,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = utils.FetchDashboardAgentURL(ctx, &r.Log, r.Client, rayClusterInstance); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
@@ -962,7 +1068,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isHealthy, isReady bool
-	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
+	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold); err != nil {
 		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)

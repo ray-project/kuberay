@@ -1189,6 +1189,14 @@
           },
           "title": "Optional. The volumes mount to head pod"
         },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by head pod\nNote that the service account has to be created prior to usage here"
+        },
+        "imagePullSecret": {
+          "type": "string",
+          "title": "Optional. image pull secret used by head pod"
+        },
         "environment": {
           "type": "object",
           "additionalProperties": {
@@ -1305,6 +1313,14 @@
             "$ref": "#/definitions/protoVolume"
           },
           "title": "Optional. The volumes mount to worker pods"
+        },
+        "serviceAccount": {
+          "type": "string",
+          "title": "Optional. ServiceAccount used by worker pod\nNote that the service account has to be created prior to usage here"
+        },
+        "imagePullSecret": {
+          "type": "string",
+          "title": "Optional. image pull secret used by worker pod"
         },
         "environment": {
           "type": "object",
@@ -1613,13 +1629,13 @@
           "description": "The number of GPUs required by the deployment's application per replica."
         },
         "memoryPerActor": {
-          "type": "integer",
-          "format": "int32",
+          "type": "string",
+          "format": "uint64",
           "description": "Restrict the heap memory usage of each replica."
         },
         "objectStoreMemoryPerActor": {
-          "type": "integer",
-          "format": "int32",
+          "type": "string",
+          "format": "uint64",
           "description": "Restrict the object store memory used per replica when creating objects."
         },
         "customResource": {
@@ -1762,18 +1778,18 @@
       "properties": {
         "applicationStatus": {
           "type": "string",
-          "description": "The ray serve application status."
+          "description": "NOTE(zcin): the first three fields are deprecated in favor of serve_application_status.\n(Deprecated) The ray serve application status."
         },
         "applicationMessage": {
           "type": "string",
-          "description": "A human-readable description of the status of this operation."
+          "description": "(Deprecated) A human-readable description of the status of this operation."
         },
         "serveDeploymentStatus": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoServeDeploymentStatus"
           },
-          "description": "The status for each deployment."
+          "description": "(Deprecated) The status for each deployment."
         },
         "rayServiceEvents": {
           "type": "array",
@@ -1796,6 +1812,37 @@
             "type": "string"
           },
           "description": "The service endpoint of the cluster and service."
+        },
+        "serveApplicationStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoServeApplicationStatus"
+          },
+          "title": "All ray serve application statuses"
+        }
+      }
+    },
+    "protoServeApplicationStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Application name"
+        },
+        "status": {
+          "type": "string",
+          "title": "Application status"
+        },
+        "message": {
+          "type": "string",
+          "description": "Details about the application status."
+        },
+        "serveDeploymentStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoServeDeploymentStatus"
+          },
+          "title": "All ray serve deployment statuses in this application"
         }
       }
     },

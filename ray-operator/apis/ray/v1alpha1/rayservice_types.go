@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -48,10 +49,14 @@ var DeploymentStatusEnum = struct {
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec           ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
-	RayClusterSpec                     RayClusterSpec           `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32                   `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
+	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
+	ServeConfigV2                      string         `json:"serveConfigV2,omitempty"`
+	RayClusterSpec                     RayClusterSpec `json:"rayClusterConfig,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32         `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32         `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
+	ServeService *v1.Service `json:"serveService,omitempty"`
 }
 
 type ServeDeploymentGraphSpec struct {
@@ -82,8 +87,8 @@ type RayActorOptionSpec struct {
 	RuntimeEnv        string   `json:"runtimeEnv,omitempty"`
 	NumCpus           *float64 `json:"numCpus,omitempty"`
 	NumGpus           *float64 `json:"numGpus,omitempty"`
-	Memory            *int32   `json:"memory,omitempty"`
-	ObjectStoreMemory *int32   `json:"objectStoreMemory,omitempty"`
+	Memory            *uint64  `json:"memory,omitempty"`
+	ObjectStoreMemory *uint64  `json:"objectStoreMemory,omitempty"`
 	Resources         string   `json:"resources,omitempty"`
 	AcceleratorType   string   `json:"acceleratorType,omitempty"`
 }
@@ -104,11 +109,10 @@ type RayServiceStatuses struct {
 
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ApplicationStatus AppStatus               `json:"appStatus,omitempty"`
-	ServeStatuses     []ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	DashboardStatus   DashboardStatus         `json:"dashboardStatus,omitempty"`
-	RayClusterName    string                  `json:"rayClusterName,omitempty"`
-	RayClusterStatus  RayClusterStatus        `json:"rayClusterStatus,omitempty"`
+	Applications     map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	DashboardStatus  DashboardStatus      `json:"dashboardStatus,omitempty"`
+	RayClusterName   string               `json:"rayClusterName,omitempty"`
+	RayClusterStatus RayClusterStatus     `json:"rayClusterStatus,omitempty"`
 }
 
 // DashboardStatus defines the current states of Ray Dashboard
@@ -126,13 +130,13 @@ type AppStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
+	HealthLastUpdateTime *metav1.Time                     `json:"healthLastUpdateTime,omitempty"`
+	Deployments          map[string]ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
-	Name string `json:"name,omitempty"`
 	// TODO: change status type to enum
 	Status         string       `json:"status,omitempty"`
 	Message        string       `json:"message,omitempty"`
@@ -142,9 +146,9 @@ type ServeDeploymentStatus struct {
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`

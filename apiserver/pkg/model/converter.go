@@ -173,6 +173,14 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.Environment = env
 	}
 
+	if len(spec.Template.Spec.ServiceAccountName) > 1 {
+		headNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
+	}
+
+	if len(spec.Template.Spec.ImagePullSecrets) > 0 {
+		headNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
+	}
+
 	return headNodeSpec
 }
 
@@ -214,7 +222,15 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 			}
 			workerNodeSpec.Environment = env
 		}
-		// Resources.
+
+		if len(spec.Template.Spec.ServiceAccountName) > 1 {
+			workerNodeSpec.ServiceAccount = spec.Template.Spec.ServiceAccountName
+		}
+
+		if len(spec.Template.Spec.ImagePullSecrets) > 0 {
+			workerNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
+		}
+
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}
 
@@ -368,12 +384,10 @@ func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.Ser
 
 func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {
 	status := &api.RayServiceStatus{
-		ApplicationStatus:     serviceStatus.ActiveServiceStatus.ApplicationStatus.Status,
-		ApplicationMessage:    serviceStatus.ActiveServiceStatus.ApplicationStatus.Message,
-		ServeDeploymentStatus: PopulateServeDeploymentStatus(serviceStatus.ActiveServiceStatus.ServeStatuses),
-		RayServiceEvents:      PopulateRayServiceEvent(serviceName, events),
-		RayClusterName:        serviceStatus.ActiveServiceStatus.RayClusterName,
-		RayClusterState:       string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
+		RayServiceEvents:       PopulateRayServiceEvent(serviceName, events),
+		RayClusterName:         serviceStatus.ActiveServiceStatus.RayClusterName,
+		RayClusterState:        string(serviceStatus.ActiveServiceStatus.RayClusterStatus.State),
+		ServeApplicationStatus: PopulateServeApplicationStatus(serviceStatus.ActiveServiceStatus.Applications),
 	}
 	status.ServiceEndpoint = map[string]string{}
 	for name, port := range serviceStatus.ActiveServiceStatus.RayClusterStatus.Endpoints {
@@ -382,17 +396,31 @@ func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RaySer
 	return status
 }
 
-func PopulateServeDeploymentStatus(serveDeploymentStatuses []v1alpha1.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
-	deploymentStatus := make([]*api.ServeDeploymentStatus, 0)
-	for _, serveDeploymentStatus := range serveDeploymentStatuses {
-		ds := &api.ServeDeploymentStatus{
-			DeploymentName: serveDeploymentStatus.Name,
-			Status:         serveDeploymentStatus.Status,
-			Message:        serveDeploymentStatus.Message,
+func PopulateServeApplicationStatus(serveApplicationStatuses map[string]v1alpha1.AppStatus) []*api.ServeApplicationStatus {
+	appStatuses := make([]*api.ServeApplicationStatus, 0)
+	for appName, appStatus := range serveApplicationStatuses {
+		ds := &api.ServeApplicationStatus{
+			Name:                  appName,
+			Status:                appStatus.Status,
+			Message:               appStatus.Message,
+			ServeDeploymentStatus: PopulateServeDeploymentStatus(appStatus.Deployments),
 		}
-		deploymentStatus = append(deploymentStatus, ds)
+		appStatuses = append(appStatuses, ds)
 	}
-	return deploymentStatus
+	return appStatuses
+}
+
+func PopulateServeDeploymentStatus(serveDeploymentStatuses map[string]v1alpha1.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
+	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
+	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
+		ds := &api.ServeDeploymentStatus{
+			DeploymentName: deploymentName,
+			Status:         deploymentStatus.Status,
+			Message:        deploymentStatus.Message,
+		}
+		deploymentStatuses = append(deploymentStatuses, ds)
+	}
+	return deploymentStatuses
 }
 
 func PopulateRayServiceEvent(serviceName string, events []v1.Event) []*api.RayServiceEvent {

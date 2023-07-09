@@ -1,14 +1,17 @@
 """Configuration test framework for KubeRay"""
-from typing import List
+import json
+import jsonpatch
+from typing import Dict, List, Optional
 import unittest
 import time
-import jsonpatch
 
 from framework.utils import (
     create_custom_object,
     delete_custom_object,
     get_custom_object,
+    get_pod,
     get_head_pod,
+    start_curl_pod,
     logger,
     pod_exec_command,
     shell_subprocess_run,
@@ -83,6 +86,19 @@ def get_expected_worker_pods(custom_resource):
 
 def show_cluster_info(cr_namespace):
     """Show system information"""
+    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+    head_pods = k8s_v1_api.list_namespaced_pod(
+        namespace=cr_namespace,
+        label_selector='ray.io/node-type=head'
+    )
+    worker_pods = k8s_v1_api.list_namespaced_pod(
+        namespace=cr_namespace,
+        label_selector='ray.io/node-type=worker'
+    )
+    logger.info(
+        f"Number of head pods: {len(head_pods.items)}, "
+        f"number of worker pods: {len(worker_pods.items)}"
+    )
     shell_subprocess_run(f'kubectl get all -n={cr_namespace}')
     shell_subprocess_run(f'kubectl describe pods -n={cr_namespace}')
     # With "--tail=-1", every line in the log will be printed. The default value of "tail" is not
@@ -145,8 +161,14 @@ class CREvent:
     CREvent: Custom Resource Event can be mainly divided into 3 categories.
     (1) Add (create) CR (2) Update CR (3) Delete CR
     """
-    def __init__(self, custom_resource_object,
-        rulesets: List[RuleSet], timeout, namespace, filepath = None):
+    def __init__(
+        self,
+        custom_resource_object,
+        rulesets: List[RuleSet] = [],
+        timeout: int = 90,
+        namespace: str = "default",
+        filepath: Optional[str] = None,
+    ):
         self.rulesets = rulesets
         self.timeout = timeout
         self.namespace = namespace
@@ -223,27 +245,82 @@ class EasyJobRule(Rule):
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
 class CurlServiceRule(Rule):
-    """"Using curl to access the deployed application on Ray service"""
-    def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        # Create a pod for running curl command, because the service is not exposed.
-        shell_subprocess_run(f"kubectl run curl --image=radial/busyboxplus:curl -n {cr_namespace} "
-            "--command -- /bin/sh -c \"while true; do sleep 10;done\"")
-        success_create = False
-        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        for _ in range(30):
-            resp = k8s_v1_api.read_namespaced_pod(name="curl", namespace=cr_namespace)
-            if resp.status.phase != 'Pending':
-                success_create = True
+    """Using curl to access the deployed application(s) on RayService"""
+    CURL_CMD_FMT = (
+        "kubectl exec curl -n {namespace} -- "
+        "curl -X POST -H 'Content-Type: application/json' "
+        "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
+    )
+
+    def __init__(self, queries: List[Dict[str, str]], start_in_background: bool = False):
+        self.queries = queries
+        self.start_in_background = start_in_background
+
+    def assert_rule(self, custom_resource, cr_namespace):
+        # If curl pod doesn't exist, create one
+        if get_pod("default", "run=curl") is None:
+            start_curl_pod("curl", cr_namespace, timeout_s=30)
+        
+        for query in self.queries:
+            cmd = self.CURL_CMD_FMT.format(
+                name=custom_resource["metadata"]["name"],
+                namespace=cr_namespace,
+                path=query.get("path").rstrip("/"),
+                json=json.dumps(query["json_args"]),
+            )
+            if self.start_in_background:
+                shell_subprocess_run(f"{cmd} &", hide_output=True)
+
+            else:
+                output = shell_subprocess_check_output(cmd)
+                if hasattr(query.get("expected_output"), "__iter__"):
+                    assert output.decode('utf-8') in query["expected_output"]
+                else:
+                    assert output.decode('utf-8') == query["expected_output"]
+
+class AutoscaleRule(Rule):
+    def __init__(
+        self,
+        query: Dict[str, str],
+        num_repeat: int,
+        expected_worker_pods: int,
+        timeout: int,
+        message: str = "",
+    ):
+        self.query: Dict[str, str] = query
+        self.num_repeat: int = num_repeat
+        self.expected_worker_pods = expected_worker_pods
+        self.query_rule = CurlServiceRule(queries=[query], start_in_background=True)
+        self.timeout = timeout
+        self.message = message
+
+    def assert_rule(self, custom_resource, cr_namespace):
+        logger.info(self.message)
+        for _ in range(self.num_repeat):
+            self.query_rule.assert_rule(custom_resource, cr_namespace)
+
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
+            k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+            pods = k8s_v1_api.list_namespaced_pod(
+                namespace=cr_namespace, label_selector='ray.io/node-type=worker'
+            )
+            if len(pods.items) == self.expected_worker_pods:
+                logger.info(
+                    "Cluster has successfully scaled to the expected number of "
+                    f"{self.expected_worker_pods} worker pods after "
+                    f"{time.time() - start_time} seconds."
+                )
                 break
-            time.sleep(1)
-        if not success_create:
-            raise Exception("CurlServiceRule create curl pod timeout")
-        output = shell_subprocess_check_output(f"kubectl exec curl -n {cr_namespace} "
-            "-- curl -X POST -H 'Content-Type: application/json' "
-            f"{custom_resource['metadata']['name']}-serve-svc.{cr_namespace}.svc.cluster.local:8000"
-            " -d '[\"MANGO\", 2]'")
-        assert output == b'6'
-        shell_subprocess_run(f"kubectl delete pod curl -n {cr_namespace}")
+            
+            time.sleep(0.1)
+        else:
+            raise TimeoutError(
+                "Cluster did not scale to the expected number of "
+                f"{self.expected_worker_pods} worker pod(s) within {self.timeout} "
+                f"seconds. Cluster is currently at {len(pods.items)} worker pods."
+            )
+
 
 class RayClusterAddCREvent(CREvent):
     """CREvent for RayCluster addition"""
@@ -306,7 +383,7 @@ class RayClusterAddCREvent(CREvent):
             show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
 
-class RayServiceAddCREvent(CREvent):
+class RayServiceFullCREvent(CREvent):
     """CREvent for RayService addition"""
     def wait(self):
         """Wait for RayService to converge"""""

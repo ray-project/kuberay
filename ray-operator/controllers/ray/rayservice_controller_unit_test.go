@@ -2,11 +2,13 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +27,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 	// `hash2` in this case.
 	cluster := rayv1alpha1.RayCluster{
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "2.4.0",
+			RayVersion: "2.5.0",
 			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
@@ -57,7 +59,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 func TestCompareRayClusterJsonHash(t *testing.T) {
 	cluster1 := rayv1alpha1.RayCluster{
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "2.4.0",
+			RayVersion: "2.5.0",
 		},
 	}
 	cluster2 := cluster1.DeepCopy()
@@ -85,19 +87,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: rayv1alpha1.AppStatus{
-				Status:               "running",
-				Message:              "OK",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "unhealthy",
-					Message:              "error",
+			Applications: map[string]rayv1alpha1.AppStatus{
+				common.DefaultServeAppName: {
+					Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+					Message:              "OK",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               rayv1alpha1.DeploymentStatusEnum.UNHEALTHY,
+							Message:              "error",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -108,19 +111,20 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
-			ApplicationStatus: rayv1alpha1.AppStatus{
-				Status:               "stopped",
-				Message:              "stopped",
-				LastUpdateTime:       &timeNow,
-				HealthLastUpdateTime: &timeNow,
-			},
-			ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-				{
-					Name:                 "serve-1",
-					Status:               "healthy",
-					Message:              "Serve is healthy",
+			Applications: map[string]rayv1alpha1.AppStatus{
+				common.DefaultServeAppName: {
+					Status:               rayv1alpha1.ApplicationStatusEnum.NOT_STARTED,
+					Message:              "application not started yet",
 					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
+					Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+						"serve-1": {
+							Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+							Message:              "Serve is healthy",
+							LastUpdateTime:       &timeNow,
+							HealthLastUpdateTime: &timeNow,
+						},
+					},
 				},
 			},
 		},
@@ -150,19 +154,34 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
-		ApplicationStatus: rayv1alpha1.AppStatus{
-			Status:               "running",
-			Message:              "Application is running",
-			LastUpdateTime:       &timeNow,
-			HealthLastUpdateTime: &timeNow,
-		},
-		ServeStatuses: []rayv1alpha1.ServeDeploymentStatus{
-			{
-				Name:                 "serve-1",
-				Status:               "healthy",
-				Message:              "Serve is healthy",
+		Applications: map[string]rayv1alpha1.AppStatus{
+			"app1": {
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+				Message:              "Application is running",
 				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
+				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
+			},
+			"app2": {
+				Status:               rayv1alpha1.ApplicationStatusEnum.RUNNING,
+				Message:              "Application is running",
+				LastUpdateTime:       &timeNow,
+				HealthLastUpdateTime: &timeNow,
+				Deployments: map[string]rayv1alpha1.ServeDeploymentStatus{
+					"serve-1": {
+						Status:               rayv1alpha1.DeploymentStatusEnum.HEALTHY,
+						Message:              "Serve is healthy",
+						LastUpdateTime:       &timeNow,
+						HealthLastUpdateTime: &timeNow,
+					},
+				},
 			},
 		},
 	}
@@ -174,6 +193,11 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	// Test 1: Only LastUpdateTime and HealthLastUpdateTime are updated.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+	for appName, application := range newStatus.Applications {
+		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
+		application.LastUpdateTime = &metav1.Time{Time: timeNow.Add(2)}
+		newStatus.Applications[appName] = application
+	}
 	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 
 	// Test 2: Not only LastUpdateTime and HealthLastUpdateTime are updated.
@@ -222,7 +246,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.TODO()
 
-	// Initialize RayCluster reconciler.
+	// Initialize RayService reconciler.
 	r := &RayServiceReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
@@ -349,4 +373,52 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
+}
+
+func TestFetchHeadServiceURL(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	namespace := "ray"
+	dashboardPort := int32(9999)
+	cluster := rayv1alpha1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: namespace,
+		},
+	}
+	headSvc := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServiceName(cluster.Name),
+			Namespace: cluster.ObjectMeta.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name: common.DefaultDashboardName,
+					Port: dashboardPort,
+				},
+			},
+		},
+	}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{&headSvc}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayService reconciler.
+	ctx := context.TODO()
+	r := RayServiceReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
+	}
+
+	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DefaultDashboardName)
+	assert.Nil(t, err, "Fail to fetch head service url")
+	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }

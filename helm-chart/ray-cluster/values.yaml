@@ -7,7 +7,7 @@
 
 image:
   repository: rayproject/ray
-  tag: 2.4.0
+  tag: 2.5.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay"
@@ -19,7 +19,7 @@ imagePullSecrets: []
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
-  # rayVersion: 2.4.0
+  # rayVersion: 2.5.0
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -163,8 +163,8 @@ additionalWorkerGroups:
   smallGroup:
     # Disabled by default
     disabled: true
-    replicas: 1
-    minReplicas: 1
+    replicas: 0
+    minReplicas: 0
     maxReplicas: 3
     labels: {}
     serviceAccountName: ""

@@ -937,9 +937,9 @@ type ActorOptions struct {
 	// The number of GPUs required by the deployment's application per replica.
 	GpusPerActor float64 `protobuf:"fixed64,3,opt,name=gpus_per_actor,json=gpusPerActor,proto3" json:"gpus_per_actor,omitempty"`
 	// Restrict the heap memory usage of each replica.
-	MemoryPerActor int32 `protobuf:"varint,4,opt,name=memory_per_actor,json=memoryPerActor,proto3" json:"memory_per_actor,omitempty"`
+	MemoryPerActor uint64 `protobuf:"varint,4,opt,name=memory_per_actor,json=memoryPerActor,proto3" json:"memory_per_actor,omitempty"`
 	// Restrict the object store memory used per replica when creating objects.
-	ObjectStoreMemoryPerActor int32 `protobuf:"varint,5,opt,name=object_store_memory_per_actor,json=objectStoreMemoryPerActor,proto3" json:"object_store_memory_per_actor,omitempty"`
+	ObjectStoreMemoryPerActor uint64 `protobuf:"varint,5,opt,name=object_store_memory_per_actor,json=objectStoreMemoryPerActor,proto3" json:"object_store_memory_per_actor,omitempty"`
 	// The custom resources required by each replica.
 	CustomResource string `protobuf:"bytes,6,opt,name=custom_resource,json=customResource,proto3" json:"custom_resource,omitempty"`
 	// Forces replicas to run on nodes with the specified accelerator type.
@@ -999,14 +999,14 @@ func (x *ActorOptions) GetGpusPerActor() float64 {
 	return 0
 }
 
-func (x *ActorOptions) GetMemoryPerActor() int32 {
+func (x *ActorOptions) GetMemoryPerActor() uint64 {
 	if x != nil {
 		return x.MemoryPerActor
 	}
 	return 0
 }
 
-func (x *ActorOptions) GetObjectStoreMemoryPerActor() int32 {
+func (x *ActorOptions) GetObjectStoreMemoryPerActor() uint64 {
 	if x != nil {
 		return x.ObjectStoreMemoryPerActor
 	}
@@ -1032,11 +1032,12 @@ type RayServiceStatus struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The ray serve application status.
+	// NOTE(zcin): the first three fields are deprecated in favor of serve_application_status.
+	// (Deprecated) The ray serve application status.
 	ApplicationStatus string `protobuf:"bytes,1,opt,name=application_status,json=applicationStatus,proto3" json:"application_status,omitempty"`
-	// A human-readable description of the status of this operation.
+	// (Deprecated) A human-readable description of the status of this operation.
 	ApplicationMessage string `protobuf:"bytes,2,opt,name=application_message,json=applicationMessage,proto3" json:"application_message,omitempty"`
-	// The status for each deployment.
+	// (Deprecated) The status for each deployment.
 	ServeDeploymentStatus []*ServeDeploymentStatus `protobuf:"bytes,3,rep,name=serve_deployment_status,json=serveDeploymentStatus,proto3" json:"serve_deployment_status,omitempty"`
 	// The related event for the ray service.
 	RayServiceEvents []*RayServiceEvent `protobuf:"bytes,4,rep,name=ray_service_events,json=rayServiceEvents,proto3" json:"ray_service_events,omitempty"`
@@ -1046,6 +1047,8 @@ type RayServiceStatus struct {
 	RayClusterState string `protobuf:"bytes,6,opt,name=ray_cluster_state,json=rayClusterState,proto3" json:"ray_cluster_state,omitempty"`
 	// The service endpoint of the cluster and service.
 	ServiceEndpoint map[string]string `protobuf:"bytes,7,rep,name=service_endpoint,json=serviceEndpoint,proto3" json:"service_endpoint,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// All ray serve application statuses
+	ServeApplicationStatus []*ServeApplicationStatus `protobuf:"bytes,8,rep,name=serve_application_status,json=serveApplicationStatus,proto3" json:"serve_application_status,omitempty"`
 }
 
 func (x *RayServiceStatus) Reset() {
@@ -1129,6 +1132,88 @@ func (x *RayServiceStatus) GetServiceEndpoint() map[string]string {
 	return nil
 }
 
+func (x *RayServiceStatus) GetServeApplicationStatus() []*ServeApplicationStatus {
+	if x != nil {
+		return x.ServeApplicationStatus
+	}
+	return nil
+}
+
+type ServeApplicationStatus struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Application name
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Application status
+	Status string `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	// Details about the application status.
+	Message string `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	// All ray serve deployment statuses in this application
+	ServeDeploymentStatus []*ServeDeploymentStatus `protobuf:"bytes,4,rep,name=serve_deployment_status,json=serveDeploymentStatus,proto3" json:"serve_deployment_status,omitempty"`
+}
+
+func (x *ServeApplicationStatus) Reset() {
+	*x = ServeApplicationStatus{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_serve_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ServeApplicationStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServeApplicationStatus) ProtoMessage() {}
+
+func (x *ServeApplicationStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_serve_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServeApplicationStatus.ProtoReflect.Descriptor instead.
+func (*ServeApplicationStatus) Descriptor() ([]byte, []int) {
+	return file_serve_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ServeApplicationStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ServeApplicationStatus) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ServeApplicationStatus) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ServeApplicationStatus) GetServeDeploymentStatus() []*ServeDeploymentStatus {
+	if x != nil {
+		return x.ServeDeploymentStatus
+	}
+	return nil
+}
+
 type ServeDeploymentStatus struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1145,7 +1230,7 @@ type ServeDeploymentStatus struct {
 func (x *ServeDeploymentStatus) Reset() {
 	*x = ServeDeploymentStatus{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_serve_proto_msgTypes[15]
+		mi := &file_serve_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1158,7 +1243,7 @@ func (x *ServeDeploymentStatus) String() string {
 func (*ServeDeploymentStatus) ProtoMessage() {}
 
 func (x *ServeDeploymentStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_serve_proto_msgTypes[15]
+	mi := &file_serve_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +1256,7 @@ func (x *ServeDeploymentStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServeDeploymentStatus.ProtoReflect.Descriptor instead.
 func (*ServeDeploymentStatus) Descriptor() ([]byte, []int) {
-	return file_serve_proto_rawDescGZIP(), []int{15}
+	return file_serve_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ServeDeploymentStatus) GetDeploymentName() string {
@@ -1223,7 +1308,7 @@ type RayServiceEvent struct {
 func (x *RayServiceEvent) Reset() {
 	*x = RayServiceEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_serve_proto_msgTypes[16]
+		mi := &file_serve_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1236,7 +1321,7 @@ func (x *RayServiceEvent) String() string {
 func (*RayServiceEvent) ProtoMessage() {}
 
 func (x *RayServiceEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_serve_proto_msgTypes[16]
+	mi := &file_serve_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1249,7 +1334,7 @@ func (x *RayServiceEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RayServiceEvent.ProtoReflect.Descriptor instead.
 func (*RayServiceEvent) Descriptor() ([]byte, []int) {
-	return file_serve_proto_rawDescGZIP(), []int{16}
+	return file_serve_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RayServiceEvent) GetId() string {
@@ -1333,7 +1418,7 @@ type WorkerGroupUpdateSpec struct {
 func (x *WorkerGroupUpdateSpec) Reset() {
 	*x = WorkerGroupUpdateSpec{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_serve_proto_msgTypes[17]
+		mi := &file_serve_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1346,7 +1431,7 @@ func (x *WorkerGroupUpdateSpec) String() string {
 func (*WorkerGroupUpdateSpec) ProtoMessage() {}
 
 func (x *WorkerGroupUpdateSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_serve_proto_msgTypes[17]
+	mi := &file_serve_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1359,7 +1444,7 @@ func (x *WorkerGroupUpdateSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerGroupUpdateSpec.ProtoReflect.Descriptor instead.
 func (*WorkerGroupUpdateSpec) Descriptor() ([]byte, []int) {
-	return file_serve_proto_rawDescGZIP(), []int{17}
+	return file_serve_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *WorkerGroupUpdateSpec) GetGroupName() string {
@@ -1546,17 +1631,17 @@ var file_serve_proto_rawDesc = []byte{
 	0x63, 0x74, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0c, 0x67, 0x70, 0x75, 0x73,
 	0x50, 0x65, 0x72, 0x41, 0x63, 0x74, 0x6f, 0x72, 0x12, 0x28, 0x0a, 0x10, 0x6d, 0x65, 0x6d, 0x6f,
 	0x72, 0x79, 0x5f, 0x70, 0x65, 0x72, 0x5f, 0x61, 0x63, 0x74, 0x6f, 0x72, 0x18, 0x04, 0x20, 0x01,
-	0x28, 0x05, 0x52, 0x0e, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72, 0x41, 0x63, 0x74,
+	0x28, 0x04, 0x52, 0x0e, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72, 0x41, 0x63, 0x74,
 	0x6f, 0x72, 0x12, 0x40, 0x0a, 0x1d, 0x6f, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x5f, 0x73, 0x74, 0x6f,
 	0x72, 0x65, 0x5f, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x5f, 0x70, 0x65, 0x72, 0x5f, 0x61, 0x63,
-	0x74, 0x6f, 0x72, 0x18, 0x05, 0x20, 0x01, 0x28, 0x05, 0x52, 0x19, 0x6f, 0x62, 0x6a, 0x65, 0x63,
+	0x74, 0x6f, 0x72, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x19, 0x6f, 0x62, 0x6a, 0x65, 0x63,
 	0x74, 0x53, 0x74, 0x6f, 0x72, 0x65, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72, 0x41,
 	0x63, 0x74, 0x6f, 0x72, 0x12, 0x27, 0x0a, 0x0f, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x5f, 0x72,
 	0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x63,
 	0x75, 0x73, 0x74, 0x6f, 0x6d, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x12, 0x2b, 0x0a,
 	0x11, 0x61, 0x63, 0x63, 0x63, 0x65, 0x6c, 0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x5f, 0x74, 0x79,
 	0x70, 0x65, 0x18, 0x07, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x61, 0x63, 0x63, 0x63, 0x65, 0x6c,
-	0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x54, 0x79, 0x70, 0x65, 0x22, 0x81, 0x04, 0x0a, 0x10, 0x52,
+	0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x54, 0x79, 0x70, 0x65, 0x22, 0xda, 0x04, 0x0a, 0x10, 0x52,
 	0x61, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12,
 	0x2d, 0x0a, 0x12, 0x61, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x73,
 	0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x11, 0x61, 0x70, 0x70,
@@ -1584,11 +1669,28 @@ var file_serve_proto_rawDesc = []byte{
 	0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x61, 0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x53, 0x74,
 	0x61, 0x74, 0x75, 0x73, 0x2e, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x45, 0x6e, 0x64, 0x70,
 	0x6f, 0x69, 0x6e, 0x74, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0f, 0x73, 0x65, 0x72, 0x76, 0x69,
-	0x63, 0x65, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x1a, 0x42, 0x0a, 0x14, 0x53, 0x65,
-	0x72, 0x76, 0x69, 0x63, 0x65, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x45, 0x6e, 0x74,
-	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x72,
+	0x63, 0x65, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x12, 0x57, 0x0a, 0x18, 0x73, 0x65,
+	0x72, 0x76, 0x65, 0x5f, 0x61, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f,
+	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x08, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x72, 0x76, 0x65, 0x41, 0x70, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x16, 0x73, 0x65, 0x72,
+	0x76, 0x65, 0x41, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x1a, 0x42, 0x0a, 0x14, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x45, 0x6e,
+	0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b,
+	0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a,
+	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xb4, 0x01, 0x0a, 0x16, 0x53, 0x65, 0x72, 0x76,
+	0x65, 0x41, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74,
+	0x75, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x18,
+	0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x54, 0x0a, 0x17, 0x73, 0x65, 0x72, 0x76,
+	0x65, 0x5f, 0x64, 0x65, 0x70, 0x6c, 0x6f, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2e, 0x53, 0x65, 0x72, 0x76, 0x65, 0x44, 0x65, 0x70, 0x6c, 0x6f, 0x79, 0x6d, 0x65, 0x6e,
+	0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x15, 0x73, 0x65, 0x72, 0x76, 0x65, 0x44, 0x65,
+	0x70, 0x6c, 0x6f, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x72,
 	0x0a, 0x15, 0x53, 0x65, 0x72, 0x76, 0x65, 0x44, 0x65, 0x70, 0x6c, 0x6f, 0x79, 0x6d, 0x65, 0x6e,
 	0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x27, 0x0a, 0x0f, 0x64, 0x65, 0x70, 0x6c, 0x6f,
 	0x79, 0x6d, 0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
@@ -1710,7 +1812,7 @@ func file_serve_proto_rawDescGZIP() []byte {
 	return file_serve_proto_rawDescData
 }
 
-var file_serve_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_serve_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_serve_proto_goTypes = []interface{}{
 	(*CreateRayServiceRequest)(nil),        // 0: proto.CreateRayServiceRequest
 	(*UpdateRayServiceRequest)(nil),        // 1: proto.UpdateRayServiceRequest
@@ -1727,54 +1829,57 @@ var file_serve_proto_goTypes = []interface{}{
 	(*ServeConfig)(nil),                    // 12: proto.ServeConfig
 	(*ActorOptions)(nil),                   // 13: proto.ActorOptions
 	(*RayServiceStatus)(nil),               // 14: proto.RayServiceStatus
-	(*ServeDeploymentStatus)(nil),          // 15: proto.ServeDeploymentStatus
-	(*RayServiceEvent)(nil),                // 16: proto.RayServiceEvent
-	(*WorkerGroupUpdateSpec)(nil),          // 17: proto.WorkerGroupUpdateSpec
-	nil,                                    // 18: proto.RayServiceStatus.ServiceEndpointEntry
-	(*ClusterSpec)(nil),                    // 19: proto.ClusterSpec
-	(*timestamppb.Timestamp)(nil),          // 20: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 21: google.protobuf.Empty
+	(*ServeApplicationStatus)(nil),         // 15: proto.ServeApplicationStatus
+	(*ServeDeploymentStatus)(nil),          // 16: proto.ServeDeploymentStatus
+	(*RayServiceEvent)(nil),                // 17: proto.RayServiceEvent
+	(*WorkerGroupUpdateSpec)(nil),          // 18: proto.WorkerGroupUpdateSpec
+	nil,                                    // 19: proto.RayServiceStatus.ServiceEndpointEntry
+	(*ClusterSpec)(nil),                    // 20: proto.ClusterSpec
+	(*timestamppb.Timestamp)(nil),          // 21: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 22: google.protobuf.Empty
 }
 var file_serve_proto_depIdxs = []int32{
 	10, // 0: proto.CreateRayServiceRequest.service:type_name -> proto.RayService
 	10, // 1: proto.UpdateRayServiceRequest.service:type_name -> proto.RayService
 	3,  // 2: proto.UpdateRayServiceConfigsRequest.update_service:type_name -> proto.UpdateRayServiceBody
-	17, // 3: proto.UpdateRayServiceBody.worker_group_update_spec:type_name -> proto.WorkerGroupUpdateSpec
+	18, // 3: proto.UpdateRayServiceBody.worker_group_update_spec:type_name -> proto.WorkerGroupUpdateSpec
 	11, // 4: proto.UpdateRayServiceBody.serve_deployment_graph_spec:type_name -> proto.ServeDeploymentGraphSpec
 	10, // 5: proto.ListRayServicesResponse.services:type_name -> proto.RayService
 	10, // 6: proto.ListAllRayServicesResponse.services:type_name -> proto.RayService
 	11, // 7: proto.RayService.serve_deployment_graph_spec:type_name -> proto.ServeDeploymentGraphSpec
-	19, // 8: proto.RayService.cluster_spec:type_name -> proto.ClusterSpec
+	20, // 8: proto.RayService.cluster_spec:type_name -> proto.ClusterSpec
 	14, // 9: proto.RayService.ray_service_status:type_name -> proto.RayServiceStatus
-	20, // 10: proto.RayService.created_at:type_name -> google.protobuf.Timestamp
-	20, // 11: proto.RayService.delete_at:type_name -> google.protobuf.Timestamp
+	21, // 10: proto.RayService.created_at:type_name -> google.protobuf.Timestamp
+	21, // 11: proto.RayService.delete_at:type_name -> google.protobuf.Timestamp
 	12, // 12: proto.ServeDeploymentGraphSpec.serve_configs:type_name -> proto.ServeConfig
 	13, // 13: proto.ServeConfig.actor_options:type_name -> proto.ActorOptions
-	15, // 14: proto.RayServiceStatus.serve_deployment_status:type_name -> proto.ServeDeploymentStatus
-	16, // 15: proto.RayServiceStatus.ray_service_events:type_name -> proto.RayServiceEvent
-	18, // 16: proto.RayServiceStatus.service_endpoint:type_name -> proto.RayServiceStatus.ServiceEndpointEntry
-	20, // 17: proto.RayServiceEvent.created_at:type_name -> google.protobuf.Timestamp
-	20, // 18: proto.RayServiceEvent.first_timestamp:type_name -> google.protobuf.Timestamp
-	20, // 19: proto.RayServiceEvent.last_timestamp:type_name -> google.protobuf.Timestamp
-	0,  // 20: proto.RayServeService.CreateRayService:input_type -> proto.CreateRayServiceRequest
-	1,  // 21: proto.RayServeService.UpdateRayService:input_type -> proto.UpdateRayServiceRequest
-	2,  // 22: proto.RayServeService.UpdateRayServiceConfigs:input_type -> proto.UpdateRayServiceConfigsRequest
-	4,  // 23: proto.RayServeService.GetRayService:input_type -> proto.GetRayServiceRequest
-	5,  // 24: proto.RayServeService.ListRayServices:input_type -> proto.ListRayServicesRequest
-	7,  // 25: proto.RayServeService.ListAllRayServices:input_type -> proto.ListAllRayServicesRequest
-	9,  // 26: proto.RayServeService.DeleteRayService:input_type -> proto.DeleteRayServiceRequest
-	10, // 27: proto.RayServeService.CreateRayService:output_type -> proto.RayService
-	10, // 28: proto.RayServeService.UpdateRayService:output_type -> proto.RayService
-	10, // 29: proto.RayServeService.UpdateRayServiceConfigs:output_type -> proto.RayService
-	10, // 30: proto.RayServeService.GetRayService:output_type -> proto.RayService
-	6,  // 31: proto.RayServeService.ListRayServices:output_type -> proto.ListRayServicesResponse
-	8,  // 32: proto.RayServeService.ListAllRayServices:output_type -> proto.ListAllRayServicesResponse
-	21, // 33: proto.RayServeService.DeleteRayService:output_type -> google.protobuf.Empty
-	27, // [27:34] is the sub-list for method output_type
-	20, // [20:27] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	16, // 14: proto.RayServiceStatus.serve_deployment_status:type_name -> proto.ServeDeploymentStatus
+	17, // 15: proto.RayServiceStatus.ray_service_events:type_name -> proto.RayServiceEvent
+	19, // 16: proto.RayServiceStatus.service_endpoint:type_name -> proto.RayServiceStatus.ServiceEndpointEntry
+	15, // 17: proto.RayServiceStatus.serve_application_status:type_name -> proto.ServeApplicationStatus
+	16, // 18: proto.ServeApplicationStatus.serve_deployment_status:type_name -> proto.ServeDeploymentStatus
+	21, // 19: proto.RayServiceEvent.created_at:type_name -> google.protobuf.Timestamp
+	21, // 20: proto.RayServiceEvent.first_timestamp:type_name -> google.protobuf.Timestamp
+	21, // 21: proto.RayServiceEvent.last_timestamp:type_name -> google.protobuf.Timestamp
+	0,  // 22: proto.RayServeService.CreateRayService:input_type -> proto.CreateRayServiceRequest
+	1,  // 23: proto.RayServeService.UpdateRayService:input_type -> proto.UpdateRayServiceRequest
+	2,  // 24: proto.RayServeService.UpdateRayServiceConfigs:input_type -> proto.UpdateRayServiceConfigsRequest
+	4,  // 25: proto.RayServeService.GetRayService:input_type -> proto.GetRayServiceRequest
+	5,  // 26: proto.RayServeService.ListRayServices:input_type -> proto.ListRayServicesRequest
+	7,  // 27: proto.RayServeService.ListAllRayServices:input_type -> proto.ListAllRayServicesRequest
+	9,  // 28: proto.RayServeService.DeleteRayService:input_type -> proto.DeleteRayServiceRequest
+	10, // 29: proto.RayServeService.CreateRayService:output_type -> proto.RayService
+	10, // 30: proto.RayServeService.UpdateRayService:output_type -> proto.RayService
+	10, // 31: proto.RayServeService.UpdateRayServiceConfigs:output_type -> proto.RayService
+	10, // 32: proto.RayServeService.GetRayService:output_type -> proto.RayService
+	6,  // 33: proto.RayServeService.ListRayServices:output_type -> proto.ListRayServicesResponse
+	8,  // 34: proto.RayServeService.ListAllRayServices:output_type -> proto.ListAllRayServicesResponse
+	22, // 35: proto.RayServeService.DeleteRayService:output_type -> google.protobuf.Empty
+	29, // [29:36] is the sub-list for method output_type
+	22, // [22:29] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_serve_proto_init() }
@@ -1965,7 +2070,7 @@ func file_serve_proto_init() {
 			}
 		}
 		file_serve_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ServeDeploymentStatus); i {
+			switch v := v.(*ServeApplicationStatus); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1977,7 +2082,7 @@ func file_serve_proto_init() {
 			}
 		}
 		file_serve_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RayServiceEvent); i {
+			switch v := v.(*ServeDeploymentStatus); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1989,6 +2094,18 @@ func file_serve_proto_init() {
 			}
 		}
 		file_serve_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RayServiceEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_serve_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkerGroupUpdateSpec); i {
 			case 0:
 				return &v.state
@@ -2007,7 +2124,7 @@ func file_serve_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_serve_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

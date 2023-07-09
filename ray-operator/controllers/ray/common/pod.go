@@ -104,8 +104,7 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1alpha1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1alpha1.HeadNode, headPort, "")
-	headSpec.RayStartParams = setAgentListPortStartParams(instance, headSpec.RayStartParams)
+	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1alpha1.HeadNode, headPort, "", instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
 	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
@@ -248,8 +247,7 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1alpha1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
-	workerSpec.RayStartParams = setAgentListPortStartParams(instance, workerSpec.RayStartParams)
+	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -549,14 +547,13 @@ func labelPod(rayNodeType rayv1alpha1.RayNodeType, rayClusterName string, groupN
 	}
 
 	ret = map[string]string{
-		RayNodeLabelKey:                    "yes",
-		RayClusterLabelKey:                 rayClusterName,
-		RayNodeTypeLabelKey:                string(rayNodeType),
-		RayNodeGroupLabelKey:               groupName,
-		RayIDLabelKey:                      utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
-		KubernetesApplicationNameLabelKey:  ApplicationName,
-		KubernetesCreatedByLabelKey:        ComponentName,
-		RayClusterDashboardServiceLabelKey: utils.GenerateDashboardAgentLabel(rayClusterName),
+		RayNodeLabelKey:                   "yes",
+		RayClusterLabelKey:                rayClusterName,
+		RayNodeTypeLabelKey:               string(rayNodeType),
+		RayNodeGroupLabelKey:              groupName,
+		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		KubernetesApplicationNameLabelKey: ApplicationName,
+		KubernetesCreatedByLabelKey:       ComponentName,
 	}
 
 	for k, v := range ret {
@@ -687,6 +684,10 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 			container.Env = append(container.Env, gcsTimeout)
 		}
 	}
+	if !envVarExists(RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
+		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
+		container.Env = append(container.Env, v1.EnvVar{Name: RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})
+	}
 }
 
 func envVarExists(envName string, envVars []v1.EnvVar) bool {
@@ -698,8 +699,7 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 	return false
 }
 
-// TODO auto complete params
-func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1alpha1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1alpha1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
 	// Note: The argument headPort is unused for nodeType == rayv1alpha1.HeadNode.
 	if nodeType == rayv1alpha1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
@@ -725,23 +725,19 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1al
 		}
 	}
 
-	// add metrics port for expose the metrics to the prometheus.
+	// Add a metrics port to expose the metrics to Prometheus.
 	if _, ok := rayStartParams["metrics-export-port"]; !ok {
 		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
 	}
 
-	// add --block option. See https://github.com/ray-project/kuberay/pull/675
+	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
 	if _, ok := rayStartParams["block"]; !ok {
 		rayStartParams["block"] = "true"
 	}
 
-	return rayStartParams
-}
-
-func setAgentListPortStartParams(instance rayv1alpha1.RayCluster, rayStartParams map[string]string) (completeStartParams map[string]string) {
-	// add dashboard listen port for serve endpoints to RayService.
+	// Add dashboard listen port for RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		if value, ok := instance.Annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
+		if value, ok := annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
 			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}

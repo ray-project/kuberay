@@ -359,6 +359,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, RAY_ADDRESS, "127.0.0.1:6379")
 	checkContainerEnv(t, rayContainer, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -410,6 +411,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
 	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
@@ -957,23 +959,23 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 
 	// Case 1: Head node with no address option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.NotContains(t, rayStartParams, "address", "Head node should not have an address option set by default.")
 
 	// Case 2: Head node with custom address option set.
 	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
 
 	// Case 3: Worker node with no address option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 	assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
 
 	// Case 4: Worker node with custom address option set.
 	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
 }
 
@@ -988,22 +990,22 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 
 	// Case 1: Head node with no metrics-export-port option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 2: Head node with custom metrics-export-port option set.
 	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 3: Worker node with no metrics-export-port option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 4: Worker node with custom metrics-export-port option set.
 	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
 }
 
@@ -1017,22 +1019,22 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 
 	// Case 1: Head node with no --block option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
 
 	// Case 2: Head node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 
 	// Case 3: Worker node with no --block option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
 
 	// Case 4: Worker node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
 
@@ -1044,24 +1046,62 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 
 	// Case 1: Head node with no dashboard-host option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
 
 	// Case 2: Head node with dashboard-host option set.
 	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "")
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
 
 	// Case 3: Worker node with no dashboard-host option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.NotContains(t, rayStartParams, "dashboard-host", "workers should not have an dashboard-host option set.")
 
 	// Case 4: Worker node with dashboard-host option set.
 	// To maximize user empowerment, this option can be enabled. However, it is important to note that the dashboard is not available on worker nodes.
 	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP)
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+}
+
+func TestSetMissingRayStartParamsAgentListenPort(t *testing.T) {
+	// The "dashboard-agent-listen-port" port will be automatically injected into RayStartParams with a default
+	// value of 52365 (i.e., DefaultDashboardAgentListenPort) when the annotation "ray.io/enableAgentService"
+	// is set to true. The behavior is the same for both head and workers.
+	headPort := "6379"
+	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+	rayStartParams := map[string]string{}
+	annotaions := map[string]string{}
+
+	// Case 1: Head node without "ray.io/enableAgentService=true".
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", annotaions)
+	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Head Pod should not have a dashboard-agent-listen-port option set by default.")
+
+	// Case 2: Worker node without "ray.io/enableAgentService=true".
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, annotaions)
+	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Worker Pod should not have a dashboard-agent-listen-port option set by default.")
+
+	// Case 3: Head node with "ray.io/enableAgentService=true" and users do not provide "dashboard-agent-listen-port".
+	annotaions = map[string]string{EnableAgentServiceKey: EnableAgentServiceTrue}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", annotaions)
+	assert.Equal(t, fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
+
+	// Case 4: Worker node with "ray.io/enableAgentService=true" and users do not provide "dashboard-agent-listen-port".
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, annotaions)
+	assert.Equal(t, fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
+
+	// Case 5: Head node with "ray.io/enableAgentService=true" and users provide "dashboard-agent-listen-port".
+	customDashboardAgentListenPort := DefaultDashboardAgentListenPort + 1
+	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.HeadNode, headPort, "", annotaions)
+	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
+
+	// Case 6: Worker node with "ray.io/enableAgentService=true" and users provide "dashboard-agent-listen-port".
+	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
+	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1alpha1.WorkerNode, headPort, fqdnRayIP, annotaions)
+	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
 }
 
 func TestGetCustomWorkerInitImage(t *testing.T) {
