@@ -6,6 +6,7 @@ If you don't find an answer to your question here, please don't hesitate to conn
 ## Contents
 - [Worker Init Container](#worker-init-container)
 - [cluster domain](#cluster-domain)
+- [RayService](#rayservice)
 
 ### Worker Init Container
 
@@ -25,6 +26,11 @@ The cluster domain plays a critical role in service discovery and inter-service 
 Related questions:
 - [How can I set a custom cluster domain if mine is not `cluster.local`?](#how-can-i-set-a-custom-cluster-domain-if-mine-is-not-clusterlocal)
 
+### RayService
+
+RayService is a Custom Resource Definition (CRD) designed for Ray Serve. In KubeRay, creating a RayService will first create a RayCluster and then
+create Ray Serve applications once the RayCluster is ready. If the issue pertains to the data plane, specifically your Ray Serve scripts 
+or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. See [rayservice-troubleshooting](https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md) for more details.
 
 ## Questions
 
