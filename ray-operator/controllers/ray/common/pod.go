@@ -219,15 +219,14 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 								break
 							fi
 							echo "$SECONDS seconds elapsed: Waiting for GCS to be ready."
-							sleep 5
 						else
 							if ray health-check --address %s:%s; then
 								echo "GCS is ready. Any error messages above can be safely ignored."
 								break
 							fi
 							echo "$SECONDS seconds elapsed: Still waiting for GCS to be ready. For troubleshooting, refer to the FAQ at https://github.com/ray-project/kuberay/blob/master/docs/guidance/FAQ.md."
-							sleep 5		
 						fi
+						sleep 5		
 					done
 				`, fqdnRayIP, headPort, fqdnRayIP, headPort),
 			},
