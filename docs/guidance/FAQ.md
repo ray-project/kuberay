@@ -3,56 +3,57 @@
 Welcome to the Frequently Asked Questions page for KubeRay. This document addresses common inquiries.
 If you don't find an answer to your question here, please don't hesitate to connect with us via our [community channels](https://github.com/ray-project/kuberay#getting-involved).
 
-## Contents
+# Contents
 - [Worker Init Container](#worker-init-container)
 - [cluster domain](#cluster-domain)
 - [RayService](#rayservice)
 
-### Worker Init Container
+## Worker init container
 
-When starting a RayCluster, the worker Pod needs to wait until the head Pod is started in order to connect to the head successfully.
-To achieve this, the KubeRay operator will automatically inject an [init container](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) into the worker Pod to wait for the head Pod to be ready before starting the worker container. The init container will continuously check if the head's GCS server is ready or not.
+The KubeRay operator will inject a default [init container](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) into every worker Pod. 
+This init container is responsible for waiting until the Global Control Service (GCS) on the head Pod is ready before establishing a connection to the head.
+The init container will use `ray health-check` to check the GCS server status continuously.
 
-Related questions:
-- [Why are my worker Pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?](#why-are-my-worker-pods-stuck-in-init01-status-how-can-i-troubleshoot-the-worker-init-container)
-- [I do not want to use the default worker init container, how can I disable the auto-injection and add my own?](#i-do-not-want-to-use-the-default-worker-init-container-how-can-i-disable-the-auto-injection-and-add-my-own)
+The default worker init container may not work for all use cases, or users may want to customize the init container.
 
-### Cluster Domain
+### 1. Init container troubleshooting
 
-Each Kubernetes cluster is assigned a unique cluster domain during installation. This domain helps differentiate between names local to the cluster and external names. The `cluster_domain` can be customized as outlined in the [Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/#introduction). The default value for `cluster_domain` is `cluster.local`.
+Some common causes for the worker init container to stuck in `Init:0/1` status are:
 
-The cluster domain plays a critical role in service discovery and inter-service communication within the cluster. It is part of the Fully Qualified Domain Name (FQDN) for services within the cluster. See [here](https://github.com/kubernetes/website/blob/main/content/en/docs/concepts/services-networking/dns-pod-service.md#aaaaa-records-1) for examples. In the context of KubeRay, workers use the FQDN of the head service to establish a connection to the head.
+* The GCS server process has failed in the head Pod. Please inspect the log directory `/tmp/ray/session_latest/logs/` in the head Pod for errors related to the GCS server.
+* The `ray` executable is not included in the `$PATH` for the image, so the init container will fail to run `ray health-check`.
+* The `CLUSTER_DOMAIN` environment variable is not set correctly. See the section [cluster domain](#cluster-domain) for more details.
+* The worker init container shares the same ***ImagePullPolicy***, ***SecurityContext***, ***Env***, ***VolumeMounts***, and ***Resources*** as the worker Pod template. Sharing these settings is possible to cause a deadlock. See [#1130](https://github.com/ray-project/kuberay/issues/1130) for more details.
 
-Related questions:
-- [How can I set a custom cluster domain if mine is not `cluster.local`?](#how-can-i-set-a-custom-cluster-domain-if-mine-is-not-clusterlocal)
+If the init container remains stuck in `Init:0/1` status for 2 minutes, we will stop redirecting the output messages to `/dev/null` and instead print them to the worker Pod logs.
+To troubleshoot further, you can inspect the logs using `kubectl logs`.
 
-### RayService
+### 2. Disable the init container injection
+
+If you want to customize the worker init container, you can disable the init container injection and add your own.
+To disable the injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the KubeRay operator to `false` (applicable from KubeRay v0.5.2).
+Please refer to [#1069](https://github.com/ray-project/kuberay/pull/1069) and the [KubeRay Helm chart](https://github.com/ray-project/kuberay/blob/ddb5e528c29c2e1fb80994f05b1bd162ecbaf9f2/helm-chart/kuberay-operator/values.yaml#L83-L87) for instructions on how to set the environment variable.
+Once disabled, you can add your custom init container to the worker Pod template.
+
+## Cluster domain
+
+In KubeRay, we use Fully Qualified Domain Names (FQDNs) to establish connections between workers and the head.
+The FQDN of the head service is `${HEAD_SVC}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}`.
+The default [cluster domain](https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/#introduction) is `cluster.local`, which works for most Kubernetes clusters.
+However, it's important to note that some clusters may have a different cluster domain.
+You can check the cluster domain of your Kubernetes cluster by checking `/etc/resolv.conf` in a Pod.
+
+To set a custom cluster domain, adjust the `CLUSTER_DOMAIN` environment variable in the KubeRay operator.
+Helm chart users can make this modification [here](https://github.com/ray-project/kuberay/blob/ddb5e528c29c2e1fb80994f05b1bd162ecbaf9f2/helm-chart/kuberay-operator/values.yaml#L88-L91).
+For more information, please refer to [#951](https://github.com/ray-project/kuberay/pull/951) and [#938](https://github.com/ray-project/kuberay/pull/938) for more details.
+
+## RayService
 
 RayService is a Custom Resource Definition (CRD) designed for Ray Serve. In KubeRay, creating a RayService will first create a RayCluster and then
 create Ray Serve applications once the RayCluster is ready. If the issue pertains to the data plane, specifically your Ray Serve scripts 
 or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. See [rayservice-troubleshooting](https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md) for more details.
 
 ## Questions
-
-### Why are my worker Pods stuck in `Init:0/1` status, how can I troubleshoot the worker init container?
-
-Worker Pods might be stuck in `Init:0/1` status for several reasons. The default worker init container only progresses when the GCS server in the head Pod is ready. Here are some common causes for the issue:
-- The GCS server process failed in the head Pod. Inspect the head Pod logs for errors related to the GCS server.
-- Ray is not included in the `$PATH` in the worker init container. The init container uses `ray health-check` to check the GCS server status.
-- The cluster domain is not set correctly. See [cluster-domain](#cluster-domain) for more details. The init container uses the Fully Qualified Domain Name (FQDN) of the head service to connect to the GCS server.
-- The worker init container shares the same ImagePullPolicy, SecurityContext, Env, VolumeMounts, and Resources as the worker Pod template. Any setting requiring a sidecar container could lead to a deadlock. Refer to [issue 1130](https://github.com/ray-project/kuberay/issues/1130) for additional details.
-
-If none of the above reasons apply, you can troubleshoot by disabling the default worker init container injection and adding your test init container to the worker Pod template.
-
-
-### I do not want to use the default worker init container, how can I disable the auto-injection and add my own?
-
-The default worker init container is used to wait for the GCS server in the head Pod to be ready. It is defined [here](https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/common/pod.go#L207). To disable the injection, set the `ENABLE_INIT_CONTAINER_INJECTION` environment variable in the KubeRay operator to `false` (applicable only for versions after 0.5.0). Helm chart users can make this change [here](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/values.yaml#L74). Once disabled, you can add your custom init container to the worker Pod template. More details can be found in [PR 1069](https://github.com/ray-project/kuberay/pull/1069).
-
-
-### How can I set the custom cluster domain if mine is not `cluster.local`?
-
-To set a custom cluster domain, adjust the `CLUSTER_DOMAIN` environment variable in the KubeRay operator. Helm chart users can make this modification [here](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/values.yaml#L78).
 
 ### Why are my changes to RayCluster/RayJob CR not taking effect?
 
