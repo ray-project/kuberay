@@ -197,12 +197,12 @@ func (in *RayActorOptionSpec) DeepCopyInto(out *RayActorOptionSpec) {
 	}
 	if in.Memory != nil {
 		in, out := &in.Memory, &out.Memory
-		*out = new(int32)
+		*out = new(uint64)
 		**out = **in
 	}
 	if in.ObjectStoreMemory != nil {
 		in, out := &in.ObjectStoreMemory, &out.ObjectStoreMemory
-		*out = new(int32)
+		*out = new(uint64)
 		**out = **in
 	}
 }
@@ -428,6 +428,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		for key, val := range *in {
 			(*out)[key] = val
 		}
+	}
+	if in.SubmitterPodTemplate != nil {
+		in, out := &in.SubmitterPodTemplate, &out.SubmitterPodTemplate
+		*out = new(v1.PodTemplateSpec)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

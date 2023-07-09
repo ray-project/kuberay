@@ -3,8 +3,10 @@ module github.com/ray-project/kuberay/ray-operator
 go 1.17
 
 require (
+	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/go-logr/logr v1.2.0
 	github.com/go-logr/zapr v1.2.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/jarcoal/httpmock v1.2.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0

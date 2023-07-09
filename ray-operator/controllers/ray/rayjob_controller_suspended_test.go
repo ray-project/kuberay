@@ -33,6 +33,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
+	batchv1 "k8s.io/api/batch/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,6 +43,7 @@ var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 	var headPods corev1.PodList
+
 	mySuspendedRayCluster := &rayv1alpha1.RayCluster{}
 
 	mySuspendedRayJob := &rayv1alpha1.RayJob{
@@ -265,6 +268,17 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(pod.Status.Phase).Should(Or(Equal(corev1.PodPending)))
 		})
 
+		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			Eventually(
+				// k8sClient client throws error if resource not found
+				func() bool {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: mySuspendedRayJob.Name, Namespace: "default"}, underlyingK8sJob)()
+					return errors.IsNotFound(err)
+				},
+				time.Second*10, time.Millisecond*500).Should(BeTrue())
+		})
+
 		It("should be able to update all Pods to Running", func() {
 			// We need to manually update Pod statuses otherwise they'll always be Pending.
 			// envtest doesn't create a full K8s cluster. It's only the control plane.
@@ -298,6 +312,17 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getDashboardURLForRayJob(ctx, mySuspendedRayJob),
 				time.Second*3, time.Millisecond*500).Should(HavePrefix(mySuspendedRayJob.Name), "Dashboard URL = %v", mySuspendedRayJob.Status.DashboardURL)
+		})
+
+		It("should create the underlying Kubernetes Job object", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			// The underlying Kubernetes Job should be created when the RayJob is created
+			Eventually(
+				// k8sClient does not throw error if Job is found
+				func() error {
+					return getResourceFunc(ctx, client.ObjectKey{Name: mySuspendedRayJob.Name, Namespace: "default"}, underlyingK8sJob)()
+				},
+				time.Second*15, time.Millisecond*500).Should(BeNil(), "Expected Kubernetes job to be present")
 		})
 	})
 })

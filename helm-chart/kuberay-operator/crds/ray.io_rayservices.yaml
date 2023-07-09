@@ -12113,14 +12113,14 @@ spec:
                             acceleratorType:
                               type: string
                             memory:
-                              format: int32
+                              format: int64
                               type: integer
                             numCpus:
                               type: number
                             numGpus:
                               type: number
                             objectStoreMemory:
-                              format: int32
+                              format: int64
                               type: integer
                             resources:
                               type: string
