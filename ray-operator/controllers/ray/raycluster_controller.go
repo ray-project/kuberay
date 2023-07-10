@@ -67,23 +67,20 @@ func getClusterType(logger logr.Logger) bool {
 			if err != nil {
 				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
 				return false
-			} else {
-				for i := 0; i < len(apiGroupList.Groups); i++ {
-					if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
-						logger.Info("We detected being on OpenShift!")
-						return true
-					}
-				}
-				return false
 			}
-		} else {
-			logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
+			for i := 0; i < len(apiGroupList.Groups); i++ {
+				if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
+					logger.Info("We detected being on OpenShift!")
+					return true
+				}
+			}
 			return false
 		}
-	} else {
-		logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
 		return false
 	}
+	logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+	return false
 }
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -285,7 +282,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	if r.IsOpenShift {
 		// This is OpenShift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
-	} else {
+	} else{
 		// plain vanilla kubernetes - create ingress
 		return r.reconcileIngressKubernetes(ctx, instance)
 	}
@@ -394,7 +391,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			r.Log.Info("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
-			return fmt.Errorf("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
+			return fmt.Errorf("ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
 		}
 
 		if err != nil {
