@@ -43,7 +43,13 @@ ray-operator-75dbbf8587-5lrvn   1/1     Running   0          31s
 
 In this guide we will be working with the sample RayService defined by [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml).
 
-Let's first take a look at the Ray Serve config embedded in the RayService yaml. At a high level (without digging too deep into the details about the deployments in each application), there are two applications: a fruit stand app and a calculator app. The fruit stand application is imported from the `fruit.py` file in the [test_dag](https://github.com/ray-project/test_dag/tree/master) repo, and it's hosted at the route prefix `/fruit`. Similarly, the calculator app is imported from the `conditional_dag.py` file in the same repo, and it's hosted at the route prefix `/calc`.
+Let's first take a look at the Ray Serve config embedded in the RayService yaml. At a high level, there are two applications: a fruit stand app and a calculator app. Some details about the fruit stand application:
+* The fruit stand application is contained in the `deployment_graph` variable in `fruit.py` in the [test_dag](https://github.com/ray-project/test_dag/tree/41d09119cbdf8450599f993f51318e9e27c59098) repo, so `import_path` in the config points to this variable to tell Serve from where to import the application.
+* It is hosted at the route prefix `/fruit`, meaning HTTP requests with routes that start with the prefix `/fruit` will be sent to the fruit stand application.
+* The working directory points to the [test_dag](https://github.com/ray-project/test_dag/tree/41d09119cbdf8450599f993f51318e9e27c59098) repo, which will be downloaded at runtime, and your application will be started in this directory. See the [Runtime Environment Documentation](https://docs.ray.io/en/latest/ray-core/handling-dependencies.html#runtime-environments) for more details.
+* For more details on configuring Ray Serve deployments, see the [Ray Serve Documentation](https://docs.ray.io/en/master/serve/configure-serve-deployment.html).
+
+Similarly, the calculator app is imported from the `conditional_dag.py` file in the same repo, and it's hosted at the route prefix `/calc`.
 ```yaml
 serveConfigV2: |
   applications:
@@ -155,10 +161,11 @@ $ kubectl port-forward service/rayservice-sample-head-svc 8265
 ```
 Access the dashboard using a web browser at `localhost:8265`.
 
-### Update Ray Serve config
+### Upgrade RayService Using In-Place Update
 
-You can update the applications in the `serveConfigV2` in your RayService config file.
-For example, update the price of mangos from `3` to `4` for the fruit app in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml):
+You can update the configurations for the applications by modifying `serveConfigV2` in the RayService config file. Re-applying the modified config with `kubectl apply` will re-apply the new configurations to the existing Serve cluster.
+
+Let's try it out. Update the price of mangos from `3` to `4` for the fruit stand app in [ray_v1alpha1_rayservice.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayservice.yaml). This will reconfigure the existing MangoStand deployment, and future requests will use the updated Mango price.
 ```shell
 - name: MangoStand
   num_replicas: 1
