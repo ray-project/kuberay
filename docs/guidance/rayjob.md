@@ -1,15 +1,16 @@
-## Ray Job (alpha)
+# Ray Job (alpha)
 
 > Note: This is the alpha version of Ray Job Support in KubeRay. There will be ongoing improvements for Ray Job in the future releases.
 
-### Prerequisites
+## Prerequisites
 
 * Ray 1.10 or higher
 * KubeRay v0.3.0+. (v0.5.0+ is recommended)
 
-### What is a RayJob?
+## What is a RayJob?
 
 A RayJob manages 2 things:
+
 * Ray Cluster: Manages resources in a Kubernetes cluster.
 * Job: Manages jobs in a Ray Cluster.
 
@@ -17,14 +18,13 @@ A RayJob manages 2 things:
 
 * **Kubernetes-native support for Ray clusters and Ray Jobs.** You can use a Kubernetes config to define a Ray cluster and job, and use `kubectl` to create them. The cluster can be deleted automatically once the job is finished.
 
-
-### Deploy KubeRay
+## Deploy KubeRay
 
 Make sure your KubeRay operator version is at least v0.3.0.
 The latest released KubeRay version is recommended.
 For installation instructions, please follow [the documentation](../deploy/installation.md).
 
-### Run an example Job
+## Run an example Job
 
 There is one example config file to deploy a RayJob included here:
 [ray_v1alpha1_rayjob.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray_v1alpha1_rayjob.yaml)
@@ -48,21 +48,23 @@ $ kubectl get rayclusters
 $ kubectl get pod
 ```
 
-### RayJob Configuration
+## RayJob Configuration
 
-- `entrypoint` - The shell command to run for this job. job_id.
-- `jobId` - _(Optional)_ Job ID to specify for the job. If not provided, one will be generated.
-- `metadata` - Arbitrary user-provided metadata for the job.
-- `runtimeEnv` - base64 string of the runtime json string.
-- `shutdownAfterJobFinishes` - whether to recycle the cluster after job finishes.
-- `ttlSecondsAfterFinished` - TTL to clean up the cluster. This only works if `shutdownAfterJobFinishes` is set.
+* `entrypoint` - The shell command to run for this job.
+* `rayClusterSpec` - The spec for the Ray cluster to run the job on.
+* `jobId` - _(Optional)_ Job ID to specify for the job. If not provided, one will be generated.
+* `metadata` - _(Optional)_ Arbitrary user-provided metadata for the job.
+* `runtimeEnv` - _(Optional)_ base64-encoded string of the runtime env json string.
+* `shutdownAfterJobFinishes` - _(Optional)_ whether to recycle the cluster after the job finishes.
+* `ttlSecondsAfterFinished` - _(Optional)_ TTL to clean up the cluster. This only works if `shutdownAfterJobFinishes` is set.
+* `submitterPodTemplate` - _(Optional)_ Pod template spec for the pod that runs `ray job submit` against the Ray cluster.
 
-### RayJob Observability
+## RayJob Observability
 
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
 You can also use `kubectl describe rayjobs rayjob-sample` to check the states and event logs of your RayJob instance:
 
-```
+```text
 Status:
   Dashboard URL:          rayjob-sample-raycluster-vnl8w-head-svc.ray-system.svc.cluster.local:8265
   End Time:               2022-07-24T02:04:56Z
@@ -88,9 +90,9 @@ Events:
   Normal  Deleted    15s   rayjob-controller  Deleted cluster rayjob-sample-raycluster-vnl8w
 ```
 
-
 If the job doesn't run successfully, the above `describe` command will provide information about that too:
-```
+
+```text
 Status:
   Dashboard URL:          rayjob-sample-raycluster-nrdm8-head-svc.ray-system.svc.cluster.local:8265
   End Time:               2022-07-24T02:01:39Z
@@ -118,9 +120,8 @@ Events:
   Normal  Deleted    58s   rayjob-controller  Deleted cluster rayjob-sample-raycluster-nrdm8
 ```
 
-
-### Delete the RayJob instance
+## Delete the RayJob instance
 
 ```shell
-$ kubectl delete -f config/samples/ray_v1alpha1_rayjob.yaml
+kubectl delete -f config/samples/ray_v1alpha1_rayjob.yaml
 ```
