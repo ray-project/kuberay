@@ -725,26 +725,33 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // It's return values should be interpreted as
 // (Serve app healthy?, Serve app ready?, error if any)
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
-	// If the unhealthySecondThreshold value is non-nil, then we will use that value.
-	// Otherwise, we will use the value ServiceUnhealthySecondThreshold which can be set in a test
-	// This is used for testing purposes.
+	// If the `unhealthySecondThreshold`` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
+	// which can be set in a test. This is used for testing purposes.
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
+	// TODO (kevin85421): Separate the logic for retrieving Serve application statuses from checking Serve application statuses into two separate functions.
+	// Currently, the handling logic for `isHealthy` and `isReady` between these two behaviors is inconsistent. This can cause potential issues in the future.
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
 	if serveConfigType == utils.SINGLE_APP {
 		var singleApplicationStatus *utils.ServeApplicationStatus
 		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
-			r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+			err = fmt.Errorf(
+				"Failed to get Serve deployment statuses from dashboard. "+
+					"If you observe this error consistently after the head Pod is ready, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+					"err: %v", err)
 			return false, false, err
 		}
 		serveAppStatuses = map[string]*utils.ServeApplicationStatus{common.DefaultServeAppName: singleApplicationStatus}
 	} else if serveConfigType == utils.MULTI_APP {
 		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
-			r.Log.Error(err, "Failed to get Serve deployment statuses from dashboard!")
+			err = fmt.Errorf(
+				"Failed to get Serve deployment statuses from dashboard. "+
+					"If you observe this error consistently after the head Pod is ready, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+					"err: %v", err)
 			return false, false, err
 		}
 	} else {
