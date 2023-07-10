@@ -39,14 +39,14 @@ kubectl port-forward $RAY_POD -n $YOUR_NAMESPACE --address 0.0.0.0 8265:8265
 
 For more details about Ray Serve observability on the dashboard, you can refer to [the documentation](https://docs.ray.io/en/latest/ray-observability/getting-started.html#serve-view) and [the YouTube video](https://youtu.be/eqXfwM641a4).
 
-### Common issues
+## Common issues
 
-#### Issue 1: Ray Serve script is incorrect.
+### Issue 1: Ray Serve script is incorrect.
 
 We strongly recommend that you test your Ray Serve script locally or in a RayCluster before
 deploying it to a RayService. [TODO: https://github.com/ray-project/kuberay/issues/1176]
 
-#### Issue 2: `serveConfigV2` is incorrect.
+### Issue 2: `serveConfigV2` is incorrect.
 
 For the sake of flexibility, we have set `serveConfigV2` as a YAML multi-line string in the RayService CR.
 This implies that there is no strict type checking for the Ray Serve configurations in `serveConfigV2` field.
@@ -56,7 +56,7 @@ Some tips to help you debug the `serveConfigV2` field:
 the Ray Serve Multi-application API `PUT "/api/serve/applications/"`.
 * Unlike `serveConfig`, `serveConfigV2` adheres to the snake case naming convention. For example, `numReplicas` is used in `serveConfig`, while `num_replicas` is used in `serveConfigV2`. 
 
-#### Issue 3-1: The Ray image does not include the required dependencies.
+### Issue 3-1: The Ray image does not include the required dependencies.
 
 You have two options to resolve this issue:
 
@@ -65,7 +65,7 @@ You have two options to resolve this issue:
   * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.5.0`.
 Therefore, the YAML file includes `python-multipart` in the runtime environment. For more details, refer to [the MobileNet example](mobilenet-rayservice.md).
 
-#### Issue 3-2: Examples for troubleshooting dependency issues.
+### Issue 3-2: Examples for troubleshooting dependency issues.
 
 > Note: We highly recommend testing your Ray Serve script locally or in a RayCluster before deploying it to a RayService. This helps identify any dependency issues in the early stages. [TODO: https://github.com/ray-project/kuberay/issues/1176]
 
@@ -106,7 +106,7 @@ The function `__call__()` will only be called when the Serve application receive
             ModuleNotFoundError: No module named 'tensorflow'
     ```
 
-#### Issue 4: Incorrect `import_path`.
+### Issue 4: Incorrect `import_path`.
 
 You can refer to [the documentation](https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html#ray.serve.schema.ServeApplicationSchema.import_path) for more details about the format of `import_path`.
 Taking [the MobileNet YAML file](../../ray-operator/config/samples/ray-service.mobilenet.yaml) as an example,
@@ -123,3 +123,30 @@ and `app` is the name of the variable representing Ray Serve application within 
           working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
           pip: ["python-multipart==0.0.6"]
 ```
+
+### Issue 5: Fail to create / update Serve applications.
+
+You may encounter the following error message when KubeRay tries to create / update Serve applications:
+
+```
+Put "http://${HEAD_SVC_FQDN}:52365/api/serve/applications/": dial tcp $HEAD_IP:52365: connect: connection refused
+```
+
+For RayService, the KubeRay operator submits a request to the RayCluster for creating Serve applications once the head Pod is ready.
+It's important to note that the Dashboard and GCS may take a few seconds to start up after the head Pod is ready.
+As a result, the request may fail a few times initially before the necessary components are fully operational.
+
+If you continue to encounter this issue after 1 minute, there are several possible causes:
+
+* The Dashboard and dashboard agent failed to start up due to some reasons. You can check the `dashboard.log` and `dashboard_agent.log` files located at `/tmp/ray/session_latest/logs/` on the head Pod for more information.
+
+* There is a Kubernetes NetworkPolicy blocking the traffic between the KubeRay operator and the dashboard agent port (i.e., 52365). Please review your NetworkPolicy configuration.
+
+### Issue 6: `runtime_env`
+
+In `serveConfigV2`, you can specify the runtime environment for the Ray Serve applications via `runtime_env`.
+Some common issues related to `runtime_env`:
+
+* The `working_dir` points to a private AWS S3 bucket, but the Ray Pods do not have the necessary permissions to access the bucket.
+
+* The NetworkPolicy blocks the traffic between the Ray Pods and the external URLs specified in `runtime_env`.
