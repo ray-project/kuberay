@@ -4,8 +4,8 @@ Welcome to the Frequently Asked Questions page for KubeRay. This document addres
 If you don't find an answer to your question here, please don't hesitate to connect with us via our [community channels](https://github.com/ray-project/kuberay#getting-involved).
 
 # Contents
-- [Worker Init Container](#worker-init-container)
-- [cluster domain](#cluster-domain)
+- [Worker init container](#worker-init-container)
+- [Cluster domain](#cluster-domain)
 - [RayService](#rayservice)
 
 ## Worker init container
@@ -51,7 +51,7 @@ For more information, please refer to [#951](https://github.com/ray-project/kube
 
 RayService is a Custom Resource Definition (CRD) designed for Ray Serve. In KubeRay, creating a RayService will first create a RayCluster and then
 create Ray Serve applications once the RayCluster is ready. If the issue pertains to the data plane, specifically your Ray Serve scripts 
-or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. See [rayservice-troubleshooting](https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md) for more details.
+or Ray Serve configurations (`serveConfigV2`), troubleshooting may be challenging. See [rayservice-troubleshooting](rayservice-troubleshooting.md) for more details.
 
 ## Questions
 
