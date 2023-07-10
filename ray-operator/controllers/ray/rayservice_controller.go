@@ -718,14 +718,14 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	}
 }
 
-// getAndCheckServeStatus gets Serve applications' and deployments' statuses,
-// updates health timestamps, and checks if the RayCluster is overall healthy.
-// It takes as one of its inputs `serveConfigType`, which is used to decide whether
-// to query the single-application Serve REST API or the multi-application Serve REST API
-// It's return values should be interpreted as
-// (Serve app healthy?, Serve app ready?, error if any)
+// `getAndCheckServeStatus` gets Serve applications' and deployments' statuses, updates health timestamps,
+// and checks if the RayCluster is overall healthy. It takes as one of its inputs `serveConfigType`, which
+// is used to decide whether to query the single-application Serve REST API or the multi-application Serve
+// REST API. It's return values should be interpreted as:
+//
+// (Serve app healthy?, Serve app ready?, error if failed to get Serve statuses)
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
-	// If the `unhealthySecondThreshold`` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
+	// If the `unhealthySecondThreshold` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
 	// which can be set in a test. This is used for testing purposes.
 	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 	if unhealthySecondThreshold != nil {
