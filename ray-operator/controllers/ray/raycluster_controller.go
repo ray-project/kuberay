@@ -282,7 +282,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	if r.IsOpenShift {
 		// This is OpenShift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
-	} else{
+	} else {
 		// plain vanilla kubernetes - create ingress
 		return r.reconcileIngressKubernetes(ctx, instance)
 	}
