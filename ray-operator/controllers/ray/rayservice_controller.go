@@ -732,7 +732,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
 	}
 
-	// TODO (kevin85421): Separate the logic for retrieving Serve application statuses from checking Serve application statuses into two separate functions.
+	// TODO (kevin85421): Separate the logic for retrieving Serve application statuses and checking Serve application statuses into two separate functions.
 	// Currently, the handling logic for `isHealthy` and `isReady` between these two behaviors is inconsistent. This can cause potential issues in the future.
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
@@ -740,7 +740,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		var singleApplicationStatus *utils.ServeApplicationStatus
 		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
 			err = fmt.Errorf(
-				"Failed to get Serve deployment statuses from the dashboard agent (port: 52365). "+
+				"Failed to get Serve deployment statuses from the head's dashboard agent port (the head service's port with the name `dashboard-agent`). "+
 					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 					"err: %v", err)
 			return false, false, err
@@ -749,7 +749,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	} else if serveConfigType == utils.MULTI_APP {
 		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 			err = fmt.Errorf(
-				"Failed to get Serve application statuses from the dashboard agent (port: 52365). "+
+				"Failed to get Serve application statuses from the dashboard agent (the head service's port with the name `dashboard-agent`). "+
 					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 					"err: %v", err)
 			return false, false, err
