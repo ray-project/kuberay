@@ -740,8 +740,8 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		var singleApplicationStatus *utils.ServeApplicationStatus
 		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
 			err = fmt.Errorf(
-				"Failed to get Serve deployment statuses from dashboard. "+
-					"If you observe this error consistently after the head Pod is ready, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+				"Failed to get Serve deployment statuses from the dashboard agent (port: 52365). "+
+					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 					"err: %v", err)
 			return false, false, err
 		}
@@ -749,8 +749,8 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	} else if serveConfigType == utils.MULTI_APP {
 		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 			err = fmt.Errorf(
-				"Failed to get Serve deployment statuses from dashboard. "+
-					"If you observe this error consistently after the head Pod is ready, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+				"Failed to get Serve application statuses from the dashboard agent (port: 52365). "+
+					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 					"err: %v", err)
 			return false, false, err
 		}
@@ -786,8 +786,12 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			if prevApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 				if prevApplicationStatus.HealthLastUpdateTime != nil {
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
-
 					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+						r.Log.Info("Restart RayCluster", "appName", appName, "restart reason",
+							fmt.Sprintf(
+								"The status of the serve application %s has not been RUNNING for more than %f seconds. "+
+									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. "+
+									"The message of the serve application is: %s", appName, serviceUnhealthySecondThreshold, app.Message))
 						isHealthy = false
 					}
 				}
@@ -810,7 +814,15 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 					if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
 						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
 
-						if prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
+						if !isHealthy || (prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold) {
+							// TODO (kevin85421): Without `!isHealthy`, this `if` statement is almost impossible to be reached because the `HealthLastUpdateTime` of a serve deployment
+							// is always later than the `HealthLastUpdateTime` of the serve application. Hence, the restart is always triggered by the serve application. If we
+							// can confirm that `isHealthy = false` is always set by the serve application check, we can remove the `time.Since` check here.
+							r.Log.Info("Restart RayCluster", "deploymentName", deploymentName, "appName", appName, "restart reason",
+								fmt.Sprintf(
+									"The status of the serve deployment %s or the serve application %s has not been HEALTHY/RUNNING for more than %f seconds. "+
+										"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. "+
+										"The message of the serve deployment is: %s", deploymentName, appName, serviceUnhealthySecondThreshold, deploymentStatus.Message))
 							isHealthy = false
 						}
 					}
@@ -1106,8 +1118,19 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
 
-		logger.Info("Mark cluster as unhealthy", "rayCluster", rayClusterInstance)
-		r.Recorder.Eventf(rayServiceInstance, "Normal", "Restarting", "The cluster will restart after %s", ServiceRestartRequeueDuration)
+		availableWorkerReplicas := rayClusterInstance.Status.AvailableWorkerReplicas
+		desiredWorkerReplicas := rayClusterInstance.Status.DesiredWorkerReplicas
+		logger.Info(
+			"Restart RayCluster", "AvailableWorkerReplicas", availableWorkerReplicas, "DesiredWorkerReplicas", desiredWorkerReplicas,
+			"restart reason",
+			"The serve application is unhealthy, restarting the cluster. If the AvailableWorkerReplicas is not equal to DesiredWorkerReplicas, "+
+				"this may imply that the Autoscaler does not have enough resources to scale up the cluster. Hence, the serve application does not "+
+				"have enough resources to run. Please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details.",
+			"RayCluster", rayClusterInstance)
+		r.Recorder.Eventf(
+			rayServiceInstance, "Normal", "Restarting",
+			"Please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. The cluster will restart after %s", ServiceRestartRequeueDuration,
+			"AvailableWorkerReplicas", availableWorkerReplicas, "DesiredWorkerReplicas", desiredWorkerReplicas)
 		// Wait a while for the cluster delete
 		return ctrl.Result{RequeueAfter: ServiceRestartRequeueDuration}, false, false, nil
 	}

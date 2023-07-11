@@ -133,7 +133,7 @@ Put "http://${HEAD_SVC_FQDN}:52365/api/serve/applications/": dial tcp $HEAD_IP:5
 ```
 
 For RayService, the KubeRay operator submits a request to the RayCluster for creating Serve applications once the head Pod is ready.
-It's important to note that the Dashboard and GCS may take a few seconds to start up after the head Pod is ready.
+It's important to note that the Dashboard, Dashboard Agent and GCS may take a few seconds to start up after the head Pod is ready.
 As a result, the request may fail a few times initially before the necessary components are fully operational.
 
 If you continue to encounter this issue after 1 minute, there are several possible causes:
@@ -150,3 +150,48 @@ Some common issues related to `runtime_env`:
 * The `working_dir` points to a private AWS S3 bucket, but the Ray Pods do not have the necessary permissions to access the bucket.
 
 * The NetworkPolicy blocks the traffic between the Ray Pods and the external URLs specified in `runtime_env`.
+
+### Issue 7: Failed to get Serve application statuses.
+
+You may encounter the following error message when KubeRay tries to get Serve application statuses:
+
+```
+Get "http://${HEAD_SVC_FQDN}:52365/api/serve/applications/": dial tcp $HEAD_IP:52365: connect: connection refused"
+```
+
+As mentioned in [Issue 5](#issue-5-fail-to-create--update-serve-applications), the KubeRay operator submits a `Put` request to the RayCluster for creating Serve applications once the head Pod is ready.
+After the successful submission of the `Put` request to the dashboard agent, a `Get` request is sent to the dashboard agent port (i.e., 52365). 
+The successful submission indicates that all the necessary components, including the dashboard agent, are fully operational. 
+Therefore, unlike Issue 5, the failure of the `Get` request is not expected.
+
+If you continue to encounter this issue after 1 minute, there are several possible causes:
+
+* The dashboard agent process on the head Pod is not running. You can check the `dashboard_agent.log` file located at `/tmp/ray/session_latest/logs/` on the head Pod for more information. In addition, you can also perform an experiment to verify this cause by manually killing the dashboard agent process on the head Pod.
+  ```bash
+  # Step 1: Log in to the head Pod
+  kubectl exec -it $HEAD_POD -n $YOUR_NAMESPACE -- bash
+
+  # Step 2: Check the PID of the dashboard agent process
+  ps aux
+  # [Example output]
+  # ray          156 ... 0:03 /.../python -u /.../ray/dashboard/agent.py --
+
+  # Step 3: Kill the dashboard agent process
+  kill 156
+
+  # Step 4: Check the logs
+  cat /tmp/ray/session_latest/logs/dashboard_agent.log
+
+  # [Example output]
+  # 2023-07-10 11:24:31,962 INFO web_log.py:206 -- 10.244.0.5 [10/Jul/2023:18:24:31 +0000] "GET /api/serve/applications/ HTTP/1.1" 200 13940 "-" "Go-http-client/1.1"
+  # 2023-07-10 11:24:34,001 INFO web_log.py:206 -- 10.244.0.5 [10/Jul/2023:18:24:33 +0000] "GET /api/serve/applications/ HTTP/1.1" 200 13940 "-" "Go-http-client/1.1"
+  # 2023-07-10 11:24:36,043 INFO web_log.py:206 -- 10.244.0.5 [10/Jul/2023:18:24:36 +0000] "GET /api/serve/applications/ HTTP/1.1" 200 13940 "-" "Go-http-client/1.1"
+  # 2023-07-10 11:24:38,082 INFO web_log.py:206 -- 10.244.0.5 [10/Jul/2023:18:24:38 +0000] "GET /api/serve/applications/ HTTP/1.1" 200 13940 "-" "Go-http-client/1.1"
+  # 2023-07-10 11:24:38,590 WARNING agent.py:531 -- Exiting with SIGTERM immediately...
+
+  # Step 5: Open a new terminal and check the logs of the KubeRay operator
+  kubectl logs $KUBERAY_OPERATOR_POD -n $YOUR_NAMESPACE | tee operator-log
+
+  # [Example output]
+  # Get \"http://rayservice-sample-raycluster-rqlsl-head-svc.default.svc.cluster.local:52365/api/serve/applications/\": dial tcp 10.96.7.154:52365: connect: connection refused
+  ```
