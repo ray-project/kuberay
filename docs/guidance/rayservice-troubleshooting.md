@@ -164,9 +164,9 @@ After the successful submission of the `Put` request to the dashboard agent, a `
 The successful submission indicates that all the necessary components, including the dashboard agent, are fully operational. 
 Therefore, unlike Issue 5, the failure of the `Get` request is not expected.
 
-If you continue to encounter this issue after 1 minute, there are several possible causes:
+If you consistently encounter this issue, there are several possible causes:
 
-* The dashboard agent process on the head Pod is not running. You can check the `dashboard_agent.log` file located at `/tmp/ray/session_latest/logs/` on the head Pod for more information. In addition, you can also perform an experiment to verify this cause by manually killing the dashboard agent process on the head Pod.
+* The dashboard agent process on the head Pod is not running. You can check the `dashboard_agent.log` file located at `/tmp/ray/session_latest/logs/` on the head Pod for more information. In addition, you can also perform an experiment to reproduce this cause by manually killing the dashboard agent process on the head Pod.
   ```bash
   # Step 1: Log in to the head Pod
   kubectl exec -it $HEAD_POD -n $YOUR_NAMESPACE -- bash
@@ -203,7 +203,7 @@ Therefore, we recommend ensuring that the Kubernetes cluster has sufficient reso
 
 If the status of a serve application remains non-`RUNNING` for more than `serviceUnhealthySecondThreshold` seconds,
 the KubeRay operator will consider the RayCluster as unhealthy and initiate the preparation of a new RayCluster.
-However, there is a corner case where the Kubernetes cluster may not have enough resources to accommodate the serve application.
+A common cause of this issue is that the Kubernetes cluster does not have enough resources to accommodate the serve application.
 In such cases, the KubeRay operator may continue to restart the RayCluster, leading to a loop of restarts.
 
 We can also perform an experiment to reproduce this situation:
