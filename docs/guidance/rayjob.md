@@ -66,28 +66,38 @@ You can also use `kubectl describe rayjobs rayjob-sample` to check the states an
 
 ```text
 Status:
-  Dashboard URL:          rayjob-sample-raycluster-vnl8w-head-svc.ray-system.svc.cluster.local:8265
-  End Time:               2022-07-24T02:04:56Z
+  Dashboard URL:          rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265
+  End Time:               2023-07-11T17:39:56Z
   Job Deployment Status:  Complete
-  Job Id:                 test-hehe
+  Job Id:                 rayjob-sample-66z5m
   Job Status:             SUCCEEDED
   Message:                Job finished successfully.
-  Ray Cluster Name:       rayjob-sample-raycluster-vnl8w
+  Observed Generation:    2
+  Ray Cluster Name:       rayjob-sample-raycluster-v6qcq
   Ray Cluster Status:
     Available Worker Replicas:  1
+    Desired Worker Replicas:    1
     Endpoints:
-      Client:          32572
-      Dashboard:       32276
-      Gcs - Server:    30679
-    Last Update Time:  2022-07-24T02:04:43Z
-    State:             ready
-  Start Time:          2022-07-24T02:04:49Z
+      Client:        10001
+      Dashboard:     8265
+      Gcs - Server:  6379
+      Metrics:       8080
+      Serve:         8000
+    Head:
+      Pod IP:             10.244.0.6
+      Service IP:         10.96.31.68
+    Last Update Time:     2023-07-11T17:39:32Z
+    Max Worker Replicas:  5
+    Min Worker Replicas:  1
+    Observed Generation:  1
+    State:                ready
+  Start Time:             2023-07-11T17:39:39Z
 Events:
-  Type    Reason     Age   From               Message
-  ----    ------     ----  ----               -------
-  Normal  Created    90s   rayjob-controller  Created cluster rayjob-sample-raycluster-vnl8w
-  Normal  Submitted  82s   rayjob-controller  Submit Job test-hehe
-  Normal  Deleted    15s   rayjob-controller  Deleted cluster rayjob-sample-raycluster-vnl8w
+  Type    Reason   Age    From               Message
+  ----    ------   ----   ----               -------
+  Normal  Created  3m37s  rayjob-controller  Created cluster rayjob-sample-raycluster-v6qcq
+  Normal  Created  2m11s  rayjob-controller  Created k8s job rayjob-sample
+  Normal  Deleted  107s   rayjob-controller  Deleted cluster rayjob-sample-raycluster-v6qcq
 ```
 
 If the job doesn't run successfully, the above `describe` command will provide information about that too:
