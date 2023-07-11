@@ -104,30 +104,39 @@ If the job doesn't run successfully, the above `describe` command will provide i
 
 ```text
 Status:
-  Dashboard URL:          rayjob-sample-raycluster-nrdm8-head-svc.ray-system.svc.cluster.local:8265
-  End Time:               2022-07-24T02:01:39Z
+  Dashboard URL:          rayjob-sample-raycluster-2h7ds-head-svc.default.svc.cluster.local:8265
+  End Time:               2023-07-11T17:51:31Z
   Job Deployment Status:  Complete
-  Job Id:                 test-hehe
+  Job Id:                 rayjob-sample-prbts
   Job Status:             FAILED
-  Message:                Job failed due to an application error, last available logs:
-python: can't open file '/tmp/code/script.ppy': [Errno 2] No such file or directory
+  Message:                Job failed due to an application error, last available logs (truncated to 20,000 chars):
+python: can't open file '/home/ray/samples/sample_code.ppy': [Errno 2] No such file or directory
 
-  Ray Cluster Name:  rayjob-sample-raycluster-nrdm8
+  Observed Generation:  2
+  Ray Cluster Name:     rayjob-sample-raycluster-2h7ds
   Ray Cluster Status:
     Available Worker Replicas:  1
+    Desired Worker Replicas:    1
     Endpoints:
-      Client:          31852
-      Dashboard:       32606
-      Gcs - Server:    32436
-    Last Update Time:  2022-07-24T02:01:30Z
-    State:             ready
-  Start Time:          2022-07-24T02:01:38Z
+      Client:        10001
+      Dashboard:     8265
+      Gcs - Server:  6379
+      Metrics:       8080
+      Serve:         8000
+    Head:
+      Pod IP:             10.244.0.7
+      Service IP:         10.96.24.232
+    Last Update Time:     2023-07-11T17:51:12Z
+    Max Worker Replicas:  5
+    Min Worker Replicas:  1
+    Observed Generation:  1
+    State:                ready
+  Start Time:             2023-07-11T17:51:16Z
 Events:
-  Type    Reason     Age   From               Message
-  ----    ------     ----  ----               -------
-  Normal  Created    2m9s  rayjob-controller  Created cluster rayjob-sample-raycluster-nrdm8
-  Normal  Submitted  2m    rayjob-controller  Submit Job test-hehe
-  Normal  Deleted    58s   rayjob-controller  Deleted cluster rayjob-sample-raycluster-nrdm8
+  Type    Reason   Age    From               Message
+  ----    ------   ----   ----               -------
+  Normal  Created  3m57s  rayjob-controller  Created cluster rayjob-sample-raycluster-2h7ds
+  Normal  Created  2m31s  rayjob-controller  Created k8s job rayjob-sample
 ```
 
 ## Delete the RayJob instance
