@@ -154,6 +154,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve component. Active and pending Ray clusters exist.")
+		// TODO (kevin85421): This can most likely be removed.
 		if err = r.updateStatusForActiveCluster(ctx, rayServiceInstance, activeRayClusterInstance, logger); err != nil {
 			logger.Error(err, "Failed to update active Ray cluster's status.")
 		}
@@ -1024,15 +1025,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
-		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
-			logger.Info("Dashboard is unhealthy, restart the cluster.")
-			r.markRestart(rayServiceInstance)
-		}
-		err = r.updateState(ctx, rayServiceInstance, rayv1alpha1.WaitForDashboard, err)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
-	}
-
 	// Check if head pod is running and ready. If not, requeue the resource event to avoid
 	// redundant custom resource status updates.
 	//
@@ -1048,6 +1040,9 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
+	}
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
