@@ -13,6 +13,7 @@ spec:
   #        "counter_name": "test_counter"
   #    }
   #}'
+  # ShutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   shutdownAfterJobFinishes: true
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
@@ -90,13 +91,16 @@ spec:
                     cpu: "200m"
   # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
   # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
-  # submitterPodTemplate:
-  #   spec:
-  #     containers:
-  #       - name: rayjob-submitter-pod
-  #         image: rayproject/ray:2.5.0
-  #         # If command is not specified, a default command will be supplied using the RayJob spec `entrypoint` field.
-  #         command: ["ray", "job", "submit", "--", "echo", "hello", "world"]
+  submitterPodTemplate:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: my-custom-rayjob-submitter-pod
+          image: rayproject/ray:2.5.0
+          # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
+          # Specifying Command is not recommended.
+          # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
+      
 
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
