@@ -55,7 +55,7 @@ $ kubectl get pod
 * `jobId` - _(Optional)_ Job ID to specify for the job. If not provided, one will be generated.
 * `metadata` - _(Optional)_ Arbitrary user-provided metadata for the job.
 * `runtimeEnv` - _(Optional)_ base64-encoded string of the runtime env json string.
-* `shutdownAfterJobFinishes` - _(Optional)_ whether to recycle the cluster after the job finishes.
+* `shutdownAfterJobFinishes` - _(Optional)_ whether to recycle the cluster after the job finishes. Defaults to false.
 * `ttlSecondsAfterFinished` - _(Optional)_ TTL to clean up the cluster. This only works if `shutdownAfterJobFinishes` is set.
 * `submitterPodTemplate` - _(Optional)_ Pod template spec for the pod that runs `ray job submit` against the Ray cluster.
 
