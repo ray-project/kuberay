@@ -790,8 +790,8 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 						r.Log.Info("Restart RayCluster", "appName", appName, "restart reason",
 							fmt.Sprintf(
 								"The status of the serve application %s has not been RUNNING for more than %f seconds. "+
-									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. "+
-									"The message of the serve application is: %s", appName, serviceUnhealthySecondThreshold, app.Message))
+									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. ",
+								appName, serviceUnhealthySecondThreshold))
 						isHealthy = false
 					}
 				}

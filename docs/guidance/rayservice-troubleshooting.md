@@ -195,3 +195,58 @@ If you continue to encounter this issue after 1 minute, there are several possib
   # [Example output]
   # Get \"http://rayservice-sample-raycluster-rqlsl-head-svc.default.svc.cluster.local:52365/api/serve/applications/\": dial tcp 10.96.7.154:52365: connect: connection refused
   ```
+
+### Issue 8: A loop of restarting the RayCluster occurs when the Kubernetes cluster runs out of resources.
+
+> Note: Currently, the KubeRay operator does not have a clear plan to handle situations where the Kubernetes cluster runs out of resources.
+Therefore, we recommend ensuring that the Kubernetes cluster has sufficient resources to accommodate the serve application.
+
+If the status of a serve application remains non-`RUNNING` for more than `serviceUnhealthySecondThreshold` seconds,
+the KubeRay operator will consider the RayCluster as unhealthy and initiate the preparation of a new RayCluster.
+However, there is a corner case where the Kubernetes cluster may not have enough resources to accommodate the serve application.
+In such cases, the KubeRay operator may continue to restart the RayCluster, leading to a loop of restarts.
+
+We can also perform an experiment to reproduce this situation:
+
+* A Kubernetes cluster with an 8-CPUs node
+* [ray-service.insufficient-resources.yaml](https://gist.github.com/kevin85421/6a7779308aa45b197db8015aca0c1faf)
+  * RayCluster:
+    * The cluster has 1 head Pod with 4 physical CPUs, but `num-cpus` is set to 0 in `rayStartParams` to prevent any serve replicas from being scheduled on the head Pod.
+    * The cluster also has 1 worker Pod with 1 CPU by default.
+  * `serveConfigV2` specifies 5 serve deployments, each with 1 replica and a requirement of 1 CPU.
+
+```bash
+# Step 1: Get the number of CPUs available on the node
+kubectl get nodes -o custom-columns=NODE:.metadata.name,ALLOCATABLE_CPU:.status.allocatable.cpu
+
+# [Example output]
+# NODE                 ALLOCATABLE_CPU
+# kind-control-plane   8
+
+# Step 2: Install a KubeRay operator.
+
+# Step 3: Create a RayService with autoscaling enabled.
+kubectl apply -f ray-service.insufficient-resources.yaml
+
+# Step 4: The Kubernetes cluster will not have enough resources to accommodate the serve application.
+kubectl describe rayservices.ray.io rayservice-sample -n $YOUR_NAMESPACE
+
+# [Example output]
+# fruit_app_DAGDriver:
+#   Health Last Update Time:  2023-07-11T02:10:02Z
+#   Last Update Time:         2023-07-11T02:10:35Z
+#   Message:                  Deployment "fruit_app_DAGDriver" has 1 replicas that have taken more than 30s to be scheduled. This may be caused by waiting for the cluster to auto-scale, or waiting for a runtime environment to install. Resources required for each replica: {"CPU": 1.0}, resources available: {}.
+#   Status:                   UPDATING
+
+# Step 5: A new RayCluster will be created after `serviceUnhealthySecondThreshold` (300s here) seconds.
+# Check the logs of the KubeRay operator to find the reason for restarting the RayCluster.
+kubectl logs $KUBERAY_OPERATOR_POD -n $YOUR_NAMESPACE | tee operator-log
+
+# [Example output]
+# 2023-07-11T02:14:58.109Z	INFO	controllers.RayService	Restart RayCluster	{"appName": "fruit_app", "restart reason": "The status of the serve application fruit_app has not been RUNNING for more than 300.000000 seconds. Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster."}
+# 2023-07-11T02:14:58.109Z	INFO	controllers.RayService	Restart RayCluster	{"deploymentName": "fruit_app_FruitMarket", "appName": "fruit_app", "restart reason": "The status of the serve deployment fruit_app_FruitMarket or the serve application fruit_app has not been HEALTHY/RUNNING for more than 300.000000 seconds. Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. The message of the serve deployment is: Deployment \"fruit_app_FruitMarket\" has 1 replicas that have taken more than 30s to be scheduled. This may be caused by waiting for the cluster to auto-scale, or waiting for a runtime environment to install. Resources required for each replica: {\"CPU\": 1.0}, resources available: {}."}
+# .
+# .
+# .
+# 2023-07-11T02:14:58.122Z	INFO	controllers.RayService	Restart RayCluster	{"ServiceName": "default/rayservice-sample", "AvailableWorkerReplicas": 1, "DesiredWorkerReplicas": 5, "restart reason": "The serve application is unhealthy, restarting the cluster. If the AvailableWorkerReplicas is not equal to DesiredWorkerReplicas, this may imply that the Autoscaler does not have enough resources to scale up the cluster. Hence, the serve application does not have enough resources to run. Please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details.", "RayCluster": {"apiVersion": "ray.io/v1alpha1", "kind": "RayCluster", "namespace": "default", "name": "rayservice-sample-raycluster-hvd9f"}}
+```
