@@ -16,62 +16,29 @@ spec:
   # set the event in the second application, releasing all blocked requests, and worker pods should scale down.
   serveConfigV2: |
     applications:
-      - name: fruit_app
-        import_path: fruit.deployment_graph
-        route_prefix: /fruit
+      - name: app1
+        import_path: autoscaling.blocked:app
+        route_prefix: /
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/041ac908e5a04ab50cb23d5939e53bd05a03e1ae.zip"
         deployments:
-          - name: MangoStand
-            num_replicas: 1
-            user_config:
-              price: 3
+          - name: Blocked
+            autoscaling_config:
+              metrics_interval_s: 0.1
+              min_replicas: 1
+              max_replicas: 14
+              look_back_period_s: 0.2
+              downscale_delay_s: 0
+              upscale_delay_s: 0
+            graceful_shutdown_timeout_s: 1
+            max_concurrent_queries: 1000
             ray_actor_options:
-              num_cpus: 1
-          - name: OrangeStand
-            num_replicas: 1
-            user_config:
-              price: 2
-            ray_actor_options:
-              num_cpus: 1
-          - name: PearStand
-            num_replicas: 1
-            user_config:
-              price: 1
-            ray_actor_options:
-              num_cpus: 1
-          - name: FruitMarket
-            num_replicas: 1
-            ray_actor_options:
-              num_cpus: 1
-          - name: DAGDriver
-            num_replicas: 1
-            ray_actor_options:
-              num_cpus: 1
-      - name: math_app
-        import_path: conditional_dag.serve_dag
-        route_prefix: /calc
+              num_cpus: 0.5
+      - name: signal
+        import_path: autoscaling.signaling:app
+        route_prefix: /signal
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-        deployments:
-          - name: Adder
-            num_replicas: 1
-            user_config:
-              increment: 3
-            ray_actor_options:
-              num_cpus: 0.1
-          - name: Multiplier
-            num_replicas: 1
-            user_config:
-              factor: 5
-            ray_actor_options:
-              num_cpus: 0.1
-          - name: Router
-            num_replicas: 1
-          - name: create_order
-            num_replicas: 1
-          - name: DAGDriver
-            num_replicas: 1
+          working_dir: "https://github.com/ray-project/test_dag/archive/041ac908e5a04ab50cb23d5939e53bd05a03e1ae.zip"
   rayClusterConfig:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
