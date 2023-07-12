@@ -31,7 +31,7 @@ A RayService manages 2 things:
 kind create cluster --image=kindest/node:v1.23.0
 ```
 
-## Step 2: Install KubeRay operator
+## Step 2: Install the KubeRay operator
 
 Follow [this document](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) to install the nightly KubeRay operator via Helm.
 Note that sample RayService in this guide uses `serveConfigV2` to specify a multi-application Serve config.
