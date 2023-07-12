@@ -25,7 +25,7 @@ A RayService manages 2 things:
 
 # Example: Serve two simple Ray Serve applications using RayService
 
-## Step 1: Create a Kubernetes cluster with Kind.
+## Step 1: Create a Kubernetes cluster with Kind
 
 ```sh
 kind create cluster --image=kindest/node:v1.23.0
