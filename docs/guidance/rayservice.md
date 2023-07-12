@@ -7,7 +7,7 @@
 This guide focuses solely on the Ray Serve multi-application API, which is available starting from Ray version 2.4.0.
 
 * Ray 2.4.0 or newer.
-* KubeRay 0.6.0 or newer.
+* KubeRay 0.6.0, KubeRay nightly, or newer.
 
 # What is a RayService?
 
