@@ -39,6 +39,39 @@ kubectl port-forward $RAY_POD -n $YOUR_NAMESPACE --address 0.0.0.0 8265:8265
 
 For more details about Ray Serve observability on the dashboard, you can refer to [the documentation](https://docs.ray.io/en/latest/ray-observability/getting-started.html#serve-view) and [the YouTube video](https://youtu.be/eqXfwM641a4).
 
+### Method 5: Ray State CLI
+
+You can use the [Ray State CLI](https://docs.ray.io/en/latest/ray-observability/reference/cli.html) on the head Pod to check the status of Ray Serve applications.
+
+```bash
+# Log into the head Pod
+export HEAD_POD=$(kubectl get pods --selector=ray.io/node-type=head -o custom-columns=POD:metadata.name --no-headers)
+kubectl exec -it $HEAD_POD -- ray summary actors
+
+# [Example output]:
+# ======== Actors Summary: 2023-07-11 17:58:24.625032 ========
+# Stats:
+# ------------------------------------
+# total_actors: 14
+
+
+# Table (group by class):
+# ------------------------------------
+#     CLASS_NAME                          STATE_COUNTS
+# 0   ServeController                     ALIVE: 1
+# 1   ServeReplica:fruit_app_OrangeStand  ALIVE: 1
+# 2   HTTPProxyActor                      ALIVE: 3
+# 3   ServeReplica:math_app_DAGDriver     ALIVE: 1
+# 4   ServeReplica:math_app_Multiplier    ALIVE: 1
+# 5   ServeReplica:math_app_create_order  ALIVE: 1
+# 6   ServeReplica:fruit_app_DAGDriver    ALIVE: 1
+# 7   ServeReplica:fruit_app_FruitMarket  ALIVE: 1
+# 8   ServeReplica:math_app_Adder         ALIVE: 1
+# 9   ServeReplica:math_app_Router        ALIVE: 1
+# 10  ServeReplica:fruit_app_MangoStand   ALIVE: 1
+# 11  ServeReplica:fruit_app_PearStand    ALIVE: 1
+```
+
 ## Common issues
 
 ### Issue 1: Ray Serve script is incorrect.
