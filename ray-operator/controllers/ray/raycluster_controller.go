@@ -60,6 +60,7 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 func getClusterType(logger logr.Logger) bool {
 	// The user can explicitely overwrite usage of Route when running on OpenShift
 	// In this case operator will create ingress even if running on OpenShift
+	// This is a safety mechanism for people running on OPenShift, but wanting to use Ingress
 	if s := os.Getenv("USE_INGRESS_ON_OPENSHIFT"); strings.ToLower(s) == "true" {
 		return false
 	}
@@ -70,7 +71,7 @@ func getClusterType(logger logr.Logger) bool {
 		if err == nil && dclient != nil {
 			apiGroupList, err := dclient.ServerGroups()
 			if err != nil {
-				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
+				logger.Info("Error while querying ServerGroups, assuming we're not on OpenShift")
 				return false
 			}
 			for i := 0; i < len(apiGroupList.Groups); i++ {
@@ -81,10 +82,10 @@ func getClusterType(logger logr.Logger) bool {
 			}
 			return false
 		}
-		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
+		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're not on OpenShift")
 		return false
 	}
-	logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+	logger.Info("Cannot retrieve config, assuming we're not on OpenShift")
 	return false
 }
 
