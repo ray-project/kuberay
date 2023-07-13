@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"k8s.io/apimachinery/pkg/util/json"
@@ -69,6 +70,9 @@ func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Clien
 	headSvc := &corev1.Service{}
 	headSvcName := GenerateServiceName(rayCluster.Name)
 	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+		if errors.IsNotFound(err) {
+			log.Error(err, "Head service is not found", "head service name", headSvcName, "namespace", rayCluster.Namespace)
+		}
 		return "", err
 	}
 

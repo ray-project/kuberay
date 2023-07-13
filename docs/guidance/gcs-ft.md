@@ -2,7 +2,7 @@
 
 > **Note**: This feature is beta.
 
-Ray GCS FT enables GCS server to use external storage backend. As a result, Ray clusters can tolerant GCS failures and recover from failures
+Ray GCS FT enables GCS server to use external storage backend. As a result, Ray clusters can tolerate GCS failures and recover from failures
 without affecting important services such as detached Actors & RayServe deployments.
 
 ### Prerequisite
