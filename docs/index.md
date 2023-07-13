@@ -54,14 +54,7 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 ## Security
 
-If you discover a potential security issue in this project, or think you may
-have discovered a security issue, we ask that you notify KubeRay Security via our
-[Slack Channel](https://ray-distributed.slack.com/archives/C02GFQ82JPM).
-Please do **not** create a public GitHub issue.
-
-## License
-
-This project is licensed under the [Apache-2.0 License](LICENSE).
+Please report security issues to security@anyscale.com.
 
 ## The Ray docs
 

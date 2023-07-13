@@ -51,9 +51,9 @@ nav:
     - Best Practices:
       - Executing Commands: guidance/pod-command.md
       - Worker Reconnection: best-practice/worker-head-reconnection.md
-  - Troubleshooting: troubleshooting.md
-  - Design:
-    - Core API and Backend Service: design/protobuf-grpc-service.md
+  - Troubleshooting:
+    - FAQ: guidance/FAQ.md
+    - RayService Troubleshooting: guidance/rayservice-troubleshooting.md
   - Development:
     - Developer Guide: development/development.md
     - Release Process:
