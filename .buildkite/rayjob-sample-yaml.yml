@@ -1,0 +1,39 @@
+- label: "Sample YAML RayJob Test - 2.4.0"
+  env:
+    RAY_IMAGE: "rayproject/ray:2.4.0"
+  instance_size: large
+  image: golang:1.17
+  commands:
+    # Install Go
+    - export PATH=$PATH:/usr/local/go/bin
+
+    # Install kind
+    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+    - chmod +x ./kind
+    - mv ./kind /usr/local/bin/kind
+
+    # Install Docker
+    - bash scripts/install-docker.sh
+    
+    # Install python
+    - apt-get update
+    - apt-get install -y python3 python3-pip
+    - pip3 install -r tests/framework/config/requirements.txt
+
+    # Install helm from https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
+    - curl -Lo helm.tar.gz https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
+    - tar -zxvf helm.tar.gz
+    - mv linux-amd64/helm /usr/local/bin/helm
+    - helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+    - helm repo update
+
+    - kind create cluster
+    - pushd ray-operator
+    - IMG=kuberay/operator:nightly make docker-build
+    - kind load docker-image kuberay/operator:nightly
+    - popd
+    - pushd helm-chart/kuberay-operator
+    - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
+    - popd
+    # Run the tests
+    - python tests/test_sample_rayjob_yamls.py
