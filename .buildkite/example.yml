@@ -11,4 +11,5 @@
   instance_size: large
   image: golang:1.17
   commands:
+    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
     - kind create cluster
