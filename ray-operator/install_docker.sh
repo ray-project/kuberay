@@ -3,9 +3,10 @@
 export DEBIAN_FRONTEND=noninteractive
 export TZ=America/Los_Angeles
 
-export locale -a
-export LC_ALL=en_US.utf8
-export LANG=en_US.utf8
+locale -a
+locale-gen en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
 
 apt-get update -qq && apt-get upgrade -qq
 apt-get install -y -qq \
