@@ -3,7 +3,7 @@ kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  entrypoint: python /home/ray/samples/sample_code.pyyyy
+  entrypoint: python /home/ray/samples/sample_code.py
   # ShutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   shutdownAfterJobFinishes: true
   # runtimeEnv decoded to '{
