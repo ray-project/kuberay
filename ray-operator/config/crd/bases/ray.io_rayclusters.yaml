@@ -709,7 +709,7 @@ spec:
                       service.
                     type: string
                   template:
-                    description: Template is the eaxct pod template used in K8s depoyments,
+                    description: Template is the exact pod template used in K8s depoyments,
                       statefulsets, etc.
                     properties:
                       metadata:
