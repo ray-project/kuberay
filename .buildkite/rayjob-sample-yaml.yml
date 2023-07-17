@@ -27,13 +27,23 @@
     - helm repo add kuberay https://ray-project.github.io/kuberay-helm/
     - helm repo update
 
+    # Create the Kubernetes cluster
     - kind create cluster
+    
+    # Wait for Kubernetes cluster to be ready
+    - kubectl cluster-info
+    - sleep 10s  # Add a delay to allow the cluster to fully initialize
+    - kubectl cluster-info
+    - kubectl get nodes
+    
     - pushd ray-operator
     - IMG=kuberay/operator:nightly make docker-build
     - kind load docker-image kuberay/operator:nightly
     - popd
+
     - pushd helm-chart/kuberay-operator
     - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
     - popd
+
     # Run the tests
     - python tests/test_sample_rayjob_yamls.py
