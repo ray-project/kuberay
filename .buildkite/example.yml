@@ -11,7 +11,15 @@
   instance_size: large
   image: golang:1.17
   commands:
+    - ls -alp /workdir
+    - export PATH=$PATH:/usr/local/go/bin
     - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
     - chmod +x ./kind
     - mv ./kind /usr/local/bin/kind
+    - cd /workdir/ray-operator
+    - echo Second command
+    - bash install_docker.sh
+    - docker ps
+    - bash build.sh custom_image
+    - docker run -t --rm custom_image cat /tmp/yeah
     - kind create cluster
