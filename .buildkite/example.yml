@@ -6,3 +6,9 @@
     - export PATH=$PATH:/usr/local/go/bin
     - cd /workdir/ray-operator
     - make test
+
+- label: KinD in Docker
+  instance_size: large
+  image: golang:1.17
+  commands:
+    - kind create cluster
