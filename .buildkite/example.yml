@@ -17,6 +17,7 @@
     - chmod +x ./kind
     - mv ./kind /usr/local/bin/kind
     - cd /workdir/ray-operator
+    - ls -l
     - echo Second command
     - bash install_docker.sh
     - docker ps
