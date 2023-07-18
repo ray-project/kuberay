@@ -3,8 +3,7 @@
 Many RayService issues are related to the Ray Serve Python scripts.
 We strongly recommend that users develop and test their Ray Serve scripts in a RayCluster using the same Ray image before deploying them to a RayService.
 In this tutorial, we will show you how to develop [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml).
-
-please refer to [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml) and [mobilenet-rayservice.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/mobilenet-rayservice.md).
+Please refer to [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml) and [mobilenet-rayservice.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/mobilenet-rayservice.md) for more details.
 
 
 # Step 1: Install a KubeRay cluster
