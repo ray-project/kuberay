@@ -78,4 +78,4 @@
     # - helm repo update
 
     # Run the tests
-    - python tests/test_sample_rayjob_yamls.py
+    - python3 tests/test_sample_rayjob_yamls.py
