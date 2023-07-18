@@ -513,34 +513,74 @@ func TestReconcile_UnhealthyEvent(t *testing.T) {
 func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
 
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
-	ctx := context.Background()
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
 
-	podList := corev1.PodList{}
-	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
 
-	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
-
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	tests := map[string]struct {
+		workersToDelete []string
+	}{
+		// The random Pod deletion (diff < 0) will delete Pod based on the index of the Pod list.
+		// That is, it will firstly delete Pod1, then Pod2, then Pod3, then Pod4, then Pod5. Hence,
+		// we need to test the different cases of the workersToDelete to make sure both Pod deletion
+		// works as expected.
+		"Set WorkersToDelete to pod1 and pod2.": {
+			// The pod1 and pod2 will be deleted.
+			workersToDelete: []string{"pod1", "pod2"},
+		},
+		"Set WorkersToDelete to pod3 and pod4": {
+			// The pod3 and pod4 will be deleted. If the random Pod deletion is triggered, it will firstly delete pod1 and make the test fail.
+			workersToDelete: []string{"pod3", "pod4"},
+		},
+		"Set WorkersToDelete to pod1 and pod5": {
+			// The pod1 and pod5 will be deleted.
+			workersToDelete: []string{"pod1", "pod5"},
+		},
+		"Set WorkersToDelete to pod2 and NonExistentPod": {
+			// The pod2 will be deleted, and 1 pod will be deleted randomly to meet `expectedNumWorkerPods`.
+			workersToDelete: []string{"pod2", "NonExistentPod"},
+		},
 	}
 
-	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
-	err = fakeClient.List(ctx, &podList, &client.ListOptions{
-		LabelSelector: workerSelector,
-		Namespace:     namespaceStr,
-	})
+			// Sanity check
+			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = tc.workersToDelete
+			expectedNumWorkersToDelete := len(podList.Items) - expectedNumWorkerPods - 1 // -1 for the head pod
+			assert.Equal(t, expectedNumWorkersToDelete, len(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete))
 
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
 
-	assert.Equal(t, int(expectReplicaNum), len(podList.Items),
-		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			assert.Nil(t, err, "Fail to reconcile Pods")
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: workerSelector,
+				Namespace:     namespaceStr,
+			})
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.Equal(t, int(expectReplicaNum), len(podList.Items),
+				"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
+		})
+	}
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
