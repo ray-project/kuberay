@@ -69,9 +69,6 @@ var (
 
 func setupTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-	// To verify the failure logic, you can change this PrioritizeWorkersToDelete to false.
-	PrioritizeWorkersToDelete = true
-
 	namespaceStr = "default"
 	instanceName = "raycluster-sample"
 	enableInTreeAutoscaling = true
@@ -361,15 +358,10 @@ func setupTest(t *testing.T) {
 	workerSelector = labels.NewSelector().Add(*instanceReq).Add(*groupNameReq)
 }
 
-func tearDown(t *testing.T) {
-	PrioritizeWorkersToDelete = false
-}
-
 // TestReconcile_UnhealthyEvent tests the case where we have unhealthy events
 // and we want to update the corresponding pods.
 func TestReconcile_UnhealthyEvent(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	testPodName := "eventPod"
 
@@ -520,7 +512,6 @@ func TestReconcile_UnhealthyEvent(t *testing.T) {
 
 func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
@@ -554,7 +545,6 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	var localExpectReplicaNum int32 = 2
 	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = &localExpectReplicaNum
@@ -598,7 +588,6 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 
 func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
@@ -657,7 +646,6 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 
 func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
@@ -716,7 +704,6 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 
 func TestReconcile_PodDCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
@@ -784,7 +771,6 @@ func TestReconcile_PodDCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 
 func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
@@ -849,7 +835,6 @@ func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
 
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
@@ -889,7 +874,6 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 
 func TestReconcileHeadService(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
@@ -994,7 +978,6 @@ func getNotFailedPodItemNum(podList corev1.PodList) int {
 
 func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
@@ -1024,7 +1007,6 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 
 func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// Specify a ServiceAccountName for the head Pod
 	myServiceAccount := corev1.ServiceAccount{
@@ -1076,7 +1058,6 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 
 func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 	ctx := context.Background()
@@ -1107,7 +1088,7 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 
 func TestReconcile_UpdateClusterReason(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
+
 	newScheme := runtime.NewScheme()
 	_ = rayv1alpha1.AddToScheme(newScheme)
 
@@ -1141,7 +1122,6 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 
 func TestUpdateEndpoints(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testServices...).Build()
 	ctx := context.Background()
@@ -1168,7 +1148,6 @@ func TestUpdateEndpoints(t *testing.T) {
 
 func TestGetHeadPodIP(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	extraHeadPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1235,7 +1214,6 @@ func TestGetHeadPodIP(t *testing.T) {
 
 func TestGetHeadServiceIP(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	headServiceIP := "1.2.3.4"
 	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
@@ -1303,7 +1281,6 @@ func TestGetHeadServiceIP(t *testing.T) {
 
 func TestUpdateStatusObservedGeneration(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
@@ -1359,7 +1336,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 
 func TestReconcile_UpdateClusterState(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
+
 	newScheme := runtime.NewScheme()
 	_ = rayv1alpha1.AddToScheme(newScheme)
 
@@ -1482,7 +1459,6 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 func TestCalculateStatus(t *testing.T) {
 	setupTest(t)
-	defer tearDown(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()

@@ -43,10 +43,9 @@ import (
 )
 
 var (
-	DefaultRequeueDuration    = 2 * time.Second
-	PrioritizeWorkersToDelete bool
-	ForcedClusterUpgrade      bool
-	EnableBatchScheduler      bool
+	DefaultRequeueDuration = 2 * time.Second
+	ForcedClusterUpgrade   bool
+	EnableBatchScheduler   bool
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
@@ -547,46 +546,41 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			}
 		}
 
+		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
+		// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
+		deletedWorkers := make(map[string]struct{})
+		deleted := struct{}{}
+		r.Log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
+		for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
+			pod := corev1.Pod{}
+			pod.Name = podsToDelete
+			pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
+			r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
+			if err := r.Delete(ctx, &pod); err != nil {
+				if !errors.IsNotFound(err) {
+					return err
+				}
+				r.Log.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
+			} else {
+				deletedWorkers[pod.Name] = deleted
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
+			}
+		}
+		worker.ScaleStrategy.WorkersToDelete = []string{}
+
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {
 			// TODO (kevin85421): We also need to have a clear story of all the Pod status phases, especially for PodFailed.
-			if isPodRunningOrPendingAndNotDeleting(pod) {
+			if _, ok := deletedWorkers[pod.Name]; !ok && isPodRunningOrPendingAndNotDeleting(pod) {
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
 		diff := workerReplicas - int32(len(runningPods.Items))
-		if PrioritizeWorkersToDelete {
-			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
-			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
-			r.Log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
-					if !errors.IsNotFound(err) {
-						return err
-					}
-					r.Log.Info("reconcilePods", "unable to delete worker ", pod.Name)
-				} else {
-					// For example, the failed Pod (Status: corev1.PodFailed) is not counted in the `runningPods` variable.
-					// Therefore, we should not update `diff` when we delete a failed Pod.
-					if isPodRunningOrPendingAndNotDeleting(pod) {
-						diff++
-					}
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-				}
-			}
-			worker.ScaleStrategy.WorkersToDelete = []string{}
-		}
-
-		// Once we remove the feature flag and commit to those changes, the code below can be cleaned up
-		// It will end being a simple: "if diff > 0 { } else { }"
+		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
 			// pods need to be added
-			r.Log.Info("reconcilePods", "add workers for group", worker.GroupName)
+			r.Log.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
 			// create all workers of this group
 			var i int32
 			for i = 0; i < diff; i++ {
@@ -598,70 +592,19 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		} else if diff == 0 {
 			r.Log.Info("reconcilePods", "all workers already exist for group", worker.GroupName)
 			continue
-		} else if -diff == int32(len(worker.ScaleStrategy.WorkersToDelete)) {
-			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
-					if !errors.IsNotFound(err) {
-						return err
-					}
-					r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
-				}
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-			}
-			continue
 		} else {
-			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
-			// we need to scale down
-			workersToRemove := int32(len(runningPods.Items)) - workerReplicas
-			randomlyRemovedWorkers := workersToRemove - int32(len(worker.ScaleStrategy.WorkersToDelete))
-			// we only need to scale down the workers in the ScaleStrategy
-			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
+			// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
+			randomlyRemovedWorkers := -diff
+			for i := 0; i < int(randomlyRemovedWorkers); i++ {
+				randomPodToDelete := runningPods.Items[i]
+				r.Log.Info("Randomly deleting Pod ", "index ", i, "/", randomlyRemovedWorkers, "with name", randomPodToDelete.Name)
+				if err := r.Delete(ctx, &randomPodToDelete); err != nil {
 					if !errors.IsNotFound(err) {
 						return err
 					}
-					r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
+					r.Log.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
 				}
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-			}
-
-			// remove the remaining pods not part of the scaleStrategy
-			i := 0
-			if int(randomlyRemovedWorkers) > 0 {
-				for _, randomPodToDelete := range runningPods.Items {
-					found := false
-					for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-						if randomPodToDelete.Name == podsToDelete {
-							found = true
-							break
-						}
-					}
-					if !found {
-						r.Log.Info("Randomly deleting pod ", "index ", i, "/", randomlyRemovedWorkers, "with name", randomPodToDelete.Name)
-						if err := r.Delete(ctx, &randomPodToDelete); err != nil {
-							if !errors.IsNotFound(err) {
-								return err
-							}
-							r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", randomPodToDelete.Name)
-						}
-						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", randomPodToDelete.Name)
-						// increment the number of deleted pods
-						i++
-						if i >= int(randomlyRemovedWorkers) {
-							break
-						}
-					}
-				}
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
 			}
 		}
 	}
