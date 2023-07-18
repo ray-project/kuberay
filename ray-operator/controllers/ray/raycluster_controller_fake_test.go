@@ -702,7 +702,7 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 }
 
-func TestReconcile_PodDCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
+func TestReconcile_PodCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
@@ -769,7 +769,7 @@ func TestReconcile_PodDCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
 }
 
-func TestReconcile_PodDCrash_DiffLess0_OK(t *testing.T) {
+func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
