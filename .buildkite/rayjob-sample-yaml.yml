@@ -21,8 +21,12 @@
     - apt-get install -y python-is-python3
     - pip3 install -r tests/framework/config/requirements.txt
 
-    # ensure python is python3
-
+    # Install kubectl
+    - curl -LO https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl
+    - curl -LO "https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl.sha256"
+    - echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+    - install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    - kubectl version --client --output=yaml
 
     # Install helm from https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
     - curl -Lo helm.tar.gz https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
