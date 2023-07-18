@@ -21,7 +21,9 @@
     - apt-get install -y python-is-python3
     - pip3 install -r tests/framework/config/requirements.txt
 
-    # Install kubectl
+    # Install kubectl. Without this, `helm install` seems to fail with
+    # INSTALLATION FAILED: Kubernetes cluster unreachable: Get "https://127.0.0.1:45383/version": 
+    # dial tcp 127.0.0.1:45383: connect: connection refused
     - curl -LO https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl
     - curl -LO "https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl.sha256"
     - echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
@@ -34,6 +36,24 @@
     - mv linux-amd64/helm /usr/local/bin/helm
     - helm repo add kuberay https://ray-project.github.io/kuberay-helm/
     - helm repo update
+
+    # Create kind cluster and verify kubectl is working
+    - kind create cluster
+    - kubectl cluster-info
+    - kubectl get nodes
+    - kubectl get pods --all-namespaces
+
+    # Check KUBECONFIG
+    - echo "KUBECONFIG=$KUBECONFIG"
+
+    # Verify that helm install can connect to the cluster
+    - helm repo add stable https://charts.helm.sh/stable
+    - helm repo update
+    - helm install my-nginx stable/nginx
+    - kubectl get svc my-nginx
+
+    # Kill the kind cluster
+    - kind delete cluster
 
     # # Create the Kubernetes cluster
     # - kind create cluster
