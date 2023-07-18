@@ -1,0 +1,18 @@
+- label: kind in Docker
+  instance_size: large
+  image: golang:1.17
+  commands:
+    # Install Go
+    - export PATH=$PATH:/usr/local/go/bin
+
+    # Install kind
+    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+    - chmod +x ./kind
+    - mv ./kind /usr/local/bin/kind
+
+    # Install Docker
+    - bash scripts/install-docker.sh
+
+    # Delete cluster if it already exists
+    - kind delete cluster
+    - kind create cluster
