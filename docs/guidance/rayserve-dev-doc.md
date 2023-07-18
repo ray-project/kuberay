@@ -2,7 +2,8 @@
 
 Many RayService issues are related to the Ray Serve Python scripts.
 We strongly recommend that users develop and test their Ray Serve scripts in a RayCluster using the same Ray image before deploying them to a RayService.
-In this tutorial, we will show you how to develop [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml).
+In this tutorial, we will show you how to develop a Ray Serve Python script for a MobileNet image classifier on a RayCluster.
+You can deploy and serve the classifier on your local Kind cluster without requiring a GPU.
 Please refer to [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml) and [mobilenet-rayservice.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/mobilenet-rayservice.md) for more details.
 
 
@@ -51,7 +52,7 @@ helm install raycluster kuberay/ray-cluster --version 0.6.0-rc.0 --set image.rep
 ```
 
 The error message in Step 4 indicates that the Ray image `rayproject/ray:${RAY_VERSION}` does not have the TensorFlow package.
-Due to the significant size of TensorFlow, we have opted to use an image with TensorFlow as the base instead of installing it within the Ray runtime environment.
+Due to the significant size of TensorFlow, we have opted to use an image with TensorFlow as the base instead of installing it within the Ray [runtime environment](https://docs.ray.io/en/latest/ray-core/handling-dependencies.html#runtime-environments).
 In this Step, we will change the Ray image from `rayproject/ray:${RAY_VERSION}` to `rayproject/ray-ml:${RAY_VERSION}`.
 
 # Step 6: Repeat Step 3 and Step 4
@@ -123,6 +124,6 @@ python3 mobilenet_req.py
 
 # Step 9: Create a RayService YAML file
 
-In the previous steps, we found that the Ray Serve application can be successfully launched using the Ray image `rayproject/ray-ml:${RAY_VERSION}` and the runtime environment `python-multipart==0.0.6`.
+In the previous steps, we found that the Ray Serve application can be successfully launched using the Ray image `rayproject/ray-ml:${RAY_VERSION}` and the [runtime environment](https://docs.ray.io/en/latest/ray-core/handling-dependencies.html#runtime-environments) `python-multipart==0.0.6`.
 Therefore, we can create a RayService YAML file with the same Ray image and runtime environment.
 For more details, please refer to [ray-service.mobilenet.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-service.mobilenet.yaml) and [mobilenet-rayservice.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/mobilenet-rayservice.md).
