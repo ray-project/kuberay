@@ -13,5 +13,6 @@
     # Install Docker
     - bash scripts/install-docker.sh
 
-    # Create a cluster
+    # Delete cluster if it already exists
+    - kind delete cluster
     - kind create cluster
