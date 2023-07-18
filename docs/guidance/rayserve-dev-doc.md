@@ -1,4 +1,4 @@
-# Develop Ray Serve Python scripts on RayCluster
+# Developing Ray Serve Python scripts on a RayCluster
 
 Many RayService issues are related to the Ray Serve Python scripts.
 We strongly recommend that users develop and test their Ray Serve scripts in a RayCluster using the same Ray image before deploying them to a RayService.
