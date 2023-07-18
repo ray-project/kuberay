@@ -38,6 +38,7 @@
     - helm repo update
 
     # Create kind cluster and verify kubectl is working
+    - kind delete cluster
     - kind create cluster
     - kubectl cluster-info
     - kubectl get nodes
