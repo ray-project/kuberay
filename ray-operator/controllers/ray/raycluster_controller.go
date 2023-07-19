@@ -596,9 +596,10 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		} else {
 			// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
 			randomlyRemovedWorkers := -diff
+			r.Log.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
 			for i := 0; i < int(randomlyRemovedWorkers); i++ {
 				randomPodToDelete := runningPods.Items[i]
-				r.Log.Info("Randomly deleting Pod ", "index ", i, "/", randomlyRemovedWorkers, "with name", randomPodToDelete.Name)
+				r.Log.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 				if err := r.Delete(ctx, &randomPodToDelete); err != nil {
 					if !errors.IsNotFound(err) {
 						return err
