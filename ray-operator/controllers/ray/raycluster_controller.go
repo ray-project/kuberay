@@ -558,6 +558,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
 			if err := r.Delete(ctx, &pod); err != nil {
 				if !errors.IsNotFound(err) {
+					r.Log.Info("reconcilePods", "Fail to delete Pod", pod.Name, "error", err)
 					return err
 				}
 				r.Log.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
