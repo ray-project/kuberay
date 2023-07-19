@@ -525,6 +525,7 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 	tests := map[string]struct {
 		workersToDelete []string
+		numRandomDelete int
 	}{
 		// The random Pod deletion (diff < 0) will delete Pod based on the index of the Pod list.
 		// That is, it will firstly delete Pod1, then Pod2, then Pod3, then Pod4, then Pod5. Hence,
@@ -533,18 +534,27 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 		"Set WorkersToDelete to pod1 and pod2.": {
 			// The pod1 and pod2 will be deleted.
 			workersToDelete: []string{"pod1", "pod2"},
+			numRandomDelete: 0,
 		},
 		"Set WorkersToDelete to pod3 and pod4": {
 			// The pod3 and pod4 will be deleted. If the random Pod deletion is triggered, it will firstly delete pod1 and make the test fail.
 			workersToDelete: []string{"pod3", "pod4"},
+			numRandomDelete: 0,
 		},
 		"Set WorkersToDelete to pod1 and pod5": {
 			// The pod1 and pod5 will be deleted.
 			workersToDelete: []string{"pod1", "pod5"},
+			numRandomDelete: 0,
 		},
 		"Set WorkersToDelete to pod2 and NonExistentPod": {
 			// The pod2 will be deleted, and 1 pod will be deleted randomly to meet `expectedNumWorkerPods`.
 			workersToDelete: []string{"pod2", "NonExistentPod"},
+			numRandomDelete: 1,
+		},
+		"Set WorkersToDelete to NonExistentPod1 and NonExistentPod1": {
+			// Two Pods will be deleted randomly to meet `expectedNumWorkerPods`.
+			workersToDelete: []string{"NonExistentPod1", "NonExistentPod2"},
+			numRandomDelete: 2,
 		},
 	}
 
@@ -556,11 +566,28 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 			assert.Nil(t, err, "Fail to get pod list")
-			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+			numAllPods := len(podList.Items)
+			numWorkerPods := numAllPods - 1 // -1 for the head pod
+			assert.Equal(t, len(testPods), numAllPods, "Init pod list len is wrong")
 
 			// Sanity check
 			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = tc.workersToDelete
-			expectedNumWorkersToDelete := len(podList.Items) - expectedNumWorkerPods - 1 // -1 for the head pod
+			expectedNumWorkersToDelete := numWorkerPods - expectedNumWorkerPods
+			nonExistentPodSet := make(map[string]struct{})
+			for _, podName := range testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete {
+				exist := false
+				for _, pod := range podList.Items {
+					if pod.Name == podName {
+						exist = true
+						break
+					}
+				}
+				if !exist {
+					nonExistentPodSet[podName] = struct{}{}
+				}
+			}
+
+			// Simulate the Ray Autoscaler attempting to scale down.
 			assert.Equal(t, expectedNumWorkersToDelete, len(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete))
 
 			testRayClusterReconciler := &RayClusterReconciler{
@@ -579,6 +606,15 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, int(expectReplicaNum), len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
+
+			// Check if the workersToDelete are deleted.
+			for _, pod := range podList.Items {
+				if contains(tc.workersToDelete, pod.Name) {
+					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
+				}
+			}
+			numRandomDelete := expectedNumWorkersToDelete - (len(tc.workersToDelete) - len(nonExistentPodSet))
+			assert.Equal(t, tc.numRandomDelete, numRandomDelete)
 		})
 	}
 }
