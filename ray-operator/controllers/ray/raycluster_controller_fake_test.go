@@ -79,7 +79,7 @@ func setupTest(t *testing.T) {
 	headGroupServiceAccount = "head-service-account"
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
-	workersToDelete = []string{"pod1", "pod2"}
+	workersToDelete = []string{"pod3", "pod4"}
 	headNodeIP = "1.2.3.4"
 	testPods = []runtime.Object{
 		&corev1.Pod{
