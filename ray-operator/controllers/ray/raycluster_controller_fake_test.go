@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -510,7 +511,7 @@ func TestReconcile_UnhealthyEvent(t *testing.T) {
 	}
 }
 
-func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
+func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 	setupTest(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
@@ -518,10 +519,20 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 	// However, we should refactor the tests in the future.
 
 	// This test makes some assumptions about the testRayCluster object.
-	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas.
+	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) ENABLE_RANDOM_POD_DELETE is set to true.
+	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+	// Pod random deletion is enabled in the following two cases:
+	// Case 1: If Autoscaler is disabled, we will always enable random Pod deletion no matter the value of the feature flag.
+	// Case 2: If Autoscaler is enabled, we will respect the value of the feature flag. If the feature flag environment variable
+	// 		   is not set, we will disable random Pod deletion by default.
+	// Here, we enable the Autoscaler and set the feature flag `ENABLE_RANDOM_POD_DELETE` to true to enable random Pod deletion.
+	os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "true")
+	enableInTreeAutoscaling := true
 
 	tests := map[string]struct {
 		workersToDelete []string
@@ -572,6 +583,7 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 
 			// Sanity check
 			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = tc.workersToDelete
+			testRayCluster.Spec.EnableInTreeAutoscaling = &enableInTreeAutoscaling
 			expectedNumWorkersToDelete := numWorkerPods - expectedNumWorkerPods
 			nonExistentPodSet := make(map[string]struct{})
 			for _, podName := range testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete {
@@ -604,7 +616,7 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 				Namespace:     namespaceStr,
 			})
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
-			assert.Equal(t, int(expectReplicaNum), len(podList.Items),
+			assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
 			// Check if the workersToDelete are deleted.
@@ -619,8 +631,107 @@ func TestReconcile_RemoveWorkersToDelete_OK(t *testing.T) {
 	}
 }
 
+func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
+	setupTest(t)
+
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Disable random Pod deletion.
+	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+	// If Autoscaler is enabled, we will respect the value of the feature flag. If the feature flag environment variable
+	// is not set, we will disable random Pod deletion by default. Hence, this test will disable random Pod deletion.
+	// In this case, the cluster won't achieve the target state (i.e., `expectedNumWorkerPods` worker Pods) in one reconciliation.
+	// Instead, the Ray Autoscaler will gradually scale down the cluster in subsequent reconciliations until it reaches the target state.
+	os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+	enableInTreeAutoscaling := true
+
+	tests := map[string]struct {
+		workersToDelete []string
+		numNonExistPods int
+	}{
+		"Set WorkersToDelete to pod2 and pod3.": {
+			// The pod2 and pod3 will be deleted. The number of remaining Pods will be 3.
+			workersToDelete: []string{"pod2", "pod3"},
+			numNonExistPods: 0,
+		},
+		"Set WorkersToDelete to pod2 and NonExistentPod": {
+			// Only pod2 will be deleted. The number of remaining Pods will be 4.
+			workersToDelete: []string{"pod2", "NonExistentPod"},
+			numNonExistPods: 1,
+		},
+		"Set WorkersToDelete to NonExistentPod1 and NonExistentPod1": {
+			// No Pod will be deleted. The number of remaining Pods will be 5.
+			workersToDelete: []string{"NonExistentPod1", "NonExistentPod2"},
+			numNonExistPods: 2,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			numAllPods := len(podList.Items)
+			numWorkerPods := numAllPods - 1 // -1 for the head pod
+			assert.Equal(t, len(testPods), numAllPods, "Init pod list len is wrong")
+
+			// Sanity check
+			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = tc.workersToDelete
+			testRayCluster.Spec.EnableInTreeAutoscaling = &enableInTreeAutoscaling
+
+			// Because we disable random Pod deletion, only the Pods in the `workersToDelete` will be deleted.
+			expectedNumWorkersToDelete := numWorkerPods - expectedNumWorkerPods - tc.numNonExistPods
+
+			// Simulate the Ray Autoscaler attempting to scale down.
+			assert.Equal(t, expectedNumWorkersToDelete, len(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete)-tc.numNonExistPods)
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			assert.Nil(t, err, "Fail to reconcile Pods")
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: workerSelector,
+				Namespace:     namespaceStr,
+			})
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.Equal(t, expectedNumWorkersToDelete, numWorkerPods-len(podList.Items))
+
+			// Check if the workersToDelete are deleted.
+			for _, pod := range podList.Items {
+				if contains(tc.workersToDelete, pod.Name) {
+					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
+				}
+			}
+		})
+	}
+
+}
+
 func TestReconcile_RandomDelete_OK(t *testing.T) {
 	setupTest(t)
+
+	// Pod random deletion is enabled in the following two cases:
+	// Case 1: If Autoscaler is disabled, we will always enable random Pod deletion no matter the value of the feature flag.
+	// Case 2: If Autoscaler is enabled, we will respect the value of the feature flag. If the feature flag environment variable
+	// 		   is not set, we will disable random Pod deletion by default.
+	// Here, we disable the Autoscaler to enable random Pod deletion.
+	testRayCluster.Spec.EnableInTreeAutoscaling = nil
 
 	var localExpectReplicaNum int32 = 2
 	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = &localExpectReplicaNum
@@ -729,10 +840,12 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 
 	// This test makes some assumptions about the testRayCluster object.
 	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Set the workersToDelete to empty.
+	// (4) Disable Autoscaler.
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+	testRayCluster.Spec.EnableInTreeAutoscaling = nil
 
 	// This test makes some assumptions about the testPods object.
 	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
@@ -848,6 +961,7 @@ func TestReconcile_PodCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
+	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
 	// However, we should refactor the tests in the future.
@@ -860,6 +974,8 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{"pod3"}
+	enableInTreeAutoscaling := true
+	testRayCluster.Spec.EnableInTreeAutoscaling = &enableInTreeAutoscaling
 
 	// This test makes some assumptions about the testPods object.
 	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
@@ -867,46 +983,77 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	numHeadPods := 1
 	oldNumWorkerPods := len(testPods) - numHeadPods
 
-	// Initialize a fake client with newScheme and runtimeObjects.
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
-	ctx := context.Background()
-
-	// Get the pod list from the fake client.
-	podList := corev1.PodList{}
-	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
-
-	// Simulate 1 Pod fails. Because the workersToDelete also contains pod3, the controller will
-	// delete pod3. After the deletion, the number of worker Pods should be 4.
-	podList.Items[3].Status.Phase = corev1.PodFailed
-	err = fakeClient.Update(ctx, &podList.Items[3])
-	assert.Nil(t, err, "Fail to get update pod status")
-
-	// Initialize a new RayClusterReconciler.
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	tests := map[string]struct {
+		ENABLE_RANDOM_POD_DELETE bool
+	}{
+		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
+		"Enable random Pod deletion": {
+			ENABLE_RANDOM_POD_DELETE: true,
+		},
+		"Disable random Pod deletion": {
+			ENABLE_RANDOM_POD_DELETE: false,
+		},
 	}
 
-	// Since the desired state of the workerGroup is 3 replicas, the controller
-	// will delete a worker Pod.
-	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
 
-	err = fakeClient.List(ctx, &podList, &client.ListOptions{
-		LabelSelector: workerSelector,
-		Namespace:     namespaceStr,
-	})
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+			// Get the pod list from the fake client.
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	// Failed Pods (pod3) should be deleted because of the workersToDelete.
-	// Hence, no failed Pods should exist in `podList`.
-	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
-	assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
-		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
+			// Simulate 1 Pod fails. Because the workersToDelete also contains pod3, the controller will
+			// delete pod3. After the deletion, the number of worker Pods should be 4.
+			podList.Items[3].Status.Phase = corev1.PodFailed
+			err = fakeClient.Update(ctx, &podList.Items[3])
+			assert.Nil(t, err, "Fail to get update pod status")
+
+			// Initialize a new RayClusterReconciler.
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			if tc.ENABLE_RANDOM_POD_DELETE {
+				os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "true")
+			} else {
+				os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "false")
+			}
+			cluster := testRayCluster.DeepCopy()
+			// Case 1: ENABLE_RANDOM_POD_DELETE is true.
+			// 	Since the desired state of the workerGroup is 3 replicas, the controller will delete a worker Pod randomly.
+			//  After the deletion, the number of worker Pods should be 3.
+			// Case 2: ENABLE_RANDOM_POD_DELETE is false.
+			//  Only the Pod in the `workersToDelete` will be deleted. After the deletion, the number of worker Pods should be 4.
+			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+			assert.Nil(t, err, "Fail to reconcile Pods")
+
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: workerSelector,
+				Namespace:     namespaceStr,
+			})
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+
+			if tc.ENABLE_RANDOM_POD_DELETE {
+				// Case 1: ENABLE_RANDOM_POD_DELETE is true.
+				assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+				assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
+					"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
+			} else {
+				// Case 2: ENABLE_RANDOM_POD_DELETE is false.
+				assert.Equal(t, expectedNumWorkerPods+1, len(podList.Items))
+				assert.Equal(t, expectedNumWorkerPods+1, getNotFailedPodItemNum(podList),
+					"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
+			}
+		})
+	}
 }
 
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
