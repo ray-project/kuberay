@@ -78,7 +78,7 @@ kubectl exec -it $HEAD_POD -- ray summary actors
 ### Issue 1: Ray Serve script is incorrect.
 
 We strongly recommend that you test your Ray Serve script locally or in a RayCluster before
-deploying it to a RayService. [TODO: https://github.com/ray-project/kuberay/issues/1176]
+deploying it to a RayService. Please refer to [rayserve-dev-doc.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayserve-dev-doc.md) for more details.
 
 ### Issue 2: `serveConfigV2` is incorrect.
 
@@ -101,7 +101,7 @@ Therefore, the YAML file includes `python-multipart` in the runtime environment.
 
 ### Issue 3-2: Examples for troubleshooting dependency issues.
 
-> Note: We highly recommend testing your Ray Serve script locally or in a RayCluster before deploying it to a RayService. This helps identify any dependency issues in the early stages. [TODO: https://github.com/ray-project/kuberay/issues/1176]
+> Note: We highly recommend testing your Ray Serve script locally or in a RayCluster before deploying it to a RayService. This helps identify any dependency issues in the early stages. Please refer to [rayserve-dev-doc.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayserve-dev-doc.md) for more details.
 
 In the [MobileNet example](mobilenet-rayservice.md), the [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py) consists of two functions: `__init__()` and `__call__()`.
 The function `__call__()` will only be called when the Serve application receives a request.
