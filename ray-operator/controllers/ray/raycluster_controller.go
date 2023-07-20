@@ -627,7 +627,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
 				}
 			} else {
-				r.Log.Info(fmt.Sprintf("Random Pod deletion is disabled for cluster %s. The only decision-maker decision-maker for Pod deletions is Autoscaler.", instance.Name))
+				r.Log.Info(fmt.Sprintf("Random Pod deletion is disabled for cluster %s. The only decision-maker for Pod deletions is Autoscaler.", instance.Name))
 			}
 		}
 	}
