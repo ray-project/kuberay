@@ -61,8 +61,6 @@ func main() {
 		"watch-namespace",
 		"",
 		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
-	flag.BoolVar(&ray.PrioritizeWorkersToDelete, "prioritize-workers-to-delete", true,
-		"Temporary feature flag - to be deleted after testing")
 	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
@@ -109,9 +107,6 @@ func main() {
 	}
 
 	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
-	if ray.PrioritizeWorkersToDelete {
-		setupLog.Info("Feature flag prioritize-workers-to-delete is enabled.")
-	}
 	if ray.ForcedClusterUpgrade {
 		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
 	}
