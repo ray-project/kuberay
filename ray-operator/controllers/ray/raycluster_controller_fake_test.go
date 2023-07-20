@@ -720,7 +720,6 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestReconcile_RandomDelete_OK(t *testing.T) {
