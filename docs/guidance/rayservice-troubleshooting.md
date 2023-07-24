@@ -96,7 +96,7 @@ You have two options to resolve this issue:
 
 * Build your own Ray image with the required dependencies.
 * Specify the required dependencies via `runtime_env` in `serveConfigV2` field.
-  * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.5.0`.
+  * For example, the MobileNet example requires `python-multipart`, which is not included in the Ray image `rayproject/ray-ml:2.6.0`.
 Therefore, the YAML file includes `python-multipart` in the runtime environment. For more details, refer to [the MobileNet example](mobilenet-rayservice.md).
 
 ### Issue 3-2: Examples for troubleshooting dependency issues.
@@ -121,7 +121,7 @@ The function `__call__()` will only be called when the Serve application receive
     AssertionError: The `python-multipart` library must be installed to use form parsing..
     ```
 
-* Example 2: Update the image from `rayproject/ray-ml:2.5.0` to `rayproject/ray:2.5.0` in [the MobileNet YAML](../../ray-operator/config/samples/ray-service.mobilenet.yaml). The latter image does not include `tensorflow`.
+* Example 2: Update the image from `rayproject/ray-ml:2.6.0` to `rayproject/ray:2.6.0` in [the MobileNet YAML](../../ray-operator/config/samples/ray-service.mobilenet.yaml). The latter image does not include `tensorflow`.
   * The `tensorflow` library is imported in the [mobilenet.py](https://github.com/ray-project/serve_config_examples/blob/master/mobilenet/mobilenet.py).
   * Example error message:
     ```bash

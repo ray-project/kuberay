@@ -7,7 +7,7 @@ Applications in a pod's containers can use an AWS SDK or the AWS CLI to make API
 
 ## Pitfall
 
-* It's worth noting that this pitfall occurs in Ray images **prior to version 2.5.0**.
+* It's worth noting that this pitfall occurs in Ray images **prior to version 2.6.0**.
 
 For example, users may want to download their files from their S3 bucket with AWS Python SDK (`boto3`) in Ray Pods. However, there is a pitfall in the Ray images. When you execute the **boto3_example_1.py** in a Ray Pod, you will get an error like `An error occurred (403) when calling the HeadObject operation: Forbidden` even if your pod is attached to a service account which has an IAM role that is able to access the S3 bucket.
 
@@ -27,7 +27,7 @@ The root cause is that the version of `boto3` in the Ray image is too old. To el
 a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`).
 
 ```shell
-# image: rayproject/ray:2.5.0
+# image: rayproject/ray:2.6.0
 pip freeze | grep boto
 # boto3==1.4.8
 # botocore==1.8.50
