@@ -7,5 +7,9 @@ resources:
 - apiserver.yaml
 
 commonLabels:
-  app.kubernetes.io/name: kuberay
   app.kubernetes.io/component: kuberay-apiserver
+  app.kubernetes.io/name: kuberay
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: latest

@@ -27,13 +27,13 @@ Ensure that the admin Kubernetes configuration file is located at `~/.kube/confi
 #### Build
 
 ```bash
-go build -a -o raymgr cmd/main.go
+make build
 ```
 
 #### Start Service
 
 ```bash
-./raymgr
+make run
 ```
 
 #### Access
@@ -42,10 +42,10 @@ Access the service at `localhost:8888`.
 
 ### Kubernetes Deployment
 
-#### Build
+#### Build Image
 
 ```bash
-./docker-image-builder.sh
+make docker 
 ```
 
 This script will build and optionally push the image to the remote Docker Hub (hub.byted.org).
@@ -53,7 +53,7 @@ This script will build and optionally push the image to the remote Docker Hub (h
 #### Start Service
 
 ```bash
-kubectl apply -f deploy/
+make install
 ```
 
 #### Access
