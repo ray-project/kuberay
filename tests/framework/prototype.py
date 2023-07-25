@@ -4,6 +4,7 @@ import jsonpatch
 from typing import Dict, List, Optional
 import unittest
 import time
+from kubernetes import client
 
 from framework.utils import (
     create_custom_object,
@@ -243,6 +244,34 @@ class EasyJobRule(Rule):
         headpod_name = headpod.metadata.name
         pod_exec_command(headpod_name, cr_namespace,
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
+
+class ShutdownJobRule(Rule):
+    """Check the Ray cluster is shutdown when setting `spec.shutdownAfterJobFinishes` to true."""
+    def assert_rule(self, custom_resource=None, cr_namespace='default'):
+        custom_api = client.CustomObjectsApi()
+        rayclusters = custom_api.list_namespaced_custom_object(
+            group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
+            plural = 'rayclusters')
+        # Wait for there to be no RayClusters
+        print("Waiting for RayCluster to be deleted...")
+        for i in range(30):
+            rayclusters = custom_api.list_namespaced_custom_object(
+                group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
+                plural = 'rayclusters')
+            # print debug log
+            if i % 10 == 0 and i != 0:
+                logger.info("ShutdownJobRule wait() hasn't converged yet.")
+                logger.info("Number of RayClusters: %d", len(rayclusters["items"]))
+            if len(rayclusters["items"]) == 0:
+                break
+            time.sleep(1)
+
+
+    def trigger_condition(self, custom_resource=None) -> bool:
+        # Trigger if shutdownAfterJobFinishes is set to true
+        steps = "spec.shutdownAfterJobFinishes".split('.')
+        value = search_path(custom_resource, steps)
+        return value is not None and value
 
 class CurlServiceRule(Rule):
     """Using curl to access the deployed application(s) on RayService"""
