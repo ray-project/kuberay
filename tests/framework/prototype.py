@@ -537,6 +537,8 @@ class RayJobAddCREvent(CREvent):
                     if len(rayclusters) != expected_rayclusters:
                         logger.info("expected_rayclusters: %d, actual_rayclusters: %d",
                             expected_rayclusters, len(rayclusters))
+                    # Actually print all the rayclusters for debugging
+                    logger.info("rayclusters: %s", rayclusters)
 
                 if (rayjob.get("status") is not None and
                     rayjob.get("status").get("jobStatus") in ["STOPPED", "FAILED"]):
