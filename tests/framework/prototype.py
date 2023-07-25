@@ -253,7 +253,7 @@ class ShutdownJobRule(Rule):
             group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
             plural = 'rayclusters')
         # Wait for there to be no RayClusters
-        print("Waiting for RayCluster to be deleted...")
+        logger.info("Waiting for RayCluster to be deleted...")
         for i in range(30):
             rayclusters = custom_api.list_namespaced_custom_object(
                 group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
@@ -271,6 +271,7 @@ class ShutdownJobRule(Rule):
         # Trigger if shutdownAfterJobFinishes is set to true
         steps = "spec.shutdownAfterJobFinishes".split('.')
         value = search_path(custom_resource, steps)
+        logger.info("ShutdownJobRule trigger_condition(): %s", value)
         return value is not None and value
 
 class CurlServiceRule(Rule):
