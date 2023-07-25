@@ -495,7 +495,7 @@ class RayJobAddCREvent(CREvent):
         for i in range(self.timeout):
             rayclusters = custom_api.list_namespaced_custom_object(
                 group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
-                plural = 'rayclusters')
+                plural = 'rayclusters')["items"]
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
@@ -537,8 +537,6 @@ class RayJobAddCREvent(CREvent):
                     if len(rayclusters) != expected_rayclusters:
                         logger.info("expected_rayclusters: %d, actual_rayclusters: %d",
                             expected_rayclusters, len(rayclusters))
-                    # Actually print all the rayclusters for debugging
-                    logger.info("rayclusters: %s", rayclusters)
 
                 if (rayjob.get("status") is not None and
                     rayjob.get("status").get("jobStatus") in ["STOPPED", "FAILED"]):
