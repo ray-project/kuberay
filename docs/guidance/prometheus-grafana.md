@@ -271,6 +271,7 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 - Go to `${YOUR_IP}:9090/targets` (e.g. `127.0.0.1:9090/targets`). You should be able to see:
   - `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)`
   - `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)`
+
 ![Prometheus Web UI](../images/prometheus_web_ui.png)
 
 - Go to `${YOUR_IP}:9090/graph`. You should be able to query:
