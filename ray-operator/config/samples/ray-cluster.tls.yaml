@@ -6,6 +6,39 @@ metadata:
   name: raycluster-tls
 spec:
   rayVersion: '2.5.0'
+  # Note: Uncomment the `enableInTreeAutoscaling` and `autoscalerOptions`
+  # if you wish to configure TLS for the autoscaler.
+
+  # enableInTreeAutoscaling: true
+  # autoscalerOptions:
+  #   upscalingMode: Default
+  #   idleTimeoutSeconds: 60
+  #   imagePullPolicy: IfNotPresent
+  #   securityContext: {}
+  #   env:
+  #     - name: RAY_USE_TLS
+  #       value: "1"
+  #     - name: RAY_TLS_SERVER_CERT
+  #       value: "/etc/ray/tls/tls.crt"
+  #     - name: RAY_TLS_SERVER_KEY
+  #       value: "/etc/ray/tls/tls.key"
+  #     - name: RAY_TLS_CA_CERT
+  #       value: "/etc/ca/tls/ca.crt"
+  #   envFrom: []
+  #   # Use volumeMounts to mount the volumes where the TLS certs exist.
+  #   volumeMounts:
+  #     - mountPath: /etc/ca/tls
+  #       name: ca-tls
+  #     - mountPath: /etc/ray/tls
+  #       name: ray-tls
+  #   resources:
+  #     limits:
+  #       cpu: "500m"
+  #       memory: "512Mi"
+  #     requests:
+  #       cpu: "500m"
+  #       memory: "512Mi"
+
   # Ray head pod configuration
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.

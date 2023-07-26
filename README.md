@@ -45,12 +45,12 @@ We also recommend checking out the official Ray guides for deploying on Kubernet
 ## Quick Start
 
 * Try this [end-to-end example](helm-chart/ray-cluster/README.md)!
-* Please choose the version you would like to install. The examples below use the latest stable version `v0.5.0`.
+* Please choose the version you would like to install. The examples below use the latest stable version `v0.6.0`.
 
 | Version  |  Stable |  Suggested Kubernetes Version |
 |----------|:-------:|------------------------------:|
 |  master  |    N    | v1.19 - v1.25 |
-|  v0.5.0  |    Y    | v1.19 - v1.25 |
+|  v0.6.0  |    Y    | v1.19 - v1.25 |
 
 ### Use YAML
 
@@ -59,11 +59,11 @@ Once you have connected to a Kubernetes cluster, run the following commands to d
 
 ```sh
 # case 1: kubectl >= v1.22.0
-export KUBERAY_VERSION=v0.5.0
+export KUBERAY_VERSION=v0.6.0
 kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
 
 # case 2: kubectl < v1.22.0
-# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.5`.
+# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.6`.
 kubectl create -k ray-operator/config/default
 ```
 
@@ -71,7 +71,7 @@ To deploy both the KubeRay Operator and the optional KubeRay API Server run the 
 
 ```sh
 # case 1: kubectl >= v1.22.0
-export KUBERAY_VERSION=v0.5.0
+export KUBERAY_VERSION=v0.6.0
 kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
 kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
 
@@ -92,8 +92,8 @@ Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy 
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-# Install both CRDs and KubeRay operator v0.5.0.
-helm install kuberay-operator kuberay/kuberay-operator --version 0.5.0
+# Install both CRDs and KubeRay operator v0.6.0.
+helm install kuberay-operator kuberay/kuberay-operator --version 0.6.0
 
 # Check the KubeRay operator Pod in `default` namespace
 kubectl get pods

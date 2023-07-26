@@ -12,17 +12,20 @@ from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+    format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d:%H:%M:%S",
+    level=logging.INFO,
+)
+
 
 class CONST:
     """Constants"""
+
     __slots__ = ()
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
-    KUBERAY_LATEST_RELEASE = "kuberay/operator:v0.5.0"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v0.6.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
@@ -42,12 +45,15 @@ class CONST:
     RAY_SERVICE_CRD = "RayService"
     RAY_JOB_CRD = "RayJob"
 
+
 CONST = CONST()
+
 
 class KubernetesClusterManager:
     """
     KubernetesClusterManager controlls the lifecycle of KinD cluster and Kubernetes API client.
     """
+
     def __init__(self) -> None:
         self.k8s_client_dict = {}
 
@@ -59,22 +65,31 @@ class KubernetesClusterManager:
             k8s_client.api_client.close()
         self.k8s_client_dict = {}
 
-    def create_kind_cluster(self, kind_config = None) -> None:
+    def create_kind_cluster(self, kind_config=None) -> None:
         """Create a KinD cluster"""
         # To use NodePort service, `kind_config` needs to set `extraPortMappings` properly.
         kind_config = CONST.DEFAULT_KIND_CONFIG if not kind_config else kind_config
         shell_subprocess_run(f"kind create cluster --wait 900s --config {kind_config}")
         config.load_kube_config()
-        self.k8s_client_dict.update({
-            CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
-            CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi()
-        })
+        self.k8s_client_dict.update(
+            {
+                CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
+                CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi(),
+            }
+        )
 
     def check_cluster_exist(self) -> bool:
         """Check whether KinD cluster exists or not"""
-        return shell_subprocess_run("kubectl cluster-info --context kind-kind", check = False) == 0
+        return (
+            shell_subprocess_run(
+                "kubectl cluster-info --context kind-kind", check=False
+            )
+            == 0
+        )
+
 
 K8S_CLUSTER_MANAGER = KubernetesClusterManager()
+
 
 class OperatorManager:
     """
@@ -87,21 +102,26 @@ class OperatorManager:
         patch             : A jsonpatch that will be applied to the default KubeRay operator config
                             to create the custom config.
     """
-    def __init__(self, docker_image_dict,
-        namespace = 'default', patch = jsonpatch.JsonPatch([])) -> None:
+
+    def __init__(
+        self, docker_image_dict, namespace="default", patch=jsonpatch.JsonPatch([])
+    ) -> None:
         self.docker_image_dict = docker_image_dict
         self.namespace = namespace
         self.values_yaml = {}
         for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
             if key not in self.docker_image_dict:
                 raise Exception(f"Image {key} does not exist!")
-        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+        repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(":")
         if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
-            url = ( "https://github.com/ray-project/kuberay-helm"
-                    f"/raw/kuberay-operator-{tag[1:]}/helm-chart/kuberay-operator/values.yaml"
+            url = (
+                "https://github.com/ray-project/kuberay-helm"
+                f"/raw/kuberay-operator-{tag[1:]}/helm-chart/kuberay-operator/values.yaml"
             )
         else:
-            url = "file:///" + str(CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml"))
+            url = "file:///" + str(
+                CONST.HELM_CHART_ROOT.joinpath("kuberay-operator/values.yaml")
+            )
         with request.urlopen(url) as base_fd:
             self.values_yaml = patch.apply(yaml.safe_load(base_fd))
 
@@ -112,6 +132,7 @@ class OperatorManager:
 
     def __kind_prepare_images(self):
         """Download images and load images into KinD cluster"""
+
         def download_images():
             """Download Docker images from DockerHub"""
             logger.info("Download Docker images: %s", self.docker_image_dict)
@@ -119,9 +140,13 @@ class OperatorManager:
                 # Only pull the image from DockerHub when the image does not
                 # exist in the local docker registry.
                 image = self.docker_image_dict[key]
-                if shell_subprocess_run(
-                        f'docker image inspect {image} > /dev/null', check = False) != 0:
-                    shell_subprocess_run(f'docker pull {image}')
+                if (
+                    shell_subprocess_run(
+                        f"docker image inspect {image} > /dev/null", check=False
+                    )
+                    != 0
+                ):
+                    shell_subprocess_run(f"docker pull {image}")
                 else:
                     logger.info("Image %s exists", image)
 
@@ -129,18 +154,20 @@ class OperatorManager:
         logger.info("Load images into KinD cluster")
         for key in self.docker_image_dict:
             image = self.docker_image_dict[key]
-            shell_subprocess_run(f'kind load docker-image {image}')
+            shell_subprocess_run(f"kind load docker-image {image}")
 
     def __install_crd_and_operator(self):
         """
         Install both CRD and KubeRay operator by kuberay-operator chart.
         """
-        with tempfile.NamedTemporaryFile('w', suffix = '_values.yaml') as values_fd:
+        with tempfile.NamedTemporaryFile("w", suffix="_values.yaml") as values_fd:
             # dump the config to a temporary file and use the file as values.yaml in the chart.
             yaml.safe_dump(self.values_yaml, values_fd)
-            repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(':')
+            repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(":")
             if f"{repo}:{tag}" == CONST.KUBERAY_LATEST_RELEASE:
-                logger.info("Install both CRD and KubeRay operator with the latest release.")
+                logger.info(
+                    "Install both CRD and KubeRay operator with the latest release."
+                )
                 shell_subprocess_run(
                     "helm repo add kuberay https://ray-project.github.io/kuberay-helm/"
                 )
@@ -149,20 +176,23 @@ class OperatorManager:
                     f"kuberay/kuberay-operator --version {tag[1:]}"
                 )
             else:
-                logger.info("Install both CRD and KubeRay operator by kuberay-operator chart")
+                logger.info(
+                    "Install both CRD and KubeRay operator by kuberay-operator chart"
+                )
                 shell_subprocess_run(
                     f"helm install -n {self.namespace} -f {values_fd.name} kuberay-operator "
                     f"{CONST.HELM_CHART_ROOT}/kuberay-operator/ "
                     f"--set image.repository={repo},image.tag={tag}"
                 )
 
+
 def shell_subprocess_run(command, check=True, hide_output=False) -> int:
     """Command will be executed through the shell.
-    
+
     Args:
         check: If true, an error will be raised if the returncode is nonzero
         hide_output: If true, stdout and stderr of the command will be hidden
-    
+
     Returns:
         Return code of the subprocess.
     """
@@ -173,10 +203,11 @@ def shell_subprocess_run(command, check=True, hide_output=False) -> int:
             shell=True,
             check=check,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         ).returncode
     else:
         return subprocess.run(command, shell=True, check=check).returncode
+
 
 def shell_subprocess_check_output(command):
     """
@@ -192,35 +223,43 @@ def shell_subprocess_check_output(command):
         logger.info("Exception: %s", e.output)
         raise
 
+
 def get_pod(namespace, label_selector):
     """Gets pods in the `namespace`. Returns the first pod that has `label_filter`.
     Returns None if the number of matches is not equal to 1.
     """
-    pods = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY].list_namespaced_pod(
-        namespace = namespace, label_selector = label_selector
-    )
+    pods = K8S_CLUSTER_MANAGER.k8s_client_dict[
+        CONST.K8S_V1_CLIENT_KEY
+    ].list_namespaced_pod(namespace=namespace, label_selector=label_selector)
     if len(pods.items) != 1:
         logger.warning(
             "There are %d matches for selector %s in namespace %s, but the expected match is 1.",
-            len(pods.items), label_selector, namespace
+            len(pods.items),
+            label_selector,
+            namespace,
         )
         return None
     return pods.items[0]
 
+
 def get_head_pod(namespace):
     """Gets a head pod in the `namespace`. Returns None if there are no matches."""
-    return get_pod(namespace, 'ray.io/node-type=head')
+    return get_pod(namespace, "ray.io/node-type=head")
 
-def pod_exec_command(pod_name, namespace, exec_command, check = True):
+
+def pod_exec_command(pod_name, namespace, exec_command, check=True):
     """kubectl exec the `exec_command` in the given `pod_name` Pod in the given `namespace`.
     Both STDOUT and STDERR of `exec_command` will be printed.
     """
-    return shell_subprocess_run(f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check)
+    return shell_subprocess_run(
+        f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check
+    )
+
 
 def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
     shell_subprocess_run(
         f"kubectl run {name} --image=radial/busyboxplus:curl -n {namespace} "
-        "--command -- /bin/sh -c \"while true; do sleep 10;done\""
+        '--command -- /bin/sh -c "while true; do sleep 10;done"'
     )
 
     # Wait for curl pod to be created
@@ -228,10 +267,11 @@ def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
     start_time = time.time()
     while time.time() - start_time < timeout_s or timeout_s < 0:
         resp = k8s_v1_api.read_namespaced_pod(name=name, namespace=namespace)
-        if resp.status.phase == 'Running':
+        if resp.status.phase == "Running":
             return
 
     raise TimeoutError(f"Curl pod wasn't started in {timeout_s}s.")
+
 
 def create_custom_object(namespace, cr_object):
     """Create a custom resource based on `cr_object` in the given `namespace`."""
@@ -239,45 +279,83 @@ def create_custom_object(namespace, cr_object):
     crd = cr_object["kind"]
     if crd == CONST.RAY_CLUSTER_CRD:
         k8s_cr_api.create_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayclusters', body = cr_object)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayclusters",
+            body=cr_object,
+        )
     elif crd == CONST.RAY_SERVICE_CRD:
         k8s_cr_api.create_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayservices', body = cr_object)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayservices",
+            body=cr_object,
+        )
     elif crd == CONST.RAY_JOB_CRD:
         k8s_cr_api.create_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayjobs', body = cr_object)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayjobs",
+            body=cr_object,
+        )
+
 
 def delete_custom_object(crd, namespace, cr_name):
     """Delete the given `cr_name` custom resource in the given `namespace`."""
     k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
     if crd == CONST.RAY_CLUSTER_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayclusters', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayclusters",
+            name=cr_name,
+        )
     elif crd == CONST.RAY_SERVICE_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayservices', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayservices",
+            name=cr_name,
+        )
     elif crd == CONST.RAY_JOB_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayjobs', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayjobs",
+            name=cr_name,
+        )
+
 
 def get_custom_object(crd, namespace, cr_name):
     """Get the given `cr_name` custom resource in the given `namespace`."""
     k8s_cr_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
     if crd == CONST.RAY_CLUSTER_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayclusters', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayclusters",
+            name=cr_name,
+        )
     elif crd == CONST.RAY_SERVICE_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayservices', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayservices",
+            name=cr_name,
+        )
     elif crd == CONST.RAY_JOB_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
-            group = 'ray.io', version = 'v1alpha1', namespace = namespace,
-            plural = 'rayjobs', name = cr_name)
+            group="ray.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rayjobs",
+            name=cr_name,
+        )
