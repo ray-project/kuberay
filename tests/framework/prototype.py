@@ -256,12 +256,17 @@ class ShutdownJobRule(Rule):
                 group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
                 plural = 'rayclusters')
             # print debug log
-            if i % 10 == 0 and i != 0:
+            if i != 0:
                 logger.info("ShutdownJobRule wait() hasn't converged yet.")
                 logger.info("Number of RayClusters: %d", len(rayclusters["items"]))
             if len(rayclusters["items"]) == 0:
                 break
             time.sleep(1)
+        else:
+            raise TimeoutError("RayCluster hasn't been deleted in 30 seconds.")
+
+        logger.info("RayCluster has been deleted.")
+        
 
 
     def trigger_condition(self, custom_resource=None) -> bool:
