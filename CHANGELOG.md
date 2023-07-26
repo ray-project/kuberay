@@ -5,6 +5,187 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## v0.6.0 (2023-07-26)
+
+### Highlights
+
+* RayService
+  * RayService starts to support Ray Serve multi-app API (#1136, #1156)
+  * RayService stability improvements (#1231, #1207, #1173)
+  * RayService observability (#1230)
+  * RayService examples
+    * [RayService] Stable Diffusion example ([#1181](https://github.com/ray-project/kuberay/pull/1181), @kevin85421)
+    * MobileNet example ([#1175](https://github.com/ray-project/kuberay/pull/1175), @kevin85421)
+  * RayService troubleshooting handbook (#1221)
+
+* RayJob refactoring (#1177)
+* Autoscaler stability improvements (#1251, #1253)
+
+### RayService
+
+* [RayService][Observability] Add more logging for RayService troubleshooting ([#1230](https://github.com/ray-project/kuberay/pull/1230), @kevin85421)
+* [Bug] Long image pull time will trigger blue-green upgrade after the head is ready ([#1231](https://github.com/ray-project/kuberay/pull/1231), @kevin85421)
+* [RayService] Stable Diffusion example ([#1181](https://github.com/ray-project/kuberay/pull/1181), @kevin85421)
+* [RayService] Update docs to use multi-app ([#1179](https://github.com/ray-project/kuberay/pull/1179), @zcin)
+* [RayService] Change runtime env for e2e autoscaling test ([#1178](https://github.com/ray-project/kuberay/pull/1178), @zcin)
+* [RayService] Add e2e tests ([#1167](https://github.com/ray-project/kuberay/pull/1167), @zcin)
+* [RayService][docs] Improve explanation for config file and in-place updates ([#1229](https://github.com/ray-project/kuberay/pull/1229), @zcin)
+* [RayService][Doc] RayService troubleshooting handbook ([#1221](https://github.com/ray-project/kuberay/pull/1221), @kevin85421)
+* [Doc] Improve RayService doc ([#1235](https://github.com/ray-project/kuberay/pull/1235), @kevin85421)
+* [Doc] Improve FAQ page and RayService troubleshooting guide ([#1225](https://github.com/ray-project/kuberay/pull/1225), @kevin85421)
+* [RayService] Add RayService alb ingress CR ([#1169](https://github.com/ray-project/kuberay/pull/1169), @sihanwang41)
+* [RayService] Add support for multi-app config in yaml-string format ([#1156](https://github.com/ray-project/kuberay/pull/1156), @zcin)
+* [rayservice] Add support for getting multi-app status ([#1136](https://github.com/ray-project/kuberay/pull/1136), @zcin)
+* [Refactor] Remove Dashboard Agent service ([#1207](https://github.com/ray-project/kuberay/pull/1207), @kevin85421)
+* [Bug] KubeRay operator fails to get serve deployment status due to 500 Internal Server Error ([#1173](https://github.com/ray-project/kuberay/pull/1173), @kevin85421)
+* MobileNet example ([#1175](https://github.com/ray-project/kuberay/pull/1175), @kevin85421)
+* [Bug] fix RayActorOptionSpec.items.spec.serveConfig.deployments.rayActorOptions.memory int32 data type ([#1220](https://github.com/ray-project/kuberay/pull/1220), @kevin85421)
+
+### RayJob
+
+* [RayJob] Submit job using K8s job instead of checking Status and using DashboardHTTPClient ([#1177](https://github.com/ray-project/kuberay/pull/1177), @architkulkarni)
+* [Doc] [RayJob] Add documentation for submitterPodTemplate ([#1228](https://github.com/ray-project/kuberay/pull/1228), @architkulkarni)
+
+### Autoscaler
+
+* [release blocker][Feature] Only Autoscaler can make decisions to delete Pods ([#1253](https://github.com/ray-project/kuberay/pull/1253), @kevin85421)
+* [release blocker][Autoscaler] Randomly delete Pods when scaling down the cluster ([#1251](https://github.com/ray-project/kuberay/pull/1251), @kevin85421)
+
+### Helm
+
+* [Helm][RBAC] Introduce the option crNamespacedRbacEnable to enable or disable the creation of Role/RoleBinding for RayCluster preparation ([#1162](https://github.com/ray-project/kuberay/pull/1162), @kevin85421)
+* [Bug] Allow zero replica for workers for Helm ([#968](https://github.com/ray-project/kuberay/pull/968), @ducviet00)
+* [Bug] KubeRay tries to create ClusterRoleBinding when singleNamespaceInstall and rbacEnable are set to true ([#1190](https://github.com/ray-project/kuberay/pull/1190), @kevin85421)
+
+### KubeRay API Server
+
+* Add support for openshift routes ([#1183](https://github.com/ray-project/kuberay/pull/1183), @blublinsky)
+* Adding API server support for service account ([#1148](https://github.com/ray-project/kuberay/pull/1148), @blublinsky)
+
+### Documentation
+
+* [release v0.6.0] Update tags and versions ([#1270](https://github.com/ray-project/kuberay/pull/1270), @kevin85421)
+* [release v0.6.0-rc.1] Update tags and versions ([#1264](https://github.com/ray-project/kuberay/pull/1264), @kevin85421)
+* [release v0.6.0-rc.0] Update tags and versions ([#1237](https://github.com/ray-project/kuberay/pull/1237), @kevin85421)
+* [Doc] Develop Ray Serve Python script on KubeRay ([#1250](https://github.com/ray-project/kuberay/pull/1250), @kevin85421)
+* [Doc] Fix the order of comments in sample Job YAML file ([#1242](https://github.com/ray-project/kuberay/pull/1242), @architkulkarni)
+* [Doc] Upload a screenshot for the Serve page in Ray dashboard ([#1236](https://github.com/ray-project/kuberay/pull/1236), @kevin85421)
+* [Doc] GKE GPU cluster setup ([#1223](https://github.com/ray-project/kuberay/pull/1223), @kevin85421)
+* [Doc][Website] Add complete document link ([#1224](https://github.com/ray-project/kuberay/pull/1224), @yuxiaoba)
+* Add FAQ page ([#1150](https://github.com/ray-project/kuberay/pull/1150), @Yicheng-Lu-llll)
+* [Doc] Add gofumpt lint instructions ([#1180](https://github.com/ray-project/kuberay/pull/1180), @architkulkarni)
+* [Doc] Add `helm update` command to chart validation step in release process ([#1165](https://github.com/ray-project/kuberay/pull/1165), @architkulkarni)
+* [Doc] Add git fetch --tags command to release instructions ([#1164](https://github.com/ray-project/kuberay/pull/1164), @architkulkarni)
+* Add KubeRay related blogs ([#1147](https://github.com/ray-project/kuberay/pull/1147), @tedhtchang)
+* [2.5.0 Release] Change version numbers 2.4.0 -> 2.5.0 ([#1151](https://github.com/ray-project/kuberay/pull/1151), @ArturNiederfahrenhorst)
+* [Sample YAML] Bump ray version in pod security YAML to 2.4.0 ([#1160](https://github.com/ray-project/kuberay/pull/1160), @architkulkarni)
+* Add instruction to skip unit tests in DEVELOPMENT.md ([#1171](https://github.com/ray-project/kuberay/pull/1171), @architkulkarni)
+* Fix typo ([#1241](https://github.com/ray-project/kuberay/pull/1241), @mmourafiq)
+* Fix typo ([#1232](https://github.com/ray-project/kuberay/pull/1232), @mmourafiq)
+
+### CI
+
+* [CI] Add `kind`-in-Docker test to Buildkite CI ([#1243](https://github.com/ray-project/kuberay/pull/1243), @architkulkarni)
+* [CI] Remove unnecessary release.yaml workflow ([#1168](https://github.com/ray-project/kuberay/pull/1168), @architkulkarni)
+
+### Others
+
+* Pin operator version in single namespace installation(#1193) ([#1210](https://github.com/ray-project/kuberay/pull/1210), @wjzhou)
+* RayCluster updates status frequently ([#1211](https://github.com/ray-project/kuberay/pull/1211), @kevin85421)
+* Improve the observability of the init container ([#1149](https://github.com/ray-project/kuberay/pull/1149), @Yicheng-Lu-llll)
+* [Ray Observability] Disk usage in Dashboard ([#1152](https://github.com/ray-project/kuberay/pull/1152), @kevin85421)
+
+
+## v0.5.2 (2023-06-14)
+
+### Highlights
+
+The KubeRay 0.5.2 patch release includes the following improvements.
+* Allow specifying the entire headService and serveService YAML spec. Previously, only certain special fields such as `labels` and `annotations` were exposed to the user.
+  * Expose entire head pod Service to the user ([#1040](https://github.com/ray-project/kuberay/pull/1040), [@architkulkarni](https://github.com/architkulkarni))
+  * Exposing Serve Service ([#1117](https://github.com/ray-project/kuberay/pull/1117), [@kodwanis](https://github.com/kodwanis))
+* RayService stability improvements
+  * RayService object’s Status is being updated due to frequent reconciliation ([#1065](https://github.com/ray-project/kuberay/pull/1065), [@kevin85421](https://github.com/kevin85421))
+  * [RayService] Submit requests to the Dashboard after the head Pod is running and ready ([#1074](https://github.com/ray-project/kuberay/pull/1074), [@kevin85421](https://github.com/kevin85421))
+  * Fix in HeadPod Service Generation logic which was causing frequent reconciliation ([#1056](https://github.com/ray-project/kuberay/pull/1056), [@msumitjain](https://github.com/msumitjain))
+* Allow watching multiple namespaces
+  * [Feature] Watch CR in multiple namespaces with namespaced RBAC resources ([#1106](https://github.com/ray-project/kuberay/pull/1106), [@kevin85421](https://github.com/kevin85421))
+* Autoscaler stability improvements
+   * [Bug] RayService restarts repeatedly with Autoscaler ([#1037](https://github.com/ray-project/kuberay/pull/1037), [@kevin85421](https://github.com/kevin85421))
+  * [Bug] autoscaler not working properly in rayjob ([#1064](https://github.com/ray-project/kuberay/pull/1064), [@Yicheng-Lu-llll](https://github.com/Yicheng-Lu-llll))
+  * [Bug][Autoscaler] Operator does not remove workers ([#1139](https://github.com/ray-project/kuberay/pull/1139), [@kevin85421](https://github.com/kevin85421))
+
+
+### Contributors
+
+We'd like to thank the following contributors for their contributions to this release:
+
+@ByronHsu, @Yicheng-Lu-llll, @anishasthana, @architkulkarni, @blublinsky, @chrisxstyles, @dirtyValera, @ecurtin, @jasoonn, @jjyao, @kevin85421, @kodwanis, @msumitjain, @oginskis, @psschwei, @scarlet25151, @sihanwang41, @tedhtchang, @varungup90, @xubo245
+
+### Features
+
+* Add a flag to enable/disable worker init container injection ([#1069](https://github.com/ray-project/kuberay/pull/1069), @ByronHsu)
+* Add a warning to discourage users from launching a KubeRay-incompatible autoscaler. ([#1102](https://github.com/ray-project/kuberay/pull/1102), @kevin85421)
+* Add consistency check for deepcopy generated files ([#1127](https://github.com/ray-project/kuberay/pull/1127), @varungup90)
+* Add kubernetes dependency in python client library ([#998](https://github.com/ray-project/kuberay/pull/998), @jasoonn)
+* Add support for pvcs to apiserver ([#1118](https://github.com/ray-project/kuberay/pull/1118), @psschwei)
+* Add support for tolerations, env, annotations and labels ([#1070](https://github.com/ray-project/kuberay/pull/1070), @blublinsky)
+* Align Init Container's ImagePullPolicy with Ray Container's ImagePullPolicy ([#1080](https://github.com/ray-project/kuberay/pull/1080), @Yicheng-Lu-llll)
+* Connect Ray client with TLS using Nginx Ingress on Kind cluster (#729) ([#1051](https://github.com/ray-project/kuberay/pull/1051), @tedhtchang)
+* Expose entire head pod Service to the user ([#1040](https://github.com/ray-project/kuberay/pull/1040), @architkulkarni)
+* Exposing Serve Service ([#1117](https://github.com/ray-project/kuberay/pull/1117), @kodwanis)
+* [Test] Add e2e test for sample RayJob yaml on kind ([#935](https://github.com/ray-project/kuberay/pull/935), @architkulkarni)
+* Parametrize ray-operator makefile ([#1121](https://github.com/ray-project/kuberay/pull/1121), @anishasthana)
+* RayService object's Status is being updated due to frequent reconciliation ([#1065](https://github.com/ray-project/kuberay/pull/1065), @kevin85421)
+* [Feature] Support suspend in RayJob ([#926](https://github.com/ray-project/kuberay/pull/926), @oginskis)
+* [Feature] Watch CR in multiple namespaces with namespaced RBAC resources ([#1106](https://github.com/ray-project/kuberay/pull/1106), @kevin85421)
+* [RayService] Submit requests to the Dashboard after the head Pod is running and ready ([#1074](https://github.com/ray-project/kuberay/pull/1074), @kevin85421)
+* feat: Rename instances of rayiov1alpha1 to rayv1alpha1 ([#1112](https://github.com/ray-project/kuberay/pull/1112), @anishasthana)
+* ray-operator: Reuse contexts across ray operator reconcilers ([#1126](https://github.com/ray-project/kuberay/pull/1126), @anishasthana)
+
+### Fixes
+
+* Fix CI ([#1145](https://github.com/ray-project/kuberay/pull/1145), @kevin85421)
+* Fix config frequent update ([#1014](https://github.com/ray-project/kuberay/pull/1014), @sihanwang41)
+* Fix for Sample YAML Config Test - 2.4.0 Failure due to 'suspend' Field  ([#1096](https://github.com/ray-project/kuberay/pull/1096), @Yicheng-Lu-llll)
+* Fix in HeadPod Service Generation logic which was causing frequent reconciliation ([#1056](https://github.com/ray-project/kuberay/pull/1056), @msumitjain)
+* [Bug] Autoscaler doesn't support TLS ([#1119](https://github.com/ray-project/kuberay/pull/1119), @chrisxstyles)
+* [Bug] Enable ResourceQuota by adding Resources for the health-check init container ([#1043](https://github.com/ray-project/kuberay/pull/1043), @kevin85421)
+* [Bug] Fix null map handling in `BuildServiceForHeadPod` function ([#1095](https://github.com/ray-project/kuberay/pull/1095), @architkulkarni)
+* [Bug] RayService restarts repeatedly with Autoscaler  ([#1037](https://github.com/ray-project/kuberay/pull/1037), @kevin85421)
+* [Bug] Service (Serve) changing port from 8000 to 9000 doesn't work ([#1081](https://github.com/ray-project/kuberay/pull/1081), @kevin85421)
+* [Bug] autoscaler not working properly in rayjob  ([#1064](https://github.com/ray-project/kuberay/pull/1064), @Yicheng-Lu-llll)
+* [Bug] compatibility test for the nightly Ray image fails ([#1055](https://github.com/ray-project/kuberay/pull/1055), @kevin85421)
+* [Bug] rayStartParams is required at this moment. ([#1031](https://github.com/ray-project/kuberay/pull/1031), @kevin85421)
+* [Bug][Autoscaler] Operator does not remove workers ([#1139](https://github.com/ray-project/kuberay/pull/1139), @kevin85421)
+* [Bug][Doc] fix the link error of operator document ([#1046](https://github.com/ray-project/kuberay/pull/1046), @xubo245)
+* [Bug][GCS FT] Worker pods crash unexpectedly when gcs_server on head pod is killed ([#1036](https://github.com/ray-project/kuberay/pull/1036), @kevin85421)
+* [Bug][breaking change] Unauthorized 401 error on fetching Ray Custom Resources from K8s API server ([#1128](https://github.com/ray-project/kuberay/pull/1128), @kevin85421)
+* [Bug][k8s compatibility] k8s v1.20.7 ClusterIP svc do not updated under RayService  ([#1110](https://github.com/ray-project/kuberay/pull/1110), @kevin85421)
+* [Helm][ray-cluster] Fix parsing envFrom field in additionalWorkerGroups ([#1039](https://github.com/ray-project/kuberay/pull/1039), @dirtyValera)
+
+### Documentation
+* [Doc] Copyedit dev guide ([#1012](https://github.com/ray-project/kuberay/pull/1012), @architkulkarni)
+* [Doc] Update nav to include missing files and reorganize nav ([#1011](https://github.com/ray-project/kuberay/pull/1011), @architkulkarni)
+* [Doc] Update version from 0.4.0 to 0.5.0 on remaining kuberay docs files ([#1018](https://github.com/ray-project/kuberay/pull/1018), @architkulkarni)
+* [Doc][Website] Update KubeRay introduction and fix layout issues ([#1042](https://github.com/ray-project/kuberay/pull/1042), @kevin85421)
+* [Docs][Website] One word typo fix in docs and README ([#1068](https://github.com/ray-project/kuberay/pull/1068), @ecurtin)
+* Add a document to outline the default settings for `rayStartParams` in Kuberay ([#1057](https://github.com/ray-project/kuberay/pull/1057), @Yicheng-Lu-llll)
+* Example Pod to connect Ray client to remote a Ray cluster with TLS enabled ([#994](https://github.com/ray-project/kuberay/pull/994), @tedhtchang)
+* [Post release v0.5.0] Update CHANGELOG.md ([#1026](https://github.com/ray-project/kuberay/pull/1026), @kevin85421)
+* [Post release v0.5.0] Update release doc ([#1028](https://github.com/ray-project/kuberay/pull/1028), @kevin85421)
+* [Post Ray 2.4 Release] Update Ray versions to Ray 2.4.0 ([#1049](https://github.com/ray-project/kuberay/pull/1049), @jjyao)
+* [Post release v0.5.0] Remove block from rayStartParams ([#1015](https://github.com/ray-project/kuberay/pull/1015), @kevin85421)
+* [Post release v0.5.0] Remove block from rayStartParams for python client and KubeRay operator tests  ([#1050](https://github.com/ray-project/kuberay/pull/1050), @Yicheng-Lu-llll)
+* [Post release v0.5.0] Remove serviceType ([#1013](https://github.com/ray-project/kuberay/pull/1013), @kevin85421)
+* [Post v0.5.0] Remove init containers from YAML files ([#1010](https://github.com/ray-project/kuberay/pull/1010), @kevin85421)
+* [Sample YAML] Bump ray version in pod security YAML to 2.4.0 (#1160) ([#1161](https://github.com/ray-project/kuberay/pull/1161), @architkulkarni)
+* Kuberay 0.5.0 docs validation update docs for GCS FT ([#1004](https://github.com/ray-project/kuberay/pull/1004), @scarlet25151)
+* Release v0.5.0 doc validation ([#997](https://github.com/ray-project/kuberay/pull/997), @kevin85421)
+* Release v0.5.0 doc validation part 2 ([#999](https://github.com/ray-project/kuberay/pull/999), @architkulkarni)
+* Release v0.5.0 python client library validation ([#1006](https://github.com/ray-project/kuberay/pull/1006), @jasoonn)
+* [release v0.5.2] Update tags and versions to 0.5.2 ([#1159](https://github.com/ray-project/kuberay/pull/1159), @architkulkarni)
+
 ## v0.5.0 (2023-04-11)
 
 ### Highlights
