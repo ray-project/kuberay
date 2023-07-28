@@ -288,7 +288,7 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 # Forward the port of Grafana
 kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n prometheus-system 3000:3000
 
-# Check ${YOUR_IP}:3000 for the Grafana login page (e.g. 127.0.0.1:3000).
+# Check ${YOUR_IP}:3000/login for the Grafana login page (e.g. 127.0.0.1:3000/login).
 # The default username is "admin" and the password is "prom-operator".
 ```
 
@@ -296,6 +296,7 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
 
 * After logging in to Grafana successfully, we can import Ray Dashboard into Grafana via **dashboard_default.json**.
   * Click "Dashboards" icon in the left panel.
+  * Click "New".
   * Click "Import".
   * Click "Upload JSON file".
   * Choose [config/grafana/dashboard_default.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/dashboard_default.json).
