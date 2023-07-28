@@ -1,7 +1,3 @@
-# The resource requests and limits in this config are too small for production!
-# For examples with more realistic resource configuration, see
-# ray-cluster.complete.large.yaml and
-# ray-cluster.autoscaler.large.yaml.
 apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:

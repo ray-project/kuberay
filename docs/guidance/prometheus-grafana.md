@@ -35,7 +35,8 @@ kubectl get all -n prometheus-system
 ## Step 4: Install a RayCluster
 
 ```sh
-helm install raycluster kuberay/ray-cluster --version 0.6.0
+# path: ray-operator/config/samples/
+kubectl apply -f ray-cluster.embed-grafana.yaml
 
 # Check ${RAYCLUSTER_HEAD_POD}
 kubectl get pod -l ray.io/node-type=head
@@ -65,6 +66,22 @@ kubectl get service
 * Prometheus metrics format:
   * `# HELP`: Describe the meaning of this metric.
   * `# TYPE`: See [this document](https://prometheus.io/docs/concepts/metric_types/) for more details.
+
+* Three required environment variables are defined in [ray-cluster.embed-grafana.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.embed-grafana.yaml). See the Ray documentation ["Configuring and Managing Ray Dashboard"](https://docs.ray.io/en/latest/cluster/configure-manage-dashboard.html) for more details about these environment variables.
+  ```yaml
+  env:
+    - name: RAY_GRAFANA_IFRAME_HOST
+      value: http://127.0.0.1:3000
+    - name: RAY_GRAFANA_HOST
+      value: http://prometheus-grafana.prometheus-system.svc:80
+    - name: RAY_PROMETHEUS_HOST
+      value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+  ```
+  * Note that we do not deploy Grafana in the head Pod, so we need to set both `RAY_GRAFANA_IFRAME_HOST` and `RAY_GRAFANA_HOST`. 
+    `RAY_GRAFANA_HOST` is used by the head Pod to send health-check requests to Grafana in the backend.
+    `RAY_GRAFANA_IFRAME_HOST` is used by your browser to fetch the Grafana panels from the Grafana server rather than from the head Pod.
+    Because we forward the port of Grafana to `127.0.0.1:3000` in this example, we set `RAY_GRAFANA_IFRAME_HOST` to `http://127.0.0.1:3000`.
+  * `http://` is required.
 
 ## Step 5: Collect Head Node metrics with a ServiceMonitor
 
@@ -287,6 +304,7 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 ```sh
 # Forward the port of Grafana
 kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n prometheus-system 3000:3000
+# Note: You need to update `RAY_GRAFANA_IFRAME_HOST` if you expose Grafana to a different port.
 
 # Check ${YOUR_IP}:3000/login for the Grafana login page (e.g. 127.0.0.1:3000/login).
 # The default username is "admin" and the password is "prom-operator".
@@ -299,8 +317,16 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
   * Click "New".
   * Click "Import".
   * Click "Upload JSON file".
-  * Choose [config/grafana/dashboard_default.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/dashboard_default.json).
+  * Choose [config/grafana/default_grafana_dashboard.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/default_grafana_dashboard.json).
   * Click "Import".
 
 ![Grafana Ray Dashboard](../images/grafana_ray_dashboard.png)
 
+## Step 11: Embed Grafana panels in Ray Dashboard
+
+```sh
+kubectl port-forward --address 0.0.0.0 svc/raycluster-embed-grafana-head-svc 8265:8265
+# Visit http://127.0.0.1:8265/#/metrics in your browser.
+```
+
+![Ray Dashboard with Grafana panels](../images/ray_dashboard_embed_grafana.png)
