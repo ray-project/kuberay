@@ -333,6 +333,8 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
   * Choose [config/grafana/default_grafana_dashboard.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/default_grafana_dashboard.json).
   * Click "Import".
 
+* TODO: Note that importing the dashboard manually is not ideal. We should find a way to import the dashboard automatically.
+
 ![Grafana Ray Dashboard](../images/grafana_ray_dashboard.png)
 
 ## Step 11: Embed Grafana panels in Ray Dashboard
