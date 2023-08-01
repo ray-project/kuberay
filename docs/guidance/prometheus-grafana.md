@@ -323,6 +323,9 @@ kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n promethe
 # The default username is "admin" and the password is "prom-operator".
 ```
 
+> Note: `kubectl port-forward` is not recommended for production use.
+Refer to [this Grafana document](https://grafana.com/tutorials/run-grafana-behind-a-proxy/) for exposing Grafana behind a reverse proxy.
+
 * The default password is defined by `grafana.adminPassword` in the [values.yaml](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/values.yaml) of the kube-prometheus-stack chart.
 
 * After logging in to Grafana successfully, we can import Ray Dashboard into Grafana via **dashboard_default.json**.
