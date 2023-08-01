@@ -274,6 +274,7 @@ class ShutdownJobRule(Rule):
         steps = "spec.shutdownAfterJobFinishes".split('.')
         value = search_path(custom_resource, steps)
         logger.info("ShutdownJobRule trigger_condition(): %s", value)
+        assert isinstance(value, bool) or value is None
         return value is not None and value
 
 class CurlServiceRule(Rule):
