@@ -684,7 +684,11 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 		}
 		r.Log.V(1).Info("updateServeDeployment", "SINGLE_APP json config", string(configJson))
 		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, utils.SINGLE_APP); err != nil {
-			r.Log.Error(err, "fail to update deployment")
+			err = fmt.Errorf(
+				"Fail to create / update Serve deployments. If you observe this error consistently, "+
+					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
+					"https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+					"err: %v", err)
 			return err
 		}
 
@@ -706,7 +710,11 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 		}
 		r.Log.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
 		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, serveConfigType); err != nil {
-			r.Log.Error(err, "fail to update deployment")
+			err = fmt.Errorf(
+				"Fail to create / update Serve applications. If you observe this error consistently, "+
+					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
+					"https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+					"err: %v", err)
 			return err
 		}
 

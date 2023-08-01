@@ -160,7 +160,9 @@ and `app` is the name of the variable representing Ray Serve application within 
 
 ### Issue 5: Fail to create / update Serve applications.
 
-You may encounter the following error message when KubeRay tries to create / update Serve applications:
+You may encounter the following error messages when KubeRay tries to create / update Serve applications:
+
+#### Error message 1: `connect: connection refused`
 
 ```
 Put "http://${HEAD_SVC_FQDN}:52365/api/serve/applications/": dial tcp $HEAD_IP:52365: connect: connection refused
@@ -170,11 +172,16 @@ For RayService, the KubeRay operator submits a request to the RayCluster for cre
 It's important to note that the Dashboard, Dashboard Agent and GCS may take a few seconds to start up after the head Pod is ready.
 As a result, the request may fail a few times initially before the necessary components are fully operational.
 
-If you continue to encounter this issue after 1 minute, there are several possible causes:
+If you continue to encounter this issue after waiting for 1 minute, it's possible that the dashboard or dashboard agent may have failed to start.
+For more information, you can check the `dashboard.log` and `dashboard_agent.log` files located at `/tmp/ray/session_latest/logs/` on the head Pod.
 
-* The Dashboard and dashboard agent failed to start up due to some reasons. You can check the `dashboard.log` and `dashboard_agent.log` files located at `/tmp/ray/session_latest/logs/` on the head Pod for more information.
+#### Error message 2: `i/o timeout`
 
-* There is a Kubernetes NetworkPolicy blocking the traffic between the KubeRay operator and the dashboard agent port (i.e., 52365). Please review your NetworkPolicy configuration.
+```
+Put "http://${HEAD_SVC_FQDN}:52365/api/serve/applications/": dial tcp $HEAD_IP:52365: i/o timeout"
+```
+
+One possible cause of this issue could be a Kubernetes NetworkPolicy blocking the traffic between the Ray Pods and the dashboard agent's port (i.e., 52365).
 
 ### Issue 6: `runtime_env`
 
