@@ -39,6 +39,7 @@ class CONST:
     # Ray features
     RAY_FT = "RAY_FT"
     RAY_SERVICE = "RAY_SERVICE"
+    RAY_SERVE_FT = "RAY_SERVE_FT"
 
     # Custom Resource Definitions
     RAY_CLUSTER_CRD = "RayCluster"
