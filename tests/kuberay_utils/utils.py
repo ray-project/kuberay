@@ -31,6 +31,11 @@ def is_feature_supported(ray_version, feature):
     major, minor, _ = [int(s) for s in ray_version.split('.')]
     if feature in [CONST.RAY_FT, CONST.RAY_SERVICE]:
         return major * 100 + minor > 113
+    # Before Ray 2.6.0, there was a bug in Ray Serve that caused the
+    # test_ray_serve to be quite unstable. Therefore, we only run
+    # `test_ray_serve` for Ray versions 2.6.0 and later.
+    if feature == CONST.RAY_SERVE_FT:
+        return major * 100 + minor >= 206
     return False
 
 def create_ray_cluster(template_name, ray_version, ray_image):
