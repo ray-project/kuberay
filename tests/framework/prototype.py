@@ -248,7 +248,7 @@ class EasyJobRule(Rule):
 class ShutdownJobRule(Rule):
     """Check the Ray cluster is shutdown when setting `spec.shutdownAfterJobFinishes` to true."""
     def assert_rule(self, custom_resource=None, cr_namespace='default'):
-        custom_api = client.CustomObjectsApi()
+        custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         # Wait for there to be no RayClusters
         logger.info("Waiting for RayCluster to be deleted...")
         for i in range(30):
@@ -497,7 +497,7 @@ class RayJobAddCREvent(CREvent):
         #   (4) RayJob named "rayjob-sample" has status "SUCCEEDED".
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        custom_api = client.CustomObjectsApi()
+        custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         for i in range(self.timeout):
             rayclusters = custom_api.list_namespaced_custom_object(
                 group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
