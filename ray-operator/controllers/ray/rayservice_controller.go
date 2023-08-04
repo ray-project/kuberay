@@ -37,14 +37,14 @@ import (
 
 // This variable is mutable for unit testing purpose.
 var (
-	ServiceUnhealthySecondThreshold = 60.0 // Serve deployment related health check.
+	ServiceUnhealthySecondThreshold = 900.0 // Serve deployment related health check.
 )
 
 const (
 	ServiceDefaultRequeueDuration      = 2 * time.Second
 	ServiceRestartRequeueDuration      = 10 * time.Second
 	RayClusterDeletionDelayDuration    = 60 * time.Second
-	DeploymentUnhealthySecondThreshold = 60.0 // Dashboard agent related health check.
+	DeploymentUnhealthySecondThreshold = 300.0 // Dashboard agent related health check.
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -730,9 +730,12 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // `getAndCheckServeStatus` gets Serve applications' and deployments' statuses, updates health timestamps,
 // and checks if the RayCluster is overall healthy. It takes as one of its inputs `serveConfigType`, which
 // is used to decide whether to query the single-application Serve REST API or the multi-application Serve
-// REST API. It's return values should be interpreted as:
+// REST API. It's return values should be interpreted as: (isHealthy, isReady, err).
 //
-// (Serve app healthy?, Serve app ready?, error if failed to get Serve statuses)
+// (1) `isHealthy` is used to determine whether restart the RayCluster or not.
+// (2) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
+// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a
+// 		look at dashboard agent rather than Ray Serve applications.
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
 	// If the `unhealthySecondThreshold` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
 	// which can be set in a test. This is used for testing purposes.
@@ -789,26 +792,32 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			Deployments:          make(map[string]rayv1alpha1.ServeDeploymentStatus),
 		}
 
-		// Check app status
-		if app.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
-			// Check previous app status
-			if prevApplicationStatus.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
+		// `isHealthy` is used to determine whether restart the RayCluster or not. If the serve application is `UNHEALTHY` or `DEPLOY_FAILED`
+		// for more than `serviceUnhealthySecondThreshold` seconds, then KubeRay will consider the RayCluster unhealthy and prepare a new RayCluster.
+		if isServeAppUnhealthyOrDeployedFailed(app.Status) {
+			if isServeAppUnhealthyOrDeployedFailed(prevApplicationStatus.Status) {
 				if prevApplicationStatus.HealthLastUpdateTime != nil {
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
 					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
 						r.Log.Info("Restart RayCluster", "appName", appName, "restart reason",
 							fmt.Sprintf(
-								"The status of the serve application %s has not been RUNNING for more than %f seconds. "+
+								"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED for more than %f seconds. "+
 									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. ",
 								appName, serviceUnhealthySecondThreshold))
 						isHealthy = false
 					}
 				}
 			}
+		}
+
+		// `isReady` is used to determine whether the Serve application is ready or not. The cluster switchover only happens when all Serve
+		// applications in this RayCluster are ready so that the incoming traffic will not be dropped. Note that if `isHealthy` is false,
+		// then `isReady` must be false as well.
+		if app.Status != rayv1alpha1.ApplicationStatusEnum.RUNNING {
 			isReady = false
 		}
 
-		// Check deployment statuses
+		// Copy deployment statuses
 		for deploymentName, deployment := range app.Deployments {
 			deploymentStatus := rayv1alpha1.ServeDeploymentStatus{
 				Status:               deployment.Status,
@@ -817,26 +826,21 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 				HealthLastUpdateTime: &timeNow,
 			}
 
-			if deployment.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+			if deployment.Status == rayv1alpha1.DeploymentStatusEnum.UNHEALTHY {
 				prevStatus, exist := prevApplicationStatus.Deployments[deploymentName]
 				if exist {
-					if prevStatus.Status != rayv1alpha1.DeploymentStatusEnum.HEALTHY {
+					if prevStatus.Status == rayv1alpha1.DeploymentStatusEnum.UNHEALTHY {
 						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
-
-						if !isHealthy || (prevStatus.HealthLastUpdateTime != nil && time.Since(prevStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold) {
-							// TODO (kevin85421): Without `!isHealthy`, this `if` statement is almost impossible to be reached because the `HealthLastUpdateTime` of a serve deployment
-							// is always later than the `HealthLastUpdateTime` of the serve application. Hence, the restart is always triggered by the serve application. If we
-							// can confirm that `isHealthy = false` is always set by the serve application check, we can remove the `time.Since` check here.
+						if !isHealthy {
 							r.Log.Info("Restart RayCluster", "deploymentName", deploymentName, "appName", appName, "restart reason",
 								fmt.Sprintf(
-									"The status of the serve deployment %s or the serve application %s has not been HEALTHY/RUNNING for more than %f seconds. "+
+									"The serve application %s has been UNHEALTHY or DEPLOY_FAILED for more than %f seconds. "+
+										"This may be caused by the serve deployment %s is UNHEALTHY. "+
 										"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. "+
-										"The message of the serve deployment is: %s", deploymentName, appName, serviceUnhealthySecondThreshold, deploymentStatus.Message))
-							isHealthy = false
+										"The message of the serve deployment is: %s", appName, serviceUnhealthySecondThreshold, deploymentName, deploymentStatus.Message))
 						}
 					}
 				}
-				isReady = false
 			}
 			applicationStatus.Deployments[deploymentName] = deploymentStatus
 		}
@@ -1213,4 +1217,8 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 	}
 
 	return utils.IsRunningAndReady(&podList.Items[0]), nil
+}
+
+func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
+	return appStatus == rayv1alpha1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED
 }
