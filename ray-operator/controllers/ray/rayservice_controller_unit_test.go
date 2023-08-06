@@ -461,7 +461,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOYING)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOYING,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
 			},
@@ -476,7 +476,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOYING,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Time},
 			},
@@ -492,7 +492,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.UNHEALTHY,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
 			},
@@ -508,7 +508,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.UNHEALTHY,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold-1))},
 			},
@@ -524,7 +524,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
 			},
@@ -540,7 +540,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED)
 	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
 		Applications: map[string]rayv1alpha1.AppStatus{
-			serveAppName: rayv1alpha1.AppStatus{
+			serveAppName: {
 				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED,
 				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold-1))},
 			},
