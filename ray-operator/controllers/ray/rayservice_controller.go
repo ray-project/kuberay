@@ -799,7 +799,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 				if prevApplicationStatus.HealthLastUpdateTime != nil {
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
 					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-						r.Log.Info("Restart RayCluster", "appName", appName, "restart reason",
+						r.Log.Info("Restart RayCluster", "appName", appName, "appStatus", app.Status, "restart reason",
 							fmt.Sprintf(
 								"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED for more than %f seconds. "+
 									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. ",
