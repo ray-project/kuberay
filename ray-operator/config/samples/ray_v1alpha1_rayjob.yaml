@@ -4,6 +4,8 @@ metadata:
   name: rayjob-sample
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
+  # ShutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
+  shutdownAfterJobFinishes: true
   # runtimeEnv decoded to '{
   #    "pip": [
   #        "requests==2.26.0",
@@ -13,8 +15,6 @@ spec:
   #        "counter_name": "test_counter"
   #    }
   #}'
-  # ShutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
-  shutdownAfterJobFinishes: false
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.

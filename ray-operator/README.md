@@ -43,7 +43,7 @@ You can update the number of replicas in a worker group, and specify which exact
 ### Deploy the operator
 
 ```shell
-kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.5.0&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.6.0&timeout=90s"
 ```
 
 Check that the controller is running.

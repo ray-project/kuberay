@@ -5,7 +5,7 @@
 ## Prerequisites
 
 * Ray 1.10 or higher
-* KubeRay v0.3.0+. (v0.5.0+ is recommended)
+* KubeRay v0.3.0+. (v0.6.0+ is recommended)
 
 ## What is a RayJob?
 

@@ -92,6 +92,12 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 
+	// This KubeRay operator environment variable is used to determine if random Pod
+	// deletion should be enabled. Note that this only takes effect when autoscaling
+	// is enabled for the RayCluster. This is a feature flag for v0.6.0, and will be
+	// removed if the default behavior is stable enoguh.
+	ENABLE_RANDOM_POD_DELETE = "ENABLE_RANDOM_POD_DELETE"
+
 	// Ray core default configurations
 	DefaultRedisPassword                 = "5241590000000000"
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
