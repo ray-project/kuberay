@@ -1,0 +1,13 @@
+name: test-quay
+
+jobs:
+  test_login_quay:
+    name: Test Quay
+    runs-on: ubuntu-latest
+    steps:
+    - name: Log in to Quay.io
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
