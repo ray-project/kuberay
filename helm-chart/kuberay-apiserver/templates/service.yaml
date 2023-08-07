@@ -5,7 +5,7 @@ metadata:
   annotations:
     prometheus.io/path: /metrics
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
+    prometheus.io/port: "8888"
 spec:
   type: {{ .Values.service.type }}
   selector:
