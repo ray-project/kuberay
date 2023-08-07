@@ -835,7 +835,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 							r.Log.Info("Restart RayCluster", "deploymentName", deploymentName, "appName", appName, "restart reason",
 								fmt.Sprintf(
 									"The serve application %s has been UNHEALTHY or DEPLOY_FAILED for more than %f seconds. "+
-										"This may be caused by the serve deployment %s is UNHEALTHY. "+
+										"This may be caused by the serve deployment %s being UNHEALTHY. "+
 										"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. "+
 										"The message of the serve deployment is: %s", appName, serviceUnhealthySecondThreshold, deploymentName, deploymentStatus.Message))
 						}
