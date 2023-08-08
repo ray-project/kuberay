@@ -26,7 +26,20 @@ kubectl get all -n prometheus-system
 # deployment.apps/prometheus-kube-state-metrics         1/1     1            1           46s
 ```
 
-* KubeRay provides an [install.sh script](https://github.com/ray-project/kuberay/blob/master/install/prometheus/install.sh) to install the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
+* KubeRay provides an [install.sh script](https://github.com/ray-project/kuberay/blob/master/install/prometheus/install.sh) to install the [kube-prometheus-stack v48.2.1](https://github.com/prometheus-community/helm-charts/tree/kube-prometheus-stack-48.2.1/charts/kube-prometheus-stack) chart and related custom resources, including **ServiceMonitor**, **PodMonitor** and **PrometheusRule**, in the namespace `prometheus-system` automatically.
+
+* We made some modifications to the original `values.yaml` in kube-prometheus-stack chart to allow embedding Grafana panels in Ray Dashboard. See [overrides.yaml](https://github.com/ray-project/kuberay/tree/master/install/prometheus/overrides.yaml) for more details.
+  ```yaml
+  grafana:
+    grafana.ini:
+      security:
+        allow_embedding: true
+      auth.anonymous:
+        enabled: true
+        org_role: Viewer
+  ```
+
+
 
 ## Step 3: Install a KubeRay operator
 
@@ -35,7 +48,8 @@ kubectl get all -n prometheus-system
 ## Step 4: Install a RayCluster
 
 ```sh
-helm install raycluster kuberay/ray-cluster --version 0.5.0
+# path: ray-operator/config/samples/
+kubectl apply -f ray-cluster.embed-grafana.yaml
 
 # Check ${RAYCLUSTER_HEAD_POD}
 kubectl get pod -l ray.io/node-type=head
@@ -65,6 +79,22 @@ kubectl get service
 * Prometheus metrics format:
   * `# HELP`: Describe the meaning of this metric.
   * `# TYPE`: See [this document](https://prometheus.io/docs/concepts/metric_types/) for more details.
+
+* Three required environment variables are defined in [ray-cluster.embed-grafana.yaml](https://github.com/ray-project/kuberay/blob/master/ray-operator/config/samples/ray-cluster.embed-grafana.yaml). See the Ray documentation ["Configuring and Managing Ray Dashboard"](https://docs.ray.io/en/latest/cluster/configure-manage-dashboard.html) for more details about these environment variables.
+  ```yaml
+  env:
+    - name: RAY_GRAFANA_IFRAME_HOST
+      value: http://127.0.0.1:3000
+    - name: RAY_GRAFANA_HOST
+      value: http://prometheus-grafana.prometheus-system.svc:80
+    - name: RAY_PROMETHEUS_HOST
+      value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+  ```
+  * Note that we do not deploy Grafana in the head Pod, so we need to set both `RAY_GRAFANA_IFRAME_HOST` and `RAY_GRAFANA_HOST`. 
+    `RAY_GRAFANA_HOST` is used by the head Pod to send health-check requests to Grafana in the backend.
+    `RAY_GRAFANA_IFRAME_HOST` is used by your browser to fetch the Grafana panels from the Grafana server rather than from the head Pod.
+    Because we forward the port of Grafana to `127.0.0.1:3000` in this example, we set `RAY_GRAFANA_IFRAME_HOST` to `http://127.0.0.1:3000`.
+  * `http://` is required.
 
 ## Step 5: Collect Head Node metrics with a ServiceMonitor
 
@@ -271,6 +301,7 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 - Go to `${YOUR_IP}:9090/targets` (e.g. `127.0.0.1:9090/targets`). You should be able to see:
   - `podMonitor/prometheus-system/ray-workers-monitor/0 (1/1 up)`
   - `serviceMonitor/prometheus-system/ray-head-monitor/0 (1/1 up)`
+
 ![Prometheus Web UI](../images/prometheus_web_ui.png)
 
 - Go to `${YOUR_IP}:9090/graph`. You should be able to query:
@@ -286,19 +317,36 @@ kubectl port-forward --address 0.0.0.0 prometheus-prometheus-kube-prometheus-pro
 ```sh
 # Forward the port of Grafana
 kubectl port-forward --address 0.0.0.0 deployment/prometheus-grafana -n prometheus-system 3000:3000
+# Note: You need to update `RAY_GRAFANA_IFRAME_HOST` if you expose Grafana to a different port.
 
-# Check ${YOUR_IP}:3000 for the Grafana login page (e.g. 127.0.0.1:3000).
+# Check ${YOUR_IP}:3000/login for the Grafana login page (e.g. 127.0.0.1:3000/login).
 # The default username is "admin" and the password is "prom-operator".
 ```
+
+> Note: `kubectl port-forward` is not recommended for production use.
+Refer to [this Grafana document](https://grafana.com/tutorials/run-grafana-behind-a-proxy/) for exposing Grafana behind a reverse proxy.
 
 * The default password is defined by `grafana.adminPassword` in the [values.yaml](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/values.yaml) of the kube-prometheus-stack chart.
 
 * After logging in to Grafana successfully, we can import Ray Dashboard into Grafana via **dashboard_default.json**.
   * Click "Dashboards" icon in the left panel.
+  * Click "New".
   * Click "Import".
   * Click "Upload JSON file".
-  * Choose [config/grafana/dashboard_default.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/dashboard_default.json).
+  * Choose a JSON file.
+    * Case 1: If you are using Ray 2.5.0, you can use [config/grafana/default_grafana_dashboard.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/default_grafana_dashboard.json).
+    * Case 2: Otherwise, you should import the `default_grafana_dashboard.json` file from `/tmp/ray/session_latest/metrics/grafana/dashboards/` in the head Pod. You can use `kubectl cp` to copy the file from the head Pod to your local machine.
   * Click "Import".
+
+* TODO: Note that importing the dashboard manually is not ideal. We should find a way to import the dashboard automatically.
 
 ![Grafana Ray Dashboard](../images/grafana_ray_dashboard.png)
 
+## Step 11: Embed Grafana panels in Ray Dashboard
+
+```sh
+kubectl port-forward --address 0.0.0.0 svc/raycluster-embed-grafana-head-svc 8265:8265
+# Visit http://127.0.0.1:8265/#/metrics in your browser.
+```
+
+![Ray Dashboard with Grafana panels](../images/ray_dashboard_embed_grafana.png)

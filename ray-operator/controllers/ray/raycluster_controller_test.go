@@ -240,13 +240,6 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
 
-		It("should have only 2 running worker", func() {
-			// retry listing pods, given that last update may not immediately happen.
-			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
-		})
-
 		It("should update a raycluster object", func() {
 			// adding a scale strategy
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -254,18 +247,18 @@ var _ = Context("Inside the default namespace", func() {
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
 				podToDelete := workerPods.Items[0]
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
 				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
 				return k8sClient.Update(ctx, myRayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
 
-		It("should have only 1 running worker", func() {
+		It("should have only 2 running workers", func() {
 			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
+				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("should increase replicas past maxReplicas", func() {

@@ -25,7 +25,7 @@ head:
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   # enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
-  # The example configuration shown below below represents the DEFAULT values.
+  # The example configuration shown below represents the DEFAULT values.
   # autoscalerOptions:
     # upscalingMode: Default
     # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.

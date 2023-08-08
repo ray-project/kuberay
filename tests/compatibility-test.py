@@ -112,6 +112,10 @@ class RayFTTestCase(unittest.TestCase):
 
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
+        if not utils.is_feature_supported(ray_version, CONST.RAY_SERVE_FT):
+            raise unittest.SkipTest(
+                "This test is flaky before Ray 2.6.0, so we only run it for 2.6.0 and later."
+            )
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
 
