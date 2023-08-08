@@ -63,7 +63,7 @@ runs:
     env:
       GITHUB_ACTIONS: true
       RAY_IMAGE: rayproject/ray:${{ inputs.ray_version }}
-      OPERATOR_IMAGE: kuberay/operator:v0.5.0 # The operator image in the latest KubeRay release.
+      OPERATOR_IMAGE: kuberay/operator:v0.6.0 # The operator image in the latest KubeRay release.
     run: |
       python tests/test_sample_raycluster_yamls.py
     shell: bash
@@ -83,7 +83,7 @@ runs:
     env:
       GITHUB_ACTIONS: true
       RAY_IMAGE: rayproject/ray:${{ inputs.ray_version }}
-      OPERATOR_IMAGE: kuberay/operator:v0.5.0 # The operator image in the latest KubeRay release.
+      OPERATOR_IMAGE: kuberay/operator:v0.6.0 # The operator image in the latest KubeRay release.
     run: |
       python tests/test_sample_rayjob_yamls.py
     shell: bash

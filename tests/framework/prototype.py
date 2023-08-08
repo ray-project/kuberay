@@ -4,6 +4,7 @@ import jsonpatch
 from typing import Dict, List, Optional
 import unittest
 import time
+from kubernetes import client
 
 from framework.utils import (
     create_custom_object,
@@ -244,6 +245,38 @@ class EasyJobRule(Rule):
         pod_exec_command(headpod_name, cr_namespace,
             "python -c \"import ray; ray.init(); print(ray.cluster_resources())\"")
 
+class ShutdownJobRule(Rule):
+    """Check the Ray cluster is shutdown when setting `spec.shutdownAfterJobFinishes` to true."""
+    def assert_rule(self, custom_resource=None, cr_namespace='default'):
+        custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+        # Wait for there to be no RayClusters
+        logger.info("Waiting for RayCluster to be deleted...")
+        for i in range(30):
+            rayclusters = custom_api.list_namespaced_custom_object(
+                group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
+                plural = 'rayclusters')
+            # print debug log
+            if i != 0:
+                logger.info("ShutdownJobRule wait() hasn't converged yet.")
+                logger.info("Number of RayClusters: %d", len(rayclusters["items"]))
+            if len(rayclusters["items"]) == 0:
+                break
+            time.sleep(1)
+        else:
+            raise TimeoutError("RayCluster hasn't been deleted in 30 seconds.")
+
+        logger.info("RayCluster has been deleted.")
+        
+
+
+    def trigger_condition(self, custom_resource=None) -> bool:
+        # Trigger if shutdownAfterJobFinishes is set to true
+        steps = "spec.shutdownAfterJobFinishes".split('.')
+        value = search_path(custom_resource, steps)
+        logger.info("ShutdownJobRule trigger_condition(): %s", value)
+        assert isinstance(value, bool) or value is None
+        return value is not None and value
+
 class CurlServiceRule(Rule):
     """Using curl to access the deployed application(s) on RayService"""
     CURL_CMD_FMT = (
@@ -456,13 +489,19 @@ class RayJobAddCREvent(CREvent):
         start_time = time.time()
         expected_head_pods = get_expected_head_pods(self.custom_resource_object)
         expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
+        expected_rayclusters = 1
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
-        #   (3) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        #   (3) A RayCluster has been created.
+        #   (4) RayJob named "rayjob-sample" has status "SUCCEEDED".
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         for i in range(self.timeout):
+            rayclusters = custom_api.list_namespaced_custom_object(
+                group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
+                plural = 'rayclusters')["items"]
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
@@ -474,7 +513,8 @@ class RayJobAddCREvent(CREvent):
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)
                     and rayjob.get('status') is not None
-                    and rayjob.get('status').get('jobStatus') == "SUCCEEDED"):
+                    and rayjob.get('status').get('jobStatus') == "SUCCEEDED"
+                    and len(rayclusters) == expected_rayclusters):
                 converge = True
                 logger.info("--- RayJobAddCREvent converged in %s seconds ---",
                             time.time() - start_time)
@@ -500,6 +540,9 @@ class RayJobAddCREvent(CREvent):
                     elif rayjob.get('status').get('jobStatus') != "SUCCEEDED":
                         logger.info("rayjob status is not SUCCEEDED yet.")
                         logger.info("rayjob status: %s", rayjob.get('status').get('jobStatus'))
+                    if len(rayclusters) != expected_rayclusters:
+                        logger.info("expected_rayclusters: %d, actual_rayclusters: %d",
+                            expected_rayclusters, len(rayclusters))
 
                 if (rayjob.get("status") is not None and
                     rayjob.get("status").get("jobStatus") in ["STOPPED", "FAILED"]):

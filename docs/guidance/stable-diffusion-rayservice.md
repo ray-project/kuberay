@@ -7,10 +7,10 @@ and [the Ray documentation](https://docs.ray.io/en/latest/serve/tutorials/stable
 
 Follow [aws-eks-gpu-cluster.md](./aws-eks-gpu-cluster.md) or [gcp-gke-gpu-cluster.md](./gcp-gke-gpu-cluster.md) to create a Kubernetes cluster with 1 CPU node and 1 GPU node.
 
-## Step 2: Install the nightly KubeRay operator
+## Step 2: Install KubeRay operator
 
-Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the **nightly** KubeRay operator via 
-Helm. We're installing the nightly release here since this example's YAML file uses `serveConfigV2`, which uses features that will be released in KubeRay v0.6.0.
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
+Please note that the YAML file in this example uses `serveConfigV2`, which is supported starting from KubeRay v0.6.0.
 
 ## Step 3: Install a RayService
 

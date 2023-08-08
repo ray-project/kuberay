@@ -42,6 +42,9 @@ spec:
         {{- if .Values.head.serviceAccountName }}
         serviceAccountName: {{ .Values.head.serviceAccountName }}
         {{- end }}
+        {{- if .Values.head.initContainers }}
+        initContainers: {{- toYaml .Values.head.initContainers | nindent 10 }}
+        {{- end }}
         containers:
           - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             name: ray-head
@@ -111,6 +114,9 @@ spec:
         {{- if $values.serviceAccountName }}
         serviceAccountName: {{ $values.serviceAccountName }}
         {{- end }}
+        {{- if $values.initContainers }}
+        initContainers: {{- toYaml $values.initContainers | nindent 10 }}
+        {{- end }}
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
             name: ray-worker
@@ -177,6 +183,9 @@ spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.worker.serviceAccountName }}
         serviceAccountName: {{ .Values.worker.serviceAccountName }}
+        {{- end }}
+        {{- if .Values.worker.initContainers }}
+        initContainers: {{- toYaml .Values.worker.initContainers | nindent 10 }}
         {{- end }}
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
