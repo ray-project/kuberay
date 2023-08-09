@@ -43,8 +43,8 @@ class BasicRayTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Create a Kind cluster, a KubeRay operator, and a RayCluster."""
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
@@ -77,8 +77,8 @@ class RayFTTestCase(unittest.TestCase):
     def setUpClass(cls):
         if not utils.is_feature_supported(ray_version, CONST.RAY_FT):
             raise unittest.SkipTest(f"{CONST.RAY_FT} is not supported")
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
@@ -224,8 +224,8 @@ class KubeRayHealthCheckTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
