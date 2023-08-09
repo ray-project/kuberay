@@ -178,6 +178,20 @@ jobs:
         working-directory: ${{env.working-directory}}
         if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
 
+      - name: Log in to Quay.io
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      - name: Push Operator to Quay.io
+        run: |
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+          docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:nightly;
+          docker push quay.io/kuberay/apiserver:nightly
+
       - name: Build CLI
         run: go build -o kuberay -a main.go
         working-directory: ${{env.cli-working-directory}}
@@ -257,6 +271,22 @@ jobs:
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
 
+      working-directory: ${{env.working-directory}}
+      if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
+
+    - name: Log in to Quay.io
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+    - name: Push Operator to Quay.io
+      run: |
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/operator:${{ steps.vars.outputs.sha_short }};
+        docker push quay.io/kuberay/operator:${{ steps.vars.outputs.sha_short }};
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/operator:nightly;
+        docker push quay.io/kuberay/operator:nightly
       working-directory: ${{env.working-directory}}
       if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
 
