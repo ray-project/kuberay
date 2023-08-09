@@ -42,7 +42,7 @@
     - helm repo add kuberay https://ray-project.github.io/kuberay-helm/
     - helm repo update
 
-    # Install ray-operator
+    # Install KubeRay operator
     - pushd ray-operator
     - IMG=kuberay/operator:nightly make docker-build
     - kind load docker-image kuberay/operator:nightly
@@ -52,6 +52,6 @@
     - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
     - popd
 
-    # Verify that ray-operator is running
+    # Verify that KubeRay operator is running
     - kubectl get pods --all-namespaces
     - kubectl wait --for=condition=Ready --timeout=300s pod -l app.kubernetes.io/name=kuberay-operator -n default
