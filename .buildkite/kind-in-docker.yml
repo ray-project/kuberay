@@ -1,4 +1,4 @@
-- label: kind and kubectl
+- label: Minimal KubeRay operator test
   instance_size: large
   image: golang:1.17
   commands:
