@@ -13,6 +13,8 @@ securityContext:
     add:
     - SYS_PTRACE
 ```
+**Notes:**
+- Adding `SYS_PTRACE` is forbidden under `baseline` and `restricted` Pod Security Standards. See [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) for more details.
 
 ### **Steps to deploy and test the RayCluster with `SYS_PTRACE` capability**
 
@@ -24,7 +26,6 @@ securityContext:
 2. **Install the KubeRay operator**:
 
     Follow the steps in [Installation Guide](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md#install-crds-and-kuberay-operator).
-
 
 3. **Create a RayCluster with `SYS_PTRACE` capability**:
     ```bash
@@ -43,14 +44,17 @@ securityContext:
     kubectl exec -it ${YOUR_HEAD_POD} -- bash
 
     # (Head Pod) Run a sample job in the Pod
+    # `long_running_task` includes a `while True` loop to ensure the task remains actively running indefinitely. 
+    # This allows you ample time to view the Stack Trace and CPU Flame Graph via the Ray dashboard.
     python3 samples/long_running_task.py
     ```
+    **Notes:**
+    - If you're running your own examples and encounter the error `Failed to write flamegraph: I/O error: No stack counts found` when viewing CPU Flame Graph, it might be due to the process being idle. Notably, using the `sleep` function can lead to this state. In such situations, py-spy filters out the idle stack traces. Refer to this [issue](https://github.com/benfred/py-spy/issues/321#issuecomment-731848950) for more information.
 
 6. **Profile using the Ray dashboard**:
     - Visit http://localhost:8265/#/cluster.
     - Click `Stack Trace` for `ray::long_running_task`.
       <img width="1728" alt="StackTrace" src="../images/stack_trace.png">
-
     - Click `CPU Flame Graph` for `ray::long_running_task`.
       <img width="1728" alt="FlameGraph" src="../images/cpu_flame_graph.png">
     - For additional details on using the profiler, refer the [Ray Observability Guide](https://docs.ray.io/en/latest/ray-observability/user-guides/debug-apps/optimize-performance.html#python-cpu-profiling-in-the-dashboard).
@@ -59,8 +63,3 @@ securityContext:
     ```bash
     kubectl delete -f ray-cluster.profiling.yaml
     ```
-
-### **Note**
-- If you see the error `Failed to write flamegraph: I/O error: No stack counts found` when trying to view the CPU Flame Graph, it might be because the process is idle. See this [issue](https://github.com/benfred/py-spy/issues/321#issuecomment-731848950) for further details.
-
-- Adding `SYS_PTRACE` is forbidden under `baseline` and `restricted` Pod Security Standards. See [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) for more details.

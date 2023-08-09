@@ -1,9 +1,6 @@
 apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-    # An unique identifier for the head node and workers of this cluster.
   name: raycluster-profiling
 spec:
   rayVersion: '2.5.0' # should match the Ray version in the image of the containers
@@ -41,9 +38,9 @@ spec:
             name: client
           volumeMounts:
             - mountPath: /home/ray/samples
-              name: ray-example-configmap
+              name: profiling-example-configmap
         volumes:
-          - name: ray-example-configmap
+          - name: profiling-example-configmap
             configMap:
               name: ray-example
               items:
@@ -57,13 +54,10 @@ metadata:
 data:
   long_running_task.py: |
     import ray
-    import time
 
     @ray.remote
     def long_running_task():
       while True:
           pass
-      return 0
 
-    result = long_running_task.remote()
-    ray.get(result)
+    ray.get(long_running_task.remote())
