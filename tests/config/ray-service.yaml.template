@@ -3,7 +3,7 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 300
+  serviceUnhealthySecondThreshold: 900
   deploymentUnhealthySecondThreshold: 300
   serveConfig:
     importPath: fruit.deployment_graph

@@ -23,16 +23,21 @@ const (
 )
 
 // These statuses should match Ray Serve's application statuses
+// See `enum ApplicationStatus` in https://sourcegraph.com/github.com/ray-project/ray/-/blob/src/ray/protobuf/serve.proto for more details.
 var ApplicationStatusEnum = struct {
 	NOT_STARTED   string
 	DEPLOYING     string
 	RUNNING       string
 	DEPLOY_FAILED string
+	DELETING      string
+	UNHEALTHY     string
 }{
 	NOT_STARTED:   "NOT_STARTED",
 	DEPLOYING:     "DEPLOYING",
 	RUNNING:       "RUNNING",
 	DEPLOY_FAILED: "DEPLOY_FAILED",
+	DELETING:      "DELETING",
+	UNHEALTHY:     "UNHEALTHY",
 }
 
 // These statuses should match Ray Serve's deployment statuses

@@ -237,7 +237,7 @@ If you consistently encounter this issue, there are several possible causes:
   # Get \"http://rayservice-sample-raycluster-rqlsl-head-svc.default.svc.cluster.local:52365/api/serve/applications/\": dial tcp 10.96.7.154:52365: connect: connection refused
   ```
 
-### Issue 8: A loop of restarting the RayCluster occurs when the Kubernetes cluster runs out of resources.
+### Issue 8: A loop of restarting the RayCluster occurs when the Kubernetes cluster runs out of resources. (KubeRay v0.6.1 or earlier)
 
 > Note: Currently, the KubeRay operator does not have a clear plan to handle situations where the Kubernetes cluster runs out of resources.
 Therefore, we recommend ensuring that the Kubernetes cluster has sufficient resources to accommodate the serve application.
