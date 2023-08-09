@@ -178,7 +178,6 @@ curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc:800
 ```
 
 * `rayservice-sample-serve-svc` is HA in general. It will do traffic routing among all the workers which have Serve deployments and will always try to point to the healthy cluster, even during upgrading or failing cases. 
-* You can set `serviceUnhealthySecondThreshold` to define the threshold of seconds that the Serve deployments fail. You can also set `deploymentUnhealthySecondThreshold` to define the threshold of seconds that Ray fails to deploy any Serve deployments.
 
 ## Step 7: In-place update for Ray Serve applications
 
@@ -262,6 +261,20 @@ kubectl get raycluster
 curl -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc:8000/fruit/ -d '["MANGO", 2]'
 # [Expected output]: 8
 ```
+
+### Another two possible scenarios that will trigger a new RayCluster preparation
+
+> Note: The following behavior is for KubeRay v0.6.2 or newer.
+For older versions, please refer to [kuberay#1293](https://github.com/ray-project/kuberay/pull/1293) for more details.
+
+Not only will the zero downtime upgrade trigger a new RayCluster preparation, but KubeRay will also trigger it if it considers a RayCluster unhealthy.
+In the RayService, KubeRay can mark a RayCluster as unhealthy in two possible scenarios.
+
+* Case 1: The KubeRay operator cannot connect to the dashboard agent on the head Pod for more than the duration defined by the `deploymentUnhealthySecondThreshold` parameter. Both the default value and values in sample YAML files of `deploymentUnhealthySecondThreshold` are 300 seconds.
+
+* Case 2: The KubeRay operator will mark a RayCluster as unhealthy if the status of a serve application is `DEPLOY_FAILED` or `UNHEALTHY` for a duration exceeding the `serviceUnhealthySecondThreshold` parameter. Both the default value and values in sample YAML files of `serviceUnhealthySecondThreshold` are 900 seconds.
+
+After KubeRay marks a RayCluster as unhealthy, it initiates the creation of a new RayCluster. Once the new RayCluster is ready, KubeRay redirects network traffic to it, and subsequently deletes the old RayCluster.
 
 ## Step 9: Clean up the Kubernetes cluster
 

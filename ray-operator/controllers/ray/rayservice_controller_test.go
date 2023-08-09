@@ -408,7 +408,7 @@ applications:
 			// the RayService controller will consider the active RayCluster as unhealthy and prepare a new RayCluster.
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY))
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "New pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -436,7 +436,7 @@ applications:
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
 			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -459,7 +459,7 @@ applications:
 			ServiceUnhealthySecondThreshold = 500
 
 			// Change serve status to be unhealthy
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY))
 
 			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
 			Consistently(
@@ -490,7 +490,7 @@ applications:
 				checkAllDeploymentStatusesUnhealthy(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 
 			// Confirm not switch to a new RayCluster because ServiceUnhealthySecondThreshold is 500 seconds.
 			Consistently(
@@ -514,7 +514,7 @@ applications:
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
 			oldTime := myRayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 
 			// Confirm not switch to a new RayCluster
 			Consistently(
@@ -559,7 +559,7 @@ applications:
 			// Set deployment statuses to UNHEALTHY
 			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY))
 
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
@@ -567,7 +567,7 @@ applications:
 
 			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
@@ -582,7 +582,7 @@ applications:
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
 
 			// The cluster shouldn't switch until deployments are finished updating
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UPDATING))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOYING))
 
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
@@ -605,7 +605,7 @@ applications:
 				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// The cluster should switch once the deployments are finished updating
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
@@ -626,10 +626,10 @@ applications:
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService serve config")
 
 			// Set multi-application status to healthy.
-			healthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY)
+			healthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			// Set single-application status to unhealthy.
-			unhealthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY)
+			unhealthyStatus := generateServeStatus(rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY)
 			fakeRayDashboardClient.SetSingleApplicationStatus(unhealthyStatus)
 
 			// The status should remain healthy, because we have set serveConfigTypeForTesting to MULTI_APP
@@ -649,34 +649,32 @@ applications:
 func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
 	client := utils.FakeRayDashboardClient{}
 
-	client.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY))
+	client.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 
 	return client
 }
 
-func generateServeStatus(status string) utils.ServeApplicationStatus {
-	appStatus := utils.ServeApplicationStatus{
-		Status: rayv1alpha1.ApplicationStatusEnum.RUNNING,
+func generateServeStatus(deploymentStatus string, applicationStatus string) utils.ServeApplicationStatus {
+	return utils.ServeApplicationStatus{
+		Status: applicationStatus,
 		Deployments: map[string]utils.ServeDeploymentStatus{
 			"shallow": {
 				Name:    "shallow",
-				Status:  status,
+				Status:  deploymentStatus,
 				Message: "",
 			},
 			"deep": {
 				Name:    "deep",
-				Status:  status,
+				Status:  deploymentStatus,
 				Message: "",
 			},
 			"one": {
 				Name:    "one",
-				Status:  status,
+				Status:  deploymentStatus,
 				Message: "",
 			},
 		},
 	}
-
-	return appStatus
 }
 
 func getRayClusterNameFunc(ctx context.Context, rayService *rayv1alpha1.RayService) func() (string, error) {

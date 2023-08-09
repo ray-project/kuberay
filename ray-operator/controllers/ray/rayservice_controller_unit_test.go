@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -421,4 +422,139 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DefaultDashboardName)
 	assert.Nil(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
+}
+
+func TestGetAndCheckServeStatus(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayService reconciler.
+	ctx := context.TODO()
+	r := RayServiceReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
+	}
+	serviceUnhealthySecondThreshold := int32(ServiceUnhealthySecondThreshold) // The threshold is 900 seconds by default.
+	serveAppName := "serve-app-1"
+
+	// Test 1: There is no pre-existing RayServiceStatus in the RayService CR. Create a new Ray Serve application, and the application is still deploying.
+	dashboardClient := initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOYING)
+	prevRayServiceStatus := rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{},
+	}
+	isHealthy, isReady, err := r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.False(t, isReady)
+
+	// Test 2: The Ray Serve application takes more than `serviceUnhealthySecondThreshold` seconds to be "RUNNING".
+	// This may happen when `runtime_env` installation takes a long time or the cluster does not have enough resources
+	// for autoscaling. Note that the cluster will not be marked as unhealthy if the application is still deploying.
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOYING)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOYING,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.False(t, isReady)
+
+	// Test 3: The Ray Serve application finishes the deployment process and becomes "RUNNING".
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOYING,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Time},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.True(t, isReady)
+
+	// Test 4: The Ray Serve application lasts "UNHEALTHY" for more than `serviceUnhealthySecondThreshold` seconds.
+	// The RayCluster will be marked as unhealthy.
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.UNHEALTHY,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.False(t, isHealthy)
+	assert.False(t, isReady)
+
+	// Test 5: The Ray Serve application lasts "UNHEALTHY" for less than `serviceUnhealthySecondThreshold` seconds.
+	// The RayCluster will not be marked as unhealthy.
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UNHEALTHY, rayv1alpha1.ApplicationStatusEnum.UNHEALTHY)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.UNHEALTHY,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold-1))},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.False(t, isReady)
+
+	// Test 6: The Ray Serve application lasts "DEPLOY_FAILED" for more than `serviceUnhealthySecondThreshold` seconds.
+	// The RayCluster will be marked as unhealthy.
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold+1))},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.False(t, isHealthy)
+	assert.False(t, isReady)
+
+	// Test 7: The Ray Serve application lasts "DEPLOY_FAILED" for less than `serviceUnhealthySecondThreshold` seconds.
+	// The RayCluster will not be marked as unhealthy.
+	dashboardClient = initFakeDashboardClient(serveAppName, rayv1alpha1.DeploymentStatusEnum.UPDATING, rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED)
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			serveAppName: {
+				Status:               rayv1alpha1.ApplicationStatusEnum.DEPLOY_FAILED,
+				HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * time.Duration(serviceUnhealthySecondThreshold-1))},
+			},
+		},
+	}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.False(t, isReady)
+}
+
+func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
+	status := generateServeStatus(deploymentStatus, appStatus)
+	fakeDashboardClient := utils.FakeRayDashboardClient{}
+	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{appName: &status})
+	return &fakeDashboardClient
 }

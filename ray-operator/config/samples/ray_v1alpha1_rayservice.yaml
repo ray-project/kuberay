@@ -7,8 +7,8 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
   # serveConfigV2 takes a yaml multi-line scalar, which should be a Ray Serve multi-application config. See https://docs.ray.io/en/latest/serve/multi-app.html.
   # Only one of serveConfig and serveConfigV2 should be used.
   serveConfigV2: |
