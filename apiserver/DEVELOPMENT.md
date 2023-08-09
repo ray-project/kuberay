@@ -4,15 +4,27 @@ This guide covers the purpose, requirements, and deployment of the Kuberay API S
 
 ## Requirements
 
-| Software | Version  |                                                            Link |
-| :------- | :------: | ------------------------------------------------------------: |
+| Software | Version  |                                                                Link |
+| :------- | :------: | ------------------------------------------------------------------: |
 | kubectl  | v1.18.3+ | [Download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| Go       |  v1.17   |                            [Download](https://golang.org/dl/) |
-| Docker   |  19.03+  |                  [Download](https://docs.docker.com/install/) |
-| GNU Make |  3.81+   |                                                               |
-| curl     |  7.88+   |                                                               |
-| kind     |  v0.19.0 | [Install](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
-| helm     | v3.12.1  | [Install](https://helm.sh/docs/intro/install/) |
+| Go       |  v1.17   |                                  [Download](https://golang.org/dl/) |
+| Docker   |  19.03+  |                        [Download](https://docs.docker.com/install/) |
+| GNU Make |  3.81+   |                                                                     |
+| curl     |  7.88+   |                                                                     |
+| helm     | v3.12.1  |                      [Install](https://helm.sh/docs/intro/install/) |
+
+### Optional Development Tools
+
+These tools are downloaded and installed when they are needed. The directory of the download is `../bin`.
+Typing `make dev-tools` will download and install all of them. The `make clean-dev-tools` command can be used to remove all the tools from the filesystem.
+
+| Software      | Version  |                                                                    Link |
+| :-------      | :------: | -----------------------------------------------------------------------:|
+| kind          | v0.19.0  | [Install](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
+| golangci-lint | v1.50.1  | [Install](https://golangci-lint.run/usage/install/)                     |
+| kustomize     | v3.8.7   | [install](https://kubectl.docs.kubernetes.io/installation/kustomize/)   |
+| gofumpt       | v0.3.1   | To install `go install mvdan.cc/gofumpt@v0.3.1`                         |
+| goimports     | latest   | To install `go install golang.org/x/tools/cmd/goimports@latest`         |
 
 ## Purpose
 
@@ -20,11 +32,11 @@ The Kuberay API Server is designed to simplify the lifecycle management of Ray c
 
 ## Build and Deployment
 
-The backend service can be deployed locally or within a Kubernetes cluster. The HTTP service listens on port 8888.
+The backend service can be deployed locally or within a Kubernetes cluster. The HTTP service listens on port 8888, the RPC port on 8887.
 
 ### Pre-requisites
 
-Ensure that the admin Kubernetes configuration file is located at `~/.kube/config`. As convenience there are two makefile targets provided to help you manage a local kind cluster:
+Ensure that the admin Kubernetes configuration file is located at `~/.kube/config`. As a convenience, there are two makefile targets provided to help you manage a local kind cluster:
 
 * `make cluster` -- creates a 3 node cluster (1 control plane 2 worker) named ray-api-server-cluster
 * `make clean-cluster` -- deletes the cluster created with the `cluster` target
@@ -72,6 +84,9 @@ make docker-image
 #### Start Kubernetes Deployment
 
 ```bash
+#Optionally, to load the api server image into the local kind cluster created with make cluster
+make load-image
+
 #To use the  helm charts
 make deploy
 
@@ -91,13 +106,13 @@ make uninstall
 
 #### Local Kind Cluster Deployment
 
-For local development the following `make` targets are provided as a convenience.
+As a convenience for local development the following `make` targets are provided:
 
 * `make cluster` -- creates a local kind cluster, using the configuration from `hack/kind-cluster-config.yaml`. It creates a port mapping allowing for the service running in the kind cluster to be accessed on  `localhost:318888` for HTTP and `localhost:318887` for RPC.
 * `make clean-cluster` -- deletes the local kind cluster created with `make cluster`
 * `load-image` -- loads the docker image defined by the `IMG` make variable into the kind cluster. The default value for variable is: `kuberay/apiserver:latest`. The name of the image can be changed by using `make load-image -e IMG=<your image name and tag>`
 * `operator-image` -- Build the operator image to be loaded in your kind cluster. The tag for the operator image is `kuberay/operator:latest`. This step is optional.
-* `load-operator-image` -- Load the operator image to the kind cluster created with `create-kind-cluster`. The tag for the operator image is `kuberay/operator:latest`, and the tag can be overriden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`. To use the nightly operator tag, set the tag to 'nightly`.`
+* `load-operator-image` -- Load the operator image to the kind cluster created with `create-kind-cluster`. The tag for the operator image is `kuberay/operator:latest`, and the tag can be overridden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`. To use the nightly operator tag, set the tag to `nightly`.
 * `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:latest`.
 * `undeploy-operator` -- Undeploy operator from your cluster
 

@@ -57,7 +57,7 @@ imports: goimports ## Run goimports against code.
 test: fmt vet fumpt imports lint  ## Run unit tests.
 	go test ./... -race -coverprofile ray-kube-api-server-coverage.out
 
-lint: fmt vet fumpt imports ## Run the linter.
+lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	$(GOLANGCI_LINT) run  --timeout=3m	
 
 ##@ Build
@@ -87,7 +87,7 @@ docker-push: ## Push image with the api server.
 .PHONY: install
 install: kustomize ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
 	cd deploy/base && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
-	$(KUSTOMIZE) build deploy/base | kubectl replace -f -
+	($(KUSTOMIZE) build deploy/base | kubectl create -f -) || $(KUSTOMIZE) build deploy/base | kubectl replace -f -
 
 .PHONY: uninstall
 uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
@@ -100,7 +100,7 @@ deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified i
 
 .PHONY: undeploy
 undeploy: ## Undeploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	helm delete -n kuberay-apiserver kuberay-apiserver --wait
+	helm delete kuberay-apiserver --wait
 
 ##@ Development Tools
 

@@ -18,7 +18,6 @@ spec:
       containers:
       - name: kuberay-apiserver
         image: kuberay/apiserver
-        imagePullPolicy: Always
         ports:
         - containerPort: 8888
         - containerPort: 8887
