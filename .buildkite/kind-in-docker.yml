@@ -49,9 +49,7 @@
     - popd
 
     - pushd helm-chart/kuberay-operator
-    - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
+    - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly --wait --timeout=5m0s .
     - popd
 
-    # Verify that KubeRay operator is running
-    - kubectl get pods --all-namespaces
-    - kubectl wait --for=condition=Ready --timeout=300s pod -l app.kubernetes.io/name=kuberay-operator -n default
+    - echo "Kuberay operator successfully installed."
