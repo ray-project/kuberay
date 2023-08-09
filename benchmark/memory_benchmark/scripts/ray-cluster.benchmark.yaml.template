@@ -1,0 +1,29 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: '$raycluster_name'
+spec:
+  rayVersion: '2.5.0'
+  # Ray head pod template
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.5.0
+          resources:
+            limits:
+              cpu: 1
+              memory: 1Gi
+            requests:
+              cpu: 1
+              memory: 1Gi
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
