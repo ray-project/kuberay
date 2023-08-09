@@ -49,6 +49,7 @@
     - popd
 
     - pushd helm-chart/kuberay-operator
+    # Use helm --wait instead of kubectl wait to prevent flakiness. See #618
     - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly --wait --timeout=5m0s .
     - popd
 
