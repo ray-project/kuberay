@@ -44,7 +44,7 @@
 
     # Install KubeRay operator
     - pushd ray-operator
-    - IMG=kuberay/operator:nightly make docker-build
+    - IMG=kuberay/operator:nightly make docker-image
     - kind load docker-image kuberay/operator:nightly
     - popd
 
