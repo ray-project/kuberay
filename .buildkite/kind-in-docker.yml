@@ -54,3 +54,4 @@
 
     # Verify that ray-operator is running
     - kubectl get pods --all-namespaces
+    - kubectl wait --for=condition=Ready --timeout=300s pod -l app.kubernetes.io/name=kuberay-operator -n default
