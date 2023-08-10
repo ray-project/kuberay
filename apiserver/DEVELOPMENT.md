@@ -83,6 +83,8 @@ make docker-image
 
 #### Start Kubernetes Deployment
 
+Note that you should make your KubeRay API server image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. If you are using a Kind cluster for development, you can run `make load-image` to load the newly built API server image into the Kind cluster.  The operator image will also be needed to be loaded on your cluster. You can use `make operator-image` to build a fresh image from sources, and, if you are using a Kind cluster for development, you can run `make load-operator-image`. 
+
 ```bash
 #Optionally, to load the api server image into the local kind cluster created with make cluster
 make load-image
@@ -97,7 +99,7 @@ make install
 #### Stop Kubernetes Deployment
 
 ```bash
-#To use the  helm charts
+#To use the helm charts
 make undeploy
 
 #To use the configuration 
@@ -115,6 +117,16 @@ As a convenience for local development the following `make` targets are provided
 * `load-operator-image` -- Load the operator image to the kind cluster created with `create-kind-cluster`. The tag for the operator image is `kuberay/operator:latest`, and the tag can be overridden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`. To use the nightly operator tag, set the tag to `nightly`.
 * `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:latest`.
 * `undeploy-operator` -- Undeploy operator from your cluster
+
+When developing and testing with kind you might want to execute these targets together:
+
+```bash
+#To create a new API server image and to deploy it on a new cluster
+make docker-image cluster load-image deploy 
+
+#To create a new API server image, operator image and deploy them on a new cluster
+make docker-image operator-image cluster load-image load-operator-image deploy deploy-operator
+```
 
 #### Access API Server in the Cluster
 

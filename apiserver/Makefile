@@ -94,13 +94,15 @@ uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.
 	$(KUSTOMIZE) build deploy/base | kubectl delete -f -
 
 .PHONY: deploy
-deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
+deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 
+# Note that you should make your KubeRay APIServer image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
+# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait \
 	--set image.tag=${IMG_TAG} --set image.pullPolicy=IfNotPresent
 
 .PHONY: undeploy
 undeploy: ## Undeploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	helm delete kuberay-apiserver --wait
+	helm uninstall kuberay-apiserver --wait
 
 ##@ Development Tools
 
@@ -182,13 +184,15 @@ operator-image: ## Build the operator image to be loaded in your kind cluster.
 	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
 .PHONY: deploy-operator
-deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
+deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
+# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
+# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
 	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
 
 .PHONY: undeploy-operator
 undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified in ~/.kube/config.
-	helm delete -n raycluster-operator raycluster --wait
+	helm uninstall raycluster --wait
 
 .PHONY: load-operator-image
 load-operator-image: ## Load the operator image to the kind cluster created with create-kind-cluster.
