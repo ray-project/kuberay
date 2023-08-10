@@ -38,7 +38,7 @@ class CONST:
 
     # Decide the config based on the environment
     if os.getenv("BUILDKITE_ENV", default="") == "true":
-        DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config-buildkite.yaml")
+        DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config-buildkite.yml")
     else:
         DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
 
