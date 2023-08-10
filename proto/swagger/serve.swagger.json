@@ -317,6 +317,15 @@
     }
   },
   "definitions": {
+    "VolumeAccessMode": {
+      "type": "string",
+      "enum": [
+        "RWO",
+        "ROX",
+        "RWX"
+      ],
+      "default": "RWO"
+    },
     "VolumeHostPathType": {
       "type": "string",
       "enum": [
@@ -339,7 +348,8 @@
       "type": "string",
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
-        "HOST_PATH"
+        "HOST_PATH",
+        "EPHEMERAL"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -430,12 +440,16 @@
           "type": "string",
           "title": "Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node"
         },
+        "enableIngress": {
+          "type": "boolean",
+          "title": "Optional. Enable Ingress\nif Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class"
+        },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start params of head node group"
+          "description": "Optional. The ray start params of head node group."
         },
         "volumes": {
           "type": "array",
@@ -783,6 +797,16 @@
         },
         "mountPropagationMode": {
           "$ref": "#/definitions/VolumeMountPropagationMode"
+        },
+        "storageClassName": {
+          "type": "string",
+          "title": "If indicate ephemeral, we need to let user specify volumeClaimTemplate"
+        },
+        "accessMode": {
+          "$ref": "#/definitions/VolumeAccessMode"
+        },
+        "storage": {
+          "type": "string"
         }
       }
     },

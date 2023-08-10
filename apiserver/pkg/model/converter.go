@@ -107,6 +107,10 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 		ClusterState: string(cluster.Status.State),
 	}
 
+	if len(cluster.ObjectMeta.Annotations) > 0 {
+		pbCluster.Annotations = cluster.ObjectMeta.Annotations
+	}
+
 	// loop container and find the resource
 	pbCluster.ClusterSpec = PopulateRayClusterSpec(cluster.Spec)
 
@@ -146,6 +150,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		ServiceType:     string(spec.ServiceType),
 		Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
 		ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
+		Volumes:         PopulateVolumes(&spec.Template),
 	}
 
 	for _, annotation := range getNodeDefaultAnnotations() {
@@ -160,6 +165,10 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 	}
 	if len(spec.Template.Labels) > 0 {
 		headNodeSpec.Labels = spec.Template.Labels
+	}
+
+	if *spec.EnableIngress {
+		headNodeSpec.EnableIngress = true
 	}
 
 	// Here we update environment only for a container named 'ray-head'
@@ -196,6 +205,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 			GroupName:       spec.GroupName,
 			Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
 			ComputeTemplate: spec.Template.Annotations[util.RayClusterComputeTemplateAnnotationKey],
+			Volumes:         PopulateVolumes(&spec.Template),
 		}
 
 		for _, annotation := range getNodeDefaultAnnotations() {

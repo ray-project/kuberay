@@ -146,24 +146,26 @@ message Cluster {
   
   // Required field. This field indicates ray cluster configuration
   ClusterSpec cluster_spec = 6;
-
-  // Output. The time that the cluster created.
-  google.protobuf.Timestamp created_at = 7;
-
-  // Output. The time that the cluster deleted.
-  google.protobuf.Timestamp deleted_at = 8;
-
-  // Output. The status to show the cluster status.state
-  string cluster_state = 9;
-
-  // Output. The list related to the cluster.
-  repeated ClusterEvent events = 10;
-  
-  // Output. The service endpoint of the cluster
-  map<string, string> service_endpoint = 11;
+  // Optional. Annotations, for example, IngressClassAnnotationKey to define Ingress class 
+  map<string, string> annotations = 7;
 
   // Optional input field. Container environment variables from user.
-  map<string, string> envs = 12;
+  map<string, string> envs = 8;
+
+  // Output. The time that the cluster created.
+  google.protobuf.Timestamp created_at = 9;
+
+  // Output. The time that the cluster deleted.
+  google.protobuf.Timestamp deleted_at = 10;
+
+  // Output. The status to show the cluster status.state
+  string cluster_state = 11;
+
+  // Output. The list related to the cluster.
+  repeated ClusterEvent events = 12;
+  
+  // Output. The service endpoint of the cluster
+  map<string, string> service_endpoint = 13;
 }
 
 message ClusterSpec {
@@ -178,6 +180,7 @@ message Volume {
   enum VolumeType {
     PERSISTENT_VOLUME_CLAIM = 0;
     HOST_PATH = 1;
+    EPHEMERAL = 2;    // Ephemeral (https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/#generic-ephemeral-volumes)
   }
   VolumeType volume_type = 2;
   string name = 3;
@@ -197,7 +200,16 @@ message Volume {
     HOSTTOCONTAINER = 1;
     BIDIRECTIONAL = 2;
   }
-  MountPropagationMode mount_propagation_mode = 7;
+  MountPropagationMode mount_propagation_mode = 7;  
+  // If indicate ephemeral, we need to let user specify volumeClaimTemplate
+  string storageClassName = 8;   // If not defined, default is used
+  enum AccessMode {
+    RWO = 0;    // ReadWriteOnce
+    ROX = 1;    // ReadOnlyMany
+    RWX = 2;    // ReadWriteMany  
+  }
+  AccessMode accessMode = 9;
+  string storage = 10;          // For ephemeral - required storage, GB
 }
 
 message HeadGroupSpec {
@@ -207,21 +219,24 @@ message HeadGroupSpec {
   string image = 2;
   // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
   string service_type = 3;
-  // Optional. The ray start params of head node group
-  map<string, string> ray_start_params = 4;
+  // Optional. Enable Ingress
+  // if Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class
+  bool enableIngress = 4;
+  // Optional. The ray start params of head node group. 
+  map<string, string> ray_start_params = 5;
   // Optional. The volumes mount to head pod
-  repeated Volume volumes = 5;
+  repeated Volume volumes = 6;
   // Optional. ServiceAccount used by head pod
   // Note that the service account has to be created prior to usage here
-  string service_account = 6;  
+  string service_account = 7;  
   // Optional. image pull secret used by head pod
-  string image_pull_secret = 7;  
+  string image_pull_secret = 8;  
   // Optional. Environment variables for head pod
-  map<string, string> environment = 8;
+  map<string, string> environment = 9;
   // Optional. Annotations for the head pod
-  map<string, string> annotations = 9;
+  map<string, string> annotations = 10;
   // Optional. Labels for the head pod
-  map<string, string> labels = 10;
+  map<string, string> labels = 11;
 }
 
 message WorkerGroupSpec {
