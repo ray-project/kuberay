@@ -107,7 +107,6 @@ jobs:
     name: Build Apiserver, CLI Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
-
       - name: Set up Go 1.17.x
         uses: actions/setup-go@v2
         with:
@@ -163,20 +162,34 @@ jobs:
           path: /tmp/apiserver.tar
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-        if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
       - name: Push Apiserver to DockerHub
         run: |
           docker push kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
           docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} kuberay/apiserver:nightly;
           docker push kuberay/apiserver:nightly
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-        working-directory: ${{env.working-directory}}
-        if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
+      - name: Log in to Quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+      - name: Push Operator to Quay.io
+        run: |
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+          docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
+          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:nightly;
+          docker push quay.io/kuberay/apiserver:nightly
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
       - name: Build CLI
         run: go build -o kuberay -a main.go
@@ -245,20 +258,34 @@ jobs:
         path: /tmp/operator.tar
 
     - name: Log in to Docker Hub
-      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-      if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
     - name: Push Operator to DockerHub
       run: |
         docker push kuberay/operator:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} kuberay/operator:nightly;
         docker push kuberay/operator:nightly
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      working-directory: ${{env.working-directory}}
-      if: contains(fromJson('["refs/heads/master", "refs/heads/release-0.3"]'), github.ref)
+    - name: Log in to Quay.io
+      uses: docker/login-action@v2
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+    - name: Push Operator to Quay.io
+      run: |
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/operator:${{ steps.vars.outputs.sha_short }};
+        docker push quay.io/kuberay/operator:${{ steps.vars.outputs.sha_short }};
+        docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/operator:nightly;
+        docker push quay.io/kuberay/operator:nightly
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
   test-compatibility-1_13_0:
     needs:
