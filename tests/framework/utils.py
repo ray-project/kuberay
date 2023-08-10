@@ -1,5 +1,6 @@
 """Utilities for integration tests of KubeRay."""
 
+import os
 import subprocess
 import logging
 from pathlib import Path
@@ -34,7 +35,12 @@ class CONST:
     # Paths
     REPO_ROOT = Path(__file__).absolute().parent.parent.parent
     HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
-    DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
+
+    # Decide the config based on the environment
+    if os.getenv("BUILDKITE_ENV", default="") == "true":
+        DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config-buildkite.yaml")
+    else:
+        DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
 
     # Ray features
     RAY_FT = "RAY_FT"
