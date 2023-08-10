@@ -57,6 +57,9 @@
 
     - echo "Kuberay operator successfully installed."
 
+    # Delete kind clusters
+    - kind delete clusters --all
+
     # Install python 3.10
     - apt-get update
     - apt-get install -y python3.10
