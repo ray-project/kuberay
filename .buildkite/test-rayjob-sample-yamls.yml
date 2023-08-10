@@ -58,9 +58,9 @@
     # Delete kind clusters
     - kind delete clusters --all
 
-    # Install python 3.10
+    # Install python 3.10 and pip
     - apt-get update
-    - apt-get install -y python3.10
+    - apt-get install -y python3.10 python3-pip
 
     # Install requirements
     - pip install -r tests/framework/config/requirements.txt
