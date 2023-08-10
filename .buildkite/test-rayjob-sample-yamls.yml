@@ -1,8 +1,6 @@
 - label: Test RayJob Sample YAMLs
   instance_size: large
   image: golang:1.17
-  env:
-    BUILDKITE_ENV: "true"
   commands:
     # Install Go
     - export PATH=$PATH:/usr/local/go/bin
@@ -68,4 +66,4 @@
     - pip install -r tests/framework/config/requirements.txt
 
     # Run test
-    - python3 tests/test_sample_rayjob_yamls.py
+    - BUILDKITE_ENV=true python3 tests/test_sample_rayjob_yamls.py
