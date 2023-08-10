@@ -49,9 +49,10 @@ func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 
 // Build cluster annotations
 func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
-	annotations := map[string]string{}
-	// TODO: Add optional annotations
-	return annotations
+	if cluster.Annotations == nil {
+		return map[string]string{}
+	}
+	return cluster.Annotations
 }
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
@@ -69,6 +70,11 @@ func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpe
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
 		WorkerGroupSpecs: []rayalphaapi.WorkerGroupSpec{},
+	}
+
+	// If enable ingress is specified, add it to the head node spec.
+	if clusterSpec.HeadGroupSpec.EnableIngress {
+		rayClusterSpec.HeadGroupSpec.EnableIngress = &clusterSpec.HeadGroupSpec.EnableIngress
 	}
 
 	for _, spec := range clusterSpec.WorkerGroupSpec {
@@ -531,6 +537,54 @@ func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 						ReadOnly:  rayVol.ReadOnly,
 					},
 				},
+			}
+			vols = append(vols, vol)
+		}
+		if rayVol.VolumeType == api.Volume_EPHEMERAL {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					Ephemeral: &v1.EphemeralVolumeSource{
+						VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app.kubernetes.io/managed-by": "kuberay-apiserver",
+								},
+							},
+							Spec: v1.PersistentVolumeClaimSpec{
+								Resources: v1.ResourceRequirements{
+									Requests: v1.ResourceList{
+										v1.ResourceStorage: resource.MustParse(rayVol.Storage),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			if len(rayVol.StorageClassName) > 0 {
+				// Populate storage class, if defined
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.StorageClassName = &rayVol.StorageClassName
+			}
+
+			// Populate access mode if defined
+			switch rayVol.AccessMode {
+			case api.Volume_RWO:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteOnce,
+				}
+			case api.Volume_RWX:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteMany,
+				}
+			case api.Volume_ROX:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadOnlyMany,
+				}
+			default:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteOnce,
+				}
 			}
 			vols = append(vols, vol)
 		}

@@ -202,6 +202,15 @@
       "default": "DEV",
       "description": "Optional field."
     },
+    "VolumeAccessMode": {
+      "type": "string",
+      "enum": [
+        "RWO",
+        "ROX",
+        "RWX"
+      ],
+      "default": "RWO"
+    },
     "VolumeHostPathType": {
       "type": "string",
       "enum": [
@@ -224,7 +233,8 @@
       "type": "string",
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
-        "HOST_PATH"
+        "HOST_PATH",
+        "EPHEMERAL"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -272,6 +282,20 @@
           "$ref": "#/definitions/protoClusterSpec",
           "title": "Required field. This field indicates ray cluster configuration"
         },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations, for example, IngressClassAnnotationKey to define Ingress class"
+        },
+        "envs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional input field. Container environment variables from user."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -299,13 +323,6 @@
             "type": "string"
           },
           "title": "Output. The service endpoint of the cluster"
-        },
-        "envs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Optional input field. Container environment variables from user."
         }
       }
     },
@@ -385,12 +402,16 @@
           "type": "string",
           "title": "Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node"
         },
+        "enableIngress": {
+          "type": "boolean",
+          "title": "Optional. Enable Ingress\nif Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class"
+        },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start params of head node group"
+          "description": "Optional. The ray start params of head node group."
         },
         "volumes": {
           "type": "array",
@@ -477,6 +498,16 @@
         },
         "mountPropagationMode": {
           "$ref": "#/definitions/VolumeMountPropagationMode"
+        },
+        "storageClassName": {
+          "type": "string",
+          "title": "If indicate ephemeral, we need to let user specify volumeClaimTemplate"
+        },
+        "accessMode": {
+          "$ref": "#/definitions/VolumeAccessMode"
+        },
+        "storage": {
+          "type": "string"
         }
       }
     },

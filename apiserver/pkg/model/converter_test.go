@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	enableIngress          = false
+	enableIngress          = true
 	headNodeReplicas int32 = 1
 	workerReplicas   int32 = 5
 )
@@ -195,6 +195,22 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 	},
 }
 
+var ClusterSpecTest = v1alpha1.RayCluster{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "raycluster-sample",
+		Namespace: "default",
+		Annotations: map[string]string{
+			"kubernetes.io/ingress.class": "nginx",
+		},
+	},
+	Spec: v1alpha1.RayClusterSpec{
+		HeadGroupSpec: headSpecTest,
+		WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
+			workerSpecTest,
+		},
+	},
+}
+
 var expectedAnnotations = map[string]string{
 	"custom": "value",
 }
@@ -219,6 +235,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 
 	if groupSpec.ServiceAccount != "account" {
 		t.Errorf("failed to convert service account")
+	}
+	if groupSpec.EnableIngress != *headSpecTest.EnableIngress {
+		t.Errorf("failed to convert enableIngress")
 	}
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
@@ -251,6 +270,13 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Environment, expectedEnv)
+	}
+}
+
+func TestPopulateRayClusterSpec(t *testing.T) {
+	cluster := FromCrdToApiCluster(&ClusterSpecTest, []v1.Event{})
+	if len(cluster.Annotations) != 1 {
+		t.Errorf("failed to convert cluster's annotations")
 	}
 }
 

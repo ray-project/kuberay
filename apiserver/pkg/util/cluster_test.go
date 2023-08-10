@@ -6,6 +6,8 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var testVolume = &api.Volume{
@@ -35,6 +37,13 @@ var testPVCVolume = &api.Volume{
 	ReadOnly:   true,
 }
 
+var testEphemeralVolume = &api.Volume{
+	Name:       "test-ephemeral",
+	VolumeType: api.Volume_EPHEMERAL,
+	MountPath:  "/ephimeral/dir",
+	Storage:    "10Gi",
+}
+
 // Spec for testing
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
@@ -47,6 +56,7 @@ var headGroup = api.HeadGroupSpec{
 	},
 	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
+	EnableIngress:   true,
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -78,6 +88,20 @@ var workerGroup = api.WorkerGroupSpec{
 	},
 	Labels: map[string]string{
 		"foo": "bar",
+	},
+}
+
+var rayCluster = api.Cluster{
+	Name:      "test_cluster",
+	Namespace: "foo",
+	Annotations: map[string]string{
+		"kubernetes.io/ingress.class": "nginx",
+	},
+	ClusterSpec: &api.ClusterSpec{
+		HeadGroupSpec: &headGroup,
+		WorkerGroupSpec: []*api.WorkerGroupSpec{
+			&workerGroup,
+		},
 	},
 }
 
@@ -134,6 +158,32 @@ func TestBuildVolumes(t *testing.T) {
 			},
 		},
 	}
+
+	targetEphemeralVolume := v1.Volume{
+		Name: testEphemeralVolume.Name,
+		VolumeSource: v1.VolumeSource{
+			Ephemeral: &v1.EphemeralVolumeSource{
+				VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app.kubernetes.io/managed-by": "kuberay-apiserver",
+						},
+					},
+					Spec: v1.PersistentVolumeClaimSpec{
+						AccessModes: []v1.PersistentVolumeAccessMode{
+							v1.ReadWriteOnce,
+						},
+						Resources: v1.ResourceRequirements{
+							Requests: v1.ResourceList{
+								v1.ResourceStorage: resource.MustParse(testEphemeralVolume.Storage),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -150,6 +200,11 @@ func TestBuildVolumes(t *testing.T) {
 			"pvc test",
 			[]*api.Volume{testPVCVolume},
 			[]v1.Volume{targetPVCVolume},
+		},
+		{
+			"ephemeral test",
+			[]*api.Volume{testEphemeralVolume},
+			[]v1.Volume{targetEphemeralVolume},
 		},
 	}
 	for _, tt := range tests {
@@ -236,6 +291,16 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
 		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
+	}
+}
+
+func TestBuildRayCluster(t *testing.T) {
+	cluster := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	if len(cluster.ObjectMeta.Annotations) != 1 {
+		t.Errorf("failed to propagate annotations")
+	}
+	if !(*cluster.Spec.HeadGroupSpec.EnableIngress) {
+		t.Errorf("failed to propagate create Ingress")
 	}
 }
 
