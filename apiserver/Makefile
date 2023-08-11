@@ -86,12 +86,12 @@ docker-push: ## Push image with the api server.
 ##@ Deployment
 .PHONY: install
 install: kustomize ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	cd deploy/base && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
-	($(KUSTOMIZE) build deploy/base | kubectl create -f -) || $(KUSTOMIZE) build deploy/base | kubectl replace -f -
+	cd deploy/local && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
+	$(KUSTOMIZE) build deploy/local | kubectl create -f -
 
 .PHONY: uninstall
 uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build deploy/base | kubectl delete -f -
+	$(KUSTOMIZE) build deploy/local | kubectl delete -f -
 
 .PHONY: deploy
 deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 

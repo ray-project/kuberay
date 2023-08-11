@@ -114,7 +114,7 @@ As a convenience for local development the following `make` targets are provided
 * `make clean-cluster` -- deletes the local kind cluster created with `make cluster`
 * `load-image` -- loads the docker image defined by the `IMG` make variable into the kind cluster. The default value for variable is: `kuberay/apiserver:latest`. The name of the image can be changed by using `make load-image -e IMG=<your image name and tag>`
 * `operator-image` -- Build the operator image to be loaded in your kind cluster. The tag for the operator image is `kuberay/operator:latest`. This step is optional.
-* `load-operator-image` -- Load the operator image to the kind cluster created with `create-kind-cluster`. The tag for the operator image is `kuberay/operator:latest`, and the tag can be overridden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`. To use the nightly operator tag, set the tag to `nightly`.
+* `load-operator-image` -- Load the operator image to the kind cluster created with `create-kind-cluster`. The tag for the operator image is `kuberay/operator:latest`, and the tag can be overridden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`. To use the nightly operator tag, set `OPERATOR_IMAGE_TAG` to `nightly`.
 * `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:latest`.
 * `undeploy-operator` -- Undeploy operator from your cluster
 
