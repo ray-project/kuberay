@@ -1,4 +1,4 @@
-- label: Buildkite example
+- label: Unit tests (`make test`)
   instance_size: large
   image: golang:1.17
   commands:
@@ -6,3 +6,33 @@
     - export PATH=$PATH:/usr/local/go/bin
     - cd /workdir/ray-operator
     - make test
+
+- label: Minimal operator test
+  instance_size: large
+  image: golang:1.17
+  commands:
+    - ./.buildkite/setup-env.sh
+    # Create the cluster
+    - time kind create cluster --wait 120s --config tests/framework/config/kind-config-buildkite.yml
+    - docker ps
+
+    # Configure kubectl for kind cluster
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Verify that kubectl works
+    - kubectl version
+    - kubectl cluster-info
+    - kubectl get nodes
+    - kubectl get pods --all-namespaces
+
+    # Install KubeRay operator
+    - kind load docker-image kuberay/operator:nightly
+
+    - pushd helm-chart/kuberay-operator
+    - helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly --wait --timeout=5m0s .
+    - popd
+
+    - echo "Kuberay operator successfully installed."
+
+    - # Remove kind cluster
+    - kind delete cluster
