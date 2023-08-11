@@ -37,7 +37,8 @@ class CONST:
     HELM_CHART_ROOT = REPO_ROOT.joinpath("helm-chart")
 
     # Decide the config based on the environment
-    if os.getenv("BUILDKITE_ENV", default="") == "true":
+    BUILDKITE_ENV = "BUILDKITE_ENV"
+    if os.getenv(BUILDKITE_ENV, default="") == "true":
         DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config-buildkite.yml")
     else:
         DEFAULT_KIND_CONFIG = REPO_ROOT.joinpath("tests/framework/config/kind-config.yaml")
@@ -58,7 +59,7 @@ CONST = CONST()
 
 class KubernetesClusterManager:
     """
-    KubernetesClusterManager controlls the lifecycle of KinD cluster and Kubernetes API client.
+    KubernetesClusterManager controls the lifecycle of KinD cluster and Kubernetes API client.
     """
 
     def __init__(self) -> None:
@@ -72,11 +73,20 @@ class KubernetesClusterManager:
             k8s_client.api_client.close()
         self.k8s_client_dict = {}
 
+    def _adjust_kubeconfig_server_address(self) -> None:
+        """Modify the server address in kubeconfig to https://docker:6443"""
+        if os.getenv(CONST.BUILDKITE_ENV, default="") == "true":
+            shell_subprocess_run("kubectl config set clusters.kind-kind.server https://docker:6443")
+
     def create_kind_cluster(self, kind_config=None) -> None:
         """Create a KinD cluster"""
         # To use NodePort service, `kind_config` needs to set `extraPortMappings` properly.
         kind_config = CONST.DEFAULT_KIND_CONFIG if not kind_config else kind_config
         shell_subprocess_run(f"kind create cluster --wait 900s --config {kind_config}")
+
+        # Adjust the kubeconfig server address if necessary
+        self._adjust_kubeconfig_server_address()
+
         config.load_kube_config()
         self.k8s_client_dict.update(
             {
