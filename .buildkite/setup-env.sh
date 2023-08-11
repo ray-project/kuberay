@@ -61,3 +61,6 @@ apt-get install -y python3.10 python3-pip
 
 # Install requirements
 pip install -r tests/framework/config/requirements.txt
+
+# Bypass Git's ownership check due to unconventional user IDs in Docker containers
+git config --global --add safe.directory /workdir
