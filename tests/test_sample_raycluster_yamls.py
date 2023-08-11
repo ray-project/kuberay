@@ -26,15 +26,6 @@ if __name__ == '__main__':
 
     sample_yaml_files = []
 
-    # For Buildkite CI, we only test the following YAMLs. As runtime and CI resources
-    # allow, more YAMLs should be added to this set.
-    BUILDKITE_ENV = os.getenv("BUILDKITE_ENV", default="False").lower() == "true"
-    buildkite_tests = {
-        "ray-cluster.ingress.yaml",
-        "ray-cluster.mini.yaml",
-        "ray-cluster.external-redis.yaml"
-    }
-
     # Paths of untracked files, specified as strings, relative to KubeRay
     # git root directory.
     untracked_files = set(
@@ -48,8 +39,6 @@ if __name__ == '__main__':
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
         with open(file, encoding="utf-8") as cr_yaml:
-            if BUILDKITE_ENV and file.name not in buildkite_tests:
-                continue
             for k8s_object in yaml.safe_load_all(cr_yaml):
                 if k8s_object['kind'] == 'RayCluster':
                     sample_yaml_files.append(
@@ -60,7 +49,8 @@ if __name__ == '__main__':
     skip_tests = {
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
         'ray-cluster.autoscaler.large.yaml':
-            'Skip this test because it requires a lot of resources.'
+            'Skip this test because it requires a lot of resources.',
+        'ray-cluster-tpu.yaml': 'Skip this test because it requires TPU resources.',
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
