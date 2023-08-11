@@ -1,4 +1,4 @@
-- label: KubeRay operator on kind
+- label: Test RayJob Sample YAMLs
   instance_size: large
   image: golang:1.17
   commands:
@@ -54,3 +54,16 @@
     - popd
 
     - echo "Kuberay operator successfully installed."
+
+    # Delete kind clusters
+    - kind delete clusters --all
+
+    # Install python 3.10 and pip
+    - apt-get update
+    - apt-get install -y python3.10 python3-pip
+
+    # Install requirements
+    - pip install -r tests/framework/config/requirements.txt
+
+    # Run test
+    - BUILDKITE_ENV=true python3 tests/test_sample_rayjob_yamls.py
