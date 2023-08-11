@@ -1,3 +1,5 @@
+#ci:group=:yaml: Sample YAML tests
+
 - label: 'Test RayCluster Sample YAMLs (nightly operator)'
   instance_size: large
   image: golang:1.17
