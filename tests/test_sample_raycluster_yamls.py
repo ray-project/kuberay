@@ -26,12 +26,10 @@ if __name__ == '__main__':
 
     sample_yaml_files = []
 
-    # The free plan of GitHub Actions (i.e. KubeRay CI) only supports 2-core CPU runners. Most
-    # sample YAMLs cannot schedule all pods on Kubernetes nodes due to insufficient CPUs. We
-    # decided to just run some tests on KubeRay CI and run all tests in the Ray CI.
-    # See https://github.com/ray-project/kuberay/issues/695.
-    GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
-    github_action_tests = {
+    # For Buildkite CI, we only test the following YAMLs. As runtime and CI resources
+    # allow, more YAMLs should be added to this set.
+    BUILDKITE_ENV = os.getenv("BUILDKITE_ENV", default="False").lower() == "true"
+    buildkite_tests = {
         "ray-cluster.ingress.yaml",
         "ray-cluster.mini.yaml",
         "ray-cluster.external-redis.yaml"
@@ -50,7 +48,7 @@ if __name__ == '__main__':
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
         with open(file, encoding="utf-8") as cr_yaml:
-            if GITHUB_ACTIONS and file.name not in github_action_tests:
+            if BUILDKITE_ENV and file.name not in buildkite_tests:
                 continue
             for k8s_object in yaml.safe_load_all(cr_yaml):
                 if k8s_object['kind'] == 'RayCluster':
