@@ -66,4 +66,4 @@
     - pip install -r tests/framework/config/requirements.txt
 
     # Run test
-    - BUILDKITE_ENV=true python3 tests/test_sample_rayjob_yamls.py
+    - BUILDKITE_ENV=true RAY_IMAGE="rayproject/ray:2.6.2" python3 tests/test_sample_rayjob_yamls.py
