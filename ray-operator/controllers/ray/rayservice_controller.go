@@ -1162,14 +1162,24 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 		if pod.Labels == nil {
 			pod.Labels = make(map[string]string)
 		}
+
+		// Make a copy of the labels for comparison later, to decide whether we need to push an update.
+		originalLabels := make(map[string]string, len(pod.Labels))
+		for key, value := range pod.Labels {
+			originalLabels[key] = value
+		}
+
 		if httpProxyClient.CheckHealth() == nil {
 			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceTrue
 		} else {
 			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceFalse
 		}
-		if updateErr := r.Update(ctx, &pod); updateErr != nil {
-			r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
-			return updateErr
+
+		if !reflect.DeepEqual(originalLabels, pod.Labels) {
+			if updateErr := r.Update(ctx, &pod); updateErr != nil {
+				r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
+				return updateErr
+			}
 		}
 	}
 
