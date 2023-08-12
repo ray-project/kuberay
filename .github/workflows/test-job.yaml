@@ -183,7 +183,7 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push Operator to Quay.io
+      - name: Push Apiserver to Quay.io
         run: |
           docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
           docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
