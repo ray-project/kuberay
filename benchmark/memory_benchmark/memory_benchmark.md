@@ -2,6 +2,12 @@
 
 # Running benchmark experiments on a Google GKE Cluster
 
+## Architecture
+
+![benchmark architecture](images/benchmark_architecture.png)
+
+This architecture is not a good practice, but it can fulfill the current requirements.
+
 ## Step 1: Create a new Kubernetes cluster
 
 We will create a GKE cluster with autoscaling enabled.
@@ -72,3 +78,7 @@ Based on [the survey](https://forms.gle/KtMLzjXcKoeSTj359) for KubeRay users, we
 
 * As shown in the figure, the memory usage of the KubeRay operator Pod is highly positively correlated to the number of Pods in the Kubernetes cluster.
 In addition, the number of custom resources in the Kubernetes cluster does not have a big impact on the memory usage.
+* Note that the x-axis "Number of Pods" is the number of Pods that are created rather than running.
+If the Kubernetes cluster does not have enough computing resources, the GKE Autopilot will add a new Kubernetes node into the cluster.
+This process may take a few minutes, so some Pods may be pending in the process.
+This may be the reason why the memory usage is somewhat throttled.
