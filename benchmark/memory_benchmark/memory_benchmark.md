@@ -65,7 +65,7 @@ We've designed three benchmark experiments:
 
 Based on [the survey](https://forms.gle/KtMLzjXcKoeSTj359) for KubeRay users, we decided to set our benchmark target at 150 Ray Pods which can cover most use cases.
 
-## Experiment results
+## Experiment results (KubeRay v0.6.0)
 
 ![benchmark result](images/benchmark_result.png)
 
