@@ -9,3 +9,7 @@ resources:
 commonLabels:
   app.kubernetes.io/name: kuberay
   app.kubernetes.io/component: kuberay-apiserver
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: nightly
