@@ -1,8 +1,0 @@
-- label: Buildkite example
-  instance_size: large
-  image: golang:1.19
-  commands:
-    - ls -alp /workdir
-    - export PATH=$PATH:/usr/local/go/bin
-    - cd /workdir/ray-operator
-    - make test
