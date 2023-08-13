@@ -1,6 +1,6 @@
 - label: Test RayJob Sample YAMLs
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     # Install Go
     - export PATH=$PATH:/usr/local/go/bin

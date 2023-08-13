@@ -1,6 +1,6 @@
 - label: Buildkite example
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     - ls -alp /workdir
     - export PATH=$PATH:/usr/local/go/bin
