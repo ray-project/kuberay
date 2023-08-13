@@ -734,9 +734,8 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 //
 // (1) `isHealthy` is used to determine whether restart the RayCluster or not.
 // (2) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
-// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a
-//
-//	look at dashboard agent rather than Ray Serve applications.
+// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
+
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
 	// If the `unhealthySecondThreshold` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
 	// which can be set in a test. This is used for testing purposes.
