@@ -5,7 +5,7 @@ COMMIT_SHA1     := $(shell git rev-parse HEAD )
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 # Golang forbids converting float from Json to struct. Need allowDangerousTypes=true to unblock build.
-CRD_OPTIONS ?= "crd:maxDescLen=100,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
+CRD_OPTIONS ?= "crd:maxDescLen=100,trivialVersions=true,preserveUnknownFields=false,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -110,7 +110,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(CONTROLLER_GEN)/.. go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0
+	GOBIN=$(CONTROLLER_GEN)/.. go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.0
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
