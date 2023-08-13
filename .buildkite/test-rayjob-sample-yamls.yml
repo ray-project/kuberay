@@ -1,17 +1,9 @@
 - label: Test RayJob Sample YAMLs
   instance_size: large
-  image: ubuntu:latest
+  image: golang:1.19
   commands:
-    # Install dependencies
-    - apt-get update && apt-get install -y wget tar curl
-
     # Install Go
-    - export GO_VERSION=1.19
-    - wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
-    - tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
-    - rm go${GO_VERSION}.linux-amd64.tar.gz
     - export PATH=$PATH:/usr/local/go/bin
-    - go version
 
     # Install kind
     - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
