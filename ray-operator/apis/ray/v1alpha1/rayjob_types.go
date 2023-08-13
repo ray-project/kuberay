@@ -97,9 +97,9 @@ type RayJobStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
 	metav1.TypeMeta   `json:",inline"`
