@@ -52,6 +52,10 @@ spec:
                   type: string
                 description: Metadata is data to store along with this job.
                 type: object
+              rayClusterName:
+                description: If rayClusterName is not set, a new rayClusterName will
+                  be auto-generated.
+                type: string
               rayClusterSpec:
                 description: RayClusterSpec is the cluster template to run the job
                 properties:

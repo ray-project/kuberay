@@ -55,6 +55,8 @@ type RayJobSpec struct {
 	RuntimeEnv string `json:"runtimeEnv,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
+	// If rayClusterName is not set, a new rayClusterName will be auto-generated.
+	RayClusterName string `json:"rayClusterName,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
@@ -97,9 +99,9 @@ type RayJobStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
 	metav1.TypeMeta   `json:",inline"`
