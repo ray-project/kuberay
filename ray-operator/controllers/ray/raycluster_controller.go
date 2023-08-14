@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
@@ -35,11 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var (
@@ -104,12 +100,6 @@ type RayClusterReconciler struct {
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error
 
-	// Try to fetch the Event instance
-	event := &corev1.Event{}
-	if err = r.Get(ctx, request.NamespacedName, event); err == nil {
-		return r.eventReconcile(ctx, request, event)
-	}
-
 	// Try to fetch the RayCluster instance
 	instance := &rayv1alpha1.RayCluster{}
 	if err = r.Get(ctx, request.NamespacedName, instance); err == nil {
@@ -124,77 +114,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	// Error reading the object - requeue the request.
 	return ctrl.Result{}, client.IgnoreNotFound(err)
-}
-
-func (r *RayClusterReconciler) eventReconcile(ctx context.Context, request ctrl.Request, event *corev1.Event) (ctrl.Result, error) {
-	var unhealthyPod *corev1.Pod
-	pods := corev1.PodList{}
-
-	// we only care about pod events
-	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
-		!strings.Contains(event.Message, "Readiness probe failed") {
-		// This is not supposed to happen since we already filter events in the watch
-		msg := fmt.Sprintf("unexpected event, we should have already filtered these conditions: %v", event)
-		r.Log.Error(fmt.Errorf(msg), msg, "event", event)
-		return ctrl.Result{}, nil
-	}
-
-	_ = r.Log.WithValues("event", request.NamespacedName)
-
-	options := []client.ListOption{
-		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
-		client.InNamespace(event.InvolvedObject.Namespace),
-		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
-	}
-
-	if err := r.List(ctx, &pods, options...); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if len(pods.Items) == 0 {
-		r.Log.Info("no ray node pod found for event", "event", event)
-		return ctrl.Result{}, nil
-	} else if len(pods.Items) > 1 {
-		// This happens when we use fake client
-		r.Log.Info("are you running in test mode?")
-		for _, pod := range pods.Items {
-			if pod.Name == event.InvolvedObject.Name {
-				unhealthyPod = &pod
-				break
-			}
-		}
-	} else {
-		r.Log.Info("found unhealthy ray node", "pod name", event.InvolvedObject.Name)
-		unhealthyPod = &pods.Items[0]
-	}
-
-	if unhealthyPod.Annotations == nil {
-		r.Log.Info("The unhealthy ray node not found", "pod name", event.InvolvedObject.Name)
-		return ctrl.Result{}, nil
-	}
-
-	if enabledString, ok := unhealthyPod.Annotations[common.RayFTEnabledAnnotationKey]; ok {
-		if strings.ToLower(enabledString) != "true" {
-			r.Log.Info("FT not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
-			return ctrl.Result{}, nil
-		}
-	} else {
-		r.Log.Info("HAEnabled annotation not found", "pod name", unhealthyPod.Name)
-		return ctrl.Result{}, nil
-	}
-
-	if !utils.IsRunningAndReady(unhealthyPod) {
-		if v, ok := unhealthyPod.Annotations[common.RayNodeHealthStateAnnotationKey]; !ok || v != common.PodUnhealthy {
-			updatedPod := unhealthyPod.DeepCopy()
-			updatedPod.Annotations[common.RayNodeHealthStateAnnotationKey] = common.PodUnhealthy
-			r.Log.Info("mark pod unhealthy and need for a rebuild", "pod", unhealthyPod)
-			if err := r.Update(ctx, updatedPod); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	return ctrl.Result{}, nil
 }
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1alpha1.RayCluster) (ctrl.Result, error) {
@@ -443,7 +362,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
 			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
-				// Remove the healthy pod  at index i from the list of pods to delete
+				// Remove the healthy pod at index i from the list of pods to delete
 				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // replace last element with the healthy head.
 				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
 				itemLength--
@@ -456,17 +375,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			}
 		}
 	} else {
-		// we have exactly one head pod running
-		if headPods.Items[0].Annotations != nil {
-			if v, ok := headPods.Items[0].Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
-				if err := r.Delete(ctx, &headPods.Items[0]); err != nil {
-					return err
-				}
-				r.Log.Info(fmt.Sprintf("need to delete unhealthy head pod %s", headPods.Items[0].Name))
-				// we are deleting the head pod now, let's reconcile again later
-				return nil
-			}
-		}
+		// TODO: Delete unhealthy head pod
+
 	}
 
 	if ForcedClusterUpgrade {
@@ -531,20 +441,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// delete the worker pod if it is marked unhealthy
-		for _, workerPod := range workerPods.Items {
-			if workerPod.Annotations == nil {
-				continue
-			}
-			if v, ok := workerPod.Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
-				r.Log.Info(fmt.Sprintf("deleting unhealthy worker pod %s", workerPod.Name))
-				if err := r.Delete(ctx, &workerPod); err != nil {
-					return err
-				}
-				// we are deleting one worker pod now, let's reconcile again later
-				return nil
-			}
-		}
+		// TODO: Delete unhealthy worker pods
 
 		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
 		// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
@@ -813,31 +710,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.LabelChangedPredicate{},
 			predicate.AnnotationChangedPredicate{},
 		))).
-		Watches(&source.Kind{Type: &corev1.Event{}},
-			&handler.EnqueueRequestForObject{},
-			builder.WithPredicates(predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					if eventObj, ok := e.Object.(*corev1.Event); ok {
-						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
-							eventObj.Reason != "Unhealthy" || !strings.Contains(eventObj.Message, "Readiness probe failed") {
-							// only care about pod unhealthy events
-							return false
-						}
-						return true
-					}
-					return false
-				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return false
-				},
-				DeleteFunc: func(e event.DeleteEvent) bool {
-					return false
-				},
-				GenericFunc: func(e event.GenericEvent) bool {
-					return false
-				},
-			}),
-		).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
