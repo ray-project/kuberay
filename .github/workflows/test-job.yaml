@@ -12,11 +12,11 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
         # Use the same go version with build job
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -107,10 +107,10 @@ jobs:
     name: Build Apiserver, CLI Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.17.x
+      - name: Set up Go 1.19.x
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17'
+          go-version: '1.19'
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -183,7 +183,7 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push Operator to Quay.io
+      - name: Push Apiserver to Quay.io
         run: |
           docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
           docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
@@ -202,10 +202,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
