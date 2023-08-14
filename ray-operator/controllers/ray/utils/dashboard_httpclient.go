@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -121,7 +121,7 @@ func (r *RayDashboardClient) GetDeployments(ctx context.Context) (string, error)
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("GetDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -153,7 +153,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -174,7 +174,7 @@ func (r *RayDashboardClient) GetSingleApplicationStatus(ctx context.Context) (*S
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetDeploymentsStatus fail: %s %s", resp.Status, string(body))
@@ -225,7 +225,7 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
@@ -350,7 +350,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 		return nil, nil
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1alpha1.
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	var jobResp RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
@@ -413,7 +413,7 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
