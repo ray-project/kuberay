@@ -2,7 +2,7 @@
 
 - label: 'Test RayCluster Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
     # Use nightly KubeRay operator image
@@ -10,7 +10,7 @@
 
 - label: 'Test RayCluster Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
@@ -18,7 +18,7 @@
 
 - label: 'Test RayJob Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
     # Use nightly KubeRay operator image
@@ -26,7 +26,7 @@
 
 - label: 'Test RayJob Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.17
+  image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
