@@ -55,9 +55,11 @@ echo "Kuberay operator successfully installed."
 # Remove kind cluster
 kind delete cluster
 
-# Install python 3.10 and pip
+# Install python 3.11 and pip
 apt-get update
-apt-get install -y python3.10 python3-pip
+apt-get install -y python3.11 python3.11-venv
+python3 -m venv .venv
+source .venv/bin/activate
 
 # Install requirements
 pip install -r tests/framework/config/requirements.txt
