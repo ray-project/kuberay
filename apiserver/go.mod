@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/apiserver
 
-go 1.17
+go 1.19
 
 require (
 	github.com/go-openapi/runtime v0.19.31
