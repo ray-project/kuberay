@@ -32,6 +32,14 @@ const (
 	DefaultDomainName   = "cluster.local"
 )
 
+type CRDType string
+
+const (
+	RayClusterCRD CRDType = "RayCluster"
+	RayJobCRD     CRDType = "RayJob"
+	RayServiceCRD CRDType = "RayService"
+)
+
 // GetClusterDomainName returns cluster's domain name
 func GetClusterDomainName() string {
 	if domain := os.Getenv(ClusterDomainEnvKey); len(domain) > 0 {
@@ -129,14 +137,29 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateServiceName generates a Ray head service name from cluster name
-func GenerateServiceName(clusterName string) string {
-	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "svc"))
+// GenerateHeadServiceName generates a Ray head service name for both RayCluster and RayService.
+func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayClusterSpec, ownerName string) (string, error) {
+	switch crdType {
+	case RayServiceCRD:
+		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc")), nil
+	case RayClusterCRD:
+		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc"))
+		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
+			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
+		}
+		return headSvcName, nil
+	default:
+		return "", fmt.Errorf("unknown CRD type: %s", crdType)
+	}
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
 func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) string {
-	headSvcName := GenerateServiceName(cluster.Name)
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		logrus.Errorf("Failed to generate head service name: %v", err)
+		return ""
+	}
 	if cluster.Spec.HeadGroupSpec.HeadService != nil && cluster.Spec.HeadGroupSpec.HeadService.Name != "" {
 		headSvcName = cluster.Spec.HeadGroupSpec.HeadService.Name
 	}
@@ -147,11 +170,6 @@ func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) s
 // domain name (FQDN). This function is provided for backward compatibility purposes only.
 func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 	return strings.Split(fqdnRayIP, ".")[0]
-}
-
-// GenerateDashboardServiceName generates a ray head service name from cluster name
-func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
 // GenerateServeServiceName generates name for serve service.

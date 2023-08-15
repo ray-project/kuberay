@@ -789,6 +789,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1alpha1.RayCluster, w
 	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayv1alpha1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
 	podName = utils.CheckName(podName)                                       // making sure the name is valid
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
+
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling

@@ -51,7 +51,10 @@ func BuildServiceForHeadPod(cluster rayv1alpha1.RayCluster, labels map[string]st
 		annotations = make(map[string]string)
 	}
 
-	default_name := utils.GenerateServiceName(cluster.Name)
+	default_name, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		return nil, err
+	}
 	default_namespace := cluster.Namespace
 	default_type := cluster.Spec.HeadGroupSpec.ServiceType
 
@@ -132,7 +135,12 @@ func BuildHeadServiceForRayService(rayService rayv1alpha1.RayService, rayCluster
 		return nil, err
 	}
 
-	service.ObjectMeta.Name = utils.GenerateServiceName(rayService.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	service.ObjectMeta.Name = headSvcName
 	service.ObjectMeta.Namespace = rayService.Namespace
 	service.ObjectMeta.Labels = map[string]string{
 		RayServiceLabelKey:  rayService.Name,
