@@ -19,7 +19,7 @@ var podTemplateTest = v1.PodTemplateSpec{
 	Spec: v1.PodSpec{
 		Containers: []v1.Container{
 			{
-				Name:  "ray-head",
+				Name:  "ray_head",
 				Image: "my_image",
 				VolumeMounts: []v1.VolumeMount{
 					{
