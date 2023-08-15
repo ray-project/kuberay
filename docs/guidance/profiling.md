@@ -60,5 +60,5 @@ securityContext:
 
 7. **Clean up the RayCluster**: 
     ```bash
-    kubectl delete -f ray-cluster.profiling.yaml
+    kubectl delete -f ray-cluster.py-spy.yaml
     ```
