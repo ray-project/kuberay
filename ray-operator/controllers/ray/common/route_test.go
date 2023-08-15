@@ -14,7 +14,7 @@ import (
 
 var instanceWithRouteEnabled = &rayv1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-test",
+		Name:      "raycluster-sample",
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
