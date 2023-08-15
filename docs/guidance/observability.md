@@ -53,3 +53,7 @@ curl --request GET '<baseUrl>/apis/v1alpha2/namespaces/<namespace>/clusters/<ray
 ## Ray Cluster: Monitoring with Prometheus & Grafana
 
 See [prometheus-grafana.md](./prometheus-grafana.md) for more details.
+
+## Profiling with KubeRay
+
+See [profiling.md](./profiling.md) for more details.

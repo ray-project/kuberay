@@ -1,5 +1,5 @@
 # Generate client code (go & json) from API protocol buffers
-FROM golang:1.19.10 as generator
+FROM registry.access.redhat.com/ubi8/go-toolset:1.19.10-10 as generator
 
 ENV PROTOC_VERSION 3.17.3
 ENV GOLANG_PROTOBUF_VERSION v1.5.2
@@ -11,7 +11,8 @@ ENV GOLANG_GRPC_VERSION v1.1.0
 ENV GOBIN=/go/bin
 
 # Install protoc.
-RUN apt-get update && apt-get install -y jq sed unzip
+USER root
+RUN wget https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64 -O /usr/bin/jq && chmod +x /usr/bin/jq
 RUN curl -L -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip
 RUN unzip -o protoc.zip -d /usr/ bin/protoc
 RUN unzip -o protoc.zip -d /usr/ 'include/*'
@@ -22,6 +23,8 @@ ENV PROTOCINCLUDE /usr/include/google/protobuf
 # Install protoc-gen-go && protoc-gen-go-grpc
 RUN go install github.com/golang/protobuf/protoc-gen-go@$GOLANG_PROTOBUF_VERSION
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$GOLANG_GRPC_VERSION
+# These go binaries are installed under /go/bin
+ENV PATH /go/bin:${PATH}
 
 # Install protoc-gen-rpc-gateway && protoc-gen-openapiv2.
 RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$GRPC_GATEWAY_VERSION
@@ -33,3 +36,4 @@ ENV XDG_CACHE_HOME /tmp/.cache
 RUN chmod -R 775 /usr/bin/
 RUN chmod -R 775 /usr/include/google
 RUN chmod -R 775 /go
+USER 65532:65532
