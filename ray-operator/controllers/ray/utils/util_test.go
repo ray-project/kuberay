@@ -459,4 +459,8 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, *clusterSpecWithHeadService.DeepCopy(), "rayservice-sample")
 	assert.Nil(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+
+	// Invalid CRD type
+	_, err = GenerateHeadServiceName(RayJobCRD, rayv1alpha1.RayClusterSpec{}, "rayjob-sample")
+	assert.NotNil(t, err)
 }
