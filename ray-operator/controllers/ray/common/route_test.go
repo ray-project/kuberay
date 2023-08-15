@@ -1,20 +1,20 @@
 package common
 
 import (
+	"strings"
+	"testing"
+
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
-
-	"strings"
-	"testing"
 )
 
 var instanceWithRouteEnabled = &rayv1alpha1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "raycluster-sample",
+		Name:      "raycluster-test",
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
