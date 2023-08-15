@@ -18,15 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.17
+### Use go v1.19
 
-Currently, Kuberay does not support go v1.16 ([#568](https://github.com/ray-project/kuberay/issues/568)) or go v1.18 ([#518](https://github.com/ray-project/kuberay/issues/518)).
-Hence, we strongly recommend you to use go v1.17. The following commands can help you switch to go v1.17.6.
+Currently, KubeRay uses go v1.19 for development.
 
 ```bash
-go install golang.org/dl/go1.17.6@latest
-go1.17.6 download
-export GOROOT=$(go1.17.6 env GOROOT)
+go install golang.org/dl/go1.19.12@latest
+go1.19.12 download
+export GOROOT=$(go1.19. env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 

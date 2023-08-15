@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/ray-operator
 
-go 1.17
+go 1.19
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.0
@@ -14,7 +14,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.19.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	k8s.io/api v0.23.0
