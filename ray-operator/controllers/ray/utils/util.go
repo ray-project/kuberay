@@ -135,8 +135,12 @@ func GenerateServiceName(clusterName string) string {
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
-func GenerateFQDNServiceName(clusterName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.%s", GenerateServiceName(clusterName), namespace, GetClusterDomainName())
+func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) string {
+	headSvcName := GenerateServiceName(cluster.Name)
+	if cluster.Spec.HeadGroupSpec.HeadService != nil && cluster.Spec.HeadGroupSpec.HeadService.Name != "" {
+		headSvcName = cluster.Spec.HeadGroupSpec.HeadService.Name
+	}
+	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
 }
 
 // ExtractRayIPFromFQDN extracts the head service name (i.e., RAY_IP, deprecated) from a fully qualified

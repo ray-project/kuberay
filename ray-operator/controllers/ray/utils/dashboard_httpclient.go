@@ -69,6 +69,9 @@ type RayDashboardClient struct {
 func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster, defaultPortName string) (string, error) {
 	headSvc := &corev1.Service{}
 	headSvcName := GenerateServiceName(rayCluster.Name)
+	if rayCluster.Spec.HeadGroupSpec.HeadService != nil && rayCluster.Spec.HeadGroupSpec.HeadService.Name != "" {
+		headSvcName = rayCluster.Spec.HeadGroupSpec.HeadService.Name
+	}
 	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
 		if errors.IsNotFound(err) {
 			log.Error(err, "Head service is not found", "head service name", headSvcName, "namespace", rayCluster.Namespace)
