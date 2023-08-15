@@ -178,8 +178,8 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 	}
 
 	if len(ports) == 0 && rayService.Spec.ServeService == nil {
-		return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
-			"otherwise, the Kubernetes service for Ray Serve will not be created.")
+		return nil, fmt.Errorf("please specify the port named 'serve' in the Ray head container; " +
+			"otherwise, the Kubernetes service for Ray Serve will not be created")
 	}
 
 	if rayService.Spec.ServeService != nil {
