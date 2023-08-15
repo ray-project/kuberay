@@ -234,7 +234,7 @@ rules:
   - delete
   - get
   - list
-``- patch
+  - patch
   - update
   - watch
 {{- if .Values.batchScheduler.enabled }}
