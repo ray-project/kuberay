@@ -32,6 +32,7 @@ const (
 	DefaultDomainName   = "cluster.local"
 )
 
+// TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
 type CRDType string
 
 const (
@@ -137,7 +138,17 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateHeadServiceName generates a Ray head service name for both RayCluster and RayService.
+// GenerateHeadServiceName generates a Ray head service name. Note that there are two types of head services:
+//
+// (1) For RayCluster: If `HeadService.Name` in the cluster spec is not empty, it will be used as the head service name.
+// Otherwise, the name is generated based on the RayCluster CR's name.
+// (2) For RayService: It's important to note that the RayService CR not only possesses a head service owned by its RayCluster CR
+// but also maintains a separate head service for itself to facilitate zero-downtime upgrades. The name of the head service owned
+// by the RayService CR is generated based on the RayService CR's name.
+//
+// @param crdType: The type of the CRD that owns the head service.
+// @param clusterSpec: `RayClusterSpec`
+// @param ownerName: The name of the CR that owns the head service.
 func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
 	case RayServiceCRD:
