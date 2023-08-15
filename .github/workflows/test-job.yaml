@@ -347,13 +347,13 @@ jobs:
         with:
           ray_version: 2.5.0
   
-  test-compatibility-2_6_2:
+  test-compatibility-2_6_3:
     needs:
       - build_operator
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 2.6.2
+    name: Compatibility Test - 2.6.3
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -365,7 +365,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 2.6.2
+          ray_version: 2.6.3
 
   test-compatibility-nightly:
     needs:

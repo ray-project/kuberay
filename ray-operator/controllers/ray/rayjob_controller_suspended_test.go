@@ -55,7 +55,7 @@ var _ = Context("Inside the default namespace", func() {
 			Suspend:    true,
 			Entrypoint: "sleep 999",
 			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
-				RayVersion: "2.5.0",
+				RayVersion: "2.6.3",
 				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
 					Replicas:    pointer.Int32(1),

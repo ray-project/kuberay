@@ -144,7 +144,7 @@ applications:
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.5.0",
+									Image: "rayproject/ray:2.6.3",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -218,7 +218,7 @@ applications:
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.5.0",
+										Image:   "rayproject/ray:2.6.3",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
