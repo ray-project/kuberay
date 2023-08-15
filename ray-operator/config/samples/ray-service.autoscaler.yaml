@@ -7,8 +7,8 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 300 # Config for the health check threshold for service. Default value is 60.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for deployments. Default value is 60.
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
   # The workload consists of two applications. The first application checks on an event in the second application.
   # If the event isn't set, the first application will block on requests until the event is set. So, to test upscaling
   # we can first send a bunch of requests to the first application, which will trigger Serve autoscaling to bring up
