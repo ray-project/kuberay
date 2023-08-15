@@ -14,6 +14,12 @@ bash scripts/install-docker.sh
 # Delete dangling clusters
 kind delete clusters --all
 
+# Install kubectl.
+curl -LO https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl
+curl -LO "https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl.sha256"
+echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
 # Install Helm
 curl -Lo helm.tar.gz https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
 tar -zxvf helm.tar.gz
