@@ -357,7 +357,6 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(oldStatus rayv1alpha
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
-
 	r.Log.Info("Reconciling Ingress")
 	if instance.Spec.HeadGroupSpec.EnableIngress == nil || !*instance.Spec.HeadGroupSpec.EnableIngress {
 		return nil
@@ -373,7 +372,6 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 }
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
-
 	headRoutes := routev1.RouteList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -408,7 +406,6 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 }
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1alpha1.RayCluster) error {
-
 	headIngresses := networkingv1.IngressList{}
 	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
@@ -733,7 +730,6 @@ func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
-
 	// making sure the name is valid
 	ingress.Name = utils.CheckName(ingress.Name)
 
@@ -751,7 +747,6 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 }
 
 func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *routev1.Route, instance *rayv1alpha1.RayCluster) error {
-
 	// making sure the name is valid
 	route.Name = utils.CheckName(route.Name)
 
