@@ -171,9 +171,6 @@ func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) s
 		logrus.Errorf("Failed to generate head service name: %v", err)
 		return ""
 	}
-	if cluster.Spec.HeadGroupSpec.HeadService != nil && cluster.Spec.HeadGroupSpec.HeadService.Name != "" {
-		headSvcName = cluster.Spec.HeadGroupSpec.HeadService.Name
-	}
 	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
 }
 
