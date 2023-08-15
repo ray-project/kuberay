@@ -41,6 +41,7 @@ nav:
     - Monitoring and Observability:
       - Observability: guidance/observability.md
       - Prometheus and Grafana: guidance/prometheus-grafana.md
+      - Profiling: guidance/profiling.md
     - Security:
       - IAM Roles (AWS EKS): guidance/aws-eks-iam.md
       - Pod Security: guidance/pod-security.md

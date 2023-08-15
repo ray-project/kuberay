@@ -53,9 +53,9 @@ securityContext:
 6. **Profile using Ray Dashboard**:
     - Visit http://localhost:8265/#/cluster.
     - Click `Stack Trace` for `ray::long_running_task`.
-      <img width="1728" alt="StackTrace" src="../images/stack_trace.png">
+      ![StackTrace](../images/stack_trace.png)
     - Click `CPU Flame Graph` for `ray::long_running_task`.
-      <img width="1728" alt="FlameGraph" src="../images/cpu_flame_graph.png">
+      ![FlameGraph](../images/cpu_flame_graph.png)
     - For additional details on using the profiler, refer the [Ray Observability Guide](https://docs.ray.io/en/latest/ray-observability/user-guides/debug-apps/optimize-performance.html#python-cpu-profiling-in-the-dashboard).
 
 7. **Clean up the RayCluster**: 
