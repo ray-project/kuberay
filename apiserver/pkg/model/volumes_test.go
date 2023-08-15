@@ -20,7 +20,7 @@ var podTemplateTest = v1.PodTemplateSpec{
 		Containers: []v1.Container{
 			{
 				Name:  "ray-head",
-				Image: "blah",
+				Image: "my_image",
 				VolumeMounts: []v1.VolumeMount{
 					{
 						Name:             "hostPath",
