@@ -4,24 +4,25 @@ metadata:
   name: rayjob-sample-shutdown
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
+
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   shutdownAfterJobFinishes: true
+
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   ttlSecondsAfterFinished: 10
-  # runtimeEnv decoded to '{
-  #    "pip": [
-  #        "requests==2.26.0",
-  #        "pendulum==2.1.2"
-  #    ],
-  #    "env_vars": {
-  #        "counter_name": "test_counter"
-  #    }
-  # }'
-  runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
-  # Suspend specifies whether the RayJob controller should create a RayCluster instance.
+
+  # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
+  RuntimeEnvYAML: |
+    pip:
+      - requests==2.26.0
+      - pendulum==2.1.2
+    env_vars:
+      counter_name: "test_counter"    # Suspend specifies whether the RayJob controller should create a RayCluster instance.
+
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
   # If the RayCluster is already created, it will be deleted. In the case of transition to false, a new RayCluste rwill be created.
   # suspend: false
+
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
     rayVersion: '2.5.0' # should match the Ray version in the image of the containers
