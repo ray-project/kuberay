@@ -401,7 +401,7 @@ func TestBuildPod(t *testing.T) {
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(podTemplateSpec, rayv1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
 
@@ -549,7 +549,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	// Build a worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(podTemplateSpec, rayv1alpha1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
 
@@ -799,7 +799,7 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 
 func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	worker.Template.ObjectMeta.Name = "ray-worker-test"
 	podName := cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
@@ -851,7 +851,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{}
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
@@ -874,7 +874,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 func TestDefaultInitContainer(t *testing.T) {
 	// A default init container to check the health of GCS is expected to be added.
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	expectedResult := len(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.InitContainers) + 1
@@ -908,7 +908,7 @@ func TestDefaultInitContainer(t *testing.T) {
 
 func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(cluster.Name, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + DashSymbol + string(rayv1alpha1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 
