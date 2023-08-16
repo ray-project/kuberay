@@ -160,7 +160,6 @@ func serveSwaggerUI(mux *http.ServeMux) {
 
 func registerHttpHandlerFromEndpoint(handler RegisterHttpHandlerFromEndpoint, serviceName string, ctx context.Context, mux *runtime.ServeMux) {
 	endpoint := "localhost" + *rpcPortFlag
-	//	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32))}
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32))}
 
 	if err := handler(ctx, mux, endpoint, opts); err != nil {
