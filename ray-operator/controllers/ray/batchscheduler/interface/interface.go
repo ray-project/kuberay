@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // BatchScheduler manages submitting RayCluster pods to a third-party scheduler.
@@ -34,7 +35,7 @@ type BatchSchedulerFactory interface {
 
 	// ConfigureReconciler configures the RayCluster Reconciler in the process of being built by
 	// adding watches for its scheduler-specific custom resource types, and any other needed setup.
-	ConfigureReconciler(b *builder.Builder) *builder.Builder
+	ConfigureReconciler(b *builder.Builder, mgr manager.Manager) *builder.Builder
 }
 
 type DefaultBatchScheduler struct{}
@@ -63,6 +64,6 @@ func (df *DefaultBatchSchedulerFactory) New(config *rest.Config) (BatchScheduler
 func (df *DefaultBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
 }
 
-func (df *DefaultBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
+func (df *DefaultBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder, mgr manager.Manager) *builder.Builder {
 	return b
 }

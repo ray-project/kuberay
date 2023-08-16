@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -27,9 +28,9 @@ func GetRegisteredNames() []string {
 	return pluginNames
 }
 
-func ConfigureReconciler(b *builder.Builder) *builder.Builder {
+func ConfigureReconciler(b *builder.Builder, mgr manager.Manager) *builder.Builder {
 	for _, factory := range schedulerContainers {
-		b = factory.ConfigureReconciler(b)
+		b = factory.ConfigureReconciler(b, mgr)
 	}
 	return b
 }
