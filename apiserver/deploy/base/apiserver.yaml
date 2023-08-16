@@ -28,6 +28,29 @@ spec:
           requests:
             cpu: 300m
             memory: 300Mi
+      - name: kube-rbac-proxy
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - "ALL"
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.14.1
+        args:
+        - "--secure-listen-address=0.0.0.0:8443"
+        - "--upstream=http://127.0.0.1:8888/"
+        - "--logtostderr=true"
+        - "--v=0"
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: https
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 5m
+            memory: 64Mi
 
 ---
 apiVersion: v1
@@ -52,6 +75,10 @@ spec:
       port: 8887
       targetPort: 8887
       nodePort: 31887
+    - name: https
+      port: 8443
+      targetPort: 8443
+      nodePort: 31843
 
 ---
 apiVersion: v1
