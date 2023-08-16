@@ -391,9 +391,12 @@ func TestFetchHeadServiceURL(t *testing.T) {
 			Namespace: namespace,
 		},
 	}
+
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	assert.Nil(t, err, "Fail to generate head service name")
 	headSvc := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateServiceName(cluster.Name),
+			Name:      headSvcName,
 			Namespace: cluster.ObjectMeta.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
