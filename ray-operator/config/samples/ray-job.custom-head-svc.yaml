@@ -1,30 +1,16 @@
+# This YAML file is primarily for testing purposes. It specifies a custom head service name for the 
+# RayCluster associated with the RayJob. The head service allows worker Pods to connect to the head 
+# Pod and enables the Kubernetes Job, owned by the RayJob, to submit tasks to the RayCluster.
 apiVersion: ray.io/v1alpha1
 kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
-  # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
-  # shutdownAfterJobFinishes: false
-  # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
-  # ttlSecondsAfterFinished: 10
-  # runtimeEnv decoded to '{
-  #    "pip": [
-  #        "requests==2.26.0",
-  #        "pendulum==2.1.2"
-  #    ],
-  #    "env_vars": {
-  #        "counter_name": "test_counter"
-  #    }
-  #}'
   runtimeEnv: ewogICAgInBpcCI6IFsKICAgICAgICAicmVxdWVzdHM9PTIuMjYuMCIsCiAgICAgICAgInBlbmR1bHVtPT0yLjEuMiIKICAgIF0sCiAgICAiZW52X3ZhcnMiOiB7ImNvdW50ZXJfbmFtZSI6ICJ0ZXN0X2NvdW50ZXIifQp9Cg==
-  # Suspend specifies whether the RayJob controller should create a RayCluster instance.
-  # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
-  # If the RayCluster is already created, it will be deleted. In the case of transition to false, a new RayCluste rwill be created.
-  # suspend: false
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.5.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.6.3' # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       headService:
@@ -40,7 +26,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.5.0
+              image: rayproject/ray:2.6.3
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -52,17 +38,14 @@ spec:
                 limits:
                   cpu: "1"
                 requests:
-                  cpu: "200m"
+                  cpu: "1"
               volumeMounts:
                 - mountPath: /home/ray/samples
                   name: code-sample
           volumes:
-            # You set volumes at the Pod level, then mount them into containers inside that Pod
             - name: code-sample
               configMap:
-                # Provide the name of the ConfigMap you want to mount.
                 name: ray-job-code-sample
-                # An array of keys from the ConfigMap to create as files
                 items:
                   - key: sample_code.py
                     path: sample_code.py
@@ -82,7 +65,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.5.0
+                image: rayproject/ray:2.6.3
                 lifecycle:
                   preStop:
                     exec:
@@ -91,20 +74,7 @@ spec:
                   limits:
                     cpu: "1"
                   requests:
-                    cpu: "200m"
-  # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
-  # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
-  # submitterPodTemplate:
-  #   spec:
-  #     restartPolicy: Never
-  #     containers:
-  #       - name: my-custom-rayjob-submitter-pod
-  #         image: rayproject/ray:2.5.0
-  #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
-  #         # Specifying Command is not recommended.
-  #         # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
-      
-
+                    cpu: "1"
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
 # it is mounted into the container and executed to show the Ray job at work
