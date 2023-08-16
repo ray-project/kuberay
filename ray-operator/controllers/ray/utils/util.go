@@ -32,6 +32,15 @@ const (
 	DefaultDomainName   = "cluster.local"
 )
 
+// TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
+type CRDType string
+
+const (
+	RayClusterCRD CRDType = "RayCluster"
+	RayJobCRD     CRDType = "RayJob"
+	RayServiceCRD CRDType = "RayService"
+)
+
 // GetClusterDomainName returns cluster's domain name
 func GetClusterDomainName() string {
 	if domain := os.Getenv(ClusterDomainEnvKey); len(domain) > 0 {
@@ -129,25 +138,46 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateServiceName generates a Ray head service name from cluster name
-func GenerateServiceName(clusterName string) string {
-	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "svc"))
+// GenerateHeadServiceName generates a Ray head service name. Note that there are two types of head services:
+//
+// (1) For RayCluster: If `HeadService.Name` in the cluster spec is not empty, it will be used as the head service name.
+// Otherwise, the name is generated based on the RayCluster CR's name.
+// (2) For RayService: It's important to note that the RayService CR not only possesses a head service owned by its RayCluster CR
+// but also maintains a separate head service for itself to facilitate zero-downtime upgrades. The name of the head service owned
+// by the RayService CR is generated based on the RayService CR's name.
+//
+// @param crdType: The type of the CRD that owns the head service.
+// @param clusterSpec: `RayClusterSpec`
+// @param ownerName: The name of the CR that owns the head service.
+func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayClusterSpec, ownerName string) (string, error) {
+	switch crdType {
+	case RayServiceCRD:
+		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc")), nil
+	case RayClusterCRD:
+		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc"))
+		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
+			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
+		}
+		return headSvcName, nil
+	default:
+		return "", fmt.Errorf("unknown CRD type: %s", crdType)
+	}
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
-func GenerateFQDNServiceName(clusterName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.%s", GenerateServiceName(clusterName), namespace, GetClusterDomainName())
+func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) string {
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		logrus.Errorf("Failed to generate head service name: %v", err)
+		return ""
+	}
+	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
 }
 
 // ExtractRayIPFromFQDN extracts the head service name (i.e., RAY_IP, deprecated) from a fully qualified
 // domain name (FQDN). This function is provided for backward compatibility purposes only.
 func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 	return strings.Split(fqdnRayIP, ".")[0]
-}
-
-// GenerateDashboardServiceName generates a ray head service name from cluster name
-func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
 // GenerateServeServiceName generates name for serve service.

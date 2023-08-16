@@ -44,13 +44,18 @@ func BuildIngressForHeadService(cluster rayv1alpha1.RayCluster) (*networkingv1.I
 	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = port
 	}
+
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		return nil, err
+	}
 	paths = []networkingv1.HTTPIngressPath{
 		{
 			Path:     "/" + cluster.Name + "/(.*)",
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
-					Name: utils.GenerateServiceName(cluster.Name),
+					Name: headSvcName,
 					Port: networkingv1.ServiceBackendPort{
 						Number: dashboardPort,
 					},
@@ -100,7 +105,12 @@ func BuildIngressForRayService(service rayv1alpha1.RayService, cluster rayv1alph
 		return nil, err
 	}
 
-	ingress.ObjectMeta.Name = utils.GenerateServiceName(service.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, service.Spec.RayClusterSpec, service.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	ingress.ObjectMeta.Name = headSvcName
 	ingress.ObjectMeta.Namespace = service.Namespace
 	ingress.ObjectMeta.Labels = map[string]string{
 		RayServiceLabelKey: service.Name,
