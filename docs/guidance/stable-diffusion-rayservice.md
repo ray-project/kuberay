@@ -21,7 +21,7 @@ kubectl apply -f ray-service.stable-diffusion.yaml
 
 This RayService configuration contains some important settings:
 
-* The `tolerations`` for workers allow them to be scheduled on nodes without any taints or on nodes with specific taints. However, workers will only be scheduled on GPU nodes because we set `nvidia.com/gpu: 1` in the Pod's resource configurations.
+* The `tolerations` for workers allow them to be scheduled on nodes without any taints or on nodes with specific taints. However, workers will only be scheduled on GPU nodes because we set `nvidia.com/gpu: 1` in the Pod's resource configurations.
     ```yaml
     # Please add the following taints to the GPU node.
     tolerations:
