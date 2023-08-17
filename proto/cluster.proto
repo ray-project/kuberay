@@ -221,22 +221,22 @@ message HeadGroupSpec {
   string service_type = 3;
   // Optional. Enable Ingress
   // if Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class
-  bool enableIngress = 4;
+  bool enableIngress = 11;
   // Optional. The ray start params of head node group. 
-  map<string, string> ray_start_params = 5;
+  map<string, string> ray_start_params = 4;
   // Optional. The volumes mount to head pod
-  repeated Volume volumes = 6;
+  repeated Volume volumes = 5;
   // Optional. ServiceAccount used by head pod
   // Note that the service account has to be created prior to usage here
-  string service_account = 7;  
+  string service_account = 6;  
   // Optional. image pull secret used by head pod
-  string image_pull_secret = 8;  
+  string image_pull_secret = 7;  
   // Optional. Environment variables for head pod
-  map<string, string> environment = 9;
+  map<string, string> environment = 8;
   // Optional. Annotations for the head pod
-  map<string, string> annotations = 10;
+  map<string, string> annotations = 9;
   // Optional. Labels for the head pod
-  map<string, string> labels = 11;
+  map<string, string> labels = 10;
 }
 
 message WorkerGroupSpec {
