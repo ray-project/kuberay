@@ -20,7 +20,7 @@ kubectl apply -f ray-service.text-sumarizer.yaml
 
 This RayService configuration contains some important settings:
 
-* Its `tolerations` for workers match the taints on the GPU node group (which has taints), so they can be scheduled on either GPU or CPU node. We don't add these to head nodes to head node from being allocated to GPU node.
+* The `tolerations`` for workers allow them to be scheduled on nodes without any taints or on nodes with specific taints. However, workers will only be scheduled on GPU nodes because we set `nvidia.com/gpu: 1` in the Pod's resource configurations.
     ```yaml
     # Please add the following taints to the GPU node.
     tolerations:
