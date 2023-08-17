@@ -26,17 +26,6 @@ if __name__ == '__main__':
 
     sample_yaml_files = []
 
-    # The free plan of GitHub Actions (i.e. KubeRay CI) only supports 2-core CPU runners. Most
-    # sample YAMLs cannot schedule all pods on Kubernetes nodes due to insufficient CPUs. We
-    # decided to just run some tests on KubeRay CI and run all tests in the Ray CI.
-    # See https://github.com/ray-project/kuberay/issues/695.
-    GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", default="False").lower() == "true"
-    github_action_tests = {
-        "ray-cluster.ingress.yaml",
-        "ray-cluster.mini.yaml",
-        "ray-cluster.external-redis.yaml"
-    }
-
     # Paths of untracked files, specified as strings, relative to KubeRay
     # git root directory.
     untracked_files = set(
@@ -50,8 +39,6 @@ if __name__ == '__main__':
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
         with open(file, encoding="utf-8") as cr_yaml:
-            if GITHUB_ACTIONS and file.name not in github_action_tests:
-                continue
             for k8s_object in yaml.safe_load_all(cr_yaml):
                 if k8s_object['kind'] == 'RayCluster':
                     sample_yaml_files.append(
@@ -62,7 +49,8 @@ if __name__ == '__main__':
     skip_tests = {
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
         'ray-cluster.autoscaler.large.yaml':
-            'Skip this test because it requires a lot of resources.'
+            'Skip this test because it requires a lot of resources.',
+        'ray-cluster-tpu.yaml': 'Skip this test because it requires TPU resources.',
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])

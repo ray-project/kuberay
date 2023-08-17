@@ -9,6 +9,7 @@ import (
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -414,4 +415,52 @@ func TestFindContainerPort(t *testing.T) {
 	assert.NotEqual(t, port, -1, "expect port2 found")
 	port = FindContainerPort(&container, "port3", -1)
 	assert.Equal(t, port, -1, "expect port3 not found")
+}
+
+func TestGenerateHeadServiceName(t *testing.T) {
+	// GenerateHeadServiceName generates a Ray head service name. Note that there are two types of head services:
+	//
+	// (1) For RayCluster: If `HeadService.Name` in the cluster spec is not empty, it will be used as the head service name.
+	// Otherwise, the name is generated based on the RayCluster CR's name.
+	// (2) For RayService: It's important to note that the RayService CR not only possesses a head service owned by its RayCluster CR
+	// but also maintains a separate head service for itself to facilitate zero-downtime upgrades. The name of the head service owned
+	// by the RayService CR is generated based on the RayService CR's name.
+
+	// [RayCluster]
+	// Test 1: `HeadService.Name` is empty.
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1alpha1.RayClusterSpec{}, "raycluster-sample")
+	expectedGeneratedSvcName := "raycluster-sample-head-svc"
+	assert.Nil(t, err)
+	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+
+	// Test 2: `HeadService.Name` is not empty.
+	clusterSpecWithHeadService := rayv1alpha1.RayClusterSpec{
+		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+			HeadService: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-head-svc",
+				},
+			},
+		},
+	}
+
+	headSvcName, err = GenerateHeadServiceName(RayClusterCRD, *clusterSpecWithHeadService.DeepCopy(), "raycluster-sample")
+	assert.Nil(t, err)
+	assert.Equal(t, headSvcName, "my-head-svc")
+
+	// [RayService]
+	// Test 3: `HeadService.Name` is empty.
+	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1alpha1.RayClusterSpec{}, "rayservice-sample")
+	expectedGeneratedSvcName = "rayservice-sample-head-svc"
+	assert.Nil(t, err)
+	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+
+	// Test 4: `HeadService.Name` is not empty.
+	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, *clusterSpecWithHeadService.DeepCopy(), "rayservice-sample")
+	assert.Nil(t, err)
+	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+
+	// Invalid CRD type
+	_, err = GenerateHeadServiceName(RayJobCRD, rayv1alpha1.RayClusterSpec{}, "rayjob-sample")
+	assert.NotNil(t, err)
 }

@@ -68,8 +68,13 @@ type RayDashboardClient struct {
 // and the port with the given port name (defaultPortName).
 func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster, defaultPortName string) (string, error) {
 	headSvc := &corev1.Service{}
-	headSvcName := GenerateServiceName(rayCluster.Name)
-	if err := cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+	if err != nil {
+		log.Error(err, "Failed to generate head service name", "RayCluster name", rayCluster.Name, "RayCluster spec", rayCluster.Spec)
+		return "", err
+	}
+
+	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
 		if errors.IsNotFound(err) {
 			log.Error(err, "Head service is not found", "head service name", headSvcName, "namespace", rayCluster.Namespace)
 		}
