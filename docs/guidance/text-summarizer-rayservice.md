@@ -51,9 +51,21 @@ Note that the RayService's Kubernetes service will be created after the Serve ap
 
 ```sh
 # Step 5.1: Download `stable_diffusion_req.py` 
-curl -LO https://raw.githubusercontent.com/ray-project/serve_config_examples/master/text_summarizer/text_summarizer.py
+curl -LO https://raw.githubusercontent.com/ray-project/serve_config_examples/master/text_summarizer/text_summarizer_req.py
 
 # Step 5.2: Send a request to the Summarizer model.
-python text_summarizer.py
+python text_summarizer_req.py
 # Check printed to consoler
 ```
+
+### Step 6: Delete your service
+
+```sh
+# path: ray-operator/config/samples/
+kubectl delete -f ray-service.text-sumarizer.yaml
+```
+```
+
+### Step 7: Uninstall your kuberay operator
+
+Follow [this document](../../helm-chart/kuberay-operator/README.md) to uninstall the latest stable KubeRay operator via Helm repository.

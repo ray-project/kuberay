@@ -10,7 +10,7 @@ spec:
       - name: text_summarizer
         import_path: text_summarizer.text_summarizer:deployment
         runtime_env:
-          working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/praveeng-nlp-service.zip"
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
   rayClusterConfig:
     rayVersion: '2.5.0' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
