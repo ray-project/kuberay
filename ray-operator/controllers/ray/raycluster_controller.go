@@ -333,25 +333,23 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	}
 
 	// Reconcile head Pod
-	restartLimit := 5
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name)
-		if len(headPod.Status.ContainerStatuses) > 0 && headPod.Status.ContainerStatuses[0].RestartCount >= int32(restartLimit) {
-			r.Log.Info(fmt.Sprintf(
-				"The Ray container in the head Pod '%s' has restarted more than %d times. "+
-					"This could indicate an unhealthy Kubernetes node. "+
-					"KubeRay will delete the Pod and recreate the head Pod to potentially schedule it on a different node.",
-				headPod.Name, restartLimit))
-			if err := r.Delete(ctx, &headPod); err != nil {
-				return err
-			}
-			return fmt.Errorf("Head Pod %s has restarted more than %d times. Delete the Pod and recreate it in the next reconciliation.", headPod.Name, restartLimit)
-		}
-
+		// TODO (kevin85421): Consider deleting a head Pod if its Ray container restarts excessively,
+		// as this might suggest an unhealthy Kubernetes node. Deleting and then recreating the head Pod
+		// might allow it to be scheduled on a different node. However, it's aggressive to delete a head Pod
+		// that is not in a terminated state (i.e., `Failed` or `Succeeded`). We should only delete a head Pod
+		// when GCS fault tolerance is enabled. In addition, draining the head Pod before deleting it might
+		// be a good idea.
 		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
 			r.Log.Info("reconcilePods", "The head pod is Running or Pending... checking workers", headPod.Name)
 		} else {
+			if headPod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
+				message := fmt.Sprintf("The status of the head Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always'.", headPod.Name, headPod.Status.Phase)
+				r.Log.Info(message)
+				return fmt.Errorf(message)
+			}
 			r.Log.Info(fmt.Sprintf("The head Pod's status is %s. KubeRay will delete the Pod and recreate the head Pod.", headPod.Status.Phase))
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
@@ -452,24 +450,18 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		// Delete unhealthy worker Pods
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
-			// TODO (kevin85421): feature gate
-			// TODO (kevin85421): We may need to figure out how to drain the node if we decide to delete the Pod.
-			if len(workerPod.Status.ContainerStatuses) > 0 && workerPod.Status.ContainerStatuses[0].RestartCount >= int32(restartLimit) && workerPod.ObjectMeta.DeletionTimestamp == nil {
-				numDeletedUnhealthyWorkerPods++
-				r.Log.Info(fmt.Sprintf(
-					"The Ray container in the worker Pod '%s' has restarted more than %d times. "+
-						"This could indicate an unhealthy Kubernetes node. "+
-						"KubeRay will delete the Pod and recreate the head Pod to potentially schedule it on a different node.",
-					workerPod.Name, restartLimit))
-				if err := r.Delete(ctx, &workerPod); err != nil {
-					return err
-				}
-				continue
-			}
+			// TODO (kevin85421): Consider deleting a worker Pod if its Ray container restarts excessively,
+			// as this could suggest an unhealthy Kubernetes node. Deleting and then recreating the worker Pod
+			// might allow it to be scheduled on a different node. Compared to deleting a head Pod, removing a
+			// worker Pod is less aggressive and aligns more closely with the behavior of the Ray Autoscaler.
+			// Nevertheless, we should still carefully drain the node before deleting the worker Pod. Enabling
+			// GCS fault tolerance might not be necessary when deleting worker Pods. Note that the Ray Autoscaler
+			// will not delete any worker Pods that have never been registered with the Ray cluster. Therefore,
+			// we may need to address the Ray Autoscaler's blind spots.
 
 			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
 			if workerPod.Spec.RestartPolicy != corev1.RestartPolicyAlways && !isPodRunningOrPendingAndNotDeleting(workerPod) {
-				// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart automatically.
+				// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
 				numDeletedUnhealthyWorkerPods++
 				r.Log.Info(fmt.Sprintf("The worker Pod %s status is %s. KubeRay will delete the Pod because the status is not Running or Pending. ", workerPod.Name, workerPod.Status.Phase))
 				if err := r.Delete(ctx, &workerPod); err != nil {
