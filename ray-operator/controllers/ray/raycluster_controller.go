@@ -333,24 +333,34 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	}
 
 	// Reconcile head Pod
+	restartLimit := 5
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
-		r.Log.Info("reconcilePods", "head pod found", headPod.Name)
-		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
-			r.Log.Info("reconcilePods", "head pod is up and running... checking workers", headPod.Name)
-		} else if headPod.Status.Phase == corev1.PodFailed && strings.Contains(headPod.Status.Reason, "Evicted") {
-			// Handle evicted pod
-			r.Log.Info("reconcilePods", "head pod has been evicted and controller needs to replace the pod", headPod.Name)
+		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name)
+		if len(headPod.Status.ContainerStatuses) > 0 && headPod.Status.ContainerStatuses[0].RestartCount >= int32(restartLimit) {
+			r.Log.Info(fmt.Sprintf(
+				"The Ray container in the head Pod '%s' has restarted more than %d times. "+
+					"This could indicate an unhealthy Kubernetes node. "+
+					"KubeRay will delete the Pod and recreate the head Pod to potentially schedule it on a different node.",
+				headPod.Name, restartLimit))
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
 			}
-		} else {
-			return fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
+			return fmt.Errorf("Head Pod %s has restarted more than %d times. Delete the Pod and recreate it in the next reconciliation.", headPod.Name, restartLimit)
 		}
-	}
-	if len(headPods.Items) == 0 || headPods.Items == nil {
-		// create head pod
-		r.Log.Info("reconcilePods", "creating head pod for cluster", instance.Name)
+
+		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
+			r.Log.Info("reconcilePods", "The head pod is Running or Pending... checking workers", headPod.Name)
+		} else {
+			r.Log.Info(fmt.Sprintf("The head Pod's status is %s. KubeRay will delete the Pod and recreate the head Pod.", headPod.Status.Phase))
+			if err := r.Delete(ctx, &headPod); err != nil {
+				return err
+			}
+			return fmt.Errorf("The status of the head Pod %s is %s. Delete the Pod and recreate it in the next reconciliation.", headPod.Name, headPod.Status.Phase)
+		}
+	} else if len(headPods.Items) == 0 {
+		// Create head Pod if it does not exist.
+		r.Log.Info("reconcilePods", "Found 0 head Pods; creating a head Pod for the RayCluster.", instance.Name)
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
@@ -358,7 +368,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
-		r.Log.Info("reconcilePods", "more than 1 head pod found for cluster", instance.Name)
+		r.Log.Info("reconcilePods", fmt.Sprintf("Found %d head Pods; deleting extra head Pods.", len(headPods.Items)), instance.Name)
+		// TODO (kevin85421): In-place update may not be a good idea.
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
 			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
@@ -374,9 +385,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				return err
 			}
 		}
-	} else {
-		// TODO: Delete unhealthy head pod
-
 	}
 
 	if ForcedClusterUpgrade {
@@ -441,7 +449,39 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// TODO: Delete unhealthy worker pods
+		// Delete unhealthy worker Pods
+		numDeletedUnhealthyWorkerPods := 0
+		for _, workerPod := range workerPods.Items {
+			// TODO (kevin85421): feature gate
+			// TODO (kevin85421): We may need to figure out how to drain the node if we decide to delete the Pod.
+			if len(workerPod.Status.ContainerStatuses) > 0 && workerPod.Status.ContainerStatuses[0].RestartCount >= int32(restartLimit) && workerPod.ObjectMeta.DeletionTimestamp == nil {
+				numDeletedUnhealthyWorkerPods++
+				r.Log.Info(fmt.Sprintf(
+					"The Ray container in the worker Pod '%s' has restarted more than %d times. "+
+						"This could indicate an unhealthy Kubernetes node. "+
+						"KubeRay will delete the Pod and recreate the head Pod to potentially schedule it on a different node.",
+					workerPod.Name, restartLimit))
+				if err := r.Delete(ctx, &workerPod); err != nil {
+					return err
+				}
+				continue
+			}
+
+			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
+			if workerPod.Spec.RestartPolicy != corev1.RestartPolicyAlways && !isPodRunningOrPendingAndNotDeleting(workerPod) {
+				// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart automatically.
+				numDeletedUnhealthyWorkerPods++
+				r.Log.Info(fmt.Sprintf("The worker Pod %s status is %s. KubeRay will delete the Pod because the status is not Running or Pending. ", workerPod.Name, workerPod.Status.Phase))
+				if err := r.Delete(ctx, &workerPod); err != nil {
+					return err
+				}
+			}
+		}
+
+		// If we delete unhealthy Pods, we will not create new Pods in this reconciliation.
+		if numDeletedUnhealthyWorkerPods > 0 {
+			return fmt.Errorf("Delete %d unhealthy worker Pods.", numDeletedUnhealthyWorkerPods)
+		}
 
 		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
 		// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
