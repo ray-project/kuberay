@@ -12,7 +12,7 @@ spec:
         runtime_env:
           working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
   rayClusterConfig:
-    rayVersion: '2.5.0' # Should match the Ray version in the image of the containers
+    rayVersion: '2.6.3' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -26,7 +26,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-ml:2.6.0
+            image: rayproject/ray-ml:2.6.3
             ports:
             - containerPort: 6379
               name: gcs
@@ -61,7 +61,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-ml:2.5.0
+            image: rayproject/ray-ml:2.6.3
             resources:
               limits:
                 cpu: 4

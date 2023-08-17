@@ -32,7 +32,7 @@ Create a GPU node group for Ray GPU workers.
 > **Note:** If you encounter permission issues with `kubectl`, follow "Step 2: Configure your computer to communicate with your cluster"
 in the [AWS documentation](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-console.html#).
 
-2. Please install the NVIDIA device plugin. Note: You dont need this if you used `BOTTLEROCKET_x86_64_NVIDIA` image in above step
+2. Please install the NVIDIA device plugin. Note: You don't need this if you used `BOTTLEROCKET_x86_64_NVIDIA` image in above step
    * Install the DaemonSet for NVIDIA device plugin to run GPU enabled containers in your Amazon EKS cluster. You can refer to the [Amazon EKS optimized accelerated Amazon Linux AMIs](https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html#gpu-ami)
    or [NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) repository for more details.
    * If the GPU nodes have taints, add `tolerations` to `nvidia-device-plugin.yml` to enable the DaemonSet to schedule Pods on the GPU nodes.
