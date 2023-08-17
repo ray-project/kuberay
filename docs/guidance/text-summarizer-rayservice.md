@@ -20,7 +20,7 @@ kubectl apply -f ray-service.text-sumarizer.yaml
 
 This RayService configuration contains some important settings:
 
-* Its `tolerations` for workers match the taints on the GPU node group. Without the tolerations, worker Pods won't be scheduled on GPU nodes.
+* Its `tolerations` for workers match the taints on the GPU node group (which has taints), so they can be scheduled on either GPU or CPU node. We don't add these to head nodes to head node from being allocated to GPU node.
     ```yaml
     # Please add the following taints to the GPU node.
     tolerations:
@@ -46,7 +46,7 @@ kubectl port-forward svc/text-summarizer-serve-svc 8000
 
 Note that the RayService's Kubernetes service will be created after the Serve applications are ready and running. This process may take approximately 1 minute after all Pods in the RayCluster are running.
 
-## Step 5: Send a request to the text-to-image model
+## Step 5: Send a request to the text_summarizer model
 
 ```sh
 # Step 5.1: Download `text_summarizer_req.py` 

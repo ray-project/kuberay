@@ -21,7 +21,7 @@ kubectl apply -f ray-service.stable-diffusion.yaml
 
 This RayService configuration contains some important settings:
 
-* Its `tolerations` for workers match the taints on the GPU node group. Without the tolerations, worker Pods won't be scheduled on GPU nodes.
+* Its `tolerations` for workers match the taints on the GPU node group (which has taints), so they can be scheduled on either GPU or CPU node. We don't add these to `headGroupSpec` to make sure head Pod & KubeRay operator Pod are not allocated to GPU node group (which has taints).
     ```yaml
     # Please add the following taints to the GPU node.
     tolerations:
@@ -33,6 +33,14 @@ This RayService configuration contains some important settings:
 * It includes `diffusers` in `runtime_env` since this package is not included by default in the `ray-ml` image.
 
 ## Step 4: Forward the port of Serve
+
+First get the service name from this command.
+
+```sh
+kubectl get services
+```
+
+Then, port forward to the serve.
 
 ```sh
 kubectl port-forward svc/stable-diffusion-serve-svc 8000
