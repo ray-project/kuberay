@@ -1690,3 +1690,69 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 	assert.Nil(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 }
+
+func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
+	setupTest(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Only one head Pod and no worker Pods in the RayCluster.
+	runtimeObjects := testPods[0:1]
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.WorkerGroupSpecs = nil
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Get the pod list from the fake client.
+	podList := corev1.PodList{}
+	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 1, len(podList.Items))
+	assert.Equal(t, "headNode", podList.Items[0].Name)
+
+	// Make sure the head Pod's restart policy is `Always` and status is `Failed`.
+	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+
+	// Initialize a new RayClusterReconciler.
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// The head Pod will not be deleted because the restart policy is `Always`,
+	// and the controller will return an error to requeue the request after a brief delay.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 1, len(podList.Items))
+
+	// Make sure the head Pod's restart policy is `Never` and status is `Failed`.
+	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+
+	// The head Pod will be deleted and the controller will return an error
+	// instead of creating a new head Pod in the same reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 0, len(podList.Items))
+
+	// The new head Pod will be created in the this reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.Nil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 1, len(podList.Items))
+}
