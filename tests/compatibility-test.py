@@ -157,6 +157,7 @@ class RayFTTestCase(unittest.TestCase):
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
+        # [Test 1: Kill GCS process to "restart" the head Pod]
         # Kill the gcs_server process on head node. The head node will crash after 20 seconds
         # because the value of `RAY_gcs_rpc_server_reconnect_timeout_s` is "20" in the
         # `ray-cluster.ray-ft.yaml.template` file.
@@ -182,6 +183,7 @@ class RayFTTestCase(unittest.TestCase):
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
 
+        # [Test 2: Delete the head Pod and wait for a new head Pod]
         # Delete the head Pod. The `kubectl delete pod` command has a default flag `--wait=true`,
         # which waits for resources to be gone before returning.
         shell_subprocess_run(
