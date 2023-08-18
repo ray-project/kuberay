@@ -119,7 +119,7 @@ class RayFTTestCase(unittest.TestCase):
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.KILL_GCS_SERVER, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
@@ -164,7 +164,7 @@ class RayFTTestCase(unittest.TestCase):
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.KILL_GCS_SERVER, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
@@ -191,7 +191,7 @@ class RayFTTestCase(unittest.TestCase):
         restart_count = headpod.status.container_statuses[0].restart_count
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(headpod_name, restart_count,
+        utils.wait_for_new_head(CONST.KILL_HEAD_POD, headpod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
