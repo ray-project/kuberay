@@ -60,7 +60,7 @@ def create_ray_cluster(template_name, ray_version, ray_image):
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
             rulesets = [],
-            timeout = 90,
+            timeout = 180,
             namespace='default',
             filepath = context['filepath']
         )
