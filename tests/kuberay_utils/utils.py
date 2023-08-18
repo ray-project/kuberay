@@ -154,6 +154,9 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
     def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
         all_pods = k8s_v1_api.list_namespaced_pod(namespace = namespace)
         headpod = get_head_pod(namespace)
+        if headpod is None:
+            logger.info(f"headpod is None")
+            return False
         new_head_pod_name = headpod.metadata.name
         new_restart_count = headpod.status.container_statuses[0].restart_count
         # The default container restartPolicy of a Pod is `Always`. Hence, when GCS server is killed,
@@ -179,12 +182,13 @@ def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, 
         # but worker pods should not. However, currently, worker pods will also restart.
         # See https://github.com/ray-project/kuberay/issues/634 for more details.
         for pod in all_pods.items:
+            logger.info(f"Pod: {pod.metadata.name}, Pod.status.phase: {pod.status.phase}")
             if pod.status.phase != 'Running':
-                logger.info(f'Pod {pod.metadata.name} is not Running.')
+                logger.info(f"Pod {pod.metadata.name} is not Running.")
                 return False
             for c in pod.status.container_statuses:
                 if not c.ready:
-                    logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
+                    logger.info(f"Container {c.name} in {pod.metadata.name} is not ready.")
                     return False
         return True
     wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms,
