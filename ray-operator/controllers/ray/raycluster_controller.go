@@ -336,25 +336,32 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name)
-		// TODO (kevin85421): Consider deleting a head Pod if its Ray container restarts excessively,
-		// as this might suggest an unhealthy Kubernetes node. Deleting and then recreating the head Pod
-		// might allow it to be scheduled on a different node. However, it's aggressive to delete a head Pod
-		// that is not in a terminated state (i.e., `Failed` or `Succeeded`). We should only delete a head Pod
-		// when GCS fault tolerance is enabled. In addition, draining the head Pod before deleting it might
-		// be a good idea.
+		// TODO (kevin85421): Consider deleting a head Pod if its Ray container restarts excessively, as this
+		// might suggest an unhealthy Kubernetes node. Deleting and then recreating the head Pod might allow
+		// it to be scheduled on a different node. However, it's aggressive to delete a head Pod that is not
+		// in a terminated state (i.e., `Failed` or `Succeeded`). We should only delete a head Pod when GCS
+		// fault tolerance is enabled, and drain the head Pod before deleting it.
 		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
 			r.Log.Info("reconcilePods", "The head pod is Running or Pending... checking workers", headPod.Name)
 		} else {
 			if headPod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
-				message := fmt.Sprintf("The status of the head Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always'.", headPod.Name, headPod.Status.Phase)
+				// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
+				// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
+				// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
+				// in the head Pod. Therefore, I've added this check as a safeguard.
+				message := fmt.Sprintf(
+					"The status of the head Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+						"and it should be able to restart automatically.", headPod.Name, headPod.Status.Phase)
 				r.Log.Info(message)
 				return fmt.Errorf(message)
 			}
-			r.Log.Info(fmt.Sprintf("The head Pod's status is %s. KubeRay will delete the Pod and recreate the head Pod.", headPod.Status.Phase))
+			message := fmt.Sprintf("The status of the head Pod %s is %s. KubeRay will delete the Pod and recreate the head Pod in the next reconciliation.", headPod.Name, headPod.Status.Phase)
+			r.Log.Info(message)
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
 			}
-			return fmt.Errorf("The status of the head Pod %s is %s. Delete the Pod and recreate it in the next reconciliation.", headPod.Name, headPod.Status.Phase)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted head Pod %s; status: %s", headPod.Name, headPod.Status.Phase)
+			return fmt.Errorf(message)
 		}
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
@@ -466,6 +473,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				r.Log.Info(fmt.Sprintf("The worker Pod %s status is %s. KubeRay will delete the Pod because the status is not Running or Pending. ", workerPod.Name, workerPod.Status.Phase))
 				if err := r.Delete(ctx, &workerPod); err != nil {
 					return err
+				} else {
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted worker Pod %s; status: %s", workerPod.Name, workerPod.Status.Phase)
 				}
 			}
 		}
