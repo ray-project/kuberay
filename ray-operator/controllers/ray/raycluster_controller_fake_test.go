@@ -1560,3 +1560,133 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 }
+
+func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
+	setupTest(t)
+
+	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+	// I added the assertion to prevent the test logic from being affected by other changes.
+	// However, we should refactor the tests in the future.
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup
+	// (2) The goal state of the workerGroup is 3 replicas.
+	// (3) Set the `WorkersToDelete` field to an empty slice.
+	// (4) Disable autoscaling.
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+	testRayCluster.Spec.EnableInTreeAutoscaling = nil
+
+	// This test makes some assumptions about the testPods object.
+	// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+	assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+	numHeadPods := 1
+	oldNumWorkerPods := len(testPods) - numHeadPods
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+	ctx := context.Background()
+
+	// Get the pod list from the fake client.
+	podList := corev1.PodList{}
+	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
+
+	// Make sure all worker Pods are running.
+	for _, pod := range podList.Items {
+		pod.Status.Phase = corev1.PodRunning
+		err = fakeClient.Status().Update(ctx, &pod)
+		assert.Nil(t, err, "Fail to update pod status")
+	}
+
+	// Initialize a new RayClusterReconciler.
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// Since the desired state of the workerGroup is 3 replicas, the controller
+	// will delete 2 worker Pods.
+	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	assert.Nil(t, err, "Fail to reconcile Pods")
+
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+
+	// Update 1 worker Pod to Failed (a terminate state) state.
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
+	assert.Nil(t, err, "Fail to update Pod status")
+
+	// Reconcile again, and the Failed worker Pod should be deleted even if the goal state of the workerGroup specifies 3 replicas.
+	// The function will return an error to requeue the request after a brief delay. Moreover, if there are unhealthy worker
+	// Pods to be deleted, the controller won't create new worker Pods during the same reconcile loop. As a result, the number of worker
+	// Pods will be (expectedNumWorkerPods - 1) after the reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.Equal(t, expectedNumWorkerPods-1, len(podList.Items))
+
+	// Reconcile again, and the controller will create a new worker Pod to reach the goal state of the workerGroup.
+	// Note that the status of new worker Pod created by the fake client is empty, so we need to set all worker
+	// Pods to running state manually to avoid the new Pod being deleted in the next `reconcilePods` call.
+	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	assert.Nil(t, err)
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+	for _, pod := range podList.Items {
+		pod.Status.Phase = corev1.PodRunning
+		err = fakeClient.Status().Update(ctx, &pod)
+		assert.Nil(t, err, "Fail to update pod status")
+	}
+
+	// Update 1 worker Pod to Succeeded (a terminate state) state.
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	podList.Items[0].Status.Phase = corev1.PodSucceeded
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
+	assert.Nil(t, err, "Fail to update Pod status")
+
+	// Reconcile again, and the Succeeded worker Pod should be deleted even if the goal state of the workerGroup specifies 3 replicas.
+	// The function will return an error to requeue the request after a brief delay. Moreover, if there are unhealthy worker
+	// Pods to be deleted, the controller won't create new worker Pods during the same reconcile loop. As a result, the number of worker
+	// Pods will be (expectedNumWorkerPods - 1) after the reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.Equal(t, expectedNumWorkerPods-1, len(podList.Items))
+
+	// Reconcile again, and the controller will create a new worker Pod to reach the goal state of the workerGroup.
+	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	assert.Nil(t, err)
+	err = fakeClient.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: workerSelector,
+		Namespace:     namespaceStr,
+	})
+	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
+}
