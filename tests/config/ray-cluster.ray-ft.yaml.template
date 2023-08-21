@@ -267,6 +267,4 @@ data:
     val = retry_with_timeout(lambda: ray.get(tc.increment.remote()))
     print(f"val: {val}")
 
-    # The actual value should be 1 rather than 2. Ray will launch all registered actors when
-    # the ray cluster restarts, but the internal state of the state will not be restored.
-    assert(val == 3)
+    assert(val == int(sys.argv[2]))
