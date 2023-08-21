@@ -174,6 +174,8 @@ def wait_for_new_head(mode, old_head_pod_name, old_restart_count, namespace, tim
             if new_head_pod_name == old_head_pod_name:
                 logger.info("The old head Pod %s is not killed.", old_head_pod_name)
                 return False
+        else:
+            raise ValueError(f"Invalid failure mode: {mode}")
 
         if headpod.status.phase != "Running":
             logger.info(
