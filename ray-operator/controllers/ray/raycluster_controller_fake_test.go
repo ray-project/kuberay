@@ -737,7 +737,7 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 }
 
-func TestReconcile_PodCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
+func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 	setupTest(t)
 
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
@@ -777,8 +777,8 @@ func TestReconcile_PodCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	// Since the desired state of the workerGroup is 3 replicas, the controller
-	// will not create or delete any worker Pods.
+	// Pod3 and Pod4 should be deleted because of the workersToDelete.
+	// Hence, no failed Pods should exist in `podList`.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 	assert.Nil(t, err, "Fail to reconcile Pods")
 
@@ -788,8 +788,6 @@ func TestReconcile_PodCrash_Diff0_WorkersToDelete_OK(t *testing.T) {
 	})
 	assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-	// Failed Pods (pod3, pod4) should be deleted because of the workersToDelete.
-	// Hence, no failed Pods should exist in `podList`.
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 	assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
