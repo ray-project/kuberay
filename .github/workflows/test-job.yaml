@@ -41,7 +41,7 @@ jobs:
       uses: golangci/golangci-lint-action@v2
       with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v1.50.1
+          version: v1.54.1
 
           # Optional: working directory, useful for monorepos
           working-directory: ./ray-operator
@@ -65,7 +65,7 @@ jobs:
     - name: Run linter against apiserver
       uses: golangci/golangci-lint-action@v2
       with:
-        version: v1.50.1
+        version: v1.54.1
         working-directory: ./apiserver
         args: --timeout=3m
         skip-go-installation: true
@@ -74,7 +74,7 @@ jobs:
     - name: Run linter against cli
       uses: golangci/golangci-lint-action@v2
       with:
-        version: v1.50.1
+        version: v1.54.1
         working-directory: ./cli
         args: --timeout=3m
         skip-go-installation: true
