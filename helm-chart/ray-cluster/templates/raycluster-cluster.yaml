@@ -48,7 +48,7 @@ spec:
         containers:
           - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             name: ray-head
-            {{- if .Values.head.image.repository }}
+            {{- if .Values.head.image }}
             image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
             imagePullPolicy: {{ .Values.head.image.pullPolicy }}
             {{- else }}
@@ -125,7 +125,7 @@ spec:
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
             name: ray-worker
-            {{- if $values.image.repository }}
+            {{- if $values.image }}
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
             imagePullPolicy: {{ $values.image.pullPolicy }}
             {{- else }}
@@ -200,7 +200,7 @@ spec:
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
             name: ray-worker
-            {{- if .Values.worker.image.repository }}
+            {{- if .Values.worker.image }}
             image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
             imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
             {{- else }}
