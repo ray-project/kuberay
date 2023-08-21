@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
@@ -38,18 +36,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var (
-	DefaultRequeueDuration    = 2 * time.Second
-	PrioritizeWorkersToDelete bool
-	ForcedClusterUpgrade      bool
-	EnableBatchScheduler      bool
+	DefaultRequeueDuration = 2 * time.Second
+	ForcedClusterUpgrade   bool
+	EnableBatchScheduler   bool
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
@@ -151,12 +146,6 @@ type RayClusterReconciler struct {
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error
 
-	// Try to fetch the Event instance
-	event := &corev1.Event{}
-	if err = r.Get(ctx, request.NamespacedName, event); err == nil {
-		return r.eventReconcile(ctx, request, event)
-	}
-
 	// Try to fetch the RayCluster instance
 	instance := &rayv1alpha1.RayCluster{}
 	if err = r.Get(ctx, request.NamespacedName, instance); err == nil {
@@ -171,77 +160,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	// Error reading the object - requeue the request.
 	return ctrl.Result{}, client.IgnoreNotFound(err)
-}
-
-func (r *RayClusterReconciler) eventReconcile(ctx context.Context, request ctrl.Request, event *corev1.Event) (ctrl.Result, error) {
-	var unhealthyPod *corev1.Pod
-	pods := corev1.PodList{}
-
-	// we only care about pod events
-	if event.InvolvedObject.Kind != "Pod" || event.Type != "Warning" || event.Reason != "Unhealthy" ||
-		!strings.Contains(event.Message, "Readiness probe failed") {
-		// This is not supposed to happen since we already filter events in the watch
-		msg := fmt.Sprintf("unexpected event, we should have already filtered these conditions: %v", event)
-		r.Log.Error(fmt.Errorf(msg), msg, "event", event)
-		return ctrl.Result{}, nil
-	}
-
-	_ = r.Log.WithValues("event", request.NamespacedName)
-
-	options := []client.ListOption{
-		client.MatchingFields(map[string]string{podUIDIndexField: string(event.InvolvedObject.UID)}),
-		client.InNamespace(event.InvolvedObject.Namespace),
-		client.MatchingLabels(map[string]string{common.RayNodeLabelKey: "yes"}),
-	}
-
-	if err := r.List(ctx, &pods, options...); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if len(pods.Items) == 0 {
-		r.Log.Info("no ray node pod found for event", "event", event)
-		return ctrl.Result{}, nil
-	} else if len(pods.Items) > 1 {
-		// This happens when we use fake client
-		r.Log.Info("are you running in test mode?")
-		for _, pod := range pods.Items {
-			if pod.Name == event.InvolvedObject.Name {
-				unhealthyPod = &pod
-				break
-			}
-		}
-	} else {
-		r.Log.Info("found unhealthy ray node", "pod name", event.InvolvedObject.Name)
-		unhealthyPod = &pods.Items[0]
-	}
-
-	if unhealthyPod.Annotations == nil {
-		r.Log.Info("The unhealthy ray node not found", "pod name", event.InvolvedObject.Name)
-		return ctrl.Result{}, nil
-	}
-
-	if enabledString, ok := unhealthyPod.Annotations[common.RayFTEnabledAnnotationKey]; ok {
-		if strings.ToLower(enabledString) != "true" {
-			r.Log.Info("FT not enabled skipping event reconcile for pod.", "pod name", unhealthyPod.Name)
-			return ctrl.Result{}, nil
-		}
-	} else {
-		r.Log.Info("HAEnabled annotation not found", "pod name", unhealthyPod.Name)
-		return ctrl.Result{}, nil
-	}
-
-	if !utils.IsRunningAndReady(unhealthyPod) {
-		if v, ok := unhealthyPod.Annotations[common.RayNodeHealthStateAnnotationKey]; !ok || v != common.PodUnhealthy {
-			updatedPod := unhealthyPod.DeepCopy()
-			updatedPod.Annotations[common.RayNodeHealthStateAnnotationKey] = common.PodUnhealthy
-			r.Log.Info("mark pod unhealthy and need for a rebuild", "pod", unhealthyPod)
-			if err := r.Update(ctx, updatedPod); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	return ctrl.Result{}, nil
 }
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1alpha1.RayCluster) (ctrl.Result, error) {
@@ -508,22 +426,37 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
-		r.Log.Info("reconcilePods ", "head pod found", headPod.Name)
+		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name)
+		// TODO (kevin85421): Consider deleting a head Pod if its Ray container restarts excessively, as this
+		// might suggest an unhealthy Kubernetes node. Deleting and then recreating the head Pod might allow
+		// it to be scheduled on a different node. However, it's aggressive to delete a head Pod that is not
+		// in a terminated state (i.e., `Failed` or `Succeeded`). We should only delete a head Pod when GCS
+		// fault tolerance is enabled, and drain the head Pod before deleting it.
 		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
-			r.Log.Info("reconcilePods", "head pod is up and running... checking workers", headPod.Name)
-		} else if headPod.Status.Phase == corev1.PodFailed && strings.Contains(headPod.Status.Reason, "Evicted") {
-			// Handle evicted pod
-			r.Log.Info("reconcilePods", "head pod has been evicted and controller needs to replace the pod", headPod.Name)
+			r.Log.Info("reconcilePods", "The head pod is Running or Pending... checking workers", headPod.Name)
+		} else {
+			if headPod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
+				// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
+				// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
+				// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
+				// in the head Pod. Therefore, I've added this check as a safeguard.
+				message := fmt.Sprintf(
+					"The status of the head Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+						"and it should be able to restart automatically.", headPod.Name, headPod.Status.Phase)
+				r.Log.Info(message)
+				return fmt.Errorf(message)
+			}
+			message := fmt.Sprintf("The status of the head Pod %s is %s which is a terminal state. It is not expected that the head pod ever be in a terminal state, so KubeRay will delete the Pod and recreate the head Pod in the next reconciliation.", headPod.Name, headPod.Status.Phase)
+			r.Log.Info(message)
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
 			}
-		} else {
-			return fmt.Errorf("head pod %s is not running nor pending", headPod.Name)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted head Pod %s; status: %s", headPod.Name, headPod.Status.Phase)
+			return fmt.Errorf(message)
 		}
-	}
-	if len(headPods.Items) == 0 || headPods.Items == nil {
-		// create head pod
-		r.Log.Info("reconcilePods ", "creating head pod for cluster", instance.Name)
+	} else if len(headPods.Items) == 0 {
+		// Create head Pod if it does not exist.
+		r.Log.Info("reconcilePods", "Found 0 head Pods; creating a head Pod for the RayCluster.", instance.Name)
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
@@ -531,11 +464,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
-		r.Log.Info("reconcilePods ", "more than 1 head pod found for cluster", instance.Name)
+		r.Log.Info("reconcilePods", fmt.Sprintf("Found %d head Pods; deleting extra head Pods.", len(headPods.Items)), instance.Name)
+		// TODO (kevin85421): In-place update may not be a good idea.
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
 			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
-				// Remove the healthy pod  at index i from the list of pods to delete
+				// Remove the healthy pod at index i from the list of pods to delete
 				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // replace last element with the healthy head.
 				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
 				itemLength--
@@ -545,18 +479,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		for _, extraHeadPodToDelete := range headPods.Items {
 			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
 				return err
-			}
-		}
-	} else {
-		// we have exactly one head pod running
-		if headPods.Items[0].Annotations != nil {
-			if v, ok := headPods.Items[0].Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
-				if err := r.Delete(ctx, &headPods.Items[0]); err != nil {
-					return err
-				}
-				r.Log.Info(fmt.Sprintf("need to delete unhealthy head pod %s", headPods.Items[0].Name))
-				// we are deleting the head pod now, let's reconcile again later
-				return nil
 			}
 		}
 	}
@@ -623,61 +545,72 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// delete the worker pod if it is marked unhealthy
+		// Delete unhealthy worker Pods
+		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
-			if workerPod.Annotations == nil {
-				continue
-			}
-			if v, ok := workerPod.Annotations[common.RayNodeHealthStateAnnotationKey]; ok && v == common.PodUnhealthy {
-				r.Log.Info(fmt.Sprintf("deleting unhealthy worker pod %s", workerPod.Name))
+			// TODO (kevin85421): Consider deleting a worker Pod if its Ray container restarts excessively,
+			// as this could suggest an unhealthy Kubernetes node. Deleting and then recreating the worker Pod
+			// might allow it to be scheduled on a different node. Compared to deleting a head Pod, removing a
+			// worker Pod is less aggressive and aligns more closely with the behavior of the Ray Autoscaler.
+			// Nevertheless, we should still carefully drain the node before deleting the worker Pod. Enabling
+			// GCS fault tolerance might not be necessary when deleting worker Pods. Note that the Ray Autoscaler
+			// will not delete any worker Pods that have never been registered with the Ray cluster. Therefore,
+			// we may need to address the Ray Autoscaler's blind spots.
+
+			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
+			if workerPod.Spec.RestartPolicy != corev1.RestartPolicyAlways && !isPodRunningOrPendingAndNotDeleting(workerPod) {
+				// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
+				numDeletedUnhealthyWorkerPods++
+				r.Log.Info(fmt.Sprintf("The worker Pod %s status is %s. KubeRay will delete the Pod because the status is not Running or Pending. ", workerPod.Name, workerPod.Status.Phase))
 				if err := r.Delete(ctx, &workerPod); err != nil {
 					return err
+				} else {
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted worker Pod %s; status: %s", workerPod.Name, workerPod.Status.Phase)
 				}
-				// we are deleting one worker pod now, let's reconcile again later
-				return nil
 			}
 		}
+
+		// If we delete unhealthy Pods, we will not create new Pods in this reconciliation.
+		if numDeletedUnhealthyWorkerPods > 0 {
+			return fmt.Errorf("Delete %d unhealthy worker Pods.", numDeletedUnhealthyWorkerPods)
+		}
+
+		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
+		// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
+		deletedWorkers := make(map[string]struct{})
+		deleted := struct{}{}
+		r.Log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
+		for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
+			pod := corev1.Pod{}
+			pod.Name = podsToDelete
+			pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
+			r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
+			if err := r.Delete(ctx, &pod); err != nil {
+				if !errors.IsNotFound(err) {
+					r.Log.Info("reconcilePods", "Fail to delete Pod", pod.Name, "error", err)
+					return err
+				}
+				r.Log.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
+			} else {
+				deletedWorkers[pod.Name] = deleted
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
+			}
+		}
+		worker.ScaleStrategy.WorkersToDelete = []string{}
 
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {
 			// TODO (kevin85421): We also need to have a clear story of all the Pod status phases, especially for PodFailed.
-			if isPodRunningOrPendingAndNotDeleting(pod) {
+			if _, ok := deletedWorkers[pod.Name]; !ok && isPodRunningOrPendingAndNotDeleting(pod) {
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
 		diff := workerReplicas - int32(len(runningPods.Items))
-		if PrioritizeWorkersToDelete {
-			// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
-			// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
-			r.Log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
-					if !errors.IsNotFound(err) {
-						return err
-					}
-					r.Log.Info("reconcilePods", "unable to delete worker ", pod.Name)
-				} else {
-					// For example, the failed Pod (Status: corev1.PodFailed) is not counted in the `runningPods` variable.
-					// Therefore, we should not update `diff` when we delete a failed Pod.
-					if isPodRunningOrPendingAndNotDeleting(pod) {
-						diff++
-					}
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-				}
-			}
-			worker.ScaleStrategy.WorkersToDelete = []string{}
-		}
-
-		// Once we remove the feature flag and commit to those changes, the code below can be cleaned up
-		// It will end being a simple: "if diff > 0 { } else { }"
+		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
 			// pods need to be added
-			r.Log.Info("reconcilePods", "add workers for group", worker.GroupName)
+			r.Log.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
 			// create all workers of this group
 			var i int32
 			for i = 0; i < diff; i++ {
@@ -689,70 +622,41 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		} else if diff == 0 {
 			r.Log.Info("reconcilePods", "all workers already exist for group", worker.GroupName)
 			continue
-		} else if -diff == int32(len(worker.ScaleStrategy.WorkersToDelete)) {
-			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
-					if !errors.IsNotFound(err) {
-						return err
-					}
-					r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
-				}
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-			}
-			continue
 		} else {
-			// diff < 0 and not the same absolute value as int32(len(worker.ScaleStrategy.WorkersToDelete)
-			// we need to scale down
-			workersToRemove := int32(len(runningPods.Items)) - workerReplicas
-			randomlyRemovedWorkers := workersToRemove - int32(len(worker.ScaleStrategy.WorkersToDelete))
-			// we only need to scale down the workers in the ScaleStrategy
-			r.Log.Info("reconcilePods", "removing all the pods in the scaleStrategy of", worker.GroupName)
-			for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-				pod := corev1.Pod{}
-				pod.Name = podsToDelete
-				pod.Namespace = utils.GetNamespace(instance.ObjectMeta)
-				r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
-				if err := r.Delete(ctx, &pod); err != nil {
-					if !errors.IsNotFound(err) {
-						return err
-					}
-					r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", pod.Name)
-				}
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
-			}
+			// diff < 0 indicates the need to delete some Pods to match the desired number of replicas. However,
+			// randomly deleting Pods is certainly not ideal. So, if autoscaling is enabled for the cluster, we
+			// will disable random Pod deletion, making Autoscaler the sole decision-maker for Pod deletions.
+			enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
 
-			// remove the remaining pods not part of the scaleStrategy
-			i := 0
-			if int(randomlyRemovedWorkers) > 0 {
-				for _, randomPodToDelete := range runningPods.Items {
-					found := false
-					for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
-						if randomPodToDelete.Name == podsToDelete {
-							found = true
-							break
-						}
-					}
-					if !found {
-						r.Log.Info("Randomly deleting pod ", "index ", i, "/", randomlyRemovedWorkers, "with name", randomPodToDelete.Name)
-						if err := r.Delete(ctx, &randomPodToDelete); err != nil {
-							if !errors.IsNotFound(err) {
-								return err
-							}
-							r.Log.Info("reconcilePods", "workers specified to delete was already deleted ", randomPodToDelete.Name)
-						}
-						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", randomPodToDelete.Name)
-						// increment the number of deleted pods
-						i++
-						if i >= int(randomlyRemovedWorkers) {
-							break
-						}
-					}
+			// TODO (kevin85421): `enableRandomPodDelete` is a feature flag for KubeRay v0.6.0. If users want to use
+			// the old behavior, they can set the environment variable `ENABLE_RANDOM_POD_DELETE` to `true`. When the
+			// default behavior is stable enough, we can remove this feature flag.
+			enableRandomPodDelete := false
+			if enableInTreeAutoscaling {
+				if s := os.Getenv(common.ENABLE_RANDOM_POD_DELETE); strings.ToLower(s) == "true" {
+					enableRandomPodDelete = true
 				}
+			}
+			// Case 1: If Autoscaler is disabled, we will always enable random Pod deletion no matter the value of the feature flag.
+			// Case 2: If Autoscaler is enabled, we will respect the value of the feature flag. If the feature flag environment variable
+			// is not set, we will disable random Pod deletion by default.
+			if !enableInTreeAutoscaling || enableRandomPodDelete {
+				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
+				randomlyRemovedWorkers := -diff
+				r.Log.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
+				for i := 0; i < int(randomlyRemovedWorkers); i++ {
+					randomPodToDelete := runningPods.Items[i]
+					r.Log.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
+					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
+						if !errors.IsNotFound(err) {
+							return err
+						}
+						r.Log.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+					}
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
+				}
+			} else {
+				r.Log.Info(fmt.Sprintf("Random Pod deletion is disabled for cluster %s. The only decision-maker for Pod deletions is Autoscaler.", instance.Name))
 			}
 		}
 	}
@@ -952,31 +856,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.LabelChangedPredicate{},
 			predicate.AnnotationChangedPredicate{},
 		))).
-		Watches(&source.Kind{Type: &corev1.Event{}},
-			&handler.EnqueueRequestForObject{},
-			builder.WithPredicates(predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					if eventObj, ok := e.Object.(*corev1.Event); ok {
-						if eventObj.InvolvedObject.Kind != "Pod" || eventObj.Type != "Warning" ||
-							eventObj.Reason != "Unhealthy" || !strings.Contains(eventObj.Message, "Readiness probe failed") {
-							// only care about pod unhealthy events
-							return false
-						}
-						return true
-					}
-					return false
-				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return false
-				},
-				DeleteFunc: func(e event.DeleteEvent) bool {
-					return false
-				},
-				GenericFunc: func(e event.GenericEvent) bool {
-					return false
-				},
-			}),
-		).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
