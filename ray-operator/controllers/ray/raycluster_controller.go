@@ -355,7 +355,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				r.Log.Info(message)
 				return fmt.Errorf(message)
 			}
-			message := fmt.Sprintf("The status of the head Pod %s is %s. KubeRay will delete the Pod and recreate the head Pod in the next reconciliation.", headPod.Name, headPod.Status.Phase)
+			message := fmt.Sprintf("The status of the head Pod %s is %s which is a terminal state. It is not expected that the head pod ever be in a terminal state, so KubeRay will delete the Pod and recreate the head Pod in the next reconciliation.", headPod.Name, headPod.Status.Phase)
 			r.Log.Info(message)
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
