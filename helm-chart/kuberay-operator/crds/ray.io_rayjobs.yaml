@@ -12104,8 +12104,19 @@ spec:
               entrypointNumCpus:
                 description: EntrypointNumCpus specifies the number of cpus to reserve for
                   the entrypoint command.
-                format: int32
-                type: integer
+                  oneOf:
+                    - type: integer
+                    - type: number
+              entrypointNumGpus:
+                description: EntrypointNumGpus specifies the number of gpus to reserve for
+                  the entrypoint command.
+                  oneOf:
+                    - type: integer
+                    - type: number
+              entrypointResources:
+                description: EntrypointResources specifies the custom resources and their
+                  quantities as a json formatted dictionary string.
+                type: string
               submitterPodTemplate:
                 description: SubmitterPodTemplate is the template for the pod that
                   will run `ray job submit`.

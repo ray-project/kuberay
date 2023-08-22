@@ -96,13 +96,9 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--runtime-env-json", `{"test":"test"}`,
 		"--metadata-json", `{"testKey":"testValue"}`,
 		"--submission-id", "testJobId",
-<<<<<<< HEAD
 		"--entrypoint_num_cpus", "1.000000",
 		"--entrypoint_num_gpus", "0.500000",
 		"--entrypoint_resources", `{"Custom_1": 1, "Custom_2": 5.5}`,
-=======
-		"--entrypoint_num_cpus", "1"
->>>>>>> 5bf3147a36f37af31c618e100a1832adf0233d28
 		"--",
 		"echo", "hello",
 	}
