@@ -12113,6 +12113,11 @@ spec:
                 description: ShutdownAfterJobFinishes will determine whether to delete
                   the ray cluster once rayJob succeed or fai
                 type: boolean
+              entrypointNumCpus:
+                description: EntrypointNumCpus specifies the number of cpus to reserve for
+                  the entrypoint command.
+                format: int32
+                type: integer  
               submitterPodTemplate:
                 description: SubmitterPodTemplate is the template for the pod that
                   will run `ray job submit`.

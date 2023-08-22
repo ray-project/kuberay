@@ -61,6 +61,7 @@ $ kubectl get pod
 * `runtimeEnv` - [DEPRECATED] _(Optional)_ base64-encoded string of the runtime env json string.
 * `entrypointNumCpus` - _(Optional)_ Specifies the quantity of CPU cores to reserve for the entrypoint command.
 * `entrypointNumGpus` - _(Optional)_ Specifies the number of GPUs to reserve for the entrypoint command.
+* `entrypointResources` - _(Optional)_ A json formatted dictionary to specify custom resources and their quantity.
 ## RayJob Observability
 
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
