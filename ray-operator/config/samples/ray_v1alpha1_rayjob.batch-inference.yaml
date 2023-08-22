@@ -8,16 +8,6 @@ spec:
   # shutdownAfterJobFinishes: false
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
-  # Runtime env decoded to {
-  # {
-  # "pip": [
-  #   "torch",
-  #   "torchvision",
-  #   "Pillow",
-  #   "transformers"
-  # ]
-  # }
-  runtimeEnv: ewogICJwaXAiOiBbCiAgICAidG9yY2giLAogICAgInRvcmNodmlzaW9uIiwKICAgICJQaWxsb3ciLAogICAgInRyYW5zZm9ybWVycyIKICBdCn0=
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
   # If the RayCluster is already created, it will be deleted. In the case of transition to false, a new RayCluste rwill be created.
@@ -47,14 +37,15 @@ spec:
                   name: client
               resources:
                 limits:
-                  cpu: 2
-                  memory: 8Gi
+                  nvidia.com/gpu: "4"
                 requests:
-                  cpu: 2
-                  memory: 8Gi
+                  cpu: "54"
+                  memory: "54Gi"
               volumeMounts:
                 - mountPath: /home/ray/samples
                   name: code-sample
+          nodeSelector:
+            cloud.google.com/gke-accelerator: nvidia-tesla-t4
           volumes:
             # You set volumes at the Pod level, then mount them into containers inside that Pod
             - name: code-sample
@@ -65,39 +56,6 @@ spec:
                 items:
                   - key: sample_code.py
                     path: sample_code.py
-    workerGroupSpecs:
-      # the pod replicas in this group typed worker
-      - replicas: 1
-        minReplicas: 1
-        maxReplicas: 5
-        # logical group name, for this called small-group, also can be functional
-        groupName: small-group
-        # The `rayStartParams` are used to configure the `ray start` command.
-        # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-        # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-        rayStartParams:
-          resources: '"{\"accelerator_type_cpu\": 48, \"accelerator_type_a10\": 2, \"accelerator_type_a100\": 2}"'
-        #pod template
-        template:
-          spec:
-            containers:
-              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray-ml:2.6.3-gpu
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: [ "/bin/sh","-c","ray stop" ]
-                resources:
-                  limits:
-                    cpu: "48"
-                    memory: "192G"
-                    nvidia.com/gpu: 4
-                  requests:
-                    cpu: "36"
-                    memory: "128G"
-                    nvidia.com/gpu: 4
-            nodeSelector:
-              cloud.google.com/gke-accelerator: nvidia-tesla-t4
   # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
   # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
   # submitterPodTemplate:
@@ -129,51 +87,48 @@ data:
         s3_uri, mode="RGB"
     )
     ds
-    # TODO(archit) need to install Pillow, pytorch or tf or flax (pip install torch torchvision torchaudio)
     from typing import Dict
     import numpy as np
 
     from transformers import pipeline
     from PIL import Image
 
-    # Pick the largest batch size that can fit on our GPUs
-    BATCH_SIZE = 1024
+    BATCH_SIZE = 16
 
-    # TODO(archit) basic step
+    class ImageClassifier:
+        def __init__(self):
+            # If doing CPU inference, set `device="cpu"` instead.
+            self.classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device=0) # TODO:archit
 
-    # single_batch = ds.take_batch(10)
+        def __call__(self, batch: Dict[str, np.ndarray]):
+            # Convert the numpy array of images into a list of PIL images which is the format the HF pipeline expects.
+            outputs = self.classifier(
+                [Image.fromarray(image_array) for image_array in batch["image"]], 
+                top_k=1, 
+                batch_size=BATCH_SIZE)
+            
+            # `outputs` is a list of length-one lists. For example:
+            # [[{'score': '...', 'label': '...'}], ..., [{'score': '...', 'label': '...'}]]
+            batch["score"] = [output[0]["score"] for output in outputs]
+            batch["label"] = [output[0]["label"] for output in outputs]
+            return batch
 
-    # from PIL import Image
+    predictions = ds.map_batches(
+        ImageClassifier,
+        compute=ray.data.ActorPoolStrategy(size=4), # Change this number based on the number of GPUs in your cluster.
+        num_gpus=1, # Specify 1 GPU per model replica.
+        batch_size=BATCH_SIZE # Use the largest batch size that can fit on our GPUs
+    )
 
-    # img = Image.fromarray(single_batch["image"][0])
-    # # display image
-    # img.show()
-    # from transformers import pipeline
-    # from PIL import Image
+    prediction_batch = predictions.take_batch(5)
 
-    # # If doing CPU inference, set device="cpu" instead.
-    # classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device="cuda:0")
-    # outputs = classifier([Image.fromarray(image_array) for image_array in single_batch["image"]], top_k=1, batch_size=10)
-    # del classifier # Delete the classifier to free up GPU memory.
-    # print(outputs)
-
-    @ray.remote(num_gpus=1)
-    def do_single_batch():
-        single_batch = ds.take_batch(10)
-
-        from PIL import Image
-
-        img = Image.fromarray(single_batch["image"][0])
-        # display image
+    from PIL import Image
+    print("A few sample predictions: ")
+    for image, prediction in zip(prediction_batch["image"], prediction_batch["label"]):
+        img = Image.fromarray(image)
+        # Display the image
         img.show()
-        from transformers import pipeline
-        from PIL import Image
+        print("Label: ", prediction)
 
-        # If doing CPU inference, set device="cpu" instead.
-        classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device="cuda:0")
-        outputs = classifier([Image.fromarray(image_array) for image_array in single_batch["image"]], top_k=1, batch_size=10)
-        del classifier # Delete the classifier to free up GPU memory.
-        print(outputs)
-        return outputs
-
-    print(ray.get(do_single_batch.remote()))
+    # Write to local disk, or external storage, e.g. S3
+    # ds.write_parquet("s3://my_bucket/my_folder")
