@@ -5,6 +5,10 @@
   image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - IMG=kuberay/operator:nightly make docker-image
+    - popd
     # Use nightly KubeRay operator image
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 
@@ -21,6 +25,10 @@
   image: golang:1.19
   commands:
     - ./.buildkite/setup-env.sh
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - IMG=kuberay/operator:nightly make docker-image
+    - popd
     # Use nightly KubeRay operator image
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayjob_yamls.py
 
