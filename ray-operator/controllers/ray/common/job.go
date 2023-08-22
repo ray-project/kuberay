@@ -85,6 +85,9 @@ func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
 	entrypoint := rayJobInstance.Spec.Entrypoint
+	entrypointNumCpus := rayJobInstance.Spec.EntrypointNumCpus
+	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
+	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
 	k8sJobCommand := GetBaseRayJobCommand(address)
 
@@ -106,6 +109,18 @@ func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 
 	if len(jobId) > 0 {
 		k8sJobCommand = append(k8sJobCommand, "--submission-id", jobId)
+	}
+
+	if entrypointNumCpus > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint_num_cpus", fmt.Sprintf("%f", entrypointNumCpus))
+	}
+
+	if entrypointNumGpus > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint_num_gpus", fmt.Sprintf("%f", entrypointNumGpus))
+	}
+
+	if len(entrypointResources) > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint_resources", entrypointResources)
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
