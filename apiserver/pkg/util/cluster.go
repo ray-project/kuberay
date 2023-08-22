@@ -651,8 +651,8 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 func GetNodeHostIP(node *v1.Node) (net.IP, error) {
 	addresses := node.Status.Addresses
 	addressMap := make(map[v1.NodeAddressType][]v1.NodeAddress)
-	for i := range addresses {
-		addressMap[addresses[i].Type] = append(addressMap[addresses[i].Type], addresses[i])
+	for _, nodeAddress := range addresses {
+		addressMap[nodeAddress.Type] = append(addressMap[nodeAddress.Type], nodeAddress)
 	}
 	if addresses, ok := addressMap[v1.NodeInternalIP]; ok {
 		return net.ParseIP(addresses[0].Address), nil
