@@ -12,7 +12,7 @@ spec:
   ttlSecondsAfterFinished: 10
 
   # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
-  RuntimeEnvYAML: |
+  runtimeEnvYAML: |
     pip:
       - requests==2.26.0
       - pendulum==2.1.2
