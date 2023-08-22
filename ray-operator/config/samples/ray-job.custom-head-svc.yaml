@@ -9,7 +9,9 @@ spec:
   entrypoint: python /home/ray/samples/sample_code.py
 
   # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
-  RuntimeEnvYAML: |
+  # See https://docs.ray.io/en/latest/ray-core/handling-dependencies.html for details.
+  # (New in KubeRay version 1.0.)  
+  runtimeEnvYAML: |
     pip:
       - requests==2.26.0
       - pendulum==2.1.2
