@@ -234,7 +234,7 @@ message HeadGroupSpec {
   map<string, string> annotations = 9;
   // Optional. Labels for the head pod
   map<string, string> labels = 10;
-  // Optional. Enable Ingress
+  // Optional. Enable cluster Ingress
   // if Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class
   bool enableIngress = 11;
 }
