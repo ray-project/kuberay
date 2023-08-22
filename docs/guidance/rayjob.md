@@ -59,7 +59,8 @@ $ kubectl get pod
 * `ttlSecondsAfterFinished` - _(Optional)_ TTL to clean up the cluster. This only works if `shutdownAfterJobFinishes` is set.
 * `submitterPodTemplate` - _(Optional)_ Pod template spec for the pod that runs `ray job submit` against the Ray cluster.
 * `runtimeEnv` - [DEPRECATED] _(Optional)_ base64-encoded string of the runtime env json string.
-
+* `entrypointNumCpus` - _(Optional)_ Specifies the quantity of CPU cores to reserve for the entrypoint command.
+* `entrypointNumGpus` - _(Optional)_ Specifies the number of GPUs to reserve for the entrypoint command.
 ## RayJob Observability
 
 You can use `kubectl logs` to check the operator logs or the head/worker nodes logs.
