@@ -6,28 +6,25 @@ spec:
   entrypoint: python /home/ray/samples/sample_code.py
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   # shutdownAfterJobFinishes: false
-
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
-  
-  # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
-  # See https://docs.ray.io/en/latest/ray-core/handling-dependencies.html for details.
-  # (New in KubeRay version 1.0.)  
-  runtimeEnvYAML: |
-    pip:
-      - requests==2.26.0
-      - pendulum==2.1.2
-    env_vars:
-      counter_name: "test_counter"  
-      
+  # Runtime env decoded to {
+  # {
+  # "pip": [
+  #   "torch",
+  #   "torchvision",
+  #   "Pillow",
+  #   "transformers"
+  # ]
+  # }
+  runtimeEnv: ewogICJwaXAiOiBbCiAgICAidG9yY2giLAogICAgInRvcmNodmlzaW9uIiwKICAgICJQaWxsb3ciLAogICAgInRyYW5zZm9ybWVycyIKICBdCn0=
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
   # If the RayCluster is already created, it will be deleted. In the case of transition to false, a new RayCluste rwill be created.
   # suspend: false
-
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.5.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.6.3' # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
@@ -40,7 +37,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.5.0
+              image: rayproject/ray-ml:2.6.3-gpu
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -50,9 +47,11 @@ spec:
                   name: client
               resources:
                 limits:
-                  cpu: "1"
+                  cpu: 2
+                  memory: 8Gi
                 requests:
-                  cpu: "200m"
+                  cpu: 2
+                  memory: 8Gi
               volumeMounts:
                 - mountPath: /home/ray/samples
                   name: code-sample
@@ -76,22 +75,29 @@ spec:
         # The `rayStartParams` are used to configure the `ray start` command.
         # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
         # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-        rayStartParams: {}
+        rayStartParams:
+          resources: '"{\"accelerator_type_cpu\": 48, \"accelerator_type_a10\": 2, \"accelerator_type_a100\": 2}"'
         #pod template
         template:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.5.0
+                image: rayproject/ray-ml:2.6.3-gpu
                 lifecycle:
                   preStop:
                     exec:
                       command: [ "/bin/sh","-c","ray stop" ]
                 resources:
                   limits:
-                    cpu: "1"
+                    cpu: "48"
+                    memory: "192G"
+                    nvidia.com/gpu: 4
                   requests:
-                    cpu: "200m"
+                    cpu: "36"
+                    memory: "128G"
+                    nvidia.com/gpu: 4
+            nodeSelector:
+              cloud.google.com/gke-accelerator: nvidia-tesla-t4
   # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
   # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
   # submitterPodTemplate:
@@ -99,7 +105,7 @@ spec:
   #     restartPolicy: Never
   #     containers:
   #       - name: my-custom-rayjob-submitter-pod
-  #         image: rayproject/ray:2.5.0
+  #         image: rayproject/ray:2.6.3
   #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
   #         # Specifying Command is not recommended.
   #         # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
@@ -116,30 +122,58 @@ metadata:
 data:
   sample_code.py: |
     import ray
-    import os
-    import requests
 
-    ray.init()
+    s3_uri = "s3://anonymous@air-example-data-2/imagenette2/val/"
 
-    @ray.remote
-    class Counter:
-        def __init__(self):
-            # Used to verify runtimeEnv
-            self.name = os.getenv("counter_name")
-            assert self.name == "test_counter"
-            self.counter = 0
+    ds = ray.data.read_images(
+        s3_uri, mode="RGB"
+    )
+    ds
+    # TODO(archit) need to install Pillow, pytorch or tf or flax (pip install torch torchvision torchaudio)
+    from typing import Dict
+    import numpy as np
 
-        def inc(self):
-            self.counter += 1
+    from transformers import pipeline
+    from PIL import Image
 
-        def get_counter(self):
-            return "{} got {}".format(self.name, self.counter)
+    # Pick the largest batch size that can fit on our GPUs
+    BATCH_SIZE = 1024
 
-    counter = Counter.remote()
+    # TODO(archit) basic step
 
-    for _ in range(5):
-        ray.get(counter.inc.remote())
-        print(ray.get(counter.get_counter.remote()))
+    # single_batch = ds.take_batch(10)
 
-    # Verify that the correct runtime env was used for the job.
-    assert requests.__version__ == "2.26.0"
+    # from PIL import Image
+
+    # img = Image.fromarray(single_batch["image"][0])
+    # # display image
+    # img.show()
+    # from transformers import pipeline
+    # from PIL import Image
+
+    # # If doing CPU inference, set device="cpu" instead.
+    # classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device="cuda:0")
+    # outputs = classifier([Image.fromarray(image_array) for image_array in single_batch["image"]], top_k=1, batch_size=10)
+    # del classifier # Delete the classifier to free up GPU memory.
+    # print(outputs)
+
+    @ray.remote(num_gpus=1)
+    def do_single_batch():
+        single_batch = ds.take_batch(10)
+
+        from PIL import Image
+
+        img = Image.fromarray(single_batch["image"][0])
+        # display image
+        img.show()
+        from transformers import pipeline
+        from PIL import Image
+
+        # If doing CPU inference, set device="cpu" instead.
+        classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device="cuda:0")
+        outputs = classifier([Image.fromarray(image_array) for image_array in single_batch["image"]], top_k=1, batch_size=10)
+        del classifier # Delete the classifier to free up GPU memory.
+        print(outputs)
+        return outputs
+
+    print(ray.get(do_single_batch.remote()))
