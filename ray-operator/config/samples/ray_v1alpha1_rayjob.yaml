@@ -18,7 +18,8 @@ spec:
       - requests==2.26.0
       - pendulum==2.1.2
     env_vars:
-      counter_name: "test_counter"  
+      counter_name: "test_counter" 
+  entrypointNumCpus: 1 
       
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.

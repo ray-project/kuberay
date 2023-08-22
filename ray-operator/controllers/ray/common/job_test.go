@@ -18,6 +18,7 @@ var testRayJob = &rayv1alpha1.RayJob{
 			RayVersion: "2.6.0",
 		},
 		Entrypoint: "echo hello",
+		EntrypointNumCpus: 1,
 	},
 	Status: rayv1alpha1.RayJobStatus{
 		DashboardURL: "http://127.0.0.1:8265",
@@ -93,6 +94,7 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--runtime-env-json", `{"test":"test"}`,
 		"--metadata-json", `{"testKey":"testValue"}`,
 		"--submission-id", "testJobId",
+		"--entrypoint_num_cpus", "1"
 		"--",
 		"echo", "hello",
 	}

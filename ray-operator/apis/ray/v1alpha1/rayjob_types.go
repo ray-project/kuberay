@@ -76,6 +76,8 @@ type RayJobSpec struct {
 	Suspend bool `json:"suspend,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
 	SubmitterPodTemplate *v1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+	EntrypointNumCpus int32 `json:"entrypointNumCpus,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
