@@ -12090,7 +12090,12 @@ spec:
                 - headGroupSpec
                 type: object
               runtimeEnv:
-                description: RuntimeEnv is base64 encoded.
+                description: RuntimeEnv is base64 encoded. This field is deprecated,
+                  please use RuntimeEnvYAML instead.
+                type: string
+              runtimeEnvYAML:
+                description: RuntimeEnvYAML represents the runtime environment configuration
+                  provided as a multi-line YAML string
                 type: string
               shutdownAfterJobFinishes:
                 description: ShutdownAfterJobFinishes will determine whether to delete
