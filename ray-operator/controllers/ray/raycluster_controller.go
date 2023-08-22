@@ -58,6 +58,10 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or OPenshift
 func getClusterType(logger logr.Logger) bool {
+	if os.Getenv("USE_INGRESS_ON_OPENSHIFT") == "true" {
+		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
+		return false
+	}
 	// The discovery package is used to discover APIs supported by a Kubernetes API server.
 	config, err := ctrl.GetConfig()
 	if err == nil && config != nil {
