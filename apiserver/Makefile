@@ -62,17 +62,8 @@ lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 
 ##@ Build
 
-COMMIT := $(shell git rev-parse --short HEAD)
-VERSION := $(shell git describe --tags $(shell git rev-list --tags --max-count=1))
-DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
-REPO=github.com/ray-project/kuberay
-
-BUILD_FLAGS ?= -ldflags="-X '${REPO}/apiserver/cmd/version.Version=$(VERSION)' \
-	-X '${REPO}/apiserver/cmd/version.gitCommit=$(COMMIT)' \
-	-X '${REPO}/apiserver/cmd/version.buildDate=$(DATE)'"
-
 build: fmt vet fumpt imports lint ## Build api server binary.
-	go build $(BUILD_FLAGS) -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
+	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
 	go run -race cmd/main.go
@@ -122,7 +113,7 @@ KIND ?= $(REPO_ROOT_BIN)/kind
 KUSTOMIZE_VERSION ?= v3.8.7
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= latest
-GOLANGCI_LINT_VERSION ?= v1.50.1
+GOLANGCI_LINT_VERSION ?= v1.54.1
 KIND_VERSION ?= v0.19.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
