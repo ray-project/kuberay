@@ -107,8 +107,6 @@ To submit the job, run the following command:
 kubectl apply -f ray_v1alpha1_rayjob.batch-inference.yaml
 ```
 
-Here the cluster is running because we did not set `shutdownAfterJobFinishes` in the `RayJob` spec.  If you set `shutdownAfterJobFinishes` to `true`, the cluster will be shut down after the job finishes.
-
 We can check the status with `kubectl describe rayjob rayjob-sample`.
 
 Sample output:
@@ -154,6 +152,8 @@ kuberay-operator-8b86754c-r4rc2             1/1     Running     0          25h
 rayjob-sample-raycluster-j6t8n-head-kx2gz   1/1     Running     0          35m
 rayjob-sample-w98c7                         0/1     Completed   0          30m
 ```
+
+Here the Ray cluster is still running because we did not set `shutdownAfterJobFinishes` in the `RayJob` spec.  If you set `shutdownAfterJobFinishes` to `true`, the cluster will be shut down after the job finishes.
 
 Next, run
 
