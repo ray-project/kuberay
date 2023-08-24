@@ -48,8 +48,13 @@ spec:
         containers:
           - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             name: ray-head
+            {{- if .Values.head.image }}
+            image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
+            imagePullPolicy: {{ .Values.head.image.pullPolicy }}
+            {{- else }}
             image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
             imagePullPolicy: {{ .Values.image.pullPolicy }}
+            {{- end }}
             resources: {{- toYaml .Values.head.resources | nindent 14 }}
             securityContext:
             {{- toYaml .Values.head.securityContext | nindent 14 }}
@@ -120,8 +125,13 @@ spec:
         containers:
           - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
             name: ray-worker
-            image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
-            imagePullPolicy: {{ $.Values.image.pullPolicy }}
+            {{- if $values.image }}
+            image: {{ $values.image.repository }}:{{ $values.image.tag }}
+            imagePullPolicy: {{ $values.image.pullPolicy }}
+            {{- else }}
+            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            {{- end }}
             resources: {{- toYaml $values.resources | nindent 14 }}
             securityContext:
             {{- toYaml $values.securityContext | nindent 14 }}
@@ -190,8 +200,13 @@ spec:
         containers:
           - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
             name: ray-worker
+            {{- if .Values.worker.image }}
+            image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
+            imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+            {{- else }}
             image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
             imagePullPolicy: {{ .Values.image.pullPolicy }}
+            {{- end }}
             resources: {{- toYaml .Values.worker.resources | nindent 14 }}
             securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 14 }}
