@@ -70,7 +70,7 @@ spec:
       
 
 ######################Ray code sample#################################
-# this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
+# this sample is from https://docs.ray.io/en/latest/data/examples/huggingface_vit_batch_prediction.html
 # it is mounted into the container and executed to show the Ray job at work
 ---
 apiVersion: v1
