@@ -91,7 +91,10 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	}
 
 	// convert *api.Cluster to v1alpha1.RayCluster
-	rayCluster := util.NewRayCluster(apiCluster, computeTemplateDict)
+	rayCluster, err := util.NewRayCluster(apiCluster, computeTemplateDict)
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to create a Ray cluster for (%s/%s)", apiCluster.Namespace, apiCluster.Name)
+	}
 
 	// set our own fields.
 	clusterAt := r.clientManager.Time().Now().String()
@@ -216,7 +219,10 @@ func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob) (*v
 	}
 
 	// convert *api.Cluster to v1alpha1.RayCluster
-	rayJob := util.NewRayJob(apiJob, computeTemplateMap)
+	rayJob, err := util.NewRayJob(apiJob, computeTemplateMap)
+	if err != nil {
+		return nil, util.NewInternalServerError(err, "Failed to create a Ray Job for (%s/%s)", apiJob.Namespace, apiJob.Name)
+	}
 
 	newRayJob, err := r.getRayJobClient(apiJob.Namespace).Create(ctx, rayJob.Get(), metav1.CreateOptions{})
 	if err != nil {
@@ -303,7 +309,10 @@ func (r *ResourceManager) CreateService(ctx context.Context, apiService *api.Ray
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
 	}
-	rayService := util.NewRayService(apiService, computeTemplateDict)
+	rayService, err := util.NewRayService(apiService, computeTemplateDict)
+	if err != nil {
+		return nil, err
+	}
 	createdAt := r.clientManager.Time().Now().String()
 	rayService.Annotations["ray.io/creation-timestamp"] = createdAt
 	newRayService, err := r.getRayServiceClient(apiService.Namespace).Create(ctx, rayService.Get(), metav1.CreateOptions{})
@@ -327,7 +336,10 @@ func (r *ResourceManager) UpdateRayService(ctx context.Context, apiService *api.
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
 	}
-	rayService := util.NewRayService(apiService, computeTemplateDict)
+	rayService, err := util.NewRayService(apiService, computeTemplateDict)
+	if err != nil {
+		return nil, err
+	}
 	rayService.Annotations["ray.io/update-timestamp"] = r.clientManager.Time().Now().String()
 	rayService.ResourceVersion = oldService.DeepCopy().ResourceVersion
 	newRayService, err := client.Update(ctx, rayService.Get(), metav1.UpdateOptions{})

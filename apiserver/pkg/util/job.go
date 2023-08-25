@@ -15,13 +15,7 @@ type RayJob struct {
 const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
-func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) *RayJob {
-	var clusterSpec *rayalphaapi.RayClusterSpec
-
-	if apiJob.ClusterSpec != nil {
-		clusterSpec = buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
-	}
-
+func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
 	// transfer json to runtimeEnv
 	encodedText := base64.StdEncoding.EncodeToString([]byte(apiJob.RuntimeEnv))
 
@@ -39,14 +33,18 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			ShutdownAfterJobFinishes: apiJob.ShutdownAfterJobFinishes,
 			TTLSecondsAfterFinished:  &apiJob.TtlSecondsAfterFinished,
 			JobId:                    apiJob.JobId,
-			RayClusterSpec:           clusterSpec,
+			RayClusterSpec:           nil,
 			ClusterSelector:          apiJob.ClusterSelector,
 		},
 	}
-
-	return &RayJob{
-		rayJob,
+	if apiJob.ClusterSpec != nil {
+		clusterSpec, err := buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
+		if err != nil {
+			return nil, err
+		}
+		rayJob.Spec.RayClusterSpec = clusterSpec
 	}
+	return &RayJob{rayJob}, nil
 }
 
 func (j *RayJob) Get() *rayalphaapi.RayJob {
