@@ -90,26 +90,6 @@ class RayFTTestCase(unittest.TestCase):
         operator_manager.prepare_operator()
         utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
 
-    @unittest.skip("Skip test_kill_head due to its flakiness.")
-    def test_kill_head(self):
-        # This test will delete head node and wait for a new replacement to
-        # come up.
-        shell_subprocess_run(
-            'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
-
-        # wait for new head node to start
-        time.sleep(80)
-        shell_subprocess_run('kubectl get pods -A')
-
-        # make sure the new head is ready
-        # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
-        # make sure both head and worker pods are ready
-        rtn = shell_subprocess_run(
-                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
-        if rtn != 0:
-            show_cluster_info("default")
-            raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
-
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
         if not utils.is_feature_supported(ray_version, CONST.RAY_SERVE_FT):
@@ -127,9 +107,7 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}.")
 
         old_head_pod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         old_head_pod_name = old_head_pod.metadata.name
@@ -141,7 +119,7 @@ class RayFTTestCase(unittest.TestCase):
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.KILL_GCS_SERVER, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
@@ -154,9 +132,7 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
 
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""
@@ -175,21 +151,20 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}.")
 
         old_head_pod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
+        # [Test 1: Kill GCS process to "restart" the head Pod]
         # Kill the gcs_server process on head node. The head node will crash after 20 seconds
         # because the value of `RAY_gcs_rpc_server_reconnect_timeout_s` is "20" in the
         # `ray-cluster.ray-ft.yaml.template` file.
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.KILL_GCS_SERVER, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
@@ -198,16 +173,39 @@ class RayFTTestCase(unittest.TestCase):
         # connection succeeds.
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
+        expected_output = 3
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
-            f" python samples/test_detached_actor_2.py {ray_namespace}",
+            f" python samples/test_detached_actor_2.py {ray_namespace} {expected_output}",
             check = False
         )
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
+
+        # [Test 2: Delete the head Pod and wait for a new head Pod]
+        # Delete the head Pod. The `kubectl delete pod` command has a default flag `--wait=true`,
+        # which waits for resources to be gone before returning.
+        shell_subprocess_run(
+            f'kubectl delete pod {headpod_name} -n {RayFTTestCase.ray_cluster_ns}')
+        restart_count = headpod.status.container_statuses[0].restart_count
+
+        # Waiting for all pods become ready and running.
+        utils.wait_for_new_head(CONST.KILL_HEAD_POD, headpod_name, restart_count,
+            RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
+
+        # Try to connect to the detached actor again.
+        headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
+        headpod_name = headpod.metadata.name
+        expected_output = 4
+        exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
+            f" python samples/test_detached_actor_2.py {ray_namespace} {expected_output}",
+            check = False
+        )
+
+        if exit_code != 0:
+            show_cluster_info(RayFTTestCase.ray_cluster_ns)
+            self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
 
 class RayServiceTestCase(unittest.TestCase):
     """Integration tests for RayService"""
