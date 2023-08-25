@@ -266,6 +266,8 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 // For KubeRay, the liveness and readiness probes perform the same checks.
 // Hence, we use the same function to initialize both probes.
 func initHealthProbe(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
+	// TODO (kevin85421): This function assumes that user-defined probes will always be `Exec`.
+	// If users want to use `HTTPGet`, we currently do not support it.
 	if probe.Exec == nil {
 		// Case 1: head node => Check GCS and Raylet status.
 		// Case 2: worker node => Check Raylet status.
@@ -365,9 +367,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
 						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
 					}
-					initHealthProbe(probe, rayNodeType)
 					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
 				}
+				initHealthProbe(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
 
 				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
 					probe := &v1.Probe{
@@ -377,9 +379,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
 						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
 					}
-					initHealthProbe(probe, rayNodeType)
 					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
 				}
+				initHealthProbe(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
 			}
 		}
 	}
