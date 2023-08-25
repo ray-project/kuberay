@@ -78,7 +78,6 @@ func initTemplateAnnotations(instance rayv1alpha1.RayCluster, podTemplate *v1.Po
 	} else {
 		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "false"
 	}
-	podTemplate.Annotations[RayNodeHealthStateAnnotationKey] = ""
 
 	// set ray external storage namespace if user specified one.
 	if instance.Annotations != nil {
@@ -264,11 +263,17 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 	return podTemplate
 }
 
-func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
+// For KubeRay, the liveness and readiness probes perform the same checks.
+// Hence, we use the same function to initialize both probes.
+func initHealthProbe(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
 	if probe.Exec == nil {
-		// we only create the probe if user did not specify any.
+		// Case 1: head node => Check GCS and Raylet status.
+		// Case 2: worker node => Check Raylet status.
+		//
+		// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
+		// we only need to check one of them.
+		// TODO (kevin85421): Should we take the dashboard process into account?
 		if rayNodeType == rayv1alpha1.HeadNode {
-			// head node liveness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
@@ -277,30 +282,6 @@ func initLivenessProbeHandler(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeTy
 			}
 			probe.Exec = &v1.ExecAction{Command: cmd}
 		} else {
-			// worker node liveness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-			}
-			probe.Exec = &v1.ExecAction{Command: cmd}
-		}
-	}
-}
-
-func initReadinessProbeHandler(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
-	if probe.Exec == nil {
-		// we only create the probe if user did not specify any.
-		if rayNodeType == rayv1alpha1.HeadNode {
-			// head node readiness probe
-			cmd := []string{
-				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
-				"&&", "bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
-					DefaultDashboardPort, RayDashboardGCSHealthPath),
-			}
-			probe.Exec = &v1.ExecAction{Command: cmd}
-		} else {
-			// worker node readiness probe
 			cmd := []string{
 				"bash", "-c", fmt.Sprintf("wget -T 2 -q -O- http://localhost:%d/%s | grep success",
 					DefaultDashboardAgentListenPort, RayAgentRayletHealthPath),
@@ -375,10 +356,8 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 	if podTemplateSpec.Annotations != nil {
 		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
 			if strings.ToLower(enabledString) == "true" {
-				// Ray FT is enabled and we need to add health checks
+				// If users do not specify probes, we will set the default probes.
 				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
-					// it is possible that some user have the probe parameters to override the default,
-					// in this case, this if condition is skipped
 					probe := &v1.Probe{
 						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
 						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
@@ -386,14 +365,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
 						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
 					}
+					initHealthProbe(probe, rayNodeType)
 					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
 				}
-				// add readiness probe exec command in case missing.
-				initReadinessProbeHandler(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
 
 				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
-					// it is possible that some user have the probe parameters to override the default,
-					// in this case, this if condition is skipped
 					probe := &v1.Probe{
 						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
 						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
@@ -401,10 +377,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
 						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
 					}
+					initHealthProbe(probe, rayNodeType)
 					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
 				}
-				// add liveness probe exec command in case missing
-				initLivenessProbeHandler(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
 			}
 		}
 	}
