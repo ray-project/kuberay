@@ -112,15 +112,15 @@ func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 	}
 
 	if entrypointNumCpus > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint_num_cpus", fmt.Sprintf("%f", entrypointNumCpus))
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-cpus", fmt.Sprintf("%f", entrypointNumCpus))
 	}
 
 	if entrypointNumGpus > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint_num_gpus", fmt.Sprintf("%f", entrypointNumGpus))
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-gpus", fmt.Sprintf("%f", entrypointNumGpus))
 	}
 
 	if len(entrypointResources) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint_resources", entrypointResources)
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", entrypointResources)
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
