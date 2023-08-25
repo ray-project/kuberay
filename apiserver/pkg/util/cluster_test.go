@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -209,7 +210,8 @@ func TestBuildVolumes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildVols(tt.apiVolume)
+			got, err := buildVols(tt.apiVolume)
+			assert.Nil(t, err)
 			if !reflect.DeepEqual(got, tt.expect) {
 				t.Errorf("failed for %s ..., got %v, expected %v", tt.name, got, tt.expect)
 			}
@@ -268,7 +270,8 @@ func TestBuildVolumeMounts(t *testing.T) {
 }
 
 func TestBuildHeadPodTemplate(t *testing.T) {
-	podSpec := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	podSpec, err := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")
@@ -295,7 +298,8 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 }
 
 func TestBuildRayCluster(t *testing.T) {
-	cluster := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	cluster, err := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	assert.Nil(t, err)
 	if len(cluster.ObjectMeta.Annotations) != 1 {
 		t.Errorf("failed to propagate annotations")
 	}
@@ -305,7 +309,8 @@ func TestBuildRayCluster(t *testing.T) {
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")

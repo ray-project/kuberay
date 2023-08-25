@@ -167,7 +167,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.Labels = spec.Template.Labels
 	}
 
-	if *spec.EnableIngress {
+	if spec.EnableIngress != nil && *spec.EnableIngress {
 		headNodeSpec.EnableIngress = true
 	}
 
