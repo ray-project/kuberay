@@ -65,16 +65,6 @@ spec:
                   name: client
                 - containerPort: 8000
                   name: serve
-              livenessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 400
-              readinessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 300
     workerGroupSpecs:
       # the pod replicas in this group typed worker
       - replicas: 1
@@ -103,13 +93,3 @@ spec:
                   preStop:
                     exec:
                       command: ["/bin/sh","-c","ray stop"]
-                livenessProbe:
-                  initialDelaySeconds: 30
-                  periodSeconds: 3
-                  timeoutSeconds: 1
-                  failureThreshold: 400
-                readinessProbe:
-                  initialDelaySeconds: 30
-                  periodSeconds: 3
-                  timeoutSeconds: 1
-                  failureThreshold: 300
