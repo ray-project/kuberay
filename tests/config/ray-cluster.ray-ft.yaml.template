@@ -96,16 +96,6 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
-            livenessProbe:
-              initialDelaySeconds: 30
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 400
-            readinessProbe:
-              initialDelaySeconds: 30
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 300
             volumeMounts:
               - mountPath: /home/ray/samples
                 name: test-script-configmap
@@ -145,16 +135,6 @@ spec:
                   cpu: "1"
                 requests:
                   cpu: "200m"
-              livenessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 400
-              readinessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 300
 ---
 apiVersion: v1
 kind: ConfigMap
