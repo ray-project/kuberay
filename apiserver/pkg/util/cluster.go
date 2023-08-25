@@ -87,6 +87,7 @@ func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpe
 		rayClusterSpec.HeadGroupSpec.EnableIngress = &clusterSpec.HeadGroupSpec.EnableIngress
 	}
 
+	// Build worker groups
 	for _, spec := range clusterSpec.WorkerGroupSpec {
 		computeTemplate = computeTemplateMap[spec.ComputeTemplate]
 		workerPodTemplate, err := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate)
