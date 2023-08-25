@@ -79,11 +79,6 @@ spec:
       redis-password: "5241590000000000"
     #pod template
     template:
-      metadata:
-        labels:
-          # Enables Ray client command execution via the NodePort service
-          # configured in tests/config/raycluster-service.yaml.
-          ray.io/test: compatibility-test-label
       spec:
         containers:
           - name: ray-head
@@ -101,9 +96,6 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
-            volumeMounts:
-              - mountPath: /home/ray/samples
-                name: test-script-configmap
             livenessProbe:
               initialDelaySeconds: 30
               periodSeconds: 3
@@ -114,6 +106,9 @@ spec:
               periodSeconds: 3
               timeoutSeconds: 1
               failureThreshold: 300
+            volumeMounts:
+              - mountPath: /home/ray/samples
+                name: test-script-configmap
         volumes:
           - name: test-script-configmap
             configMap:
@@ -169,6 +164,7 @@ data:
   test_ray_serve_1.py: |
     import ray
     from ray import serve
+    import requests
 
     # 1: Define a Ray Serve model.
     @serve.deployment(route_prefix="/")
@@ -178,14 +174,16 @@ data:
 
         def __call__(self):
             return self._msg
+    app = MyModelDeployment.bind(msg="Hello world!")
 
-    ray.init(address='ray://127.0.0.1:10001')
     # 2: Deploy the model.
-    handle = serve.run(MyModelDeployment.bind(msg="Hello world!"))
+    serve.run(app)
     # 3: Query the deployment and print the result.
-    val = ray.get(handle.remote())
-    print(val)
-    assert(val == "Hello world!")
+    resp = requests.get("http://localhost:8000/")
+    assert(resp.status_code == 200)
+    print(resp.status_code)
+    print(resp.text)
+    assert(resp.text == "Hello world!")
 
   test_ray_serve_2.py: |
     import requests
