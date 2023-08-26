@@ -71,7 +71,7 @@ func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
 // Reconcile used to bridge the desired state with the current state
 func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("reconciling RayJob World", "NamespacedName", request.NamespacedName)
+	r.Log.Info("reconciling RayJob", "NamespacedName", request.NamespacedName)
 
 	// Get RayJob instance
 	var err error
@@ -86,8 +86,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		r.Log.Error(err, "Failed to get RayJob")
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-
-	fmt.Printf("Hello : %v", rayJobInstance)
 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,

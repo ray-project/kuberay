@@ -19,9 +19,6 @@ spec:
       - pendulum==2.1.2
     env_vars:
       counter_name: "test_counter"
-  entrypointNumCpus: 2
-  entrypointNumGpus: 0.5
-  entrypointResources: "{\"resource1\": 1, \"resource2\": 2}"
 
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
@@ -38,9 +35,6 @@ spec:
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams:
         dashboard-host: '0.0.0.0'
-        num-cpus: "3"
-        num-gpus: "2"
-        resources: '"{\"resource1\": 2, \"resource2\": 3}"'
       #pod template
       template:
         spec:
