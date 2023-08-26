@@ -41,6 +41,7 @@ spec:
         num-cpus: "3"
         num-gpus: "2"
         resources: '"{\"resource1\": 2, \"resource2\": 3}"'
+        
       #pod template
       template:
         spec:
@@ -55,8 +56,6 @@ spec:
                 - containerPort: 10001
                   name: client
               resources:
-                limits:
-                  cpu: "1"
                 requests:
                   cpu: "200m"
               volumeMounts:
@@ -94,8 +93,6 @@ spec:
                     exec:
                       command: [ "/bin/sh","-c","ray stop" ]
                 resources:
-                  limits:
-                    cpu: "1"
                   requests:
                     cpu: "200m"
   # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
@@ -122,30 +119,17 @@ metadata:
 data:
   sample_code.py: |
     import ray
-    import os
-    import requests
 
     ray.init()
 
-    @ray.remote
-    class Counter:
-        def __init__(self):
-            # Used to verify runtimeEnv
-            self.name = os.getenv("counter_name")
-            assert self.name == "test_counter"
-            self.counter = 0
+    available = ray.available_resources()
+    total = ray.cluster_resources()
 
-        def inc(self):
-            self.counter += 1
+    assert total['CPU'] - available['CPU'] == 2, "Incorrect CPU assignment"
+    assert total['GPU'] - available['GPU'] == 0.5, "Incorrect GPU assignment"
+    assert total['resource1'] - available['resource1'] == 1.0, "Incorrect Resource1 assignment"
+    assert total['resource2'] - available['resource2'] == 2.0, "Incorrect Resource2 assignment"
+  
+    print(ray.cluster_resources())
 
-        def get_counter(self):
-            return "{} got {}".format(self.name, self.counter)
-
-    counter = Counter.remote()
-
-    for _ in range(5):
-        ray.get(counter.inc.remote())
-        print(ray.get(counter.get_counter.remote()))
-
-    # Verify that the correct runtime env was used for the job.
-    assert requests.__version__ == "2.26.0"
+     

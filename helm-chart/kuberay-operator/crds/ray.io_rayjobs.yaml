@@ -12104,15 +12104,11 @@ spec:
               entrypointNumCpus:
                 description: EntrypointNumCpus specifies the number of cpus to reserve for
                   the entrypoint command.
-                  oneOf:
-                    - type: integer
-                    - type: number
+                type: number
               entrypointNumGpus:
                 description: EntrypointNumGpus specifies the number of gpus to reserve for
                   the entrypoint command.
-                  oneOf:
-                    - type: integer
-                    - type: number
+                type: number
               entrypointResources:
                 description: EntrypointResources specifies the custom resources and their
                   quantities as a json formatted dictionary string.
@@ -17432,3 +17428,4 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+  
