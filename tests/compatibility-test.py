@@ -100,8 +100,13 @@ class RayFTTestCase(unittest.TestCase):
         headpod_name = headpod.metadata.name
 
         # Deploy a Ray Serve model.
+        pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
+            "ray list nodes",
+            check = False
+        )
+
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
-            "ray list nodes; python samples/test_ray_serve_1.py",
+            "python samples/test_ray_serve_1.py",
             check = False
         )
 
