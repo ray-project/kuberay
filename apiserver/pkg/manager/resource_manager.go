@@ -93,7 +93,7 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	// convert *api.Cluster to v1alpha1.RayCluster
 	rayCluster, err := util.NewRayCluster(apiCluster, computeTemplateDict)
 	if err != nil {
-		return nil, util.NewInternalServerError(err, "Failed to create a Ray cluster for (%s/%s)", apiCluster.Namespace, apiCluster.Name)
+		return nil, util.NewInvalidInputErrorWithDetails(err, "Failed to create a Ray cluster")
 	}
 
 	// set our own fields.
@@ -221,7 +221,7 @@ func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob) (*v
 	// convert *api.Cluster to v1alpha1.RayCluster
 	rayJob, err := util.NewRayJob(apiJob, computeTemplateMap)
 	if err != nil {
-		return nil, util.NewInternalServerError(err, "Failed to create a Ray Job for (%s/%s)", apiJob.Namespace, apiJob.Name)
+		return nil, util.NewInvalidInputErrorWithDetails(err, "Failed to create a Ray Job")
 	}
 
 	newRayJob, err := r.getRayJobClient(apiJob.Namespace).Create(ctx, rayJob.Get(), metav1.CreateOptions{})
@@ -311,7 +311,7 @@ func (r *ResourceManager) CreateService(ctx context.Context, apiService *api.Ray
 	}
 	rayService, err := util.NewRayService(apiService, computeTemplateDict)
 	if err != nil {
-		return nil, err
+		return nil, util.NewInvalidInputErrorWithDetails(err, "Failed to create a Ray Service")
 	}
 	createdAt := r.clientManager.Time().Now().String()
 	rayService.Annotations["ray.io/creation-timestamp"] = createdAt
