@@ -164,10 +164,26 @@ data:
   test_ray_serve_1.py: |
     import ray
     from ray import serve
+    from ray.util.state import list_nodes
     import requests
+    import time
+
+    # 0: Wait until only 1 head Pod is alive
+    print("Wait until only 1 head Pod is alive", flush=True)
+    for i in range(90): 
+      nodes = list_nodes()
+      num_alive_heads = 0
+      for node in nodes:
+          if node.is_head_node and node.state == "ALIVE":
+              num_alive_heads += 1
+      print(f"iter {i}: {num_alive_heads} head nodes are alive.")
+      if num_alive_heads == 1:
+          break
+      time.sleep(1)
+
 
     # 1: Define a Ray Serve model.
-    @serve.deployment(route_prefix="/")
+    @serve.deployment
     class MyModelDeployment:
         def __init__(self, msg: str):
             self._msg = msg
