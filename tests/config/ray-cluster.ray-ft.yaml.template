@@ -156,7 +156,7 @@ data:
       for node in nodes:
           if node.is_head_node and node.state == "ALIVE":
               num_alive_heads += 1
-      print(f"iter {i}: {num_alive_heads} head nodes are alive.")
+      print(f"iter {i}: {num_alive_heads} head nodes are alive.", flush=True)
       if num_alive_heads == 1:
           break
       time.sleep(1)
