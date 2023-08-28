@@ -102,7 +102,9 @@ make install
 #To use the helm charts
 make undeploy
 
+
 #To use the configuration
+
 make uninstall
 ```
 
@@ -122,7 +124,9 @@ When developing and testing with kind you might want to execute these targets to
 
 ```bash
 #To create a new API server image and to deploy it on a new cluster
+
 make docker-image cluster load-image deploy
+
 
 #To create a new API server image, operator image and deploy them on a new cluster
 make docker-image operator-image cluster load-image load-operator-image deploy deploy-operator
