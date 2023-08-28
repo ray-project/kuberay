@@ -99,16 +99,6 @@ spec:
             volumeMounts:
               - mountPath: /home/ray/samples
                 name: test-script-configmap
-            livenessProbe:
-              initialDelaySeconds: 1
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 400
-            readinessProbe:
-              initialDelaySeconds: 1
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 300
         volumes:
           - name: test-script-configmap
             configMap:
@@ -145,16 +135,6 @@ spec:
                   cpu: "1"
                 requests:
                   cpu: "200m"
-              livenessProbe:
-                initialDelaySeconds: 1
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 400
-              readinessProbe:
-                initialDelaySeconds: 1
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 300
 ---
 apiVersion: v1
 kind: ConfigMap
