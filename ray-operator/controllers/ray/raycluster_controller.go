@@ -62,6 +62,7 @@ func getClusterType(logger logr.Logger) bool {
 		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
 		return false
 	}
+	
 	// The discovery package is used to discover APIs supported by a Kubernetes API server.
 	config, err := ctrl.GetConfig()
 	if err == nil && config != nil {
