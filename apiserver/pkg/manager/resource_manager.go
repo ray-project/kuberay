@@ -108,6 +108,7 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	return newRayCluster, nil
 }
 
+// Compute template
 func (r *ResourceManager) populateComputeTemplate(ctx context.Context, clusterSpec *api.ClusterSpec, nameSpace string) (map[string]*api.ComputeTemplate, error) {
 	dict := map[string]*api.ComputeTemplate{}
 	// populate head compute template
