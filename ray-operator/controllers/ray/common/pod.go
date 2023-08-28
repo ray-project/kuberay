@@ -266,12 +266,14 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 // For KubeRay, the liveness and readiness probes perform the same checks.
 // Hence, we use the same function to initialize both probes.
 func initHealthProbe(probe *v1.Probe, rayNodeType rayv1alpha1.RayNodeType) {
+	// If users do not specify probe handlers, we will set `Exec` as the default probe handler.
 	if probe.Exec == nil && probe.HTTPGet == nil && probe.TCPSocket == nil && probe.GRPC == nil {
 		// Case 1: head node => Check GCS and Raylet status.
 		// Case 2: worker node => Check Raylet status.
 		//
 		// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
-		// we only need to check one of them.
+		// we only need to check one of them. The probes use the dashboard agent's API endpoint
+		// to check the health of the Raylet process.
 		// TODO (kevin85421): Should we take the dashboard process into account?
 		if rayNodeType == rayv1alpha1.HeadNode {
 			cmd := []string{
