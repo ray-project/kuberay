@@ -44,6 +44,18 @@ spec:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code af'
                 type: string
+              entrypointNumCpus:
+                description: EntrypointNumCpus specifies the number of cpus to reserve
+                  for the entrypoint command.
+                type: number
+              entrypointNumGpus:
+                description: EntrypointNumGpus specifies the number of gpus to reserve
+                  for the entrypoint command.
+                type: number
+              entrypointResources:
+                description: EntrypointResources specifies the custom resources and
+                  quantities to reserve for the entrypoint comm
+                type: string
               jobId:
                 description: If jobId is not set, a new jobId will be auto-generated.
                 type: string
@@ -12101,18 +12113,6 @@ spec:
                 description: ShutdownAfterJobFinishes will determine whether to delete
                   the ray cluster once rayJob succeed or fai
                 type: boolean
-              entrypointNumCpus:
-                description: EntrypointNumCpus specifies the number of cpus to reserve for
-                  the entrypoint command.
-                type: number
-              entrypointNumGpus:
-                description: EntrypointNumGpus specifies the number of gpus to reserve for
-                  the entrypoint command.
-                type: number
-              entrypointResources:
-                description: EntrypointResources specifies the custom resources and their
-                  quantities as a json formatted dictionary string.
-                type: string
               submitterPodTemplate:
                 description: SubmitterPodTemplate is the template for the pod that
                   will run `ray job submit`.
@@ -17428,4 +17428,3 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-  
