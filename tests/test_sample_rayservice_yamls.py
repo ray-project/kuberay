@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE = 'default'
 DEFAULT_IMAGE_DICT = {
-    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.5.0'),
+    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.6.3'),
     CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
 }
 

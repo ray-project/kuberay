@@ -14,6 +14,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1127,4 +1128,25 @@ func TestGetCustomWorkerInitImage(t *testing.T) {
 	os.Setenv(EnableInitContainerInjectionEnvKey, "False")
 	b = getEnableInitContainerInjection()
 	assert.False(t, b)
+}
+
+func TestInitHealthProbe(t *testing.T) {
+	// Test 1: User defines a custom HTTPGet probe.
+	httpGetProbe := v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			HTTPGet: &v1.HTTPGetAction{
+				// Check Raylet status
+				Path: fmt.Sprintf("/%s", RayAgentRayletHealthPath),
+				Port: intstr.FromInt(DefaultDashboardAgentListenPort),
+			},
+		},
+	}
+	initHealthProbe(&httpGetProbe, rayv1alpha1.HeadNode)
+	assert.NotNil(t, httpGetProbe.HTTPGet)
+	assert.Nil(t, httpGetProbe.Exec)
+
+	// Test 2: User does not define a custom probe. KubeRay will inject a default Exec probe.
+	probe := v1.Probe{}
+	initHealthProbe(&probe, rayv1alpha1.HeadNode)
+	assert.NotNil(t, probe.Exec)
 }

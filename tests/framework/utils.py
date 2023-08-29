@@ -53,6 +53,10 @@ class CONST:
     RAY_SERVICE_CRD = "RayService"
     RAY_JOB_CRD = "RayJob"
 
+    # Failures
+    KILL_GCS_SERVER = "KILL_GCS_SERVER"
+    KILL_HEAD_POD = "KILL_HEAD_POD"
+
 
 CONST = CONST()
 

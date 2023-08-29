@@ -87,7 +87,7 @@ metadata:
   # An unique identifier for the head node and workers of this cluster.
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.5.0'
+  rayVersion: '2.6.3'
   headGroupSpec:
     replicas: 1
     # The `rayStartParams` are used to configure the `ray start` command.
@@ -103,7 +103,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.5.0
+            image: rayproject/ray:2.6.3
             resources:
               limits:
                 cpu: "1"
@@ -147,7 +147,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.5.0
+              image: rayproject/ray:2.6.3
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs

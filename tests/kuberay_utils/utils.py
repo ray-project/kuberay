@@ -14,7 +14,6 @@ from framework.prototype import (
 from framework.utils import (
     get_head_pod,
     CONST,
-    K8S_CLUSTER_MANAGER
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ def create_ray_cluster(template_name, ray_version, ray_image):
         ray_cluster_add_event = RayClusterAddCREvent(
             custom_resource_object = context['cr'],
             rulesets = [],
-            timeout = 90,
+            timeout = 180,
             namespace='default',
             filepath = context['filepath']
         )
@@ -123,71 +122,79 @@ def wait_for_condition(
         message += f" Last exception: {last_ex}"
     raise RuntimeError(message)
 
-def wait_for_new_head(old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
+def wait_for_new_head(mode, old_head_pod_name, old_restart_count, namespace, timeout, retry_interval_ms):
     """
-    `wait_for_new_head` is used to wait for new head is ready and running. For example, `test_detached_actor` kills
-    the gcs_server process on the head pod. It takes nearly 1 min to kill the head pod, and the head pod will still
-    be in 'Running' and 'Ready' in that minute.
-    
-    Hence, we need to check `restart_count` or `new_head_pod_name`.
-    (1) `restart_count`: If the pod is restarted by the restartPolicy of a Pod, `restart_count` will increase by 1.
-                         If the pod is deleted by KubeRay and the reconciler creates a new one, `restart_count` will be 0.
-    (2) `new_head_pod_name`: If the reconciler creates a new head pod, `new_head_pod_name` will be different from
-                             `old_head_pod_name`.
+    `wait_for_new_head` is used to wait for the head Pod is ready and running.
 
-    Next, we check the status of pods to ensure all pods should be "Running" and "Ready".
-
-    After the cluster state converges (all pods are "Running" and "Ready"), ray processes still need tens of seconds to
-    become ready to serve new connections from ray clients. So, users need to retry until a Ray client connection succeeds.
+    [Case 1]
+    KILL_GCS_SERVER: The head Pod should be restarted rather than creating a new head Pod.
+    [Case 2]
+    KILL_HEAD_POD: The new head Pod should be created.
 
     Args:
+        mode: KILL_GCS_SERVER or KILL_HEAD_POD.
         old_head_pod_name: Name of the old head pod.
-        old_restart_count: If the Pod is restarted by Kubernetes Pod RestartPolicy, the restart_count will increase by 1.
+        old_restart_count: The restart count of the old head pod.
         namespace: Namespace that the head pod is running in.
         timeout: Same as `wait_for_condition`.
         retry_interval_ms: Same as `wait_for_condition`.
 
     Raises:
-        RuntimeError: If the condition is not met before the timeout expires, raise the RuntimeError.
+        RuntimeError: Raise a RuntimeError if a timeout occurs.
     """
-    k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-    def check_status(old_head_pod_name, old_restart_count, namespace) -> bool:
-        all_pods = k8s_v1_api.list_namespaced_pod(namespace = namespace)
+    def check_status(mode, old_head_pod_name, old_restart_count, namespace) -> bool:
         headpod = get_head_pod(namespace)
+        if headpod is None:
+            logger.info(
+                "There is no head Pod. We will only check the following conditions " +
+                "after the head Pod is created."
+            )
+            return False
         new_head_pod_name = headpod.metadata.name
         new_restart_count = headpod.status.container_statuses[0].restart_count
-        # The default container restartPolicy of a Pod is `Always`. Hence, when GCS server is killed,
-        # the head pod will restart the old one rather than create a new one.
-        if new_head_pod_name != old_head_pod_name:
-            logger.info(f'If GCS server is killed, the head pod will restart the old one rather than create a new one.' +
-                f' new_head_pod_name: {new_head_pod_name}, old_head_pod_name: {old_head_pod_name}')
-            # TODO (kevin85421): We should `return False` here, but currently ray:nightly has a high possibility to create
-            #                    a new head pod instead of restarting the old one.
 
-        # When GCS server is killed, it takes nearly 1 min to kill the head pod. In the minute, the head
-        # pod will still be in 'Running' and 'Ready'. Hence, we need to check `restart_count`.
-        else:
-            # TODO (kevin85421): We should remove `else` in the future. Currently, ray:nightly has a high possibility to
-            #                    create a new head pod instead of restarting the old one. The new pod's `restart_count`
-            #                    is 0.
+        logger.info("Failure mode: %s", mode)
+        if mode == CONST.KILL_GCS_SERVER:
+            if new_head_pod_name != old_head_pod_name:
+                logger.warning(
+                    "GCS server process is killed. The head Pod should be restarted "
+                    "rather than creating a new head Pod. There is something wrong. "
+                    "new_head_pod_name: %s, old_head_pod_name: %s",
+                    new_head_pod_name, old_head_pod_name
+                )
+                return False
             if new_restart_count != old_restart_count + 1:
-                logger.info(f'new_restart_count != old_restart_count + 1 => new_restart_count: {new_restart_count},' +
-                    f' old_restart_count: {old_restart_count}')
+                logger.info(
+                    "new_restart_count != old_restart_count + 1 =>"
+                    "new_restart_count: %s; old_restart_count: %s",
+                    new_restart_count, old_restart_count
+                )
                 return False
-        # All pods should be "Running" and "Ready". This check is an overkill. We added this check due to
-        # the buggy behaviors of Ray HA. To elaborate, when GCS server is killed, the head pod should restart,
-        # but worker pods should not. However, currently, worker pods will also restart.
-        # See https://github.com/ray-project/kuberay/issues/634 for more details.
-        for pod in all_pods.items:
-            if pod.status.phase != 'Running':
-                logger.info(f'Pod {pod.metadata.name} is not Running.')
+        elif mode == CONST.KILL_HEAD_POD:
+            if new_head_pod_name == old_head_pod_name:
+                logger.info("The old head Pod %s is not killed.", old_head_pod_name)
                 return False
-            for c in pod.status.container_statuses:
-                if not c.ready:
-                    logger.info(f'Container {c.name} in {pod.metadata.name} is not ready.')
-                    return False
+        else:
+            raise ValueError(f"Invalid failure mode: {mode}")
+
+        if headpod.status.phase != "Running":
+            logger.info(
+                "The head Pod %s is not running. The status is %s",
+                headpod.metadata.name, headpod.status.phase
+            )
+            return False
+        for container_status in headpod.status.container_statuses:
+            if not container_status.ready:
+                logger.info(
+                    "The container %s is not ready. The status is %s",
+                    container_status.name, container_status.ready
+                )
+                return False
         return True
-    wait_for_condition(check_status, timeout=timeout, retry_interval_ms=retry_interval_ms,
-        old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count, namespace=namespace)
+    wait_for_condition(
+        check_status, timeout=timeout, retry_interval_ms=retry_interval_ms,
+        mode=mode, old_head_pod_name=old_head_pod_name, old_restart_count=old_restart_count,
+        namespace=namespace
+        )
     # After the cluster state converges, ray processes still need tens of seconds to become ready.
     # TODO (kevin85421): Make ray processes become ready when pods are "Ready" and "Running".

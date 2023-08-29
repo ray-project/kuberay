@@ -334,7 +334,7 @@ Refer to [this Grafana document](https://grafana.com/tutorials/run-grafana-behin
   * Click "Import".
   * Click "Upload JSON file".
   * Choose a JSON file.
-    * Case 1: If you are using Ray 2.5.0, you can use [config/grafana/default_grafana_dashboard.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/default_grafana_dashboard.json).
+    * Case 1: If you are using Ray 2.5.0 or newer, you can use [config/grafana/default_grafana_dashboard.json](https://github.com/ray-project/kuberay/blob/master/config/grafana/default_grafana_dashboard.json).
     * Case 2: Otherwise, you should import the `default_grafana_dashboard.json` file from `/tmp/ray/session_latest/metrics/grafana/dashboards/` in the head Pod. You can use `kubectl cp` to copy the file from the head Pod to your local machine.
   * Click "Import".
 

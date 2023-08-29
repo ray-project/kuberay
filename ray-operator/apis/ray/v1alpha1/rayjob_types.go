@@ -52,7 +52,11 @@ type RayJobSpec struct {
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// RuntimeEnv is base64 encoded.
+	// This field is deprecated, please use RuntimeEnvYAML instead.
 	RuntimeEnv string `json:"runtimeEnv,omitempty"`
+	// RuntimeEnvYAML represents the runtime environment configuration
+	// provided as a multi-line YAML string.
+	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
