@@ -72,7 +72,7 @@ data:
     class ImageClassifier:
         def __init__(self):
             # If doing CPU inference, set `device="cpu"` instead.
-            self.classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device=0) # TODO:archit
+            self.classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device=0)
 
         def __call__(self, batch: Dict[str, np.ndarray]):
             # Convert the numpy array of images into a list of PIL images which is the format the HF pipeline expects.
