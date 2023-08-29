@@ -19,6 +19,9 @@ spec:
       - pendulum==2.1.2
     env_vars:
       counter_name: "test_counter"
+  entrypointNumCpus: 2
+  entrypointNumGpus: 0.5
+  entrypointResources: "{\"resource1\": 1, \"resource2\": 2}"
 
   # Suspend specifies whether the RayJob controller should create a RayCluster instance.
   # If a job is applied with the suspend field set to true, the RayCluster will not be created and we will wait for the transition to false.
@@ -27,7 +30,7 @@ spec:
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.6.3' # should match the Ray version in the image of the containers
+    rayVersion: '2.5.0' # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
@@ -35,12 +38,16 @@ spec:
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams:
         dashboard-host: '0.0.0.0'
+        num-cpus: "3"
+        num-gpus: "2"
+        resources: '"{\"resource1\": 2, \"resource2\": 3}"'
+        
       #pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.6.3
+              image: rayproject/ray:2.5.0
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -49,8 +56,6 @@ spec:
                 - containerPort: 10001
                   name: client
               resources:
-                limits:
-                  cpu: "1"
                 requests:
                   cpu: "200m"
               volumeMounts:
@@ -82,14 +87,12 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.6.3
+                image: rayproject/ray:2.5.0
                 lifecycle:
                   preStop:
                     exec:
                       command: [ "/bin/sh","-c","ray stop" ]
                 resources:
-                  limits:
-                    cpu: "1"
                   requests:
                     cpu: "200m"
   # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
@@ -99,7 +102,7 @@ spec:
   #     restartPolicy: Never
   #     containers:
   #       - name: my-custom-rayjob-submitter-pod
-  #         image: rayproject/ray:2.6.3
+  #         image: rayproject/ray:2.5.0
   #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
   #         # Specifying Command is not recommended.
   #         # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
@@ -116,30 +119,13 @@ metadata:
 data:
   sample_code.py: |
     import ray
-    import os
-    import requests
 
     ray.init()
 
-    @ray.remote
-    class Counter:
-        def __init__(self):
-            # Used to verify runtimeEnv
-            self.name = os.getenv("counter_name")
-            assert self.name == "test_counter"
-            self.counter = 0
+    available = ray.available_resources()
+    total = ray.cluster_resources()
 
-        def inc(self):
-            self.counter += 1
-
-        def get_counter(self):
-            return "{} got {}".format(self.name, self.counter)
-
-    counter = Counter.remote()
-
-    for _ in range(5):
-        ray.get(counter.inc.remote())
-        print(ray.get(counter.get_counter.remote()))
-
-    # Verify that the correct runtime env was used for the job.
-    assert requests.__version__ == "2.26.0"
+    assert total['CPU'] - available['CPU'] == 2, "Incorrect CPU assignment"
+    assert total['GPU'] - available['GPU'] == 0.5, "Incorrect GPU assignment"
+    assert total['resource1'] - available['resource1'] == 1.0, "Incorrect Resource1 assignment"
+    assert total['resource2'] - available['resource2'] == 2.0, "Incorrect Resource2 assignment"
