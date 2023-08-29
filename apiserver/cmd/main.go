@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"sync/atomic"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -32,6 +34,7 @@ var (
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
+	healthy            int32
 )
 
 func main() {
@@ -48,8 +51,19 @@ func main() {
 	clientManager := manager.NewClientManager()
 	resourceManager := manager.NewResourceManager(&clientManager)
 
+	atomic.StoreInt32(&healthy, 1)
 	go startRpcServer(resourceManager)
 	startHttpProxy()
+	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
+	quit := make(chan os.Signal, 1)
+	// notify about interrupts
+	signal.Notify(quit, os.Interrupt)
+	// Process interrupts
+	go func() {
+		<-quit
+		klog.Info("Unexpected interrupt")
+		atomic.StoreInt32(&healthy, 0)
+	}()
 }
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
@@ -105,6 +119,7 @@ func startHttpProxy() {
 		}),
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
 	)
+	// Register endpoints
 	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", ctx, runtimeMux)
@@ -116,6 +131,7 @@ func startHttpProxy() {
 	topMux.Handle("/", runtimeMux)
 	topMux.Handle("/metrics", promhttp.Handler())
 	topMux.HandleFunc("/swagger/", serveSwaggerFile)
+	topMux.HandleFunc("/healthz", serveHealth)
 	serveSwaggerUI(topMux)
 
 	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
@@ -123,6 +139,14 @@ func startHttpProxy() {
 	}
 
 	klog.Info("Http Proxy started")
+}
+
+func serveHealth(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt32(&healthy) == 1 {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 }
 
 func serveSwaggerFile(w http.ResponseWriter, r *http.Request) {
