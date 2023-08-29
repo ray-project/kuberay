@@ -13,6 +13,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -38,6 +39,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(routev1.AddToScheme(scheme))
 	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }

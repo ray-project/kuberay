@@ -89,6 +89,10 @@ env:
 # Otherwise, kuberay will use your custom domain
 # - name: CLUSTER_DOMAIN
 #   value: ""
+# If not set or set to false, when running on OpenShift with Ingress creation enabled, kuberay will create OpenShift route
+# Otherwise, regardless of the type of cluster with Ingress creation enabled, kuberay will create Ingress
+# - name: USE_INGRESS_ON_OPENSHIFT
+#   value: "true"
 # Unconditionally requeue after the number of seconds specified in the
 # environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
 # environment variable is not set, requeue after the default value (300).
