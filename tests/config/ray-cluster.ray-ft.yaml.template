@@ -79,11 +79,6 @@ spec:
       redis-password: "5241590000000000"
     #pod template
     template:
-      metadata:
-        labels:
-          # Enables Ray client command execution via the NodePort service
-          # configured in tests/config/raycluster-service.yaml.
-          ray.io/test: compatibility-test-label
       spec:
         containers:
           - name: ray-head
@@ -101,16 +96,6 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
-            livenessProbe:
-              initialDelaySeconds: 30
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 400
-            readinessProbe:
-              initialDelaySeconds: 30
-              periodSeconds: 3
-              timeoutSeconds: 1
-              failureThreshold: 300
             volumeMounts:
               - mountPath: /home/ray/samples
                 name: test-script-configmap
@@ -150,16 +135,6 @@ spec:
                   cpu: "1"
                 requests:
                   cpu: "200m"
-              livenessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 400
-              readinessProbe:
-                initialDelaySeconds: 30
-                periodSeconds: 3
-                timeoutSeconds: 1
-                failureThreshold: 300
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -169,23 +144,42 @@ data:
   test_ray_serve_1.py: |
     import ray
     from ray import serve
+    from ray.util.state import list_nodes
+    import requests
+    import time
+
+    # 0: Wait until only 1 head Pod is alive
+    print("Wait until only 1 head Pod is alive", flush=True)
+    for i in range(90): 
+      nodes = list_nodes()
+      num_alive_heads = 0
+      for node in nodes:
+          if node.is_head_node and node.state == "ALIVE":
+              num_alive_heads += 1
+      print(f"iter {i}: {num_alive_heads} head nodes are alive.", flush=True)
+      if num_alive_heads == 1:
+          break
+      time.sleep(1)
+
 
     # 1: Define a Ray Serve model.
-    @serve.deployment(route_prefix="/")
+    @serve.deployment
     class MyModelDeployment:
         def __init__(self, msg: str):
             self._msg = msg
 
         def __call__(self):
             return self._msg
+    app = MyModelDeployment.bind(msg="Hello world!")
 
-    ray.init(address='ray://127.0.0.1:10001')
     # 2: Deploy the model.
-    handle = serve.run(MyModelDeployment.bind(msg="Hello world!"))
+    serve.run(app)
     # 3: Query the deployment and print the result.
-    val = ray.get(handle.remote())
-    print(val)
-    assert(val == "Hello world!")
+    resp = requests.get("http://localhost:8000/")
+    assert(resp.status_code == 200)
+    print(resp.status_code)
+    print(resp.text)
+    assert(resp.text == "Hello world!")
 
   test_ray_serve_2.py: |
     import requests
@@ -216,7 +210,7 @@ data:
     import ray
     import sys
 
-    ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1])
+    ray.init(namespace=sys.argv[1])
 
     @ray.remote
     class TestCounter:
@@ -243,8 +237,11 @@ data:
     def retry_with_timeout(func, timeout=90):
         err = None
         start = time.time()
+        i = 0
         while time.time() - start <= timeout:
             try:
+                print(f"retry iter: {i}", flush=True)
+                i += 1
                 return func()
             except BaseException as e:
                 err = e
@@ -256,15 +253,15 @@ data:
         return ray.get_actor("testCounter")
 
     # Try to connect to Ray cluster.
-    print("Try to connect to Ray cluster.")
+    print("Try to connect to Ray cluster.", flush=True)
     retry_with_timeout(lambda: ray.init(address='ray://127.0.0.1:10001', namespace=sys.argv[1]), timeout = 180)
 
     # Get TestCounter actor
-    print("Get TestCounter actor.")
+    print("Get TestCounter actor.", flush=True)
     tc = retry_with_timeout(get_detached_actor)
 
-    print("Try to call remote function \'increment\'.")
+    print("Try to call remote function \'increment\'.", flush=True)
     val = retry_with_timeout(lambda: ray.get(tc.increment.remote()))
-    print(f"val: {val}")
+    print(f"val: {val}", flush=True)
 
     assert(val == int(sys.argv[2]))
