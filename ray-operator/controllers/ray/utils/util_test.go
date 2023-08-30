@@ -9,7 +9,6 @@ import (
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -436,7 +435,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	// Test 2: `HeadService.Name` is not empty.
 	clusterSpecWithHeadService := rayv1alpha1.RayClusterSpec{
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
-			HeadService: &v1.Service{
+			HeadService: &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "my-head-svc",
 				},

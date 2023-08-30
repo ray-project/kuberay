@@ -114,7 +114,7 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) ||  GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v3@v3.10.0
+	test -s $(KUSTOMIZE) ||  GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v5@latest
 
 GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.
