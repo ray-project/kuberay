@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -138,27 +139,26 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// Test 4: Check default PYTHONUNBUFFERED setting
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
 	assert.NoError(t, err)
-	pythonUnbufferedSet := false
+	assert.True(t, common.EnvVarExists(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[0].Env))
 	for _, envVar := range submitterTemplate.Spec.Containers[0].Env {
-		if envVar.Name == "PYTHONUNBUFFERED" {
-			pythonUnbufferedSet = true
+		if envVar.Name == PythonUnbufferedEnvVarName {
 			assert.Equal(t, "1", envVar.Value)
 		}
 	}
-	assert.True(t, pythonUnbufferedSet)
 
 	// Test 5: Check user-provided PYTHONUNBUFFERED value is respected
 	userValue := "0"
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[0].Env = []corev1.EnvVar{
 		{
-			Name:  "PYTHONUNBUFFERED",
+			Name:  PythonUnbufferedEnvVarName,
 			Value: userValue,
 		},
 	}
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate)
 	assert.NoError(t, err)
+	assert.True(t, common.EnvVarExists(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[0].Env))
 	for _, envVar := range submitterTemplate.Spec.Containers[0].Env {
-		if envVar.Name == "PYTHONUNBUFFERED" {
+		if envVar.Name == PythonUnbufferedEnvVarName {
 			assert.Equal(t, userValue, envVar.Value)
 		}
 	}
