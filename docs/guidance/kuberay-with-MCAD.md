@@ -14,26 +14,26 @@ MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources
 - Support for multiple Kubernetes clusters; dispatching jobs to any one of a number of Kubernetes clusters.
 
 
-In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [KubeRay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) on a Kubernetes Cluster or an OpenShift Cluster.
+In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [KubeRay-MCAD integration](https://github.com/project-codeflare/multi-cluster-app-dispatcher/blob/main/doc/usage/examples/kuberay/kuberay-mcad.md) on a Kubernetes Cluster or an OpenShift Cluster.
 
-On OpenShift,  MCAD and KubeRay are already part of the Open Data Hub Distributed Workload Stack. The stack provides a simple, user-friendly abstraction for scaling, queuing and resource management of distributed AI/ML and Python workloads. Please follow the Quick Start in the [Distributed Workloads](https://github.com/opendatahub-io/distributed-workloads) for installation.
+On OpenShift, MCAD and KubeRay are already part of the Open Data Hub Distributed Workload Stack. The stack provides a simple, user-friendly abstraction for scaling, queuing and resource management of distributed AI/ML and Python workloads. Please follow the Quick Start in the [Distributed Workloads](https://github.com/opendatahub-io/distributed-workloads) for installation.
 
 
 ## Submitting KubeRay cluster to MCAD
 
 Let's create two RayCluster custom resources with the AppWrapper custom resource on the same Kubernetes cluster.
 
-- Assuming you have installed all the pre-requisites mentioned in the [KubeRay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first RayCluster with the AppWrapper CR [aw-raycluster.yaml](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml):
+- Assuming you have installed all the pre-requisites mentioned in the [KubeRay-MCAD integration](https://github.com/project-codeflare/multi-cluster-app-dispatcher/blob/main/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first RayCluster with the AppWrapper CR [aw-raycluster.yaml](https://github.com/project-codeflare/multi-cluster-app-dispatcher/blob/main/doc/usage/examples/kuberay/config/aw-raycluster.yaml):
 
   ```bash
   kubectl create -f https://raw.githubusercontent.com/project-codeflare/multi-cluster-app-dispatcher/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml
   ```
-  Check Appwrapper status
+  Check Appwrapper status by describing the job.
   ```
-  kubectl describe  appwrapper raycluster-complete -n default
+  kubectl describe appwrapper raycluster-complete -n default
   ```
 
-  Expect:
+  The `Status:` stanza would show the `State` of `Running` if the wrapped RayCluster has been deployed. The 2 Pods associated with the RayCluster were also created.
   ```
   Status:
     Canrun:  true
@@ -69,14 +69,15 @@ Let's create two RayCluster custom resources with the AppWrapper custom resource
   raycluster-complete-worker-small-group-4s6jv   1/1     Running   0          47s
   ```
 
-- As seen the cluster is dispatched and Pods are running. Let's submit another RayCluster with AppWrapper CR and see it queued without creating pending Pods using the command:
+- Let's submit another RayCluster with AppWrapper CR and see it queued without creating pending Pods using the command:
   ```bash
   kubectl create -f https://raw.githubusercontent.com/project-codeflare/multi-cluster-app-dispatcher/quota-management/doc/usage/examples/kuberay/config/aw-raycluster-1.yaml
-
-  # check the raycluster-complete-1 appwrapper
-  kubectl describe  appwrapper raycluster-complete-1 -n default
-  ``````
-  Expect
+  ```
+  Check the raycluster-complete-1 AppWrapper
+  ```
+  kubectl describe appwrapper raycluster-complete-1 -n default
+  ```
+  The `Status:` stanza should show the `State` of `Pending` if the wrapped object (RayCluster) has been queued. No pods from the second `AppWrapper` were created.
   ```
   Status:
     Conditions:
@@ -107,8 +108,6 @@ Let's create two RayCluster custom resources with the AppWrapper custom resource
     State:                         Pending
   Events:                          <none>
   ```
-
-  As seen the second Ray cluster is queued with no pending pods created.
 
   Dispatching policy out of the box is FIFO which can be augmented as per user needs. The second cluster will be dispatched when additional aggregated resources are available in the cluster or the first AppWrapper Ray cluster is deleted.
 
