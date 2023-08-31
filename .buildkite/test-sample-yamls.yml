@@ -11,6 +11,12 @@
     - popd
     # Use nightly KubeRay operator image
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+  retry:
+    automatic:
+      - exit_status: -1  # Agent was lost
+        limit: 2
+      - exit_status: 255 # Forced agent shutdown
+        limit: 2
 
 - label: 'Test RayCluster Sample YAMLs (latest release)'
   instance_size: large
@@ -19,6 +25,12 @@
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:v0.6.0 python3 tests/test_sample_raycluster_yamls.py
+  retry:
+    automatic:
+      - exit_status: -1  # Agent was lost
+        limit: 2
+      - exit_status: 255 # Forced agent shutdown
+        limit: 2
 
 - label: 'Test RayJob Sample YAMLs (nightly operator)'
   instance_size: large
@@ -31,6 +43,12 @@
     - popd
     # Use nightly KubeRay operator image
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayjob_yamls.py
+  retry:
+    automatic:
+      - exit_status: -1  # Agent was lost
+        limit: 2
+      - exit_status: 255 # Forced agent shutdown
+        limit: 2
 
 # Temporarily skip due to adding new `RuntimeEnvYAML` field in sample YAMLs.
 # TODO(architkulkarni): Reenable after 1.0 release
@@ -53,6 +71,12 @@
     - popd
     # Use nightly KubeRay operator image
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+  retry:
+    automatic:
+      - exit_status: -1  # Agent was lost
+        limit: 2
+      - exit_status: 255 # Forced agent shutdown
+        limit: 2
 
 - label: 'Test RayService Sample YAMLs (latest release)'
   instance_size: large
@@ -61,3 +85,9 @@
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
     - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:v0.6.0 python3 tests/test_sample_rayservice_yamls.py
+  retry:
+    automatic:
+      - exit_status: -1  # Agent was lost
+        limit: 2
+      - exit_status: 255 # Forced agent shutdown
+        limit: 2
