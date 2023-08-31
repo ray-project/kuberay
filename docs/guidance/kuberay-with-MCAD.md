@@ -23,7 +23,7 @@ On OpenShift,  MCAD and KubeRay are already part of the Open Data Hub Distribute
 
 Let's create two RayCluster custom resources with the AppWrapper custom resource on the same Kubernetes cluster.
 
-- Assuming you have installed all the pre-requisites mentioned in the [KubeRay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first Ray cluster with the AppWrapper CR [aw-raycluster.yaml](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml):
+- Assuming you have installed all the pre-requisites mentioned in the [KubeRay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md), we submit the first RayCluster with the AppWrapper CR [aw-raycluster.yaml](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml):
 
   ```bash
   kubectl create -f https://raw.githubusercontent.com/project-codeflare/multi-cluster-app-dispatcher/quota-management/doc/usage/examples/kuberay/config/aw-raycluster.yaml
