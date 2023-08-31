@@ -215,16 +215,6 @@ func GenerateIdentifier(clusterName string, nodeType rayv1alpha1.RayNodeType) st
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-// TODO: find target container through name instead of using index 0.
-// FindRayContainerIndex finds the ray head/worker container's index in the pod
-func FindRayContainerIndex(spec corev1.PodSpec) (index int) {
-	// We only support one container at this moment. We definitely need a better way to filter out sidecar containers.
-	if len(spec.Containers) > 1 {
-		logrus.Warnf("Pod has multiple containers, we choose index=0 as Ray container")
-	}
-	return 0
-}
-
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
 func CalculateDesiredReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 	count := int32(0)

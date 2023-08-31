@@ -14,6 +14,9 @@ const (
 	RayClusterServingServiceLabelKey = "ray.io/serve"
 	RayServiceClusterHashKey         = "ray.io/cluster-hash"
 
+	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
+	RayContainerIndex = 0
+
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
 	RaySchedulerName     = "ray.io/scheduler-name"
