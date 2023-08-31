@@ -598,42 +598,42 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 	}
 	container.Env = append(container.Env, clusterNameEnv)
 
-	if !EnvVarExists(RAY_PORT, container.Env) {
+	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
 	}
 
 	if strings.ToLower(creator) == RayServiceCreatorLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
-		if !EnvVarExists(RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
+		if !envVarExists(RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
 			deathEnv := v1.EnvVar{Name: RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}
 			container.Env = append(container.Env, deathEnv)
 		}
-		if !EnvVarExists(RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
+		if !envVarExists(RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
 			gcsTimeoutEnv := v1.EnvVar{Name: RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
 		}
-		if !EnvVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
+		if !envVarExists(RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := v1.EnvVar{Name: RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
 		}
-		if !EnvVarExists(SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
+		if !envVarExists(SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
 			servePinOnNode := v1.EnvVar{Name: SERVE_CONTROLLER_PIN_ON_NODE, Value: "0"}
 			container.Env = append(container.Env, servePinOnNode)
 		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
-	if !EnvVarExists(RAY_ADDRESS, container.Env) {
+	if !envVarExists(RAY_ADDRESS, container.Env) {
 		rayAddress := fmt.Sprintf("%s:%s", ip, headPort)
 		addressEnv := v1.EnvVar{Name: RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
 	}
-	if !EnvVarExists(RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
+	if !envVarExists(RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
 		usageEnv := v1.EnvVar{Name: RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
 		container.Env = append(container.Env, usageEnv)
 	}
-	if !EnvVarExists(REDIS_PASSWORD, container.Env) {
+	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
 		port := v1.EnvVar{Name: REDIS_PASSWORD}
 		if value, ok := rayStartParams["redis-password"]; ok {
@@ -641,7 +641,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 		}
 		container.Env = append(container.Env, port)
 	}
-	if !EnvVarExists(RAY_EXTERNAL_STORAGE_NS, container.Env) {
+	if !envVarExists(RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
 		if pod.Annotations != nil {
 			if v, ok := pod.Annotations[RayExternalStorageNSAnnotationKey]; ok {
@@ -650,7 +650,7 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 			}
 		}
 	}
-	if !EnvVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1alpha1.WorkerNode {
+	if !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1alpha1.WorkerNode {
 		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
 		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
 		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
@@ -661,13 +661,13 @@ func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1al
 			container.Env = append(container.Env, gcsTimeout)
 		}
 	}
-	if !EnvVarExists(RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
+	if !envVarExists(RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
 		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
 		container.Env = append(container.Env, v1.EnvVar{Name: RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})
 	}
 }
 
-func EnvVarExists(envName string, envVars []v1.EnvVar) bool {
+func envVarExists(envName string, envVars []v1.EnvVar) bool {
 	for _, env := range envVars {
 		if env.Name == envName {
 			return true
@@ -899,7 +899,7 @@ func ValidateHeadRayStartParams(rayHeadGroupSpec rayv1alpha1.HeadGroupSpec) (isV
 			// find the ray container.
 			if container.Name == RayHeadContainer {
 				if shmSize, ok := container.Resources.Requests.Memory().AsInt64(); ok && objectStoreMemory > shmSize {
-					if EnvVarExists(AllowSlowStorageEnvVar, container.Env) {
+					if envVarExists(AllowSlowStorageEnvVar, container.Env) {
 						// in ray if this env var is set, it will only affect the performance.
 						isValid = true
 						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+

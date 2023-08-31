@@ -376,23 +376,11 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[0].Command)
 	}
 
-	// Set PYTHONUNBUFFERED=1 for real-time logging, unless user already set it.
-	userProvidedValue := ""
-	if common.EnvVarExists(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[0].Env) {
-		for _, envVar := range submitterTemplate.Spec.Containers[0].Env {
-			if envVar.Name == PythonUnbufferedEnvVarName {
-				userProvidedValue = envVar.Value
-				break
-			}
-		}
-		r.Log.Info(fmt.Sprintf("User-provided %s value is respected: %s", PythonUnbufferedEnvVarName, userProvidedValue))
-	} else {
-		submitterTemplate.Spec.Containers[0].Env = append(submitterTemplate.Spec.Containers[0].Env, v1.EnvVar{
-			Name:  PythonUnbufferedEnvVarName,
-			Value: "1",
-		})
-		r.Log.Info(fmt.Sprintf("%s is set to 1 for real-time logging", PythonUnbufferedEnvVarName))
-	}
+	// Set PYTHONUNBUFFERED=1 for real-time logging
+	submitterTemplate.Spec.Containers[0].Env = append(submitterTemplate.Spec.Containers[0].Env, v1.EnvVar{
+		Name:  PythonUnbufferedEnvVarName,
+		Value: "1",
+	})
 
 	return submitterTemplate, nil
 }

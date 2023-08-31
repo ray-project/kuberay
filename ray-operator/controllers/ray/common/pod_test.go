@@ -523,7 +523,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	rayContainer := pod.Spec.Containers[rayContainerIndex]
 
 	// "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" should not be set on the head Pod by default
-	assert.True(t, !EnvVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
+	assert.True(t, !envVarExists(RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
 
 	// Test 2
 	cluster = instance.DeepCopy()
