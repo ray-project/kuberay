@@ -16,7 +16,7 @@ MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources
 
 In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please refer to the setup [KubeRay-MCAD integration](https://github.com/IBM/multi-cluster-app-dispatcher/blob/quota-management/doc/usage/examples/kuberay/kuberay-mcad.md) on a Kubernetes Cluster or an OpenShift Cluster.
 
-For OpenShift Cluster, the MCAD and KubeRay are already part of CodeFlare stack which provides a simple, user-friendly abstraction for scaling, queuing and resource management of distributed AI/ML and Python workloads. Please follow the Quick Start in the [Distributed Workloads](https://github.com/opendatahub-io/distributed-workloads) for installation.
+On OpenShift,  MCAD and KubeRay are already part of the Open Data Hub Distributed Workload Stack. The stack provides a simple, user-friendly abstraction for scaling, queuing and resource management of distributed AI/ML and Python workloads. Please follow the Quick Start in the [Distributed Workloads](https://github.com/opendatahub-io/distributed-workloads) for installation.
 
 
 ## Submitting KubeRay cluster to MCAD
