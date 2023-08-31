@@ -338,6 +338,7 @@ class AutoscaleRule(Rule):
             pods = k8s_v1_api.list_namespaced_pod(
                 namespace=cr_namespace, label_selector='ray.io/node-type=worker'
             )
+            logger.info("Number of worker pods: %d", len(pods.items))
             if len(pods.items) == self.expected_worker_pods:
                 logger.info(
                     "Cluster has successfully scaled to the expected number of "
@@ -345,9 +346,9 @@ class AutoscaleRule(Rule):
                     f"{time.time() - start_time} seconds."
                 )
                 break
-            
-            time.sleep(0.1)
+            time.sleep(2)
         else:
+            show_cluster_info(cr_namespace)
             raise TimeoutError(
                 "Cluster did not scale to the expected number of "
                 f"{self.expected_worker_pods} worker pod(s) within {self.timeout} "

@@ -106,7 +106,6 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1alpha1.HeadNode, headPort, "", instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
-	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -116,7 +115,7 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
 		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
-		rayHeadImage := podTemplate.Spec.Containers[rayContainerIndex].Image
+		rayHeadImage := podTemplate.Spec.Containers[RayContainerIndex].Image
 		// Determine the default image to use for the Ray container.
 		autoscalerImage := getAutoscalerImage(rayHeadImage, instance.Spec.RayVersion)
 		// inject autoscaler container into head pod
@@ -127,13 +126,13 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 	}
 
 	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
-	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[rayContainerIndex], DefaultMetricsName, -1) != -1
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], DefaultMetricsName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := v1.ContainerPort{
 			Name:          DefaultMetricsName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
-		podTemplate.Spec.Containers[rayContainerIndex].Ports = append(podTemplate.Spec.Containers[rayContainerIndex].Ports, metricsPort)
+		podTemplate.Spec.Containers[RayContainerIndex].Ports = append(podTemplate.Spec.Containers[RayContainerIndex].Ports, metricsPort)
 	}
 
 	return podTemplate
@@ -194,18 +193,16 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 	}
 
 	// The Ray worker should only start once the GCS server is ready.
-	rayContainerIndex := getRayContainerIndex(podTemplate.Spec)
-
 	// only inject init container only when ENABLE_INIT_CONTAINER_INJECTION is true
 	enableInitContainerInjection := getEnableInitContainerInjection()
 
 	if enableInitContainerInjection {
 		// Do not modify `deepCopyRayContainer` anywhere.
-		deepCopyRayContainer := podTemplate.Spec.Containers[rayContainerIndex].DeepCopy()
+		deepCopyRayContainer := podTemplate.Spec.Containers[RayContainerIndex].DeepCopy()
 		initContainer := v1.Container{
 			Name:            "wait-gcs-ready",
-			Image:           podTemplate.Spec.Containers[rayContainerIndex].Image,
-			ImagePullPolicy: podTemplate.Spec.Containers[rayContainerIndex].ImagePullPolicy,
+			Image:           podTemplate.Spec.Containers[RayContainerIndex].Image,
+			ImagePullPolicy: podTemplate.Spec.Containers[RayContainerIndex].ImagePullPolicy,
 			Command:         []string{"/bin/bash", "-lc", "--"},
 			Args: []string{
 				fmt.Sprintf(`
@@ -228,7 +225,7 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 					done
 				`, fqdnRayIP, headPort, fqdnRayIP, headPort),
 			},
-			SecurityContext: podTemplate.Spec.Containers[rayContainerIndex].SecurityContext.DeepCopy(),
+			SecurityContext: podTemplate.Spec.Containers[RayContainerIndex].SecurityContext.DeepCopy(),
 			// This init container requires certain environment variables to establish a secure connection with the Ray head using TLS authentication.
 			// Additionally, some of these environment variables may reference files stored in volumes, so we need to include both the `Env` and `VolumeMounts` fields here.
 			// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
@@ -251,13 +248,13 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 	initTemplateAnnotations(instance, &podTemplate)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
-	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[rayContainerIndex], DefaultMetricsName, -1) != -1
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], DefaultMetricsName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := v1.ContainerPort{
 			Name:          DefaultMetricsName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
-		podTemplate.Spec.Containers[rayContainerIndex].Ports = append(podTemplate.Spec.Containers[rayContainerIndex].Ports, metricsPort)
+		podTemplate.Spec.Containers[RayContainerIndex].Ports = append(podTemplate.Spec.Containers[RayContainerIndex].Ports, metricsPort)
 	}
 
 	return podTemplate
@@ -303,35 +300,34 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 		Spec:       podTemplateSpec.Spec,
 	}
-	rayContainerIndex := getRayContainerIndex(pod.Spec)
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
+	addEmptyDir(&pod.Spec.Containers[RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, v1.StorageMediumMemory)
 	if rayNodeType == rayv1alpha1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
 		// introduced in https://github.com/ray-project/ray/pull/13434.
 		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
-		addEmptyDir(&pod.Spec.Containers[rayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
+		addEmptyDir(&pod.Spec.Containers[RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, v1.StorageMediumDefault)
 	}
-	cleanupInvalidVolumeMounts(&pod.Spec.Containers[rayContainerIndex], &pod)
-	if len(pod.Spec.InitContainers) > rayContainerIndex {
-		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[rayContainerIndex], &pod)
+	cleanupInvalidVolumeMounts(&pod.Spec.Containers[RayContainerIndex], &pod)
+	if len(pod.Spec.InitContainers) > RayContainerIndex {
+		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[RayContainerIndex], &pod)
 	}
 
 	var cmd, args string
-	if len(pod.Spec.Containers[rayContainerIndex].Command) > 0 {
-		cmd = convertCmdToString(pod.Spec.Containers[rayContainerIndex].Command)
+	if len(pod.Spec.Containers[RayContainerIndex].Command) > 0 {
+		cmd = convertCmdToString(pod.Spec.Containers[RayContainerIndex].Command)
 	}
-	if len(pod.Spec.Containers[rayContainerIndex].Args) > 0 {
-		cmd += convertCmdToString(pod.Spec.Containers[rayContainerIndex].Args)
+	if len(pod.Spec.Containers[RayContainerIndex].Args) > 0 {
+		cmd += convertCmdToString(pod.Spec.Containers[RayContainerIndex].Args)
 	}
 	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[rayContainerIndex].Resources)
+		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[RayContainerIndex].Resources)
 		// replacing the old command
-		pod.Spec.Containers[rayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -345,21 +341,21 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 			args = args + " && sleep infinity"
 		}
 
-		pod.Spec.Containers[rayContainerIndex].Args = []string{args}
+		pod.Spec.Containers[RayContainerIndex].Args = []string{args}
 	}
 
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
 
-	setContainerEnvVars(&pod, rayContainerIndex, rayNodeType, rayStartParams, fqdnRayIP, headPort, creator)
+	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, creator)
 
 	// health check only if FT enabled
 	if podTemplateSpec.Annotations != nil {
 		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
 			if strings.ToLower(enabledString) == "true" {
 				// If users do not specify probes, we will set the default probes.
-				if pod.Spec.Containers[rayContainerIndex].ReadinessProbe == nil {
+				if pod.Spec.Containers[RayContainerIndex].ReadinessProbe == nil {
 					probe := &v1.Probe{
 						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
 						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
@@ -367,11 +363,11 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
 						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
 					}
-					pod.Spec.Containers[rayContainerIndex].ReadinessProbe = probe
+					pod.Spec.Containers[RayContainerIndex].ReadinessProbe = probe
 				}
-				initHealthProbe(pod.Spec.Containers[rayContainerIndex].ReadinessProbe, rayNodeType)
+				initHealthProbe(pod.Spec.Containers[RayContainerIndex].ReadinessProbe, rayNodeType)
 
-				if pod.Spec.Containers[rayContainerIndex].LivenessProbe == nil {
+				if pod.Spec.Containers[RayContainerIndex].LivenessProbe == nil {
 					probe := &v1.Probe{
 						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
 						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
@@ -379,9 +375,9 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1alpha1.RayNod
 						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
 						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
 					}
-					pod.Spec.Containers[rayContainerIndex].LivenessProbe = probe
+					pod.Spec.Containers[RayContainerIndex].LivenessProbe = probe
 				}
-				initHealthProbe(pod.Spec.Containers[rayContainerIndex].LivenessProbe, rayNodeType)
+				initHealthProbe(pod.Spec.Containers[RayContainerIndex].LivenessProbe, rayNodeType)
 			}
 		}
 	}
@@ -487,23 +483,6 @@ func convertCmdToString(cmdArr []string) (cmd string) {
 	return cmdAggr.String()
 }
 
-func getRayContainerIndex(podSpec v1.PodSpec) (rayContainerIndex int) {
-	// a ray pod can have multiple containers.
-	// we identify the ray container based on env var: RAY=true
-	// if the env var is missing, we choose containers[0].
-	for i, container := range podSpec.Containers {
-		for _, env := range container.Env {
-			if env.Name == strings.ToLower("ray") && env.Value == strings.ToLower("true") {
-				log.Info("Head pod container with index " + strconv.Itoa(i) + " identified as Ray container based on env RAY=true.")
-				return i
-			}
-		}
-	}
-	// not found, use first container
-	log.Info("Head pod container with index 0 identified as Ray container.")
-	return 0
-}
-
 func getAutoscalerContainerIndex(pod v1.Pod) (autoscalerContainerIndex int) {
 	// we identify the autoscaler container based on its name
 	for i, container := range pod.Spec.Containers {
@@ -568,9 +547,9 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayContainerIndex int, rayNodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
+func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
-	container := &pod.Spec.Containers[rayContainerIndex]
+	container := &pod.Spec.Containers[RayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
 		container.Env = []v1.EnvVar{}
 	}
