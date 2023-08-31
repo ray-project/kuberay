@@ -69,7 +69,7 @@ Let's create two RayCluster custom resources with the AppWrapper custom resource
   raycluster-complete-worker-small-group-4s6jv   1/1     Running   0          47s
   ```
 
-- As seen the cluster is dispatched and pods are running. Let's submit another Ray cluster with AppWrapper CR and see it queued without creating pending pods using the command:
+- As seen the cluster is dispatched and Pods are running. Let's submit another RayCluster with AppWrapper CR and see it queued without creating pending Pods using the command:
   ```bash
   kubectl create -f https://raw.githubusercontent.com/project-codeflare/multi-cluster-app-dispatcher/quota-management/doc/usage/examples/kuberay/config/aw-raycluster-1.yaml
 
