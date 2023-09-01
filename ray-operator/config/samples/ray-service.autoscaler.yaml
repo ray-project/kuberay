@@ -24,13 +24,13 @@ spec:
         deployments:
           - name: Blocked
             autoscaling_config:
-              metrics_interval_s: 0.1
+              metrics_interval_s: 0.2
               min_replicas: 1
               max_replicas: 14
-              look_back_period_s: 0.2
-              downscale_delay_s: 0
-              upscale_delay_s: 0
-            graceful_shutdown_timeout_s: 1
+              look_back_period_s: 2
+              downscale_delay_s: 5
+              upscale_delay_s: 2
+            graceful_shutdown_timeout_s: 5
             max_concurrent_queries: 1000
             ray_actor_options:
               num_cpus: 0.5

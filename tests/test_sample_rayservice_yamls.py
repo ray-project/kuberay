@@ -65,11 +65,11 @@ class RayServiceAddCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
-            head_services = k8s_v1_api.list_namespaced_service(
+            serve_services = k8s_v1_api.list_namespaced_service(
                 namespace = self.namespace, label_selector =
                 f"ray.io/serve={self.custom_resource_object['metadata']['name']}-serve")
 
-            if (len(head_services.items) == 1 and len(headpods.items) == expected_head_pods
+            if (len(serve_services.items) == 1 and len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
                 logger.info("--- RayServiceAddCREvent %s seconds ---", time.time() - start_time)
@@ -287,14 +287,14 @@ class TestRayService:
                     custom_resource_object=self.cr,
                     rulesets=[RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])],
                     filepath=self.sample_path
-                ), 
+                ),
                 RayServiceUpdateCREvent(
                     custom_resource_object=self.cr,
                     rulesets=[RuleSet([CurlServiceRule(queries=updated_queries)])],
                     filepath=yaml_copy.name,
                     switch_cluster=True,
                     query_while_updating=allowed_queries_during_update,
-                ), 
+                ),
                 RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
             ]
 

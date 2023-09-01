@@ -293,7 +293,7 @@ class CurlServiceRule(Rule):
         # If curl pod doesn't exist, create one
         if get_pod("default", "run=curl") is None:
             start_curl_pod("curl", cr_namespace, timeout_s=30)
-        
+
         for query in self.queries:
             cmd = self.CURL_CMD_FMT.format(
                 name=custom_resource["metadata"]["name"],
