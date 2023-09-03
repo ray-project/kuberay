@@ -734,10 +734,6 @@ func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTermin
 	return nil
 }
 
-func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
-	return (pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending) && pod.ObjectMeta.DeletionTimestamp == nil
-}
-
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
 	// making sure the name is valid
 	ingress.Name = utils.CheckName(ingress.Name)
