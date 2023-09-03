@@ -103,6 +103,12 @@ func setupTest(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
 				PodIP: headNodeIP,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-head",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -127,6 +133,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -151,6 +163,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -175,6 +193,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -199,6 +223,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -223,6 +253,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 	}
@@ -1712,6 +1748,8 @@ func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
 	assert.Equal(t, "headNode", podList.Items[0].Name)
 
 	// Make sure the head Pod's restart policy is `Always` and status is `Failed`.
+	// I have not observed this combination in practice, but no Kubernetes documentation
+	// explicitly forbids it.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[0])
@@ -1725,10 +1763,9 @@ func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	// The head Pod will not be deleted because the restart policy is `Always`,
-	// and the controller will return an error to requeue the request after a brief delay.
+	// The head Pod will not be deleted because the restart policy is `Always`.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
