@@ -220,6 +220,43 @@ class RayFTTestCase(unittest.TestCase):
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
 
+class KubeRayHealthCheckTestCase(unittest.TestCase):
+    """Test KubeRay health check"""
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.sidecar.yaml.template")
+    ray_cluster_ns = "default"
+
+    @classmethod
+    def setUpClass(cls):
+        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        image_dict = {
+            CONST.RAY_IMAGE_KEY: ray_image,
+            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
+        }
+        operator_manager = OperatorManager(image_dict)
+        operator_manager.prepare_operator()
+        utils.create_ray_cluster(
+            KubeRayHealthCheckTestCase.cluster_template, ray_version, ray_image)
+
+    def test_terminated_raycontainer(self):
+        """
+        KubeRay should delete a Pod if its restart policy is "Never" and the Ray container is
+        terminated no matter whether the Pod is in the "Running" state.
+        """
+        old_head_pod = get_head_pod(KubeRayHealthCheckTestCase.ray_cluster_ns)
+        old_head_pod_name = old_head_pod.metadata.name
+        restart_count = old_head_pod.status.container_statuses[0].restart_count
+
+        # After the Ray container is terminated by `pkill ray`, the head Pod will still be in the
+        # "Running" state because there is still a sidecar container running in the Pod. KubeRay
+        # should delete the Pod and create a new one.
+        pod_exec_command(old_head_pod_name, KubeRayHealthCheckTestCase.ray_cluster_ns, "pkill ray")
+
+        # Set the mode to `CONST.KILL_HEAD_POD` to wait for a new head Pod
+        # rather than restarting the old head Pod.
+        utils.wait_for_new_head(CONST.KILL_HEAD_POD, old_head_pod_name, restart_count,
+            RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
+
 class RayServiceTestCase(unittest.TestCase):
     """Integration tests for RayService"""
     service_template = 'tests/config/ray-service.yaml.template'
