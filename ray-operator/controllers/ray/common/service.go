@@ -317,8 +317,7 @@ func getServicePorts(cluster rayv1alpha1.RayCluster) map[string]int32 {
 func getPortsFromCluster(cluster rayv1alpha1.RayCluster) (map[string]int32, error) {
 	svcPorts := map[string]int32{}
 
-	index := utils.FindRayContainerIndex(cluster.Spec.HeadGroupSpec.Template.Spec)
-	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
 	for _, port := range cPorts {
 		if port.Name == "" {
 			port.Name = fmt.Sprint(port.ContainerPort) + "-port"

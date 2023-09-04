@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -182,8 +181,7 @@ func TestGetPortsFromCluster(t *testing.T) {
 		svcNames[port] = name
 	}
 
-	index := utils.FindRayContainerIndex(instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec)
-	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
 
 	for _, cPort := range cPorts {
 		expectedResult := cPort.Name

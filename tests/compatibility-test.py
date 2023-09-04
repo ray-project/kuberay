@@ -31,10 +31,10 @@ logging.basicConfig(
 )
 
 # Default Ray version
-ray_version = '2.5.0'
+ray_version = '2.6.3'
 
 # Default docker images
-ray_image = 'rayproject/ray:2.5.0'
+ray_image = 'rayproject/ray:2.6.3'
 kuberay_operator_image = 'kuberay/operator:nightly'
 
 
@@ -98,6 +98,19 @@ class RayFTTestCase(unittest.TestCase):
             )
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
+
+        # In `test_detached_actor`, we create 1 head Pod and 1 worker Pod. Afterward, we kill the
+        # GCS process of the head Pod to trigger its restart. Next, we terminate the head Pod,
+        # and KubeRay will create a new one in its place. However, Ray may take several seconds to
+        # realize that the old head Pod is gone. Therefore, using `ray list nodes` might show more
+        # than 1 "ALIVE" head nodes in the cluster temporarily. This may lead to an issue where the
+        # Serve controller believes it hasn't been scheduled to the head node, and as a result, it
+        # raises an exception. To avoid this issue, we will add a retry logic in `test_ray_serve_1`
+        # to wait until only 1 head node is alive. `ray list nodes` is for debugging purpose only.
+        pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
+            "ray list nodes",
+            check = False
+        )
 
         # Deploy a Ray Serve model.
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     NAMESPACE = 'default'
     SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
-    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml', 'ray-job.custom-head-svc.yaml']
+    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml', 'ray-job.custom-head-svc.yaml', 'ray_v1alpha1_rayjob.resources.yaml']
 
     sample_yaml_files = []
     for filename in YAMLs:
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # is only used to additionally check that the Ray Cluster remains alive and functional.
     rs = RuleSet([EasyJobRule(), ShutdownJobRule()])
     image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.5.0'),
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.6.3'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
     }
     logger.info(image_dict)

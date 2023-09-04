@@ -195,6 +195,11 @@ func GenerateIngressName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "ingress")
 }
 
+// GenerateRouteName generates an ingress name from cluster name
+func GenerateRouteName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "route")
+}
+
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
 	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
@@ -208,16 +213,6 @@ func GenerateRayJobId(rayjob string) string {
 // GenerateIdentifier generates identifier of same group pods
 func GenerateIdentifier(clusterName string, nodeType rayv1alpha1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
-}
-
-// TODO: find target container through name instead of using index 0.
-// FindRayContainerIndex finds the ray head/worker container's index in the pod
-func FindRayContainerIndex(spec corev1.PodSpec) (index int) {
-	// We only support one container at this moment. We definitely need a better way to filter out sidecar containers.
-	if len(spec.Containers) > 1 {
-		logrus.Warnf("Pod has multiple containers, we choose index=0 as Ray container")
-	}
-	return 0
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
