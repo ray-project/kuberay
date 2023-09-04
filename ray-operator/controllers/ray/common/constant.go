@@ -51,12 +51,12 @@ const (
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
-	DefaultClientPortName               = "client"
-	DefaultRedisPortName                = "redis"
-	DefaultDashboardName                = "dashboard"
-	DefaultMetricsName                  = "metrics"
-	DefaultDashboardAgentListenPortName = "dashboard-agent"
-	DefaultServingPortName              = "serve"
+	DefaultClientPortName     = "client"
+	DefaultRedisPortName      = "redis"
+	DefaultDashboardName      = "dashboard"
+	DefaultMetricsName        = "metrics"
+	DefaultDashboardAgentName = "dashboard-agent"
+	DefaultServingPortName    = "serve"
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
@@ -126,6 +126,16 @@ const (
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	DefaultAddressName                  = "address"
+	DefaultDashboardHostName            = "dashboard-host"
+	DefaultAutoscalingConfig            = "autoscaling-config"
+	DefaultMetricsPortName              = "metrics-export-port"
+	DefaultBlockOption                  = "block"
+	DefaultDashboardAgentListenPortName = "dashboard-agent-listen-port"
+	DefaultNumCPUs                      = "num-cpus"
+	DefaultMemory                       = "memory"
+	DefaultNumGPUs                      = "num-gpus"
 )
 
 type ServiceType string

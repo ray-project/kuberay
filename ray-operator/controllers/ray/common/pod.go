@@ -496,7 +496,7 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 }
 
 func isRayStartWithBlock(rayStartParams map[string]string) bool {
-	if blockValue, exist := rayStartParams["block"]; exist {
+	if blockValue, exist := rayStartParams[DefaultBlockOption]; exist {
 		return strings.ToLower(blockValue) == "true"
 	}
 	return false
@@ -711,14 +711,14 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1al
 	if nodeType == rayv1alpha1.HeadNode {
 		// Allow incoming connections from all network interfaces for the dashboard by default.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
-		if _, ok := rayStartParams["dashboard-host"]; !ok {
-			rayStartParams["dashboard-host"] = "0.0.0.0"
+		if _, ok := rayStartParams[DefaultDashboardHostName]; !ok {
+			rayStartParams[DefaultDashboardHostName] = "0.0.0.0"
 		}
 
 		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
 		// will be used to initialize the monitor with a READONLY autoscaler which only mirrors what the GCS tells it.
 		// See `monitor.py` in Ray repository for more details.
-		if _, ok := rayStartParams["autoscaling-config"]; ok {
+		if _, ok := rayStartParams[DefaultAutoscalingConfig]; ok {
 			log.Info("Detect autoscaling-config in head Pod's rayStartParams. " +
 				"The monitor process will initialize the monitor with the provided config. " +
 				"Please ensure the autoscaler is set to READONLY mode.")
@@ -726,19 +726,19 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1al
 	}
 
 	// Add a metrics port to expose the metrics to Prometheus.
-	if _, ok := rayStartParams["metrics-export-port"]; !ok {
-		rayStartParams["metrics-export-port"] = fmt.Sprint(DefaultMetricsPort)
+	if _, ok := rayStartParams[DefaultMetricsPortName]; !ok {
+		rayStartParams[DefaultMetricsPortName] = fmt.Sprint(DefaultMetricsPort)
 	}
 
 	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
-	if _, ok := rayStartParams["block"]; !ok {
-		rayStartParams["block"] = "true"
+	if _, ok := rayStartParams[DefaultBlockOption]; !ok {
+		rayStartParams[DefaultBlockOption] = "true"
 	}
 
 	// Add dashboard listen port for RayService.
-	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
+	if _, ok := rayStartParams[DefaultDashboardAgentListenPortName]; !ok {
 		if value, ok := annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
-			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
+			rayStartParams[DefaultDashboardAgentListenPortName] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}
 
@@ -747,25 +747,25 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1al
 
 // concatenateContainerCommand with ray start
 func concatenateContainerCommand(nodeType rayv1alpha1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
-	if _, ok := rayStartParams["num-cpus"]; !ok {
+	if _, ok := rayStartParams[DefaultNumCPUs]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
-			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+			rayStartParams[DefaultNumCPUs] = strconv.FormatInt(cpu.Value(), 10)
 		}
 	}
 
-	if _, ok := rayStartParams["memory"]; !ok {
+	if _, ok := rayStartParams[DefaultMemory]; !ok {
 		memory := resource.Limits[v1.ResourceMemory]
 		if !memory.IsZero() {
-			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
+			rayStartParams[DefaultMemory] = strconv.FormatInt(memory.Value(), 10)
 		}
 	}
 
-	if _, ok := rayStartParams["num-gpus"]; !ok {
+	if _, ok := rayStartParams[DefaultNumGPUs]; !ok {
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
 		for resourceKey, resource := range resource.Limits {
 			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
+				rayStartParams[DefaultNumGPUs] = strconv.FormatInt(resource.Value(), 10)
 				// For now, only support one GPU type. Break on first match.
 				break
 			}
