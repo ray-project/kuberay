@@ -1,6 +1,7 @@
 BUILD_TIME      := $(shell date "+%F %T")
 COMMIT_SHA1     := $(shell git rev-parse HEAD )
-REPO_ROOT_BIN	:= $(shell dirname ${PWD})/bin
+REPO_ROOT	    := $(shell dirname ${PWD})
+REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
 IMG_TAG ?=latest
@@ -74,6 +75,10 @@ docker-image: test ## Build image with the api server.
 docker-push: ## Push image with the api server.
 	${ENGINE} push ${IMG}
 
+.PHONY: build-swagger
+build-swagger: go-bindata
+	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
+
 ##@ Deployment
 .PHONY: install
 install: kustomize ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
@@ -107,6 +112,7 @@ GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
 GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 KIND ?= $(REPO_ROOT_BIN)/kind
+GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 
 
 ## Tool Versions
@@ -115,6 +121,7 @@ GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= latest
 GOLANGCI_LINT_VERSION ?= v1.54.1
 KIND_VERSION ?= v0.19.0
+GOBINDATA_VERSION ?= v4.0.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -142,8 +149,13 @@ kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(REPO_ROOT_BIN)	
 	test -s $(KIND) || GOBIN=$(REPO_ROOT_BIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
 
+.PHONY: go-bindata
+go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
+$(GOBINDATA): $(REPO_ROOT_BIN)
+	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
+
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports ## Install all development tools
+dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
@@ -152,6 +164,7 @@ clean-dev-tools: ## Remove all development tools
 	rm -f $(REPO_ROOT_BIN)/kustomize
 	rm -f $(REPO_ROOT_BIN)/goimports
 	rm -f $(REPO_ROOT_BIN)/kind
+	rm -f $(REPO_ROOT_BIN)/go-bindata
 
 
 ##@ Testing Setup and Tools
