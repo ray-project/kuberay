@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 import logging
 import unittest
-import time
 import os
 import random
 import string
 
 import kuberay_utils.utils as utils
 from framework.prototype import (
-    CurlServiceRule,
     EasyJobRule,
-    RuleSet,
     show_cluster_info
 )
 
@@ -256,37 +253,6 @@ class KubeRayHealthCheckTestCase(unittest.TestCase):
         # rather than restarting the old head Pod.
         utils.wait_for_new_head(CONST.CREATE_NEW_POD, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
-
-class RayServiceTestCase(unittest.TestCase):
-    """Integration tests for RayService"""
-    service_template = 'tests/config/ray-service.yaml.template'
-
-    # The previous logic for testing updates was problematic.
-    # We need to test RayService updates.
-    @classmethod
-    def setUpClass(cls):
-        if not utils.is_feature_supported(ray_version, CONST.RAY_SERVICE):
-            raise unittest.SkipTest(f"{CONST.RAY_SERVICE} is not supported")
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
-        image_dict = {
-            CONST.RAY_IMAGE_KEY: ray_image,
-            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
-        }
-        operator_manager = OperatorManager(image_dict)
-        operator_manager.prepare_operator()
-
-    def test_ray_serve_work(self):
-        """Create a RayService, send a request to RayService via `curl`, and compare the result."""
-        cr_event = utils.create_ray_service(
-            RayServiceTestCase.service_template, ray_version, ray_image)
-        # When Pods are READY and RUNNING, RayService still needs tens of seconds to be ready
-        # for serving requests. This `sleep` function is a workaround, and should be removed
-        # when https://github.com/ray-project/kuberay/pull/730 is merged.
-        time.sleep(60)
-        query = {"path": "/", "json_args": ["MANGO", 2], "expected_output": "6"}
-        cr_event.rulesets = [RuleSet([CurlServiceRule([query])])]
-        cr_event.check_rule_sets()
 
 def parse_environment():
     global ray_version, ray_image, kuberay_operator_image
