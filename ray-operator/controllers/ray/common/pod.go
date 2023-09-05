@@ -658,9 +658,9 @@ func envVarExists(envName string, envVars []v1.EnvVar) bool {
 func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1alpha1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
 	// Note: The argument headPort is unused for nodeType == rayv1alpha1.HeadNode.
 	if nodeType == rayv1alpha1.WorkerNode {
-		if _, ok := rayStartParams["address"]; !ok {
+		if _, ok := rayStartParams[DefaultAddressName]; !ok {
 			address := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
-			rayStartParams["address"] = address
+			rayStartParams[DefaultAddressName] = address
 		}
 	}
 
