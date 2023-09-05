@@ -360,7 +360,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 	}
 
 	// If the command in the submitter pod template isn't set, use the default command.
-	if len(submitterTemplate.Spec.Containers[0].Command) == 0 {
+	if len(submitterTemplate.Spec.common.RayContainerIndex.Command) == 0 {
 		// Check for deprecated 'runtimeEnv' field usage and log a warning.
 		if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
 			r.Log.Info("Warning: The 'runtimeEnv' field is deprecated. Please use 'runtimeEnvYAML' instead.")
@@ -370,14 +370,14 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 		if err != nil {
 			return v1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[0].Command = k8sJobCommand
+		submitterTemplate.Spec.common.RayContainerIndex.Command = k8sJobCommand
 		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
-		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[0].Command)
+		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.common.RayContainerIndex.Command)
 	}
 
 	// Set PYTHONUNBUFFERED=1 for real-time logging
-	submitterTemplate.Spec.Containers[0].Env = append(submitterTemplate.Spec.Containers[0].Env, v1.EnvVar{
+	submitterTemplate.Spec.common.RayContainerIndex.Env = append(submitterTemplate.Spec.common.RayContainerIndex.Env, v1.EnvVar{
 		Name:  PythonUnbufferedEnvVarName,
 		Value: "1",
 	})
