@@ -49,7 +49,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-helm: manifests kustomize ## Sync the CRDs into the Helm chart
+helm: manifests ## Sync the CRDs into the Helm chart
 	rm -r ../helm-chart/kuberay-operator/crds/
 	cp -r config/crd/bases/ ../helm-chart/kuberay-operator/crds/
 
@@ -114,7 +114,7 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) ||  GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v3@v3.10.0
+	test -s $(KUSTOMIZE) ||  GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v5@latest
 
 GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.

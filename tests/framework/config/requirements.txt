@@ -2,3 +2,4 @@ docker
 GitPython
 kubernetes
 jsonpatch
+pytest

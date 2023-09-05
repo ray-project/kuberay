@@ -154,7 +154,7 @@ def wait_for_new_head(mode, old_head_pod_name, old_restart_count, namespace, tim
         new_restart_count = headpod.status.container_statuses[0].restart_count
 
         logger.info("Failure mode: %s", mode)
-        if mode == CONST.KILL_GCS_SERVER:
+        if mode == CONST.RESTART_OLD_POD:
             if new_head_pod_name != old_head_pod_name:
                 logger.warning(
                     "GCS server process is killed. The head Pod should be restarted "
@@ -170,7 +170,7 @@ def wait_for_new_head(mode, old_head_pod_name, old_restart_count, namespace, tim
                     new_restart_count, old_restart_count
                 )
                 return False
-        elif mode == CONST.KILL_HEAD_POD:
+        elif mode == CONST.CREATE_NEW_POD:
             if new_head_pod_name == old_head_pod_name:
                 logger.info("The old head Pod %s is not killed.", old_head_pod_name)
                 return False

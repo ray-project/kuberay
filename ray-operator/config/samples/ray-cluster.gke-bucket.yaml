@@ -1,0 +1,31 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: raycluster-mini
+spec:
+  rayVersion: '2.6.3'
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        serviceAccountName: my-ksa
+        nodeSelector:
+          iam.gke.io/gke-metadata-server-enabled: "true"
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.6.3
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 1
+              memory: 2Gi
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client

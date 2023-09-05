@@ -17,7 +17,10 @@ var testRayJob = &rayv1alpha1.RayJob{
 		RayClusterSpec: &rayv1alpha1.RayClusterSpec{
 			RayVersion: "2.6.0",
 		},
-		Entrypoint: "echo hello",
+		Entrypoint:          "echo hello",
+		EntrypointNumCpus:   1,
+		EntrypointNumGpus:   0.5,
+		EntrypointResources: `{"Custom_1": 1, "Custom_2": 5.5}`,
 	},
 	Status: rayv1alpha1.RayJobStatus{
 		DashboardURL: "http://127.0.0.1:8265",
@@ -93,6 +96,9 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--runtime-env-json", `{"test":"test"}`,
 		"--metadata-json", `{"testKey":"testValue"}`,
 		"--submission-id", "testJobId",
+		"--entrypoint-num-cpus", "1.000000",
+		"--entrypoint-num-gpus", "0.500000",
+		"--entrypoint-resources", `{"Custom_1": 1, "Custom_2": 5.5}`,
 		"--",
 		"echo", "hello",
 	}

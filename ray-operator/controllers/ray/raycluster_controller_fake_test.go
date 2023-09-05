@@ -103,6 +103,12 @@ func setupTest(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
 				PodIP: headNodeIP,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-head",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -127,6 +133,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -151,6 +163,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -175,6 +193,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -199,6 +223,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
@@ -223,6 +253,12 @@ func setupTest(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "ray-worker",
+						State: corev1.ContainerState{},
+					},
+				},
 			},
 		},
 	}
@@ -1689,7 +1725,7 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 }
 
-func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
+func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	setupTest(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
@@ -1712,6 +1748,8 @@ func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
 	assert.Equal(t, "headNode", podList.Items[0].Name)
 
 	// Make sure the head Pod's restart policy is `Always` and status is `Failed`.
+	// I have not observed this combination in practice, but no Kubernetes documentation
+	// explicitly forbids it.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[0])
@@ -1725,10 +1763,9 @@ func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	// The head Pod will not be deleted because the restart policy is `Always`,
-	// and the controller will return an error to requeue the request after a brief delay.
+	// The head Pod will not be deleted because the restart policy is `Always`.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
@@ -1753,4 +1790,162 @@ func Test_TerminatedHead_RestartPolicy_Always(t *testing.T) {
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
+}
+
+func Test_RunningPods_RayContainerTerminated(t *testing.T) {
+	setupTest(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Only one head Pod and no worker Pods in the RayCluster.
+	runtimeObjects := testPods[0:1]
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.WorkerGroupSpecs = nil
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Get the pod list from the fake client.
+	podList := corev1.PodList{}
+	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 1, len(podList.Items))
+	assert.Equal(t, "headNode", podList.Items[0].Name)
+
+	// Make sure the head Pod's restart policy is `Never`, the Pod status is `Running`,
+	// and the Ray container has terminated. The next `reconcilePods` call will delete
+	// the head Pod and will not create a new one in the same reconciliation loop.
+	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
+	podList.Items[0].Status.Phase = corev1.PodRunning
+	podList.Items[0].Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name: podList.Items[0].Spec.Containers[common.RayContainerIndex].Name,
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{},
+			},
+		},
+	}
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+
+	// Initialize a new RayClusterReconciler.
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	// The head Pod will be deleted and the controller will return an error
+	// instead of creating a new head Pod in the same reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 0, len(podList.Items))
+
+	// The new head Pod will be created in the this reconcile loop.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.Nil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 1, len(podList.Items))
+}
+
+func Test_ShouldDeletePod(t *testing.T) {
+	// [Case 1]: The restart policy is `Always` and the Pod is in a terminate state.
+	// The expected behavior is that the controller will not delete the Pod because
+	// the restart policy is `Always`.
+	pod := corev1.Pod{
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyAlways,
+			Containers: []corev1.Container{
+				{
+					Name: "ray-head",
+				},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodFailed,
+		},
+	}
+	shouldDelete, _ := shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.False(t, shouldDelete)
+
+	// [Case 2]: The restart policy is `Always`, the Pod is not in a terminate state,
+	// and the Ray container has not terminated. The expected behavior is that the
+	// controller will not delete the Pod.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name: "ray-head",
+			State: corev1.ContainerState{
+				Running: &corev1.ContainerStateRunning{},
+			},
+		},
+	}
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.False(t, shouldDelete)
+
+	// [Case 3]: The restart policy is `Always`, the Pod is not in a terminate state,
+	// and the Ray container has terminated. The expected behavior is that the controller
+	// will not delete the Pod because the restart policy is `Always`.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name: "ray-head",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{},
+			},
+		},
+	}
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.False(t, shouldDelete)
+
+	// [Case 4]: The restart policy is `Never` and the Pod is in a terminate state.
+	// The expected behavior is that the controller will delete the Pod.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+	pod.Status.Phase = corev1.PodFailed
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.True(t, shouldDelete)
+
+	pod.Status.Phase = corev1.PodSucceeded
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.True(t, shouldDelete)
+
+	// [Case 5]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
+	// the Ray container has not terminated. The expected behavior is that the controller will not
+	// delete the Pod.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name: "ray-head",
+			State: corev1.ContainerState{
+				Running: &corev1.ContainerStateRunning{},
+			},
+		},
+	}
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.False(t, shouldDelete)
+
+	// [Case 6]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
+	// the Ray container has terminated. The expected behavior is that the controller will delete
+	// the Pod.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name: "ray-head",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{},
+			},
+		},
+	}
+	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	assert.True(t, shouldDelete)
 }
