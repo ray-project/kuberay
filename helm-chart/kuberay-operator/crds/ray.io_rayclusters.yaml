@@ -6074,8 +6074,8 @@ spec:
                   type: string
                 type: object
               rayVersion:
-                description: RayVersion is the version of ray being used. This determines
-                  the autoscaler's image version.
+                description: '[DEPRECATED] RayVersion is used to determines the Autoscaler''s
+                  image version.'
                 type: string
               workerGroupSpecs:
                 description: WorkerGroupSpecs are the specs for the worker pods

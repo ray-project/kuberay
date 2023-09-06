@@ -16,7 +16,7 @@ type RayClusterSpec struct {
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
-	// RayVersion is the version of ray being used. This determines the autoscaler's image version.
+	// [DEPRECATED] RayVersion is used to determines the Autoscaler's image version. It is deprecated in KubeRay v1.0.0.
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
@@ -86,12 +86,13 @@ type AutoscalerOptions struct {
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 	SecurityContext *v1.SecurityContext `json:"securityContext,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-	// Defaults to 60 (one minute).
+	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
 	// Aggressive: An alias for Default; upscaling is not rate-limited.
+	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 }
 
