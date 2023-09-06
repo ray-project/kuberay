@@ -148,7 +148,7 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 		// If we can't find the image of the Ray head, fall back to the latest stable release.
 		image = "rayproject/ray:latest"
 	}
-	return v1.PodTemplateSpec{
+	pts := v1.PodTemplateSpec{
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
@@ -159,4 +159,7 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 			RestartPolicy: v1.RestartPolicyNever,
 		},
 	}
+	pts.Labels = rayJobInstance.Labels
+	pts.Annotations = rayJobInstance.Annotations
+	return pts
 }

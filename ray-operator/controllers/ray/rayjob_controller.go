@@ -389,8 +389,10 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1alpha1.RayJob, submitterTemplate v1.PodTemplateSpec, rayClusterInstance *rayv1alpha1.RayCluster) (string, bool, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      rayJobInstance.Name,
-			Namespace: rayJobInstance.Namespace,
+			Name:        rayJobInstance.Name,
+			Namespace:   rayJobInstance.Namespace,
+			Labels:      rayJobInstance.Labels,
+			Annotations: rayJobInstance.Annotations,
 		},
 		Spec: batchv1.JobSpec{
 			Template: submitterTemplate,
