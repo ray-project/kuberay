@@ -298,7 +298,7 @@ kubectl get podgroup ray-test-cluster-1-pg -o yaml
 #     transitionID: 72bbf1b3-d501-4528-a59d-479504f3eaf5
 #     type: Scheduled
 #   phase: Running
-#   running: 2
+#   running: 3
 ```
 
 Checking the pods again, we see that the second cluster is now up and running:
