@@ -63,7 +63,7 @@ make test
 
 #### Swagger UI updates
 
-To update the swagger ui files deployed with the Kuberay APi server, you'll need to:
+To update the swagger ui files deployed with the Kuberay API server, you'll need to:
 
 * Manually run the [hack/update-swagger-ui.bash](hack/update-swagger-ui.bash) script. The script downloads the swagger ui release and copies the files
 located in the [.../third_party/swagger-ui](../third_party/swagger-ui/) directory. It copies the [swagger-initializer.js](../third_party/swagger-ui/swagger-initializer.js)
