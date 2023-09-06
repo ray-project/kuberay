@@ -134,4 +134,16 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[0].Command)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[0].Image)
+
+	// Test 4: Check default PYTHONUNBUFFERED setting
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
+	assert.NoError(t, err)
+	found := false
+	for _, envVar := range submitterTemplate.Spec.Containers[0].Env {
+		if envVar.Name == PythonUnbufferedEnvVarName {
+			assert.Equal(t, "1", envVar.Value)
+			found = true
+		}
+	}
+	assert.True(t, found)
 }
