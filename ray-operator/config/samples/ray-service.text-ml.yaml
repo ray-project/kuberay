@@ -27,7 +27,7 @@ spec:
             ray_actor_options:
               num_cpus: 0.2
             user_config:
-              language: french
+              language: german
           - name: Summarizer
             num_replicas: 1
             ray_actor_options:
