@@ -38,7 +38,7 @@
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:v0.6.2 python3 tests/test_sample_rayjob_yamls.py --latest
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.6.3 OPERATOR_IMAGE=kuberay/operator:v0.6.1 python3 tests/test_sample_rayjob_yamls.py --latest
 
 - label: 'Test RayService Sample YAMLs (nightly operator)'
   instance_size: large
