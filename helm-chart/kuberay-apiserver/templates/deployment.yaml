@@ -4,7 +4,6 @@ metadata:
   name: {{ .Values.name }}
   labels:
 {{ include "kuberay-apiserver.labels" . | indent 4 }}
-{{ include "kuberay-apiserver.labels" . | indent 4 }}
 {{- if .Values.labels }}
 {{- toYaml .Values.labels | nindent 4 }}
 {{- end }}
