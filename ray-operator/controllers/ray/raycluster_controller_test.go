@@ -51,7 +51,6 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				RayStartParams: map[string]string{

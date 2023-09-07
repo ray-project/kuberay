@@ -16,7 +16,7 @@ type RayClusterSpec struct {
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
-	// [DEPRECATED] RayVersion is used to determines the Autoscaler's image version. It is deprecated in KubeRay v1.0.0.
+	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`

@@ -29,7 +29,6 @@ var instance = rayv1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "2.0.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
