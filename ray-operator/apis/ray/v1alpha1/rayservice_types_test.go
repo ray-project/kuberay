@@ -70,7 +70,6 @@ var myRayService = &RayService{
 			},
 		},
 		RayClusterSpec: RayClusterSpec{
-			RayVersion: "1.12.1",
 			HeadGroupSpec: HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
@@ -355,8 +354,7 @@ var expected = `{
 
                }
             }
-         ],
-         "rayVersion":"1.12.1"
+         ]
       }
    },
    "status":{

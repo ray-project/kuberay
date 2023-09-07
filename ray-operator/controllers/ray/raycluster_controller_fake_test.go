@@ -286,7 +286,6 @@ func setupTest(t *testing.T) {
 			Namespace: namespaceStr,
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),

@@ -6316,8 +6316,8 @@ spec:
                       type: string
                     type: object
                   rayVersion:
-                    description: RayVersion is the version of ray being used. This
-                      determines the autoscaler's image version.
+                    description: RayVersion is used to determine the command for the
+                      Kubernetes Job managed by RayJob
                     type: string
                   workerGroupSpecs:
                     description: WorkerGroupSpecs are the specs for the worker pods

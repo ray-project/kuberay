@@ -24,7 +24,6 @@ var instanceWithIngressEnabled = &rayv1alpha1.RayCluster{
 		},
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "1.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
@@ -49,7 +48,6 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "1.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
