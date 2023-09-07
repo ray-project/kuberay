@@ -29,7 +29,6 @@ var instance = rayv1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "2.0.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
@@ -279,31 +278,6 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", v1.StorageMediumDefault)
 	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
 	assert.Equal(t, len(testPod.Spec.Volumes), 2)
-}
-
-func TestGetAutoscalerImage(t *testing.T) {
-	// rayVersion strings for which we judge autoscaler support is stable and thus
-	// use the same image for the autoscaler as for the Ray container.
-	newRayVersions := []string{"2.0.0", "2.0.0rc0", "2.0", "2", "latest", "nightly", "what's this"}
-	rayImage := "repo/image:tag"
-	for _, rayVersion := range newRayVersions {
-		expectedAutoscalerImage := rayImage
-		actualAutoscalerImage := getAutoscalerImage(rayImage, rayVersion)
-		if actualAutoscalerImage != expectedAutoscalerImage {
-			t.Fatalf("Expected `%v` but got `%v`", expectedAutoscalerImage, actualAutoscalerImage)
-		}
-	}
-
-	// rayVersion strings for which we judge autoscaler support is not stable and thus
-	// use the default Ray 2.0.0 image to run the autoscaler.
-	oldRayVersions := []string{"1", "1.13", "1.13.0"}
-	for _, rayVersion := range oldRayVersions {
-		expectedAutoscalerImage := "rayproject/ray:2.0.0"
-		actualAutoscalerImage := getAutoscalerImage(rayImage, rayVersion)
-		if actualAutoscalerImage != expectedAutoscalerImage {
-			t.Fatalf("Expected `%v` but got `%v`", expectedAutoscalerImage, actualAutoscalerImage)
-		}
-	}
 }
 
 func TestGetHeadPort(t *testing.T) {
@@ -681,6 +655,34 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
+}
+
+func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	cluster.Spec.AutoscalerOptions = nil
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1alpha1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+
+	// Case 1: If `AutoscalerOptions.Image` is not set, the Autoscaler container should use the Ray head container's image by default.
+	expectedAutoscalerImage := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Image
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := v1.Pod{
+		Spec: podTemplateSpec.Spec,
+	}
+	autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
+	assert.Equal(t, expectedAutoscalerImage, podTemplateSpec.Spec.Containers[autoscalerContainerIndex].Image)
+
+	// Case 2: If `AutoscalerOptions.Image` is set, the Autoscaler container should use the specified image.
+	customAutoscalerImage := "custom-autoscaler-xxx"
+	cluster = instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	cluster.Spec.AutoscalerOptions = &rayv1alpha1.AutoscalerOptions{
+		Image: &customAutoscalerImage,
+	}
+	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod.Spec = podTemplateSpec.Spec
+	autoscalerContainerIndex = getAutoscalerContainerIndex(pod)
+	assert.Equal(t, customAutoscalerImage, podTemplateSpec.Spec.Containers[autoscalerContainerIndex].Image)
 }
 
 // If no service account is specified in the RayCluster,
