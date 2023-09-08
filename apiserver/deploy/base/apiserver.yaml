@@ -19,8 +19,12 @@ spec:
       - name: kuberay-apiserver
         image: kuberay/apiserver
         ports:
-        - containerPort: 8888
-        - containerPort: 8887
+        - name: http
+          containerPort: 8888
+          protocol: TCP
+        - name: grpc
+          containerPort: 8887
+          protocol: TCP
         resources:
           limits:
             cpu: 500m
@@ -28,7 +32,14 @@ spec:
           requests:
             cpu: 300m
             memory: 300Mi
-
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
 ---
 apiVersion: v1
 kind: Service
