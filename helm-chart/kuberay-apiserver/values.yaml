@@ -23,8 +23,12 @@ serviceAccount:
   name: "kuberay-apiserver"
 
 containerPort:
-  - containerPort: 8888
-  - containerPort: 8887
+  - name: http
+    containerPort: 8888
+    protocol: TCP
+  - name: grpc
+    containerPort: 8887
+    protocol: TCP
 
 resources:
   limits:
