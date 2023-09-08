@@ -67,7 +67,7 @@ build: fmt vet fumpt imports lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
-	go run -race cmd/main.go
+	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
 
 docker-image: test ## Build image with the api server.
 	${ENGINE} build -t ${IMG} -f Dockerfile ..

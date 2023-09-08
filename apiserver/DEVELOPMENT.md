@@ -105,14 +105,7 @@ The swagger ui is available at the following URLs:
 * [local service -- http://localhost:8888/swagger-ui/](http://localhost:8888/swagger-ui/)
 * [kind cluster -- http://localhost:31888/swagger-ui/](http://localhost:31888/swagger-ui/)
 
-Please note that for the local service to properly serve the swagger content the location of the swagger files would need to be changed in [code](https://github.com/ray-project/kuberay/blob/f1067378bc99987f3eba1e5b12b4cc797465336d/apiserver/cmd/main.go#L138-L142) as follows (lines 138-142 of [main.go](cmd/main.go)):
-
-```golang
-// Currently, we copy swagger.json to system root /workspace/proto/swagger/.
-// For the development, you can change path to `../proto/swagger`.
-// TODO(Jeffwan@): fix this later, we should not have dependency on system folder structure.
-p = path.Join("../proto/swagger/", p)
-```
+Please note that for the local service the directory containing the `*.swagger.files` is specified using the `-localSwaggerPath` command line argument. The `make run` command sets the value correctly.
 
 #### Start Local Service
 

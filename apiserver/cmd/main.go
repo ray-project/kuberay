@@ -32,6 +32,7 @@ var (
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
+	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 )
 
 func main() {
@@ -135,10 +136,13 @@ func serveSwaggerFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := strings.TrimPrefix(r.URL.Path, "/swagger/")
-	// Currently, we copy swagger.json to system root /workspace/proto/swagger/.
-	// For the development, you can change path to `../proto/swagger`.
-	// TODO(Jeffwan@): fix this later, we should not have dependency on system folder structure.
-	p = path.Join("/workspace/proto/swagger/", p)
+	if strings.TrimSpace(*localSwaggerPath) != "" {
+		// use the specified path,  for development the is  `${REPO_ROOT}/proto/swagger`.
+		p = path.Join(*localSwaggerPath, "/", p)
+	} else {
+		// In docker images the *.swagger.json are copied to `/workspace/proto/swagger/``.
+		p = path.Join("/workspace/proto/swagger/", p)
+	}
 
 	klog.Infof("Serving swagger-file: %s", p)
 	http.ServeFile(w, r, p)
