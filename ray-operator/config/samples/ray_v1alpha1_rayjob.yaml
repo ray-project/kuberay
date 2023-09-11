@@ -118,8 +118,10 @@ spec:
       
 
 ######################Ray code sample#################################
-# this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
-# it is mounted into the container and executed to show the Ray job at work
+# This sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example.
+# It is mounted into the container and executed to show the Ray job at work.
+# Note that the job entrypoint script can also reside in a remote cloud bucket, and the bucket can be specified in the
+# working_dir field of runtimeEnvYAML; see https://docs.ray.io/en/latest/ray-core/handling-dependencies.html#remote-uris.
 ---
 apiVersion: v1
 kind: ConfigMap
