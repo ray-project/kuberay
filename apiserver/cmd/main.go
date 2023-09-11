@@ -34,7 +34,6 @@ var (
 	httpPortFlag       = flag.String("httpPortFlag", ":8888", "Http Proxy Port")
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
-	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 	healthy            int32
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 )
