@@ -126,15 +126,25 @@ const (
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 
-	DefaultAddressName                  = "address"
-	DefaultDashboardHostName            = "dashboard-host"
-	DefaultAutoscalingConfig            = "autoscaling-config"
-	DefaultMetricsPortName              = "metrics-export-port"
-	DefaultBlockOption                  = "block"
+	// Belows are Options names for Ray start
+	// Address of the GCS server.
+	DefaultAddressName = "address"
+	// The host for the dashboard server's connection
+	DefaultDashboardHostName = "dashboard-host"
+	// File that contains the autoscaling config
+	DefaultAutoscalingConfig = "autoscaling-config"
+	// Port for exposing Ray metrics through a Prometheus endpoint.
+	DefaultMetricsPortName = "metrics-export-port"
+	// This options blocks the Ray start command indefinitely.
+	DefaultBlockOption = "block"
+	// Dashboard listen port for RayService
 	DefaultDashboardAgentListenPortName = "dashboard-agent-listen-port"
-	DefaultNumCPUs                      = "num-cpus"
-	DefaultMemory                       = "memory"
-	DefaultNumGPUs                      = "num-gpus"
+	// Number of CPUs on this Ray node
+	DefaultNumCPUs = "num-cpus"
+	// Amount of memory on this Ray node.
+	DefaultMemory = "memory"
+	// Number of GPUs on this Ray node
+	DefaultNumGPUs = "num-gpus"
 )
 
 type ServiceType string
