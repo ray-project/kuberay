@@ -203,6 +203,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			}
 
 			for _, headPod := range headPods.Items {
+				if !headPod.DeletionTimestamp.IsZero() {
+					r.Log.Info(fmt.Sprintf("The head Pod %s is already being deleted. Skip deleting this Pod.", headPod.Name))
+					continue
+				}
 				r.Log.Info(fmt.Sprintf(
 					"Delete the head Pod %s before the Redis cleanup. "+
 						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
@@ -221,6 +225,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				}
 
 				for _, workerPod := range workerPods.Items {
+					if !workerPod.DeletionTimestamp.IsZero() {
+						r.Log.Info(fmt.Sprintf("The worker Pod %s is already being deleted. Skip deleting this Pod.", workerPod.Name))
+						continue
+					}
 					r.Log.Info(fmt.Sprintf(
 						"Delete the worker Pod %s. This step isn't necessary for initiating the Redis cleanup process.", workerPod.Name))
 					if err := r.Delete(ctx, &workerPod); err != nil {
@@ -235,7 +243,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
 						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
 					headPods.Items[0].Name, headPods.Items[0].Annotations[common.RayExternalStorageNSAnnotationKey]))
-				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+				// Requeue after 10 seconds because it takes much longer than DefaultRequeueDuration (2 seconds) for the head Pod to be terminated.
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
 
 			// We can start the Redis cleanup process now because the head Pod has been terminated.
@@ -1034,7 +1043,8 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1alpha1.RayClus
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
 			"import os; " +
 			"host, port = os.getenv('RAY_REDIS_ADDRESS').rsplit(':'); " +
-			"cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace'))\""}
+			"cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace'))\"",
+	}
 	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
