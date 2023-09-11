@@ -147,10 +147,11 @@ type HeadInfo struct {
 type RayNodeType string
 
 const (
-	// HeadNode means that this pod will be ray cluster head
-	HeadNode RayNodeType = "head"
-	// WorkerNode means that this pod will be ray cluster worker
+	HeadNode   RayNodeType = "head"
 	WorkerNode RayNodeType = "worker"
+	// RedisCleanupNode is a Pod managed by a Kubernetes Job that cleans up Redis data after
+	// a RayCluster with GCS fault tolerance enabled is deleted.
+	RedisCleanupNode RayNodeType = "redis-cleanup"
 )
 
 // RayCluster is the Schema for the RayClusters API

@@ -26,6 +26,9 @@ const (
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 
+	// Finalizers for GCS fault tolerance
+	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+
 	// Pod health state values
 	PodUnhealthy = "Unhealthy"
 

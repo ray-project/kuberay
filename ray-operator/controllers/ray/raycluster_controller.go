@@ -15,6 +15,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
+	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -56,7 +57,7 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 }
 
 // Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or OPenshift
+// this is vanilla kubernetes cluster or Openshift
 func getClusterType(logger logr.Logger) bool {
 	if os.Getenv("USE_INGRESS_ON_OPENSHIFT") == "true" {
 		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
@@ -173,6 +174,111 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
+
+	if common.IsGCSFaultToleranceEnabled(*instance) {
+		if instance.DeletionTimestamp.IsZero() {
+			if !controllerutil.ContainsFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer) {
+				r.Log.Info(
+					"GCS fault tolerance has been enabled. Implement a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
+					"finalizer", common.GCSFaultToleranceRedisCleanupFinalizer)
+				controllerutil.AddFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+				if err := r.Update(ctx, instance); err != nil {
+					r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", common.GCSFaultToleranceRedisCleanupFinalizer))
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+				// Only start the RayCluster reconciliation after the finalizer is added.
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+			}
+		} else {
+			r.Log.Info(
+				fmt.Sprintf("The RayCluster with GCS enabled, %s, is being deleted. Start to handle the Redis cleanup finalizer %s.",
+					instance.Name, common.GCSFaultToleranceRedisCleanupFinalizer),
+				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
+
+			// Delete the head Pod if it exists.
+			headPods := corev1.PodList{}
+			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
+			if err := r.List(ctx, &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+
+			for _, headPod := range headPods.Items {
+				r.Log.Info(fmt.Sprintf(
+					"Delete the head Pod %s before the Redis cleanup. "+
+						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
+					headPod.Name, headPod.Annotations[common.RayExternalStorageNSAnnotationKey]))
+				if err := r.Delete(ctx, &headPod); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+			}
+
+			// Delete all worker Pods if they exist.
+			for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+				workerPods := corev1.PodList{}
+				filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: workerGroup.GroupName}
+				if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+
+				for _, workerPod := range workerPods.Items {
+					r.Log.Info(fmt.Sprintf(
+						"Delete the worker Pod %s. This step isn't necessary for initiating the Redis cleanup process.", workerPod.Name))
+					if err := r.Delete(ctx, &workerPod); err != nil {
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+					}
+				}
+			}
+
+			// If the number of head Pods is not 0, wait for it to be terminated before initiating the Redis cleanup process.
+			if len(headPods.Items) != 0 {
+				r.Log.Info(fmt.Sprintf(
+					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
+						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
+					headPods.Items[0].Name, headPods.Items[0].Annotations[common.RayExternalStorageNSAnnotationKey]))
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+			}
+
+			// We can start the Redis cleanup process now because the head Pod has been terminated.
+			filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.RedisCleanupNode)}
+			redisCleanupJobs := batchv1.JobList{}
+			if err := r.List(ctx, &redisCleanupJobs, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+
+			if len(redisCleanupJobs.Items) != 0 {
+				// Check whether the Redis cleanup Job has been completed.
+				redisCleanupJob := redisCleanupJobs.Items[0]
+				if redisCleanupJob.Status.Succeeded > 0 {
+					r.Log.Info(fmt.Sprintf(
+						"The Redis cleanup Job %s has been completed. "+
+							"The storage namespace %s in Redis has been fully deleted.",
+						redisCleanupJob.Name, redisCleanupJob.Annotations[common.RayExternalStorageNSAnnotationKey]))
+					// Remove the finalizer from the RayCluster CR.
+					controllerutil.RemoveFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+					if err := r.Update(ctx, instance); err != nil {
+						r.Log.Error(err, "Failed to remove finalizer for RayCluster")
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+					}
+					r.Log.Info(fmt.Sprintf(
+						"The Redis cleanup finalizer has been successfully removed from the RayCluster CR %s. "+
+							"We do not need to requeue the RayCluster CR anymore.", instance.Name))
+					return ctrl.Result{}, nil
+				}
+			} else {
+				redisCleanupJob := r.buildRedisCleanupJob(*instance)
+				if err := r.Create(ctx, &redisCleanupJob); err != nil {
+					if errors.IsAlreadyExists(err) {
+						r.Log.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+					}
+					r.Log.Error(err, "Failed to create Redis cleanup Job")
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+				r.Log.Info("Successfully created Redis cleanup Job", "Job name", redisCleanupJob.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+		}
+	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
@@ -915,6 +1021,43 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1alpha1.RayCluster, w
 	}
 
 	return pod
+}
+
+func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1alpha1.RayCluster) batchv1.Job {
+	pod := r.buildHeadPod(instance)
+	pod.Labels[common.RayNodeTypeLabelKey] = string(rayv1alpha1.RedisCleanupNode)
+	// Only keep the Ray container in the Redis cleanup Job.
+	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[common.RayContainerIndex]}
+	pod.Spec.Containers[common.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+	pod.Spec.Containers[common.RayContainerIndex].Args = []string{
+		"python -c " +
+			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
+			"import os; " +
+			"host, port = os.getenv('RAY_REDIS_ADDRESS').rsplit(':'); " +
+			"cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace'))\""}
+	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	redisCleanupJob := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"),
+			Namespace:   instance.Namespace,
+			Labels:      pod.Labels,
+			Annotations: pod.Annotations,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: pod.ObjectMeta,
+				Spec:       pod.Spec,
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(&instance, &redisCleanupJob, r.Scheme); err != nil {
+		r.Log.Error(err, "Failed to set controller reference for the Redis cleanup Job.")
+	}
+
+	return redisCleanupJob
 }
 
 // SetupWithManager builds the reconciler.
