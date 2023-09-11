@@ -27,7 +27,6 @@ var (
 		},
 		Spec: rayv1alpha1.RayServiceSpec{
 			RayClusterSpec: rayv1alpha1.RayClusterSpec{
-				RayVersion: "1.0",
 				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
 				},
@@ -40,7 +39,6 @@ var (
 			Namespace: "default",
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "1.0",
 			HeadServiceAnnotations: map[string]string{
 				headServiceAnnotationKey1: headServiceAnnotationValue1,
 				headServiceAnnotationKey2: headServiceAnnotationValue2,

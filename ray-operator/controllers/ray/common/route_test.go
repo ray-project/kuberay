@@ -21,7 +21,6 @@ var instanceWithRouteEnabled = &rayv1alpha1.RayCluster{
 		},
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "1.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas:      pointer.Int32Ptr(1),
 			EnableIngress: pointer.BoolPtr(true),
