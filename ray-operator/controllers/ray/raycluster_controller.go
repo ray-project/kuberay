@@ -175,7 +175,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
 
-	if common.IsGCSFaultToleranceEnabled(*instance) {
+	// The `enableGCSFTRedisCleanup` is a feature flag introduced in KubeRay v1.0.0. It determines whether
+	// the Redis cleanup job should be activated. Users can disable the feature by setting the environment
+	// variable `ENABLE_GCS_FT_REDIS_CLEANUP` to `false`, and undertake the Redis storage namespace cleanup
+	// manually after the RayCluster CR deletion.
+	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
+
+	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer) {
 				r.Log.Info(
@@ -1042,9 +1048,13 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1alpha1.RayClus
 		"python -c " +
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
 			"import os; " +
+			"import sys; " +
 			"host, port = os.getenv('RAY_REDIS_ADDRESS').rsplit(':'); " +
-			"cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace'))\"",
+			"sys.exit(1) if not cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
 	}
+	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
+	pod.Spec.Containers[common.RayContainerIndex].LivenessProbe = nil
+	pod.Spec.Containers[common.RayContainerIndex].ReadinessProbe = nil
 	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 

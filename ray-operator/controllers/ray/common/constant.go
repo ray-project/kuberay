@@ -101,6 +101,10 @@ const (
 	// removed if the default behavior is stable enoguh.
 	ENABLE_RANDOM_POD_DELETE = "ENABLE_RANDOM_POD_DELETE"
 
+	// This KubeRay operator environment variable is used to determine if the Redis
+	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
+	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
