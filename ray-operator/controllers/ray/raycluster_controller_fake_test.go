@@ -2017,7 +2017,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			assert.Equal(t, 0, len(rayClusterList.Items[0].Finalizers))
 
 			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
-			testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
 
 			// Check the RayCluster's finalizer
 			rayClusterList = rayv1alpha1.RayClusterList{}
@@ -2035,7 +2035,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				assert.Equal(t, 0, len(podList.Items))
 
 				// Reconcile the RayCluster again. The controller should create Pods.
-				testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get Pod list")
 				assert.NotEqual(t, 0, len(podList.Items))
@@ -2184,11 +2184,13 @@ func Test_RedisCleanup(t *testing.T) {
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
 				job.Status.Succeeded = 1
-				fakeClient.Update(ctx, &job)
+				err = fakeClient.Update(ctx, &job)
+				assert.Nil(t, err, "Fail to update Job status")
 
 				// Reconcile the RayCluster again. The controller should remove the finalizer and the RayCluster will be deleted.
 				// See https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.11/pkg/client/fake/client.go#L308-L310 for more details.
-				testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				assert.Nil(t, err, "Fail to reconcile RayCluster")
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 0, len(rayClusterList.Items))
