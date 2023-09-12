@@ -2018,6 +2018,19 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 
 			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			if tc.enableGCSFTRedisCleanup == "false" {
+				// No finalizer should be added to the RayCluster. The head service and Ray Pods should be created.
+				// The head service's ClusterIP is empty, so the function `getHeadServiceIP` will return an error
+				// to requeue the request when it tries to update the RayCluster's status.
+				assert.NotNil(t, err)
+				podList := corev1.PodList{}
+				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err)
+				assert.NotEqual(t, 0, len(podList.Items))
+			} else {
+				// Add the GCS FT Redis cleanup finalizer to the RayCluster.
+				assert.Nil(t, err)
+			}
 
 			// Check the RayCluster's finalizer
 			rayClusterList = rayv1alpha1.RayClusterList{}
@@ -2036,6 +2049,12 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 
 				// Reconcile the RayCluster again. The controller should create Pods.
 				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+
+				// The head service and Ray Pods should be created. The head service's ClusterIP is empty,
+				// so the function `getHeadServiceIP` will return an error to requeue the request when it
+				// tries to update the RayCluster's status.
+				assert.NotNil(t, err)
+
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get Pod list")
 				assert.NotEqual(t, 0, len(podList.Items))
@@ -2132,22 +2151,24 @@ func Test_RedisCleanup(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			if tc.hasHeadPod {
 				headPods := corev1.PodList{}
-				fakeClient.List(ctx, &headPods, client.InNamespace(namespaceStr),
+				err := fakeClient.List(ctx, &headPods, client.InNamespace(namespaceStr),
 					client.MatchingLabels{
 						common.RayClusterLabelKey:   cluster.Name,
 						common.RayNodeGroupLabelKey: headGroupName,
 						common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
 					})
+				assert.Nil(t, err)
 				assert.Equal(t, 1, len(headPods.Items))
 			}
 			if tc.hasWorkerPod {
 				workerPods := corev1.PodList{}
-				fakeClient.List(ctx, &workerPods, client.InNamespace(namespaceStr),
+				err := fakeClient.List(ctx, &workerPods, client.InNamespace(namespaceStr),
 					client.MatchingLabels{
 						common.RayClusterLabelKey:   cluster.Name,
 						common.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
 						common.RayNodeTypeLabelKey:  string(rayv1alpha1.WorkerNode),
 					})
+				assert.Nil(t, err)
 				assert.Equal(t, 1, len(workerPods.Items))
 			}
 
@@ -2165,7 +2186,8 @@ func Test_RedisCleanup(t *testing.T) {
 			assert.Equal(t, 0, len(jobList.Items))
 
 			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
-			testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			assert.Nil(t, err)
 
 			// Check Job
 			jobList = batchv1.JobList{}
