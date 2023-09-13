@@ -173,8 +173,14 @@ message RayService {
   string namespace = 2;
   // Required field. This field indicates the user who owns the ray service.
   string user = 3;
-  // The config for ray serve deployments.
+  // The config for ray serve deployments V1.
   ServeDeploymentGraphSpec serve_deployment_graph_spec = 4;
+  // Config for serve deployment V2. Note that only one config V1 or V2 can be specified
+  string serve_config_V2 = 9;
+  // Serve deployment related health check
+  int32 service_unhealthy_second_threshold = 10;
+  // Dashboard agent related health check
+	int32 deployment_unhealthy_second_threshold = 11;         
   // The cluster template.
   ClusterSpec cluster_spec = 5;
   // Output. The status for the ray service.
