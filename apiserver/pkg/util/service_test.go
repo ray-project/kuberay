@@ -50,7 +50,7 @@ var apiServiceV2 = &api.RayService{
 	Name:                               "test",
 	Namespace:                          "test",
 	User:                               "test",
-	ServeConfig_V2: 					"Fake Yaml file",
+	ServeConfig_V2:                     "Fake Yaml file",
 	ClusterSpec:                        rayCluster.ClusterSpec,
 	ServiceUnhealthySecondThreshold:    100,
 	DeploymentUnhealthySecondThreshold: 200,
