@@ -39,9 +39,9 @@ class PodSecurityTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
-        K8S_CLUSTER_MANAGER.create_kind_cluster(kind_config = kind_config)
+        K8S_CLUSTER_MANAGER.initialize_cluster(kind_config = kind_config)
         # Apply the restricted Pod security standard to all Pods in the namespace pod-security.
         # The label pod-security.kubernetes.io/enforce=restricted means that the Pod that violates
         # the policies will be rejected.

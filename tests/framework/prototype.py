@@ -599,11 +599,11 @@ class GeneralTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
 
     def setUp(self):
         if not K8S_CLUSTER_MANAGER.check_cluster_exist():
-            K8S_CLUSTER_MANAGER.create_kind_cluster()
+            K8S_CLUSTER_MANAGER.initialize_cluster()
             self.operator_manager.prepare_operator()
 
     def runtest(self):
@@ -615,4 +615,4 @@ class GeneralTestCase(unittest.TestCase):
             self.cr_event.clean_up()
         except Exception as ex:
             logger.error(str(ex))
-            K8S_CLUSTER_MANAGER.delete_kind_cluster()
+            K8S_CLUSTER_MANAGER.cleanup()
