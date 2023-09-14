@@ -185,7 +185,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer) {
 				r.Log.Info(
-					"GCS fault tolerance has been enabled. Implement a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
+					"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
 					"finalizer", common.GCSFaultToleranceRedisCleanupFinalizer)
 				controllerutil.AddFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
 				if err := r.Update(ctx, instance); err != nil {
