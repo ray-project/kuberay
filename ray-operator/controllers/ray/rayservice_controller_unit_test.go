@@ -596,7 +596,7 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 			Namespace: cluster.ObjectMeta.Namespace,
 		},
 		Spec: rayv1alpha1.RayServiceSpec{
-			ServeConfigV2: fmt.Sprintf(`
+			ServeConfigV2: `
 applications:
 - name: myapp
   import_path: fruit.deployment_graph
@@ -608,7 +608,7 @@ applications:
 	user_config:
 	price: 3
 	ray_actor_options:
-	num_cpus: 0.1`),
+	num_cpus: 0.1`,
 		},
 	}
 
@@ -643,10 +643,10 @@ applications:
 
 	// Test 4: The Serve application has been created, but the Serve config has been updated.
 	// Therefore, the Serve in-place update should be triggered.
-	rayService.Spec.ServeConfigV2 = fmt.Sprintf(`
+	rayService.Spec.ServeConfigV2 = `
 applications:
 - name: new_app_name
-  import_path: fruit.deployment_graph`)
+  import_path: fruit.deployment_graph`
 	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
 	assert.True(t, shouldCreate)
 }
