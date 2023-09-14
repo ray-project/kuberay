@@ -629,6 +629,18 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 		return true
 	}
 
+	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
+	if len(serveStatus.Applications) == 0 {
+		r.Log.V(1).Info("shouldUpdate", "should create Serve applications", true,
+			"reason",
+			fmt.Sprintf(
+				"No Serve application found in RayCluster %s, need to create serve applications. "+
+					"A possible reason is the head Pod has crashed and GCS FT is not enabled. "+
+					"Hence, the RayService CR's Serve application status is set to empty in the previous reconcile.",
+				rayClusterInstance.Name))
+		return true
+	}
+
 	// If the Serve config has been cached, check if it needs to be updated.
 	shouldUpdate := false
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
@@ -847,6 +859,10 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		newApplications[appName] = applicationStatus
 	}
 
+	if len(newApplications) == 0 {
+		r.Log.Info("No Serve application found. The RayCluster is not ready to serve requests. Set 'isReady' to false")
+		isReady = false
+	}
 	rayServiceServeStatus.Applications = newApplications
 	r.Log.V(1).Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
 	return isHealthy, isReady, nil
