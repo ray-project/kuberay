@@ -47,13 +47,12 @@ var apiServiceV1 = &api.RayService{
 }
 
 var apiServiceV2 = &api.RayService{
-	Name:                               "test",
-	Namespace:                          "test",
-	User:                               "test",
-	ServeConfig_V2:                     "Fake Yaml file",
-	ClusterSpec:                        rayCluster.ClusterSpec,
-	ServiceUnhealthySecondThreshold:    100,
-	DeploymentUnhealthySecondThreshold: 200,
+	Name:                            "test",
+	Namespace:                       "test",
+	User:                            "test",
+	ServeConfig_V2:                  "Fake Yaml file",
+	ClusterSpec:                     rayCluster.ClusterSpec,
+	ServiceUnhealthySecondThreshold: 100,
 }
 
 func TestBuildService(t *testing.T) {
@@ -88,5 +87,5 @@ func TestBuildService(t *testing.T) {
 		t.Errorf("Got non empty V1")
 	}
 	assert.NotNil(t, got.Spec.ServiceUnhealthySecondThreshold)
-	assert.NotNil(t, got.Spec.DeploymentUnhealthySecondThreshold)
+	assert.Nil(t, got.Spec.DeploymentUnhealthySecondThreshold)
 }
