@@ -307,7 +307,7 @@ jobs:
         with:
           ray_version: 1.13.0
 
-  test-compatibility-2.7.04_0:
+  test-compatibility-2_4_0:
     needs:
       - build_operator
       - build_apiserver
