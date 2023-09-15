@@ -263,6 +263,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			if len(redisCleanupJobs.Items) != 0 {
 				// Check whether the Redis cleanup Job has been completed.
 				redisCleanupJob := redisCleanupJobs.Items[0]
+				r.Log.Info("Redis cleanup Job status", "Job name", redisCleanupJob.Name,
+					"Active", redisCleanupJob.Status.Active, "Succeeded", redisCleanupJob.Status.Succeeded, "Failed", redisCleanupJob.Status.Failed)
 				if redisCleanupJob.Status.Succeeded > 0 {
 					r.Log.Info(fmt.Sprintf(
 						"The Redis cleanup Job %s has been completed. "+
@@ -278,6 +280,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 						"The Redis cleanup finalizer has been successfully removed from the RayCluster CR %s. "+
 							"We do not need to requeue the RayCluster CR anymore.", instance.Name))
 					return ctrl.Result{}, nil
+				}
+				if redisCleanupJob.Status.Failed > 0 {
+					r.Log.Info("If the Redis cleanup Job has failed, we will requeue the RayCluster CR after 1 minute.")
+					return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 				}
 			} else {
 				redisCleanupJob := r.buildRedisCleanupJob(*instance)
