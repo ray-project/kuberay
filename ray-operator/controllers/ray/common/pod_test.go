@@ -830,18 +830,18 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsPortName, int32(DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
 	customMetricsPort := int32(DefaultMetricsPort) + 1
 	metricsPort := v1.ContainerPort{
-		Name:          DefaultMetricsName,
+		Name:          DefaultMetricsPortName,
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsPortName, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -855,18 +855,18 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, int32(DefaultMetricsPort)); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsPortName, int32(DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
 	customMetricsPort := int32(DefaultMetricsPort) + 1
 	metricsPort := v1.ContainerPort{
-		Name:          DefaultMetricsName,
+		Name:          DefaultMetricsPortName,
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []v1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsName, customMetricsPort); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, DefaultMetricsPortName, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
 }

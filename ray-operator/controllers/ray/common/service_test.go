@@ -199,8 +199,8 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 	ports := getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify any ports.
-	if ports[DefaultMetricsName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsName])
+	if ports[DefaultMetricsPortName] != int32(DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsPortName])
 	}
 
 	// Test case 2: Only a random port is specified by the user.
@@ -212,21 +212,21 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	}
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify the metrics port but specifies other ports.
-	if ports[DefaultMetricsName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsName])
+	if ports[DefaultMetricsPortName] != int32(DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsPortName])
 	}
 
 	// Test case 3: A custom metrics port is specified by the user.
 	customMetricsPort := int32(DefaultMetricsPort) + 1
 	metricsPort := corev1.ContainerPort{
-		Name:          DefaultMetricsName,
+		Name:          DefaultMetricsPortName,
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports, metricsPort)
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts uses the user's custom metrics port when the user specifies the metrics port.
-	if ports[DefaultMetricsName] != customMetricsPort {
-		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsName])
+	if ports[DefaultMetricsPortName] != customMetricsPort {
+		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsPortName])
 	}
 }
 

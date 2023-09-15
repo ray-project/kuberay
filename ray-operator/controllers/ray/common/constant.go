@@ -54,8 +54,8 @@ const (
 
 	DefaultClientPortName               = "client"
 	DefaultRedisPortName                = "redis"
-	DefaultDashboardName                = "dashboard"
-	DefaultMetricsName                  = "metrics"
+	DefaultDashboardPortName            = "dashboard"
+	DefaultMetricsPortName              = "metrics"
 	DefaultDashboardAgentListenPortName = "dashboard-agent"
 	DefaultServingPortName              = "serve"
 
