@@ -197,8 +197,8 @@ class TestRayService:
             {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"15 pizzas please!"'},
         ]
 
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         operator_manager = OperatorManager(DEFAULT_IMAGE_DICT)
         operator_manager.prepare_operator()
         start_curl_pod("curl", "default")
@@ -206,7 +206,7 @@ class TestRayService:
 
         yield
 
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
 
     def test_deploy_applications(self, set_up_cluster):
         rs = RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])

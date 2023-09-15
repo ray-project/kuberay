@@ -31,6 +31,7 @@ import (
 const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
+	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -374,6 +375,12 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 	} else {
 		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[0].Command)
 	}
+
+	// Set PYTHONUNBUFFERED=1 for real-time logging
+	submitterTemplate.Spec.Containers[0].Env = append(submitterTemplate.Spec.Containers[0].Env, v1.EnvVar{
+		Name:  PythonUnbufferedEnvVarName,
+		Value: "1",
+	})
 
 	return submitterTemplate, nil
 }

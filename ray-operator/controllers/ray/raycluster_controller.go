@@ -15,6 +15,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
+	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -56,7 +57,7 @@ func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error)
 }
 
 // Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or OPenshift
+// this is vanilla kubernetes cluster or Openshift
 func getClusterType(logger logr.Logger) bool {
 	if os.Getenv("USE_INGRESS_ON_OPENSHIFT") == "true" {
 		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
@@ -173,6 +174,132 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	_ = r.Log.WithValues("raycluster", request.NamespacedName)
 	r.Log.Info("reconciling RayCluster", "cluster name", request.Name)
+
+	// The `enableGCSFTRedisCleanup` is a feature flag introduced in KubeRay v1.0.0. It determines whether
+	// the Redis cleanup job should be activated. Users can disable the feature by setting the environment
+	// variable `ENABLE_GCS_FT_REDIS_CLEANUP` to `false`, and undertake the Redis storage namespace cleanup
+	// manually after the RayCluster CR deletion.
+	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
+
+	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
+		if instance.DeletionTimestamp.IsZero() {
+			if !controllerutil.ContainsFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer) {
+				r.Log.Info(
+					"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
+					"finalizer", common.GCSFaultToleranceRedisCleanupFinalizer)
+				controllerutil.AddFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+				if err := r.Update(ctx, instance); err != nil {
+					r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", common.GCSFaultToleranceRedisCleanupFinalizer))
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+				// Only start the RayCluster reconciliation after the finalizer is added.
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+			}
+		} else {
+			r.Log.Info(
+				fmt.Sprintf("The RayCluster with GCS enabled, %s, is being deleted. Start to handle the Redis cleanup finalizer %s.",
+					instance.Name, common.GCSFaultToleranceRedisCleanupFinalizer),
+				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
+
+			// Delete the head Pod if it exists.
+			headPods := corev1.PodList{}
+			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode)}
+			if err := r.List(ctx, &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+
+			for _, headPod := range headPods.Items {
+				if !headPod.DeletionTimestamp.IsZero() {
+					r.Log.Info(fmt.Sprintf("The head Pod %s is already being deleted. Skip deleting this Pod.", headPod.Name))
+					continue
+				}
+				r.Log.Info(fmt.Sprintf(
+					"Delete the head Pod %s before the Redis cleanup. "+
+						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
+					headPod.Name, headPod.Annotations[common.RayExternalStorageNSAnnotationKey]))
+				if err := r.Delete(ctx, &headPod); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+			}
+
+			// Delete all worker Pods if they exist.
+			for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+				workerPods := corev1.PodList{}
+				filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: workerGroup.GroupName}
+				if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+
+				for _, workerPod := range workerPods.Items {
+					if !workerPod.DeletionTimestamp.IsZero() {
+						r.Log.Info(fmt.Sprintf("The worker Pod %s is already being deleted. Skip deleting this Pod.", workerPod.Name))
+						continue
+					}
+					r.Log.Info(fmt.Sprintf(
+						"Delete the worker Pod %s. This step isn't necessary for initiating the Redis cleanup process.", workerPod.Name))
+					if err := r.Delete(ctx, &workerPod); err != nil {
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+					}
+				}
+			}
+
+			// If the number of head Pods is not 0, wait for it to be terminated before initiating the Redis cleanup process.
+			if len(headPods.Items) != 0 {
+				r.Log.Info(fmt.Sprintf(
+					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
+						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
+					headPods.Items[0].Name, headPods.Items[0].Annotations[common.RayExternalStorageNSAnnotationKey]))
+				// Requeue after 10 seconds because it takes much longer than DefaultRequeueDuration (2 seconds) for the head Pod to be terminated.
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			}
+
+			// We can start the Redis cleanup process now because the head Pod has been terminated.
+			filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1alpha1.RedisCleanupNode)}
+			redisCleanupJobs := batchv1.JobList{}
+			if err := r.List(ctx, &redisCleanupJobs, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+
+			if len(redisCleanupJobs.Items) != 0 {
+				// Check whether the Redis cleanup Job has been completed.
+				redisCleanupJob := redisCleanupJobs.Items[0]
+				r.Log.Info("Redis cleanup Job status", "Job name", redisCleanupJob.Name,
+					"Active", redisCleanupJob.Status.Active, "Succeeded", redisCleanupJob.Status.Succeeded, "Failed", redisCleanupJob.Status.Failed)
+				if redisCleanupJob.Status.Succeeded > 0 {
+					r.Log.Info(fmt.Sprintf(
+						"The Redis cleanup Job %s has been completed. "+
+							"The storage namespace %s in Redis has been fully deleted.",
+						redisCleanupJob.Name, redisCleanupJob.Annotations[common.RayExternalStorageNSAnnotationKey]))
+					// Remove the finalizer from the RayCluster CR.
+					controllerutil.RemoveFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+					if err := r.Update(ctx, instance); err != nil {
+						r.Log.Error(err, "Failed to remove finalizer for RayCluster")
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+					}
+					r.Log.Info(fmt.Sprintf(
+						"The Redis cleanup finalizer has been successfully removed from the RayCluster CR %s. "+
+							"We do not need to requeue the RayCluster CR anymore.", instance.Name))
+					return ctrl.Result{}, nil
+				}
+				if redisCleanupJob.Status.Failed > 0 {
+					r.Log.Info("If the Redis cleanup Job has failed, we will requeue the RayCluster CR after 1 minute.")
+					return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+				}
+			} else {
+				redisCleanupJob := r.buildRedisCleanupJob(*instance)
+				if err := r.Create(ctx, &redisCleanupJob); err != nil {
+					if errors.IsAlreadyExists(err) {
+						r.Log.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+					}
+					r.Log.Error(err, "Failed to create Redis cleanup Job")
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+				r.Log.Info("Successfully created Redis cleanup Job", "Job name", redisCleanupJob.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+		}
+	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
@@ -431,33 +558,20 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Reconcile head Pod
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
-		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name)
-		// TODO (kevin85421): Consider deleting a head Pod if its Ray container restarts excessively, as this
-		// might suggest an unhealthy Kubernetes node. Deleting and then recreating the head Pod might allow
-		// it to be scheduled on a different node. However, it's aggressive to delete a head Pod that is not
-		// in a terminated state (i.e., `Failed` or `Succeeded`). We should only delete a head Pod when GCS
-		// fault tolerance is enabled, and drain the head Pod before deleting it.
-		if headPod.Status.Phase == corev1.PodRunning || headPod.Status.Phase == corev1.PodPending {
-			r.Log.Info("reconcilePods", "The head pod is Running or Pending... checking workers", headPod.Name)
-		} else {
-			if headPod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
-				// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
-				// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
-				// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
-				// in the head Pod. Therefore, I've added this check as a safeguard.
-				message := fmt.Sprintf(
-					"The status of the head Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
-						"and it should be able to restart automatically.", headPod.Name, headPod.Status.Phase)
-				r.Log.Info(message)
-				return fmt.Errorf(message)
-			}
-			message := fmt.Sprintf("The status of the head Pod %s is %s which is a terminal state. It is not expected that the head pod ever be in a terminal state, so KubeRay will delete the Pod and recreate the head Pod in the next reconciliation.", headPod.Name, headPod.Status.Phase)
-			r.Log.Info(message)
+		r.Log.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
+			"Pod restart policy", headPod.Spec.RestartPolicy,
+			"Ray container terminated status", getRayContainerStateTerminated(headPod))
+
+		shouldDelete, reason := shouldDeletePod(headPod, rayv1alpha1.HeadNode)
+		r.Log.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
+		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted head Pod %s; status: %s", headPod.Name, headPod.Status.Phase)
-			return fmt.Errorf(message)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
+				"Deleted head Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
+				headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod))
+			return fmt.Errorf(reason)
 		}
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
@@ -551,27 +665,22 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 
 		// Delete unhealthy worker Pods
+		deletedWorkers := make(map[string]struct{})
+		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
-			// TODO (kevin85421): Consider deleting a worker Pod if its Ray container restarts excessively,
-			// as this could suggest an unhealthy Kubernetes node. Deleting and then recreating the worker Pod
-			// might allow it to be scheduled on a different node. Compared to deleting a head Pod, removing a
-			// worker Pod is less aggressive and aligns more closely with the behavior of the Ray Autoscaler.
-			// Nevertheless, we should still carefully drain the node before deleting the worker Pod. Enabling
-			// GCS fault tolerance might not be necessary when deleting worker Pods. Note that the Ray Autoscaler
-			// will not delete any worker Pods that have never been registered with the Ray cluster. Therefore,
-			// we may need to address the Ray Autoscaler's blind spots.
-
+			shouldDelete, reason := shouldDeletePod(workerPod, rayv1alpha1.WorkerNode)
+			r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
-			if workerPod.Spec.RestartPolicy != corev1.RestartPolicyAlways && !isPodRunningOrPendingAndNotDeleting(workerPod) {
-				// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
+			if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
-				r.Log.Info(fmt.Sprintf("The worker Pod %s status is %s. KubeRay will delete the Pod because the status is not Running or Pending. ", workerPod.Name, workerPod.Status.Phase))
+				deletedWorkers[workerPod.Name] = deleted
 				if err := r.Delete(ctx, &workerPod); err != nil {
 					return err
-				} else {
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted worker Pod %s; status: %s", workerPod.Name, workerPod.Status.Phase)
 				}
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
+					"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
+					workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
 			}
 		}
 
@@ -582,8 +691,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
 		// Essentially WorkersToDelete has to be deleted to meet the expectations of the Autoscaler.
-		deletedWorkers := make(map[string]struct{})
-		deleted := struct{}{}
 		r.Log.Info("reconcilePods", "removing the pods in the scaleStrategy of", worker.GroupName)
 		for _, podsToDelete := range worker.ScaleStrategy.WorkersToDelete {
 			pod := corev1.Pod{}
@@ -605,8 +712,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {
-			// TODO (kevin85421): We also need to have a clear story of all the Pod status phases, especially for PodFailed.
-			if _, ok := deletedWorkers[pod.Name]; !ok && isPodRunningOrPendingAndNotDeleting(pod) {
+			if _, ok := deletedWorkers[pod.Name]; !ok {
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
@@ -668,8 +774,91 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	return nil
 }
 
-func isPodRunningOrPendingAndNotDeleting(pod corev1.Pod) bool {
-	return (pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending) && pod.ObjectMeta.DeletionTimestamp == nil
+// shouldDeletePod returns whether the Pod should be deleted and the reason
+//
+// @param pod: The Pod to be checked.
+// @param nodeType: The type of the node that the Pod belongs to (head or worker).
+//
+// @return: shouldDelete (bool), reason (string)
+// (1) shouldDelete: Whether the Pod should be deleted.
+// (2) reason: The reason why the Pod should or should not be deleted.
+func shouldDeletePod(pod corev1.Pod, nodeType rayv1alpha1.RayNodeType) (bool, string) {
+	// If a Pod's restart policy is set to `Always`, KubeRay will not delete
+	// the Pod and rely on the Pod's restart policy to restart the Pod.
+	isRestartPolicyAlways := pod.Spec.RestartPolicy == corev1.RestartPolicyAlways
+
+	// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
+	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
+		if isRestartPolicyAlways {
+			// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
+			// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
+			// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
+			// in the head Pod. Therefore, I've added this check as a safeguard.
+			reason := fmt.Sprintf(
+				"The status of the %s Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase)
+			return false, reason
+		}
+
+		reason := fmt.Sprintf(
+			"The %s Pod %s status is %s which is a terminal state and it will not restart. "+
+				"KubeRay will delete the Pod and create new Pods in the next reconciliation if necessary.", nodeType, pod.Name, pod.Status.Phase)
+		return true, reason
+	}
+
+	rayContainerTerminated := getRayContainerStateTerminated(pod)
+	if pod.Status.Phase == corev1.PodRunning && rayContainerTerminated != nil {
+		if isRestartPolicyAlways {
+			// If restart policy is set to `Always`, KubeRay will not delete the Pod.
+			reason := fmt.Sprintf(
+				"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
+			return false, reason
+		}
+		reason := fmt.Sprintf(
+			"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. "+
+				"The container is unable to restart due to its restart policy %s, so KubeRay will delete it.",
+			nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated, pod.Spec.RestartPolicy)
+		return true, reason
+	}
+
+	// TODO (kevin85421): Consider deleting a Pod if its Ray container restarts excessively, as this might
+	// suggest an unhealthy Kubernetes node. Deleting and then recreating the Pod might allow it to be
+	// scheduled on a different node.
+	//
+	// (1) Head Pod:
+	// It's aggressive to delete a head Pod that is not in a terminated state (i.e., `Failed` or `Succeeded`).
+	// We should only delete a head Pod when GCS fault tolerance is enabled, and drain the head Pod before
+	// deleting it.
+	//
+	// (2) Worker Pod:
+	// Compared to deleting a head Pod, removing a worker Pod is less aggressive and aligns more closely with
+	// the behavior of the Ray Autoscaler. Nevertheless, we should still carefully drain the node before deleting
+	// the worker Pod. Enabling GCS fault tolerance might not be necessary when deleting worker Pods. Note that
+	// the Ray Autoscaler will not delete any worker Pods that have never been registered with the Ray cluster.
+	// Therefore, we may need to address the Ray Autoscaler's blind spots.
+
+	reason := fmt.Sprintf(
+		"KubeRay does not need to delete the %s Pod %s. The Pod status is %s, and the Ray container terminated status is %v.",
+		nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
+	return false, reason
+}
+
+// `ContainerStatuses` does not guarantee the order of the containers. Therefore, we need to find the Ray
+// container's status by name. See the following links for more details:
+// (1) https://discuss.kubernetes.io/t/pod-spec-containers-and-pod-status-containerstatuses-can-have-a-different-order-why/25273
+// (2) https://github.com/kubernetes/kubernetes/blob/03762cbcb52b2a4394e4d795f9d3517a78a5e1a2/pkg/api/v1/pod/util.go#L261-L268
+func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTerminated {
+	rayContainerName := pod.Spec.Containers[common.RayContainerIndex].Name
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.Name == rayContainerName {
+			return containerStatus.State.Terminated
+		}
+	}
+	// If the Ray container isn't found, we'll assume it hasn't terminated. This scenario
+	// typically arises during testing (`raycluster_controller_test.go`) as `envtest` lacks
+	// a Pod controller, preventing automatic Pod status updates.
+	return nil
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1alpha1.RayCluster) error {
@@ -853,6 +1042,48 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1alpha1.RayCluster, w
 	}
 
 	return pod
+}
+
+func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1alpha1.RayCluster) batchv1.Job {
+	pod := r.buildHeadPod(instance)
+	pod.Labels[common.RayNodeTypeLabelKey] = string(rayv1alpha1.RedisCleanupNode)
+	// Only keep the Ray container in the Redis cleanup Job.
+	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[common.RayContainerIndex]}
+	pod.Spec.Containers[common.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+	pod.Spec.Containers[common.RayContainerIndex].Args = []string{
+		"python -c " +
+			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
+			"import os; " +
+			"import sys; " +
+			"host, port = os.getenv('RAY_REDIS_ADDRESS').rsplit(':'); " +
+			"sys.exit(1) if not cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
+	}
+	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
+	pod.Spec.Containers[common.RayContainerIndex].LivenessProbe = nil
+	pod.Spec.Containers[common.RayContainerIndex].ReadinessProbe = nil
+	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	redisCleanupJob := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"),
+			Namespace:   instance.Namespace,
+			Labels:      pod.Labels,
+			Annotations: pod.Annotations,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: pod.ObjectMeta,
+				Spec:       pod.Spec,
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(&instance, &redisCleanupJob, r.Scheme); err != nil {
+		r.Log.Error(err, "Failed to set controller reference for the Redis cleanup Job.")
+	}
+
+	return redisCleanupJob
 }
 
 // SetupWithManager builds the reconciler.

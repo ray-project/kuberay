@@ -1,0 +1,79 @@
+apiVersion: ray.io/v1alpha1
+kind: RayService
+metadata:
+  name: text-summarizer
+spec:
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
+  serveConfigV2: |
+    applications:
+      - name: text_summarizer
+        import_path: text_summarizer.text_summarizer:deployment
+        runtime_env:
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
+  rayClusterConfig:
+    rayVersion: '2.6.3' # Should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # Ray head pod template.
+    headGroupSpec:
+      # The `rayStartParams` are used to configure the `ray start` command.
+      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray-ml:2.6.3
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8G"
+              requests:
+                cpu: "2"
+                memory: "8G"
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+    workerGroupSpecs:
+    # The pod replicas in this group typed worker
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 10
+      groupName: gpu-group
+      rayStartParams: {}
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray-ml:2.6.3
+            resources:
+              limits:
+                cpu: 4
+                memory: "16G"
+                nvidia.com/gpu: 1
+              requests:
+                cpu: 3
+                memory: "12G"
+                nvidia.com/gpu: 1
+          # Please add the following taints to the GPU node.
+          tolerations:
+            - key: "ray.io/node-type"
+              operator: "Equal"
+              value: "worker"
+              effect: "NoSchedule"

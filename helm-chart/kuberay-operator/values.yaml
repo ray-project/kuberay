@@ -98,3 +98,6 @@ env:
 # environment variable is not set, requeue after the default value (300).
 # - name: RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV
 #   value: 300
+# If not set or set to "true", KubeRay will clean up the Redis storage namespace when a GCS FT-enabled RayCluster is deleted.
+# - name: ENABLE_GCS_FT_REDIS_CLEANUP
+#   value: "true"
