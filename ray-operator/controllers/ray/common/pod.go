@@ -51,17 +51,10 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return headPort
 }
 
-// rayClusterHAEnabled check if RayCluster enabled FT in annotations
-func rayClusterHAEnabled(instance rayv1alpha1.RayCluster) bool {
-	if instance.Annotations == nil {
-		return false
-	}
-	if v, ok := instance.Annotations[RayFTEnabledAnnotationKey]; ok {
-		if strings.ToLower(v) == "true" {
-			return true
-		}
-	}
-	return false
+// Check if the RayCluster has GCS fault tolerance enabled.
+func IsGCSFaultToleranceEnabled(instance rayv1alpha1.RayCluster) bool {
+	v, ok := instance.Annotations[RayFTEnabledAnnotationKey]
+	return ok && strings.ToLower(v) == "true"
 }
 
 func initTemplateAnnotations(instance rayv1alpha1.RayCluster, podTemplate *v1.PodTemplateSpec) {
@@ -71,7 +64,7 @@ func initTemplateAnnotations(instance rayv1alpha1.RayCluster, podTemplate *v1.Po
 
 	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
 	// This may need to be updated in the future.
-	if rayClusterHAEnabled(instance) {
+	if IsGCSFaultToleranceEnabled(instance) {
 		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "true"
 		// if we have FT enabled, we need to set up a default external storage namespace.
 		podTemplate.Annotations[RayExternalStorageNSAnnotationKey] = string(instance.UID)

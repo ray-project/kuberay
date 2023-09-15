@@ -25,6 +25,7 @@ Typing `make dev-tools` will download and install all of them. The `make clean-d
 | kustomize     | v3.8.7   | [install](https://kubectl.docs.kubernetes.io/installation/kustomize/)   |
 | gofumpt       | v0.3.1   | To install `go install mvdan.cc/gofumpt@v0.3.1`                         |
 | goimports     | latest   | To install `go install golang.org/x/tools/cmd/goimports@latest`         |
+| go-bindata    | v4.0.2   | To install `github.com/kevinburke/go-bindata/v4/...@v4.0.2`             |
 
 ## Purpose
 
@@ -59,6 +60,52 @@ make build
 #To run the unit tests
 make test
 ```
+
+#### Swagger UI updates
+
+To update the swagger ui files deployed with the Kuberay API server, you'll need to:
+
+* Manually run the [hack/update-swagger-ui.bash](hack/update-swagger-ui.bash) script. The script downloads the swagger ui release and copies the downloaded files
+to the [../third_party/swagger-ui](../third_party/swagger-ui/) directory. It copies the [swagger-initializer.js](../third_party/swagger-ui/swagger-initializer.js)
+to [swagger-initializer.js.backup](../third_party/swagger-ui/swagger-initializer.js.backup).
+* Update the contents of the [swagger-initializer.js](../third_party/swagger-ui/swagger-initializer.js) to set the URLs for for the individual swagger docs. The content of the file is show below:
+
+    ```javascript
+    window.onload = function() {
+    //<editor-fold desc="Changeable Configuration Block">
+
+    // the following lines will be replaced by docker/configurator, when it runs in a docker-container
+    window.ui = SwaggerUIBundle({
+        spec: location.host,
+        urls:  [{"url":"http://"+location.host+"/swagger/serve.swagger.json","name":"RayServe Service"},
+                {"url":"http://"+location.host+"/swagger/error.swagger.json","name":"Errors API"},
+                {"url":"http://"+location.host+"/swagger/job.swagger.json","name":"RayJob Service"},
+                {"url":"http://"+location.host+"/swagger/config.swagger.json","name":"ComputeTemplate Service"},
+                {"url":"http://"+location.host+"/swagger/cluster.swagger.json","name":"Cluster Service"}],
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+        ],
+        plugins: [
+        SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout"
+    });
+
+    //</editor-fold>
+    };
+    ```
+
+* Execute `make build-swagger` target to update the contents of the [datafile.go](pkg/swagger/datafile.go) file. This will package the content of the [swagger-ui](../third_party/swagger-ui/) directory for serving by the api server (see [func serveSwaggerUI(mux *http.ServeMux)](https://github.com/ray-project/kuberay/blob/f1067378bc99987f3eba1e5b12b4cc797465336d/apiserver/cmd/main.go#L149) in [main.go](cmd/main.go))
+
+The swagger ui is available at the following URLs:
+
+* [local service -- http://localhost:8888/swagger-ui/](http://localhost:8888/swagger-ui/)
+* [kind cluster -- http://localhost:31888/swagger-ui/](http://localhost:31888/swagger-ui/)
+
+Please note that for the local service the directory containing the `*.swagger.files` is specified using the `-localSwaggerPath` command line argument. The `make run` command sets the value correctly.
 
 #### Start Local Service
 
@@ -110,7 +157,7 @@ make uninstall
 
 As a convenience for local development the following `make` targets are provided:
 
-* `make cluster` -- creates a local kind cluster, using the configuration from `hack/kind-cluster-config.yaml`. It creates a port mapping allowing for the service running in the kind cluster to be accessed on  `localhost:318888` for HTTP and `localhost:318887` for RPC.
+* `make cluster` -- creates a local kind cluster, using the configuration from `hack/kind-cluster-config.yaml`. It creates a port mapping allowing for the service running in the kind cluster to be accessed on  `localhost:31888` for HTTP and `localhost:31887` for RPC.
 * `make clean-cluster` -- deletes the local kind cluster created with `make cluster`
 * `load-image` -- loads the docker image defined by the `IMG` make variable into the kind cluster. The default value for variable is: `kuberay/apiserver:latest`. The name of the image can be changed by using `make load-image -e IMG=<your image name and tag>`
 * `operator-image` -- Build the operator image to be loaded in your kind cluster. The tag for the operator image is `kuberay/operator:latest`. This step is optional.
@@ -130,4 +177,4 @@ make docker-image operator-image cluster load-image load-operator-image deploy d
 
 #### Access API Server in the Cluster
 
-Access the service at `localhost:318888` for http and `locahost:318887` for the RPC port.
+Access the service at `localhost:31888` for http and `locahost:31887` for the RPC port.

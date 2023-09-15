@@ -24,7 +24,13 @@ func (s *RayService) Get() *rayalphaapi.RayService {
 	return s.RayService
 }
 
-func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) *RayService {
+func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*RayService, error) {
+	// Build the spec
+	spec, err := buildRayServiceSpec(apiService, computeTemplateMap)
+	if err != nil {
+		return nil, err
+	}
+	// Build Ray service
 	rayService := &rayalphaapi.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiService.Name,
@@ -32,9 +38,9 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 			Labels:      buildRayServiceLabels(apiService),
 			Annotations: buildRayServiceAnnotations(apiService),
 		},
-		Spec: *buildRayServiceSpec(apiService, computeTemplateMap),
+		Spec: *spec,
 	}
-	return &RayService{rayService}
+	return &RayService{rayService}, nil
 }
 
 func buildRayServiceLabels(apiService *api.RayService) map[string]string {
@@ -52,7 +58,7 @@ func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
 	return annotations
 }
 
-func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayServiceSpec {
+func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayalphaapi.RayServiceSpec, error) {
 	serveConfigSpecs := make([]rayalphaapi.ServeConfigSpec, 0)
 	for _, serveConfig := range apiService.ServeDeploymentGraphSpec.ServeConfigs {
 		serveConfigSpec := rayalphaapi.ServeConfigSpec{
@@ -74,7 +80,10 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		}
 		serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
 	}
-	newRayClusterSpec := *buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+	if err != nil {
+		return nil, err
+	}
 	newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports, v1.ContainerPort{
 		Name:          defaultServePortName,
 		ContainerPort: defaultServePort,
@@ -85,8 +94,8 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 			RuntimeEnv:       base64.StdEncoding.EncodeToString([]byte(apiService.ServeDeploymentGraphSpec.RuntimeEnv)),
 			ServeConfigSpecs: serveConfigSpecs,
 		},
-		RayClusterSpec: newRayClusterSpec,
-	}
+		RayClusterSpec: *newRayClusterSpec,
+	}, nil
 }
 
 func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, workerGroupSpecs []rayalphaapi.WorkerGroupSpec) []rayalphaapi.WorkerGroupSpec {
