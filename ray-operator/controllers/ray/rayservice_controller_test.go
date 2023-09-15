@@ -311,13 +311,13 @@ applications:
 					// Each worker Pod should have a container port with the name "dashboard-agent"
 					exist := false
 					for _, port := range pod.Spec.Containers[0].Ports {
-						if port.Name == common.DefaultDashboardAgentName {
+						if port.Name == common.DefaultDashboardAgentListenPortName {
 							exist = true
 							break
 						}
 					}
 					if !exist {
-						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentName))
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentListenPortName))
 					}
 				}
 			}
