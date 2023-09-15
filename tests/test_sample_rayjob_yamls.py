@@ -29,11 +29,13 @@ if __name__ == '__main__':
 
     NAMESPACE = 'default'
     SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
-    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml', 'ray-job.custom-head-svc.yaml']
+    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml']
     if not latest:
         # Test new backwards-incompatible fields.
         # TODO: Move these to "latest" after KubeRay v1.0 is released.
-        YAMLs.extend(['ray_v1alpha1_rayjob.resources.yaml', 'ray-job.runtimeenvyaml.yaml'])
+        # Note: ray-job.custom-head-svc.yaml is included here because the fix it depends on,
+        # https://github.com/ray-project/kuberay/pull/1332, was merged after the latest release 0.6.0.
+        YAMLs.extend(['ray_v1alpha1_rayjob.resources.yaml', 'ray-job.runtimeenvyaml.yaml', 'ray-job.custom-head-svc.yaml'])
 
     sample_yaml_files = []
     for filename in YAMLs:
