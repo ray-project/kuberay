@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -121,25 +122,25 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// Test 1: User provided template with command
 	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstanceWithTemplate)
 	assert.NoError(t, err)
-	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[0].Command[0])
+	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[0].Command = []string{}
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate)
 	assert.NoError(t, err)
-	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[0].Command)
+	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
 	assert.NoError(t, err)
-	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[0].Command)
-	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[0].Image)
+	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
+	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[common.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
 	assert.NoError(t, err)
 	found := false
-	for _, envVar := range submitterTemplate.Spec.Containers[0].Env {
+	for _, envVar := range submitterTemplate.Spec.Containers[common.RayContainerIndex].Env {
 		if envVar.Name == PythonUnbufferedEnvVarName {
 			assert.Equal(t, "1", envVar.Value)
 			found = true
