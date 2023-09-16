@@ -125,7 +125,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
-	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[0].Command = []string{}
+	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[common.RayContainerIndex].Command = []string{}
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate)
 	assert.NoError(t, err)
 	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
