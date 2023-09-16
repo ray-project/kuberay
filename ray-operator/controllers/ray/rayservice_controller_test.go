@@ -258,7 +258,7 @@ applications:
 	fakeRayDashboardClient := prepareFakeRayDashboardClient()
 
 	utils.GetRayDashboardClientFunc = func() utils.RayDashboardClientInterface {
-		return &fakeRayDashboardClient
+		return fakeRayDashboardClient
 	}
 
 	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
@@ -648,8 +648,8 @@ applications:
 	})
 })
 
-func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
-	client := utils.FakeRayDashboardClient{}
+func prepareFakeRayDashboardClient() *utils.FakeRayDashboardClient {
+	client := &utils.FakeRayDashboardClient{}
 
 	client.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 
