@@ -118,10 +118,10 @@ func DefaultHeadPodTemplate(instance rayv1alpha1.RayCluster, headSpec rayv1alpha
 	}
 
 	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
-	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], DefaultMetricsPortName, -1) != -1
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := v1.ContainerPort{
-			Name:          DefaultMetricsPortName,
+			Name:          MetricsPortName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[RayContainerIndex].Ports = append(podTemplate.Spec.Containers[RayContainerIndex].Ports, metricsPort)
@@ -202,10 +202,10 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 	initTemplateAnnotations(instance, &podTemplate)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
-	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], DefaultMetricsPortName, -1) != -1
+	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[RayContainerIndex], MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := v1.ContainerPort{
-			Name:          DefaultMetricsPortName,
+			Name:          MetricsPortName,
 			ContainerPort: int32(DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[RayContainerIndex].Ports = append(podTemplate.Spec.Containers[RayContainerIndex].Ports, metricsPort)
