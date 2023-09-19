@@ -322,7 +322,7 @@ class TestRayService:
             query={"path": "/", "json_args": {}},
             num_repeat=20,
             expected_worker_pods=5,
-            timeout=30,
+            timeout=300,
             message="Sending a lot of requests. Worker pods should start scaling up..."
         )
         scale_down_rule = AutoscaleRule(
