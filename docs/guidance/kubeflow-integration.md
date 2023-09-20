@@ -13,7 +13,7 @@ The [Kubeflow](https://www.kubeflow.org/) project is dedicated to making deploym
     * 16GB RAM
     * 8 CPUs
 
-# Example: Use Kubeflow to provide an interactive development envirzonment
+# Example: Use Kubeflow to provide an interactive development environment
 ![image](../images/architecture.svg)
 
 ## Step 1: Create a Kubernetes cluster with Kind.
