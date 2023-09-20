@@ -17,7 +17,7 @@ spec:
   serveConfigV2: |
     applications:
       - name: app1
-        import_path: autoscaling.blocked:app
+        import_path: autoscaling.blocked_new:app
         route_prefix: /
         runtime_env:
           working_dir: "https://github.com/ray-project/test_dag/archive/23eac0533522579dff9a8a1ecb88931874d987ea.zip"
