@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE = 'default'
 DEFAULT_IMAGE_DICT = {
-    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
+    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.6.3'),
     CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
 }
 
@@ -322,7 +322,7 @@ class TestRayService:
             query={"path": "/", "json_args": {}},
             num_repeat=20,
             expected_worker_pods=5,
-            timeout=300,
+            timeout=30,
             message="Sending a lot of requests. Worker pods should start scaling up..."
         )
         scale_down_rule = AutoscaleRule(
