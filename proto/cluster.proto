@@ -4,6 +4,7 @@ option go_package = "github.com/ray-project/kuberay/proto/go_client";
 package proto;
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -63,22 +64,22 @@ service ClusterService {
 }
 
 message CreateClusterRequest {
-  // The cluster to be created.
-  Cluster cluster = 1;
-  // The namespace of the cluster to be created. 
-  string namespace = 2;
+  // Required. The cluster to be created.
+  Cluster cluster = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the cluster to be created. 
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetClusterRequest {
-  // The name of the cluster to be retrieved.
-  string name = 1;
-  // The namespace of the cluster to be retrieved.
-  string namespace = 2;
+  // Required. The name of the cluster to be retrieved.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the cluster to be retrieved.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListClustersRequest {
-  // The namespace of the clusters to be retrieved.
-  string namespace = 1;
+  // Required. The namespace of the clusters to be retrieved.
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
 
   // A page token to request the next page of results. The token is acquried
   // from the nextPageToken field of the response from the previous
@@ -88,7 +89,7 @@ message ListClustersRequest {
 
 message ListClustersResponse {
   // A list of clusters returned.
-  repeated Cluster clusters = 1;
+  repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // The total number of clusters for the given query.
   // int32 total_size = 2;
@@ -106,7 +107,7 @@ message ListAllClustersRequest {
 
 message ListAllClustersResponse {
   // A list of clusters returned.
-  repeated Cluster clusters = 1;
+  repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // The total number of clusters for the given query.
   // int32 total_size = 2;
@@ -117,9 +118,9 @@ message ListAllClustersResponse {
 
 message DeleteClusterRequest {
   // The name of the cluster to be deleted.
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
   // The namespace of the cluster to be deleted.
-  string namespace = 2;
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message EnvValueFrom {
@@ -145,13 +146,13 @@ message EnvironmentVariables {
 
 message Cluster {
   // Required input field. Unique cluster name provided by user.
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
 
   // Required input field. Cluster's namespace provided by user
-  string namespace = 2;
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 
   // Required field. This field indicates the user who owns the cluster.
-  string user = 3;
+  string user = 3 [(google.api.field_behavior) = REQUIRED];
 
   // Optional input field. Ray cluster version
   string version = 4;
@@ -166,7 +167,8 @@ message Cluster {
   Environment environment = 5;
   
   // Required field. This field indicates ray cluster configuration
-  ClusterSpec cluster_spec = 6;
+  ClusterSpec cluster_spec = 6 [(google.api.field_behavior) = REQUIRED];
+ 
   // Optional. Annotations, for example, "kubernetes.io/ingress.class" to define Ingress class 
   map<string, string> annotations = 7;
 
@@ -174,25 +176,26 @@ message Cluster {
   EnvironmentVariables envs = 8;
 
   // Output. The time that the cluster created.
-  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp created_at = 9 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The time that the cluster deleted.
-  google.protobuf.Timestamp deleted_at = 10;
+  google.protobuf.Timestamp deleted_at = 10 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The status to show the cluster status.state
-  string cluster_state = 11;
+  string cluster_state = 11 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The list related to the cluster.
-  repeated ClusterEvent events = 12;
+  repeated ClusterEvent events = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   
   // Output. The service endpoint of the cluster
-  map<string, string> service_endpoint = 13;
+  map<string, string> service_endpoint = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
+// Cluster specification.
 message ClusterSpec {
-  // The head group configuration
-  HeadGroupSpec head_group_spec = 1;
-  // The worker group configurations
+  // Required. The head group configuration
+  HeadGroupSpec head_group_spec = 1 [(google.api.field_behavior) = REQUIRED];
+  // Optional. The worker group configurations
   repeated WorkerGroupSpec worker_group_spec = 2;
 }
 
@@ -237,9 +240,10 @@ message Volume {
   map<string, string> items = 11; // Items used for configMap and secrets
 }
 
+// Cluster HeadGroup specification
 message HeadGroupSpec {
-  // Optional. The computeTemplate of head node group
-  string compute_template = 1;
+  // Required. The computeTemplate of head node group
+  string compute_template = 1 [(google.api.field_behavior) = REQUIRED];
   // Optional field. This field will be used to retrieve right ray container
   string image = 2;
   // Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node
@@ -247,8 +251,8 @@ message HeadGroupSpec {
   // Optional. Enable Ingress
   // if Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class
   bool enableIngress = 4;
-  // Optional. The ray start params of head node group. 
-  map<string, string> ray_start_params = 5;
+  // Required. The ray start params of head node group. 
+  map<string, string> ray_start_params = 5 [(google.api.field_behavior) = REQUIRED];
   // Optional. The volumes mount to head pod
   repeated Volume volumes = 6;
   // Optional. ServiceAccount used by head pod
@@ -266,19 +270,19 @@ message HeadGroupSpec {
 
 message WorkerGroupSpec {
   // Required. Group name of the current worker group
-  string group_name = 1;
-  // Optional. The computeTemplate of head node group
-  string compute_template = 2;
+  string group_name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The computeTemplate of head node group
+  string compute_template = 2 [(google.api.field_behavior) = REQUIRED];
   // Optional field. This field will be used to retrieve right ray container
   string image = 3;
   // Required. Desired replicas of the worker group 
-  int32 replicas = 4;
-  // Optional. Min replicas of the worker group 
+  int32 replicas = 4 [(google.api.field_behavior) = REQUIRED];
+  // Optional. Min replicas of the worker group, can't be greater than max_replicas. 
   int32 min_replicas = 5;
-  // Optional. Max replicas of the worker group 
-  int32 max_replicas = 6;
-  // Optional. The ray start parames of worker node group
-  map<string, string> ray_start_params = 7;
+  // Required. Max replicas of the worker group (>0)
+  int32 max_replicas = 6 [(google.api.field_behavior) = REQUIRED];
+  // Required. The ray start parameters of worker node group
+  map<string, string> ray_start_params = 7 [(google.api.field_behavior) = REQUIRED];
   // Optional. The volumes mount to worker pods
   repeated Volume volumes = 8;
   // Optional. ServiceAccount used by worker pod
@@ -296,29 +300,29 @@ message WorkerGroupSpec {
 
 message ClusterEvent {
   // Output. Unique Event Id.
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. Human readable name for event.
-  string name = 2;
+  string name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The creation time of the event. 
-  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp created_at = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The last time the event occur.
-  google.protobuf.Timestamp first_timestamp = 4;
+  google.protobuf.Timestamp first_timestamp = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The first time the event occur
-  google.protobuf.Timestamp last_timestamp = 5;
+  google.protobuf.Timestamp last_timestamp = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. The reason for the transition into the object's current status.
-  string reason = 6;
+  string reason = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. A human-readable description of the status of this operation.
-  string message = 7;
+  string message = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Output. Type of this event (Normal, Warning), new types could be added in the future
-  string type = 8;
+  string type = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
   
   // Output. The number of times this event has occurred.
-  int32 count = 9;
+  int32 count = 9 [(google.api.field_behavior) = OUTPUT_ONLY];
 }

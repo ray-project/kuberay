@@ -63,7 +63,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the clusters to be retrieved.",
+            "description": "Required. The namespace of the clusters to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -93,14 +93,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the cluster to be created.",
+            "description": "Required. The namespace of the cluster to be created.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "body",
-            "description": "The cluster to be created.",
+            "description": "Required. The cluster to be created.",
             "in": "body",
             "required": true,
             "schema": {
@@ -134,14 +134,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the cluster to be retrieved.",
+            "description": "Required. The namespace of the cluster to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the cluster to be retrieved.",
+            "description": "Required. The name of the cluster to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -275,15 +275,24 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Required input field. Unique cluster name provided by user."
+          "description": "Required input field. Unique cluster name provided by user.",
+          "required": [
+            "name"
+          ]
         },
         "namespace": {
           "type": "string",
-          "title": "Required input field. Cluster's namespace provided by user"
+          "title": "Required input field. Cluster's namespace provided by user",
+          "required": [
+            "namespace"
+          ]
         },
         "user": {
           "type": "string",
-          "description": "Required field. This field indicates the user who owns the cluster."
+          "description": "Required field. This field indicates the user who owns the cluster.",
+          "required": [
+            "user"
+          ]
         },
         "version": {
           "type": "string",
@@ -310,75 +319,94 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the cluster created."
+          "description": "Output. The time that the cluster created.",
+          "readOnly": true
         },
         "deletedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the cluster deleted."
+          "description": "Output. The time that the cluster deleted.",
+          "readOnly": true
         },
         "clusterState": {
           "type": "string",
-          "title": "Output. The status to show the cluster status.state"
+          "title": "Output. The status to show the cluster status.state",
+          "readOnly": true
         },
         "events": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoClusterEvent"
           },
-          "description": "Output. The list related to the cluster."
+          "description": "Output. The list related to the cluster.",
+          "readOnly": true
         },
         "serviceEndpoint": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Output. The service endpoint of the cluster"
+          "title": "Output. The service endpoint of the cluster",
+          "readOnly": true
         }
-      }
+      },
+      "required": [
+        "name",
+        "namespace",
+        "user"
+      ]
     },
     "protoClusterEvent": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Output. Unique Event Id."
+          "description": "Output. Unique Event Id.",
+          "readOnly": true
         },
         "name": {
           "type": "string",
-          "description": "Output. Human readable name for event."
+          "description": "Output. Human readable name for event.",
+          "readOnly": true
         },
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The creation time of the event."
+          "description": "Output. The creation time of the event.",
+          "readOnly": true
         },
         "firstTimestamp": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The last time the event occur."
+          "description": "Output. The last time the event occur.",
+          "readOnly": true
         },
         "lastTimestamp": {
           "type": "string",
           "format": "date-time",
-          "title": "Output. The first time the event occur"
+          "title": "Output. The first time the event occur",
+          "readOnly": true
         },
         "reason": {
           "type": "string",
-          "description": "Output. The reason for the transition into the object's current status."
+          "description": "Output. The reason for the transition into the object's current status.",
+          "readOnly": true
         },
         "message": {
           "type": "string",
-          "description": "Output. A human-readable description of the status of this operation."
+          "description": "Output. A human-readable description of the status of this operation.",
+          "readOnly": true
         },
         "type": {
           "type": "string",
-          "title": "Output. Type of this event (Normal, Warning), new types could be added in the future"
+          "title": "Output. Type of this event (Normal, Warning), new types could be added in the future",
+          "readOnly": true
         },
         "count": {
           "type": "integer",
           "format": "int32",
-          "description": "Output. The number of times this event has occurred."
+          "description": "Output. The number of times this event has occurred.",
+          "readOnly": true
         }
       }
     },
@@ -387,16 +415,17 @@
       "properties": {
         "headGroupSpec": {
           "$ref": "#/definitions/protoHeadGroupSpec",
-          "title": "The head group configuration"
+          "title": "Required. The head group configuration"
         },
         "workerGroupSpec": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoWorkerGroupSpec"
           },
-          "title": "The worker group configurations"
+          "title": "Optional. The worker group configurations"
         }
-      }
+      },
+      "description": "Cluster specification."
     },
     "protoEnvValueFrom": {
       "type": "object",
@@ -437,7 +466,10 @@
       "properties": {
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -456,7 +488,10 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Optional. The ray start params of head node group."
+          "description": "Required. The ray start params of head node group.",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -491,7 +526,12 @@
           },
           "title": "Optional. Labels for the head pod"
         }
-      }
+      },
+      "title": "Cluster HeadGroup specification",
+      "required": [
+        "computeTemplate",
+        "rayStartParams"
+      ]
     },
     "protoListAllClustersResponse": {
       "type": "object",
@@ -501,7 +541,8 @@
           "items": {
             "$ref": "#/definitions/protoCluster"
           },
-          "description": "A list of clusters returned."
+          "description": "A list of clusters returned.",
+          "readOnly": true
         }
       }
     },
@@ -513,7 +554,8 @@
           "items": {
             "$ref": "#/definitions/protoCluster"
           },
-          "description": "A list of clusters returned."
+          "description": "A list of clusters returned.",
+          "readOnly": true
         }
       }
     },
@@ -564,11 +606,17 @@
       "properties": {
         "groupName": {
           "type": "string",
-          "title": "Required. Group name of the current worker group"
+          "title": "Required. Group name of the current worker group",
+          "required": [
+            "group_name"
+          ]
         },
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -577,24 +625,33 @@
         "replicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Required. Desired replicas of the worker group"
+          "title": "Required. Desired replicas of the worker group",
+          "required": [
+            "replicas"
+          ]
         },
         "minReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Min replicas of the worker group"
+          "description": "Optional. Min replicas of the worker group, can't be greater than max_replicas."
         },
         "maxReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Max replicas of the worker group"
+          "title": "Required. Max replicas of the worker group (\u003e0)",
+          "required": [
+            "max_replicas"
+          ]
         },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start parames of worker node group"
+          "title": "Required. The ray start parameters of worker node group",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -629,7 +686,14 @@
           },
           "title": "Optional. Labels for the worker pod"
         }
-      }
+      },
+      "required": [
+        "groupName",
+        "computeTemplate",
+        "replicas",
+        "maxReplicas",
+        "rayStartParams"
+      ]
     },
     "protobufAny": {
       "type": "object",

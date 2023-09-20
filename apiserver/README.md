@@ -1014,7 +1014,7 @@ Examples:
   
   ```sh
   curl --silent -X 'POST' \
-      'http://localhost:31888/apis/v1alpha2/jobs?namespace=ray-system' \
+      'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/jobs' \
       -H 'accept: application/json' \
       -H 'Content-Type: application/json' \
       -d '{

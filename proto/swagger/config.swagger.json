@@ -47,7 +47,7 @@
     },
     "/apis/v1alpha2/image_templates": {
       "post": {
-        "summary": "Creates a new ImageTemplate.",
+        "summary": "Not implemented. Creates a new ImageTemplate.",
         "operationId": "ImageTemplateService_CreateImageTemplate",
         "responses": {
           "200": {
@@ -107,7 +107,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute templates to be retrieved.",
+            "description": "Required. The namespace of the compute templates to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -137,7 +137,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be created",
+            "description": "Required. The namespace of the compute template to be created",
             "in": "path",
             "required": true,
             "type": "string"
@@ -178,14 +178,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be retrieved.",
+            "description": "Required. The namespace of the compute template to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the ComputeTemplate to be retrieved.",
+            "description": "Required. The name of the ComputeTemplate to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -215,14 +215,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the compute template to be deleted.",
+            "description": "Required. The namespace of the compute template to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the compute template to be deleted.",
+            "description": "Required. The name of the compute template to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -235,7 +235,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/image_templates": {
       "get": {
-        "summary": "Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
+        "summary": "Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
         "operationId": "ImageTemplateService_ListImageTemplates",
         "responses": {
           "200": {
@@ -267,7 +267,7 @@
     },
     "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}": {
       "get": {
-        "summary": "Finds a specific ImageTemplate by ID.",
+        "summary": "Not implemented. Finds a specific ImageTemplate by ID.",
         "operationId": "ImageTemplateService_GetImageTemplate",
         "responses": {
           "200": {
@@ -304,7 +304,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes an ImageTemplate.",
+        "summary": "Not implemented. Deletes an ImageTemplate.",
         "operationId": "ImageTemplateService_DeleteImageTemplate",
         "responses": {
           "200": {
@@ -366,30 +366,42 @@
       "properties": {
         "name": {
           "type": "string",
-          "title": "The name of the compute template"
+          "title": "Required. The name of the compute template",
+          "required": [
+            "name"
+          ]
         },
         "namespace": {
           "type": "string",
-          "title": "The namespace of the compute template"
+          "title": "Required. The namespace of the compute template",
+          "required": [
+            "namespace"
+          ]
         },
         "cpu": {
           "type": "integer",
           "format": "int64",
-          "title": "Number of cpus"
+          "title": "Required. Number of cpus",
+          "required": [
+            "cpu"
+          ]
         },
         "memory": {
           "type": "integer",
           "format": "int64",
-          "title": "Number of memory"
+          "title": "Required. Number of memory",
+          "required": [
+            "memory"
+          ]
         },
         "gpu": {
           "type": "integer",
           "format": "int64",
-          "title": "Number of gpus"
+          "title": "Optional. Number of gpus"
         },
         "gpuAccelerator": {
           "type": "string",
-          "title": "The detail gpu accelerator type"
+          "title": "Optional. The detail gpu accelerator type"
         },
         "tolerations": {
           "type": "array",
@@ -399,7 +411,13 @@
           "title": "Optional pod tolerations"
         }
       },
-      "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc"
+      "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc",
+      "required": [
+        "name",
+        "namespace",
+        "cpu",
+        "memory"
+      ]
     },
     "protoImageTemplate": {
       "type": "object",
@@ -462,7 +480,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoComputeTemplate"
-          }
+          },
+          "readOnly": true
         }
       }
     },
@@ -473,7 +492,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoComputeTemplate"
-          }
+          },
+          "readOnly": true
         }
       }
     },
