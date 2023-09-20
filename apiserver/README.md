@@ -54,7 +54,7 @@ helm version
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
   # Install KubeRay APIServer v0.6.0.
-  helm install -n ray-system kuberay-apiserver kuberay/kuberay-apiserver --version 0.6.0
+  helm install kuberay-apiserver kuberay/kuberay-apiserver --version 0.6.0
 
   # Check the KubeRay APIServer Pod in `default` namespace
   kubectl get pods
