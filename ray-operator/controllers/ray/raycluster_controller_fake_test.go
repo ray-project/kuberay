@@ -37,9 +37,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
@@ -1947,4 +1949,274 @@ func Test_ShouldDeletePod(t *testing.T) {
 	}
 	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
 	assert.True(t, shouldDelete)
+}
+
+func Test_RedisCleanupFeatureFlag(t *testing.T) {
+	setupTest(t)
+
+	defer os.Unsetenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
+	gcsFTEnabledcluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledcluster.Annotations == nil {
+		gcsFTEnabledcluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledcluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledcluster.Spec.EnableInTreeAutoscaling = nil
+	ctx := context.Background()
+
+	// The KubeRay operator environment variable `ENABLE_GCS_FT_REDIS_CLEANUP` is used to enable/disable
+	// the GCS FT Redis cleanup feature. If the feature flag is not set, the GCS FT Redis cleanup feature
+	// is enabled by default.
+	tests := map[string]struct {
+		enableGCSFTRedisCleanup string
+		expectedNumFinalizers   int
+	}{
+		"Enable GCS FT Redis cleanup": {
+			enableGCSFTRedisCleanup: "true",
+			expectedNumFinalizers:   1,
+		},
+		"Disable GCS FT Redis cleanup": {
+			enableGCSFTRedisCleanup: "false",
+			expectedNumFinalizers:   0,
+		},
+		"Feature flag is not set": {
+			enableGCSFTRedisCleanup: "unset",
+			expectedNumFinalizers:   1,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if tc.enableGCSFTRedisCleanup == "unset" {
+				os.Unsetenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)
+			} else {
+				os.Setenv(common.ENABLE_GCS_FT_REDIS_CLEANUP, tc.enableGCSFTRedisCleanup)
+			}
+
+			cluster := gcsFTEnabledcluster.DeepCopy()
+			runtimeObjects := []runtime.Object{cluster}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+			// Initialize the reconciler
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			rayClusterList := rayv1alpha1.RayClusterList{}
+			err := fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get RayCluster list")
+			assert.Equal(t, 1, len(rayClusterList.Items))
+			assert.Equal(t, 0, len(rayClusterList.Items[0].Finalizers))
+
+			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			if tc.enableGCSFTRedisCleanup == "false" {
+				// No finalizer should be added to the RayCluster. The head service and Ray Pods should be created.
+				// The head service's ClusterIP is empty, so the function `getHeadServiceIP` will return an error
+				// to requeue the request when it tries to update the RayCluster's status.
+				assert.NotNil(t, err)
+				podList := corev1.PodList{}
+				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err)
+				assert.NotEqual(t, 0, len(podList.Items))
+			} else {
+				// Add the GCS FT Redis cleanup finalizer to the RayCluster.
+				assert.Nil(t, err)
+			}
+
+			// Check the RayCluster's finalizer
+			rayClusterList = rayv1alpha1.RayClusterList{}
+			err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get RayCluster list")
+			assert.Equal(t, 1, len(rayClusterList.Items))
+			assert.Equal(t, tc.expectedNumFinalizers, len(rayClusterList.Items[0].Finalizers))
+			if tc.expectedNumFinalizers > 0 {
+				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], common.GCSFaultToleranceRedisCleanupFinalizer))
+
+				// No Pod should be created before adding the GCS FT Redis cleanup finalizer.
+				podList := corev1.PodList{}
+				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err, "Fail to get Pod list")
+				assert.Equal(t, 0, len(podList.Items))
+
+				// Reconcile the RayCluster again. The controller should create Pods.
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+
+				// The head service and Ray Pods should be created. The head service's ClusterIP is empty,
+				// so the function `getHeadServiceIP` will return an error to requeue the request when it
+				// tries to update the RayCluster's status.
+				assert.NotNil(t, err)
+
+				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err, "Fail to get Pod list")
+				assert.NotEqual(t, 0, len(podList.Items))
+			}
+		})
+	}
+}
+
+func Test_RedisCleanup(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
+	gcsFTEnabledcluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledcluster.Annotations == nil {
+		gcsFTEnabledcluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledcluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledcluster.Spec.EnableInTreeAutoscaling = nil
+
+	// Add the Redis cleanup finalizer to the RayCluster and modify the RayCluster's DeleteTimestamp to trigger the Redis cleanup.
+	controllerutil.AddFinalizer(gcsFTEnabledcluster, common.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	gcsFTEnabledcluster.DeletionTimestamp = &now
+
+	// TODO (kevin85421): Create a constant variable in constant.go for the head group name.
+	const headGroupName = "headgroup"
+
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: gcsFTEnabledcluster.Namespace,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
+				common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+				common.RayNodeGroupLabelKey: headGroupName,
+			},
+		},
+	}
+	workerPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workerNode",
+			Namespace: gcsFTEnabledcluster.Namespace,
+			Labels: map[string]string{
+				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
+				common.RayNodeTypeLabelKey:  string(rayv1alpha1.WorkerNode),
+				common.RayNodeGroupLabelKey: gcsFTEnabledcluster.Spec.WorkerGroupSpecs[0].GroupName,
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		hasHeadPod      bool
+		hasWorkerPod    bool
+		expectedNumJobs int
+	}{
+		"Both head and worker Pods are not terminated": {
+			hasHeadPod:      true,
+			hasWorkerPod:    true,
+			expectedNumJobs: 0,
+		},
+		"Only head Pod is terminated": {
+			hasHeadPod:      false,
+			hasWorkerPod:    true,
+			expectedNumJobs: 1,
+		},
+		"Only worker Pod is terminated": {
+			hasHeadPod:      true,
+			hasWorkerPod:    false,
+			expectedNumJobs: 0,
+		},
+		"Both head and worker Pods are terminated": {
+			hasHeadPod:      false,
+			hasWorkerPod:    false,
+			expectedNumJobs: 1,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cluster := gcsFTEnabledcluster.DeepCopy()
+			runtimeObjects := []runtime.Object{cluster}
+			if tc.hasHeadPod {
+				runtimeObjects = append(runtimeObjects, headPod.DeepCopy())
+			}
+			if tc.hasWorkerPod {
+				runtimeObjects = append(runtimeObjects, workerPod.DeepCopy())
+			}
+			ctx := context.Background()
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			if tc.hasHeadPod {
+				headPods := corev1.PodList{}
+				err := fakeClient.List(ctx, &headPods, client.InNamespace(namespaceStr),
+					client.MatchingLabels{
+						common.RayClusterLabelKey:   cluster.Name,
+						common.RayNodeGroupLabelKey: headGroupName,
+						common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+					})
+				assert.Nil(t, err)
+				assert.Equal(t, 1, len(headPods.Items))
+			}
+			if tc.hasWorkerPod {
+				workerPods := corev1.PodList{}
+				err := fakeClient.List(ctx, &workerPods, client.InNamespace(namespaceStr),
+					client.MatchingLabels{
+						common.RayClusterLabelKey:   cluster.Name,
+						common.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
+						common.RayNodeTypeLabelKey:  string(rayv1alpha1.WorkerNode),
+					})
+				assert.Nil(t, err)
+				assert.Equal(t, 1, len(workerPods.Items))
+			}
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			// Check Job
+			jobList := batchv1.JobList{}
+			err := fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get Job list")
+			assert.Equal(t, 0, len(jobList.Items))
+
+			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			assert.Nil(t, err)
+
+			// Check Job
+			jobList = batchv1.JobList{}
+			err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get Job list")
+			assert.Equal(t, tc.expectedNumJobs, len(jobList.Items))
+
+			if tc.expectedNumJobs > 0 {
+				// Check RayCluster's finalizer
+				rayClusterList := rayv1alpha1.RayClusterList{}
+				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err, "Fail to get RayCluster list")
+				assert.Equal(t, 1, len(rayClusterList.Items))
+				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], common.GCSFaultToleranceRedisCleanupFinalizer))
+
+				// Simulate the Job succeeded.
+				job := jobList.Items[0]
+				job.Status.Succeeded = 1
+				err = fakeClient.Update(ctx, &job)
+				assert.Nil(t, err, "Fail to update Job status")
+
+				// Reconcile the RayCluster again. The controller should remove the finalizer and the RayCluster will be deleted.
+				// See https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.11/pkg/client/fake/client.go#L308-L310 for more details.
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				assert.Nil(t, err, "Fail to reconcile RayCluster")
+				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+				assert.Nil(t, err, "Fail to get RayCluster list")
+				assert.Equal(t, 0, len(rayClusterList.Items))
+			}
+		})
+	}
 }

@@ -26,6 +26,9 @@ const (
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 
+	// Finalizers for GCS fault tolerance
+	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+
 	// Pod health state values
 	PodUnhealthy = "Unhealthy"
 
@@ -52,12 +55,12 @@ const (
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
-	DefaultClientPortName               = "client"
-	DefaultRedisPortName                = "redis"
-	DefaultDashboardName                = "dashboard"
-	DefaultMetricsName                  = "metrics"
-	DefaultDashboardAgentListenPortName = "dashboard-agent"
-	DefaultServingPortName              = "serve"
+	ClientPortName               = "client"
+	RedisPortName                = "redis"
+	DashboardPortName            = "dashboard"
+	MetricsPortName              = "metrics"
+	DashboardAgentListenPortName = "dashboard-agent"
+	ServingPortName              = "serve"
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
@@ -97,6 +100,10 @@ const (
 	// is enabled for the RayCluster. This is a feature flag for v0.6.0, and will be
 	// removed if the default behavior is stable enoguh.
 	ENABLE_RANDOM_POD_DELETE = "ENABLE_RANDOM_POD_DELETE"
+
+	// This KubeRay operator environment variable is used to determine if the Redis
+	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
+	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
