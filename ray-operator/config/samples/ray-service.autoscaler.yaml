@@ -20,7 +20,7 @@ spec:
         import_path: autoscaling.blocked:app
         route_prefix: /
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/041ac908e5a04ab50cb23d5939e53bd05a03e1ae.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/23eac0533522579dff9a8a1ecb88931874d987ea.zip"
         deployments:
           - name: Blocked
             autoscaling_config:
@@ -38,7 +38,7 @@ spec:
         import_path: autoscaling.signaling:app
         route_prefix: /signal
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/041ac908e5a04ab50cb23d5939e53bd05a03e1ae.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/23eac0533522579dff9a8a1ecb88931874d987ea.zip"
   rayClusterConfig:
     rayVersion: '2.7.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
