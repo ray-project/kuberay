@@ -22,78 +22,55 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * **KubeRay CLI**: KubeRay CLI provides the ability to manage KubeRay resources through command-line interface.
 
-## KubeRay ecosystem
+## Documentation
 
-* [AWS Application Load Balancer](docs/guidance/ingress.md)
-* [Nginx](docs/guidance/ingress.md)
-* [Prometheus and Grafana](docs/guidance/prometheus-grafana.md)
-* [Volcano](docs/guidance/volcano-integration.md)
-* [MCAD](docs/guidance/kuberay-with-MCAD.md)
-* [Kubeflow](docs/guidance/kubeflow-integration.md)
+From September 2023, most KubeRay documentation will be hosted on [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
+
+## Quick Start
+
+* [RayCluster Quickstart](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/raycluster-quick-start.html)
+* [RayJob Quickstart](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/rayjob-quick-start.html)
+* [RayService Quickstart](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/rayservice-quick-start.html)
+
+## Examples
+
+* [Ray Train XGBoostTrainer on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/ml-example.html#kuberay-ml-example) (CPU-only)
+* [Train PyTorch ResNet model with GPUs on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/gpu-training-example.html#kuberay-gpu-training-example)
+* [Serve a MobileNet image classifier on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/mobilenet-rayservice.html#kuberay-mobilenet-rayservice-example) (CPU-only)
+* [Serve a StableDiffusion text-to-image model on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/stable-diffusion-rayservice.html#kuberay-stable-diffusion-rayservice-example)
+* [Serve a text summarizer on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/text-summarizer-rayservice.html#kuberay-text-summarizer-rayservice-example)
+* [RayJob Batch Inference Example](https://docs.ray.io/en/master/cluster/kubernetes/examples/rayjob-batch-inference-example.html#kuberay-batch-inference-example)
+
+## Kubernetes Ecosystem
+
+* [Ingress: AWS Application Load Balancer, GKE Ingress, Nginx](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#kuberay-ingress)
+* [Using Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
+* [Profiling with py-spy](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/pyspy.html#kuberay-pyspy-integration)
+* [KubeRay integration with Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html#kuberay-volcano)
+* [Kubeflow: an interactive development solution](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html#kuberay-kubeflow-integration)
 
 ## Blogs
 
 * [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023).
 * [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023).
 
-## Documentation
+## Helm Charts
 
-You can view detailed documentation and guides at [https://ray-project.github.io/kuberay/](https://ray-project.github.io/kuberay/).
+KubeRay Helm charts are hosted on the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository.
+Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster.
+To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
 
-We also recommend checking out the official Ray guides for deploying on Kubernetes at [https://docs.ray.io/en/latest/cluster/kubernetes/index.html](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
-
-## Quick Start
-
-* Try this [end-to-end example](helm-chart/ray-cluster/README.md)!
-* Please choose the version you would like to install. The examples below use the latest stable version `v0.6.0`.
-
-| Version  |  Stable |  Suggested Kubernetes Version |
-|----------|:-------:|------------------------------:|
-|  master  |    N    | v1.19 - v1.25 |
-|  v0.6.0  |    Y    | v1.19 - v1.25 |
-
-### Use YAML
-
-Make sure your Kubernetes and Kubectl versions are both within the suggested range.
-Once you have connected to a Kubernetes cluster, run the following commands to deploy the KubeRay Operator.
 
 ```sh
-# case 1: kubectl >= v1.22.0
-export KUBERAY_VERSION=v0.6.0
-kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
-
-# case 2: kubectl < v1.22.0
-# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.6`.
-kubectl create -k ray-operator/config/default
-```
-
-To deploy both the KubeRay Operator and the optional KubeRay API Server run the following commands.
-
-```sh
-# case 1: kubectl >= v1.22.0
-export KUBERAY_VERSION=v0.6.0
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=${KUBERAY_VERSION}&timeout=90s"
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=${KUBERAY_VERSION}&timeout=90s"
-
-# case 2: kubectl < v1.22.0
-# Clone KubeRay repository and checkout to the desired branch e.g. `release-0.4`.
-kubectl create -k manifests/cluster-scope-resources
-kubectl apply -k manifests/base
-```
-
-> Observe that we must use `kubectl create` to install cluster-scoped resources. The corresponding `kubectl apply` command will not work. See [KubeRay issue #271](https://github.com/ray-project/kuberay/issues/271).
-
-### Use Helm (Helm v3+)
-
-A Helm chart is a collection of files that describe a related set of Kubernetes resources.
-It can help users to deploy the KubeRay Operator and Ray clusters conveniently.
-Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster. To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
-
-```sh
+# Add the Helm repo
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+helm repo update
+
+# Confirm the repo exists
+helm search repo kuberay --devel
 
 # Install both CRDs and KubeRay operator v0.6.0.
-helm install kuberay-operator kuberay/kuberay-operator --version 0.6.0
+helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.0
 
 # Check the KubeRay operator Pod in `default` namespace
 kubectl get pods
@@ -105,10 +82,13 @@ kubectl get pods
 
 Please read our [CONTRIBUTING](CONTRIBUTING.md) guide before making a pull request. Refer to our [DEVELOPMENT](./ray-operator/DEVELOPMENT.md) to build and run tests locally.
 
-### Getting involved
-Kuberay has an active community of developers. Here’s how to get involved with the Kuberay community:
+## Getting Involved
 
-Join our community: Join [Ray community slack](https://forms.gle/9TSdDYUgxYs8SA9e8) (search for Kuberay channel) or use our [discussion board](https://discuss.ray.io/c/ray-clusters/ray-kubernetes) to ask questions and get answers.
+Join [Ray's Slack workspace](https://docs.google.com/forms/d/e/1FAIpQLSfAcoiLCHOguOm8e7Jnn-JJdZaCxPGjgVCvFijHB5PLaQLeig/viewform), and search the following public channels:
+
+* `#kuberay-questions` (KubeRay users): This channel aims to help KubeRay users with their questions. The messages will be closely monitored by the Ray/KubeRay maintainers.
+
+* `#kuberay-discuss` (KubeRay contributors): This channel is for contributors to discuss what to do next with KubeRay (e.g. issue, pull request, feature request, design doc, KubeRay ecosystem integration). All KubeRay maintainers & core contributors are in the channel.
 
 ## Security
 
