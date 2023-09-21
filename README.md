@@ -24,7 +24,7 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 ## Documentation
 
-From September 2023, most KubeRay documentation will be hosted on [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
+From September 2023, most KubeRay documentation will be hosted on the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
 
 ## Quick Start
 
