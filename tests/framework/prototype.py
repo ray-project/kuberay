@@ -108,7 +108,7 @@ def show_cluster_info(cr_namespace):
     operator_namespace = shell_subprocess_check_output('kubectl get pods '
         '-l app.kubernetes.io/component=kuberay-operator -A '
         '-o jsonpath={".items[0].metadata.namespace"}')
-    shell_subprocess_run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
+    shell_subprocess_check_output("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
         f'{operator_namespace.decode("utf-8")} --tail=-1')
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
@@ -266,7 +266,7 @@ class ShutdownJobRule(Rule):
             raise TimeoutError("RayCluster hasn't been deleted in 30 seconds.")
 
         logger.info("RayCluster has been deleted.")
-        
+
 
 
     def trigger_condition(self, custom_resource=None) -> bool:

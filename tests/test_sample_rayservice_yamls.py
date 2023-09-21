@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE = 'default'
 DEFAULT_IMAGE_DICT = {
-    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.6.3'),
+    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
     CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
 }
 
@@ -217,7 +217,7 @@ class TestRayService:
 
         for cr_event in cr_events:
             cr_event.trigger()
-    
+
     def test_in_place_update(self, set_up_cluster):
         # Modify the MangoStand price and Multiplier factor
         updated_cr = deepcopy(self.cr)
@@ -304,7 +304,7 @@ class TestRayService:
     def test_service_autoscaling(self, set_up_cluster):
         """This test uses a special workload that can allow us to
         reliably test autoscaling.
-        
+
         The workload consists of two applications. The first application
         checks on an event in the second application. If the event isn't
         set, the first application will block on requests until the
