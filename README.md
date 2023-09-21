@@ -88,7 +88,7 @@ Join [Ray's Slack workspace](https://docs.google.com/forms/d/e/1FAIpQLSfAcoiLCHO
 
 * `#kuberay-questions` (KubeRay users): This channel aims to help KubeRay users with their questions. The messages will be closely monitored by the Ray/KubeRay maintainers.
 
-* `#kuberay-discuss` (KubeRay contributors): This channel is for contributors to discuss what to do next with KubeRay (e.g. issue, pull request, feature request, design doc, KubeRay ecosystem integration). All KubeRay maintainers & core contributors are in the channel.
+* `#kuberay-discuss` (KubeRay contributors): This channel is for contributors to discuss what to do next with KubeRay (e.g. issues, pull requests, feature requests, design docs, KubeRay ecosystem integrations). All KubeRay maintainers and core contributors are in the channel.
 
 ## Security
 
