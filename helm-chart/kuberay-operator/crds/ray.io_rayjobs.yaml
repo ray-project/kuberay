@@ -6357,13 +6357,13 @@ spec:
                         maxReplicas:
                           default: 2147483647
                           description: MaxReplicas denotes the maximum number of desired
-                            Pods for this worker group and is used by the Auto
+                            Pods for this worker group.
                           format: int32
                           type: integer
                         minReplicas:
                           default: 0
                           description: MinReplicas denotes the minimum number of desired
-                            Pods for this worker group and is used by the Auto
+                            Pods for this worker group.
                           format: int32
                           type: integer
                         rayStartParams:
