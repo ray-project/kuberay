@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
@@ -155,6 +156,9 @@ func (s *RayServiceServer) DeleteRayService(ctx context.Context, request *api.De
 }
 
 func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
+	if request == nil {
+		return util.NewInvalidInputError("A non nill request is expected")
+	}
 	if request.Namespace == "" {
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
@@ -175,23 +179,21 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
 
-	if len(request.Service.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
-		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
+	if request.Service.ServeDeploymentGraphSpec == nil && strings.TrimSpace(request.Service.ServeConfig_V2) == "" {
+		return util.NewInvalidInputError("A serve config v2 or deployment graph specs is required. Please specify either.")
 	}
 
-	for index, spec := range request.Service.ClusterSpec.WorkerGroupSpec {
-		if len(spec.GroupName) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
+	if request.Service.ServeDeploymentGraphSpec != nil && strings.TrimSpace(request.Service.ServeConfig_V2) != "" {
+		return util.NewInvalidInputError("Both serve config v2 or deployment graph specs were specified. Please specify one or the other.")
+	}
+	if strings.TrimSpace(request.Service.ServeConfig_V2) == "" {
+		if err := ValidateServeDeploymentGraphSpec(request.Service.ServeDeploymentGraphSpec); err != nil {
+			return err
 		}
-		if len(spec.ComputeTemplate) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d compute template is empty. Please specify a valid value.", index)
-		}
-		if spec.MaxReplicas == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MaxReplicas can not be 0. Please specify a valid value.", index)
-		}
-		if spec.MinReplicas > spec.MaxReplicas {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
-		}
+	}
+
+	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
+		return err
 	}
 
 	return nil
@@ -220,60 +222,56 @@ func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 	if request.Service.User == "" {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
-
-	if len(request.Service.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
-		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
+	if request.Service.ServeDeploymentGraphSpec == nil && strings.TrimSpace(request.Service.ServeConfig_V2) == "" {
+		return util.NewInvalidInputError("A serve config v2 or deployment graph specs is required. Please specify either.")
 	}
 
-	for index, spec := range request.Service.ClusterSpec.WorkerGroupSpec {
-		if len(spec.GroupName) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
+	if request.Service.ServeDeploymentGraphSpec != nil && strings.TrimSpace(request.Service.ServeConfig_V2) != "" {
+		return util.NewInvalidInputError("Both serve config v2 or deployment graph specs were specified. Please specify one or the other.")
+	}
+	if strings.TrimSpace(request.Service.ServeConfig_V2) == "" {
+		if err := ValidateServeDeploymentGraphSpec(request.Service.ServeDeploymentGraphSpec); err != nil {
+			return err
 		}
-		if len(spec.ComputeTemplate) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d compute template is empty. Please specify a valid value.", index)
-		}
-		if spec.MaxReplicas == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MaxReplicas can not be 0. Please specify a valid value.", index)
-		}
-		if spec.MinReplicas > spec.MaxReplicas {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
-		}
+	}
+
+	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func ValidateUpdateRayServiceConfigsRequest(request *api.UpdateRayServiceConfigsRequest) error {
+	if request == nil {
+		return util.NewInvalidInputError("Update ray service config request can't be nil.")
+	}
 	if request.Name == "" {
-		return util.NewInvalidInputError("ray service name is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("Update ray service config request ray service name is empty. Please specify a valid value.")
 	}
 	if request.Namespace == "" {
-		return util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("Update ray service config request ray service namespace is empty. Please specify a valid value.")
 	}
 	updateServiceBody := request.GetUpdateService()
 	if updateServiceBody == nil || (updateServiceBody.WorkerGroupUpdateSpec == nil && updateServiceBody.ServeDeploymentGraphSpec == nil) {
-		return util.NewInvalidInputError("update spec is empty. Nothing to update.")
+		return util.NewInvalidInputError("Update ray service config request spec is empty. Nothing to update.")
 	}
 	if updateServiceBody.WorkerGroupUpdateSpec != nil {
-		for _, spec := range updateServiceBody.WorkerGroupUpdateSpec {
+		for index, spec := range updateServiceBody.WorkerGroupUpdateSpec {
+			if strings.TrimSpace(spec.GroupName) == "" {
+				return util.NewInvalidInputError("Update ray service config request worker group update spec at index %d is missing a name, Please specify a valid value.", index)
+			}
 			if spec.Replicas <= 0 || spec.MinReplicas <= 0 || spec.MaxReplicas <= 0 {
-				return util.NewInvalidInputError("input invalid, replicas, minReplicas and maxReplicas must be greater than 0.")
+				return util.NewInvalidInputError("Update ray service config request worker group update spec at index %d has invalid values, replicas, minReplicas and maxReplicas must be greater than 0.", index)
 			}
 			if spec.MinReplicas > spec.MaxReplicas {
-				return util.NewInvalidInputError("WorkerNodeSpec %s MinReplica > MaxReplicas. Please specify a valid value.", spec.GroupName)
+				return util.NewInvalidInputError("Update ray service config request worker group update spec with name '%s' has MinReplica > MaxReplicas. Please specify a valid value.", spec.GroupName)
 			}
 		}
 	}
 	if updateServiceBody.ServeDeploymentGraphSpec != nil {
-		for _, spec := range updateServiceBody.ServeDeploymentGraphSpec.ServeConfigs {
-			if spec.Replicas <= 0 {
-				return util.NewInvalidInputError("input invalid, replicas must be greater than 0.")
-			}
-			if spec.ActorOptions != nil {
-				if spec.ActorOptions.CpusPerActor <= 0 && spec.ActorOptions.GpusPerActor <= 0 && spec.ActorOptions.MemoryPerActor <= 0 {
-					return util.NewInvalidInputError("input invalid, cpusPerActor, gpusPerActor and memoryPerActor must be greater than 0.")
-				}
-			}
+		if err := ValidateServeDeploymentGraphSpec(updateServiceBody.ServeDeploymentGraphSpec); err != nil {
+			return err
 		}
 	}
 	return nil

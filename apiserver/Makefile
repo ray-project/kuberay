@@ -7,6 +7,18 @@ REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 IMG_TAG ?=latest
 IMG ?= kuberay/apiserver:$(IMG_TAG)
 
+# Allow for additional test flags (-v, etc)
+GO_TEST_FLAGS ?= 
+# Ray docker images to use for end to end tests based upon the architecture
+# for arm64 environments (Apple silicon included) pull the architecture specific image
+ifeq (arm64,$(shell go env GOARCH))
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310-aarch64
+else 
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310
+endif 
+# Kuberay API Server base URL to use in end to end tests
+E2E_API_SERVER_URL ?=http://localhost:31888
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -56,10 +68,17 @@ imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .	
 
 test: fmt vet fumpt imports lint  ## Run unit tests.
-	go test ./... -race -coverprofile ray-kube-api-server-coverage.out
+	go test ./pkg/... ./cmd/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
 
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	$(GOLANGCI_LINT) run  --timeout=3m	
+
+.PHONY: e2e-test
+e2e-test: ## Run end to end tests using a pre-exiting cluster.
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1
+	
+.PHONY: local-e2e-test
+local-e2e-test: docker-image operator-image cluster load-image load-operator-image deploy-operator deploy load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
 
 ##@ Build
 
@@ -70,10 +89,10 @@ run: fmt vet fumpt imports lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
 
 docker-image: test ## Build image with the api server.
-	${ENGINE} build -t ${IMG} -f Dockerfile ..
+	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
 docker-push: ## Push image with the api server.
-	${ENGINE} push ${IMG}
+	$(ENGINE) push ${IMG}
 
 .PHONY: build-swagger
 build-swagger: go-bindata
@@ -199,5 +218,15 @@ undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified 
 	helm uninstall raycluster --wait
 
 .PHONY: load-operator-image
-load-operator-image: ## Load the operator image to the kind cluster created with create-kind-cluster.
+load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
+ifneq (${OPERATOR_IMAGE_TAG}, latest)
+	$(ENGINE) pull kuberay/operator:$(OPERATOR_IMAGE_TAG)
+endif	
 	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+
+.PHONY: load-ray-test-image
+load-ray-test-image: ## Load the ray test image
+	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
+	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
+	$(ENGINE) pull rayproject/ray:latest
+	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
