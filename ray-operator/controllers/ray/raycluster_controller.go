@@ -643,7 +643,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(worker)
-		r.Log.Info("reconcilePods", "desired workerReplicas", workerReplicas, "worker group", worker.GroupName, "maxReplicas", *worker.MaxReplicas, "minReplicas", *worker.MinReplicas, "replicas", *worker.Replicas)
+		r.Log.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", *worker.MaxReplicas, "minReplicas", *worker.MinReplicas, "replicas", *worker.Replicas)
 
 		workerPods := corev1.PodList{}
 		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}

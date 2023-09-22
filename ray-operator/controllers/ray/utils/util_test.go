@@ -463,3 +463,31 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	_, err = GenerateHeadServiceName(RayJobCRD, rayv1alpha1.RayClusterSpec{}, "rayjob-sample")
 	assert.NotNil(t, err)
 }
+
+func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
+	// Test 1: `WorkerGroupSpec.Replicas` is nil.
+	// `Replicas` is impossible to be nil in a real RayCluster CR as it has a default value assigned in the CRD.
+	minReplicas := int32(1)
+	maxReplicas := int32(5)
+
+	workerGroupSpec := rayv1alpha1.WorkerGroupSpec{
+		MinReplicas: &minReplicas,
+		MaxReplicas: &maxReplicas,
+	}
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+
+	// Test 2: `WorkerGroupSpec.Replicas` is not nil and is within the range.
+	replicas := int32(3)
+	workerGroupSpec.Replicas = &replicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas)
+
+	// Test 3: `WorkerGroupSpec.Replicas` is not nil but is more than maxReplicas.
+	replicas = int32(6)
+	workerGroupSpec.Replicas = &replicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), maxReplicas)
+
+	// Test 4: `WorkerGroupSpec.Replicas` is not nil but is less than minReplicas.
+	replicas = int32(0)
+	workerGroupSpec.Replicas = &replicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+}
