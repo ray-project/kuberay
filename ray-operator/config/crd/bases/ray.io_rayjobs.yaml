@@ -6355,11 +6355,15 @@ spec:
                             them by name
                           type: string
                         maxReplicas:
-                          description: MaxReplicas defaults to maxInt32
+                          default: 2147483647
+                          description: MaxReplicas denotes the maximum number of desired
+                            Pods for this worker group and is used by the Auto
                           format: int32
                           type: integer
                         minReplicas:
-                          description: MinReplicas defaults to 1
+                          default: 0
+                          description: MinReplicas denotes the minimum number of desired
+                            Pods for this worker group and is used by the Auto
                           format: int32
                           type: integer
                         rayStartParams:
@@ -6369,8 +6373,9 @@ spec:
                             command: address, object-store-memory, ...'
                           type: object
                         replicas:
-                          description: Replicas Number of desired pods in this pod
-                            group.
+                          default: 0
+                          description: Replicas is the number of desired Pods for
+                            this worker group.
                           format: int32
                           type: integer
                         scaleStrategy:
@@ -12094,7 +12099,6 @@ spec:
                       - maxReplicas
                       - minReplicas
                       - rayStartParams
-                      - replicas
                       - template
                       type: object
                     type: array
