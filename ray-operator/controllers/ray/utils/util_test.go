@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -490,4 +491,68 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	replicas = int32(0)
 	workerGroupSpec.Replicas = &replicas
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+}
+
+func TestCalculateDesiredReplicas(t *testing.T) {
+	tests := map[string]struct {
+		group1Replicas    *int32
+		group1MinReplicas *int32
+		group1MaxReplicas *int32
+		group2Replicas    *int32
+		group2MinReplicas *int32
+		group2MaxReplicas *int32
+		answer            int32
+	}{
+		"Both groups' Replicas are nil": {
+			group1Replicas:    nil,
+			group1MinReplicas: pointer.Int32Ptr(1),
+			group1MaxReplicas: pointer.Int32Ptr(5),
+			group2Replicas:    nil,
+			group2MinReplicas: pointer.Int32Ptr(2),
+			group2MaxReplicas: pointer.Int32Ptr(5),
+			answer:            3,
+		},
+		"Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.": {
+			group1Replicas:    pointer.Int32Ptr(0),
+			group1MinReplicas: pointer.Int32Ptr(2),
+			group1MaxReplicas: pointer.Int32Ptr(5),
+			group2Replicas:    pointer.Int32Ptr(6),
+			group2MinReplicas: pointer.Int32Ptr(2),
+			group2MaxReplicas: pointer.Int32Ptr(5),
+			answer:            7,
+		},
+		"Group1's Replicas is more than MaxReplicas.": {
+			group1Replicas:    pointer.Int32Ptr(6),
+			group1MinReplicas: pointer.Int32Ptr(2),
+			group1MaxReplicas: pointer.Int32Ptr(5),
+			group2Replicas:    pointer.Int32Ptr(3),
+			group2MinReplicas: pointer.Int32Ptr(2),
+			group2MaxReplicas: pointer.Int32Ptr(5),
+			answer:            8,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cluster := rayv1alpha1.RayCluster{
+				Spec: rayv1alpha1.RayClusterSpec{
+					WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
+						{
+							GroupName:   "group1",
+							Replicas:    tc.group1Replicas,
+							MinReplicas: tc.group1MinReplicas,
+							MaxReplicas: tc.group1MaxReplicas,
+						},
+						{
+							GroupName:   "group2",
+							Replicas:    tc.group2Replicas,
+							MinReplicas: tc.group2MinReplicas,
+							MaxReplicas: tc.group2MaxReplicas,
+						},
+					},
+				},
+			}
+			assert.Equal(t, CalculateDesiredReplicas(&cluster), tc.answer)
+		})
+	}
 }
