@@ -6107,7 +6107,7 @@ spec:
                     replicas:
                       default: 0
                       description: Replicas is the number of desired Pods for this
-                        worker group.
+                        worker group. See https://github.
                       format: int32
                       type: integer
                     scaleStrategy:
