@@ -45,12 +45,14 @@ type HeadGroupSpec struct {
 type WorkerGroupSpec struct {
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`
-	// Replicas Number of desired pods in this pod group. This is a pointer to distinguish between explicit
-	// zero and not specified. Defaults to 1.
-	Replicas *int32 `json:"replicas"`
-	// MinReplicas defaults to 1
+	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
+	// +kubebuilder:default:=0
+	Replicas *int32 `json:"replicas,omitempty"`
+	// MinReplicas denotes the minimum number of desired Pods for this worker group.
+	// +kubebuilder:default:=0
 	MinReplicas *int32 `json:"minReplicas"`
-	// MaxReplicas defaults to maxInt32
+	// MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32.
+	// +kubebuilder:default:=2147483647
 	MaxReplicas *int32 `json:"maxReplicas"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
