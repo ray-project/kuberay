@@ -231,7 +231,7 @@ var JobNewClusteTest = v1alpha1.RayJob{
 		Metadata: map[string]string{
 			"job_submission_id": "123",
 		},
-		RuntimeEnv:              "{pip: [requests==2.26.0, pendulum==2.1.2], env_vars: {counter_name: test_counter}}",
+		RuntimeEnvYAML:          "mytest yaml",
 		TTLSecondsAfterFinished: &secondsValue,
 		RayClusterSpec:          &ClusterSpecTest.Spec,
 	},
@@ -247,7 +247,7 @@ var JobExistingClusteTest = v1alpha1.RayJob{
 	},
 	Spec: v1alpha1.RayJobSpec{
 		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnv:              "{pip: [requests==2.26.0, pendulum==2.1.2], env_vars: {counter_name: test_counter}}",
+		RuntimeEnvYAML:          "mytest yaml",
 		TTLSecondsAfterFinished: &secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
@@ -407,6 +407,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
 	assert.Equal(t, "user", job.User)
+	assert.Greater(t, len(job.RuntimeEnv), 1)
 	assert.Nil(t, job.ClusterSelector)
 	assert.NotNil(t, job.ClusterSpec)
 
@@ -415,6 +416,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
 	assert.Equal(t, "user", job.User)
+	assert.Greater(t, len(job.RuntimeEnv), 1)
 	assert.NotNil(t, job.ClusterSelector)
 	assert.Nil(t, job.ClusterSpec)
 }
