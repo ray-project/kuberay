@@ -6356,8 +6356,8 @@ spec:
                           type: string
                         maxReplicas:
                           default: 2147483647
-                          description: MaxReplicas denotes the maximum number of desired
-                            Pods for this worker group.
+                          description: 'MaxReplicas denotes the maximum number of
+                            desired Pods for this worker group, and the default value '
                           format: int32
                           type: integer
                         minReplicas:
@@ -6375,7 +6375,7 @@ spec:
                         replicas:
                           default: 0
                           description: Replicas is the number of desired Pods for
-                            this worker group.
+                            this worker group. See https://github.
                           format: int32
                           type: integer
                         scaleStrategy:
