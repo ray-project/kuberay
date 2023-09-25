@@ -51,7 +51,7 @@ type WorkerGroupSpec struct {
 	// MinReplicas denotes the minimum number of desired Pods for this worker group.
 	// +kubebuilder:default:=0
 	MinReplicas *int32 `json:"minReplicas"`
-	// MaxReplicas denotes the maximum number of desired Pods for this worker group.
+	// MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32.
 	// +kubebuilder:default:=2147483647
 	MaxReplicas *int32 `json:"maxReplicas"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...

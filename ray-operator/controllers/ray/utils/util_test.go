@@ -491,6 +491,12 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	replicas = int32(0)
 	workerGroupSpec.Replicas = &replicas
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+
+	// Test 5: `WorkerGroupSpec.Replicas` is nil and minReplicas is less than maxReplicas.
+	workerGroupSpec.Replicas = nil
+	workerGroupSpec.MinReplicas = &maxReplicas
+	workerGroupSpec.MaxReplicas = &minReplicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), *workerGroupSpec.MaxReplicas)
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
