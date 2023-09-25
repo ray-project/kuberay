@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"testing"
 
+	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -18,6 +20,7 @@ var (
 	workerReplicas           int32   = 5
 	unhealthySecondThreshold int32   = 900
 	floatNumber              float64 = 1
+	secondsValue             int32   = 100
 )
 
 var headSpecTest = v1alpha1.HeadGroupSpec{
@@ -215,6 +218,43 @@ var ClusterSpecTest = v1alpha1.RayCluster{
 	},
 }
 
+var JobNewClusteTest = v1alpha1.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayJobSpec{
+		Entrypoint: "python /home/ray/samples/sample_code.py",
+		Metadata: map[string]string{
+			"job_submission_id": "123",
+		},
+		RuntimeEnv:              "{pip: [requests==2.26.0, pendulum==2.1.2], env_vars: {counter_name: test_counter}}",
+		TTLSecondsAfterFinished: &secondsValue,
+		RayClusterSpec:          &ClusterSpecTest.Spec,
+	},
+}
+
+var JobExistingClusteTest = v1alpha1.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayJobSpec{
+		Entrypoint:              "python /home/ray/samples/sample_code.py",
+		RuntimeEnv:              "{pip: [requests==2.26.0, pendulum==2.1.2], env_vars: {counter_name: test_counter}}",
+		TTLSecondsAfterFinished: &secondsValue,
+		ClusterSelector: map[string]string{
+			util.RayClusterUserLabelKey: "test",
+		},
+	},
+}
+
 var ServiceV1Test = v1alpha1.RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
@@ -359,6 +399,24 @@ func TestPopulateTemplate(t *testing.T) {
 
 func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
+}
+
+func TestPopulateJob(t *testing.T) {
+	job := FromCrdToApiJob(&JobNewClusteTest)
+	fmt.Printf("jobWithCluster = %#v\n", job)
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.Nil(t, job.ClusterSelector)
+	assert.NotNil(t, job.ClusterSpec)
+
+	job = FromCrdToApiJob(&JobExistingClusteTest)
+	fmt.Printf("jobReferenceCluster = %#v\n", job)
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.NotNil(t, job.ClusterSelector)
+	assert.Nil(t, job.ClusterSpec)
 }
 
 func TestPopulateService(t *testing.T) {

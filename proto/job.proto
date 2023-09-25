@@ -28,7 +28,7 @@ service RayJobService {
   // Creates a new job.
   rpc CreateRayJob(CreateRayJobRequest) returns (RayJob) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/jobs"
+      post: "/apis/v1alpha2/namespaces/{namespace}/jobs"
       body: "job"
     };
   }

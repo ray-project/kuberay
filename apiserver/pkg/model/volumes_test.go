@@ -14,6 +14,7 @@ import (
 var (
 	hostToContainer = v1.MountPropagationHostToContainer
 	bidirectonal    = v1.MountPropagationBidirectional
+	sizelimit       = resource.MustParse("100Gi")
 )
 
 var podTemplateTest = v1.PodTemplateSpec{
@@ -36,6 +37,18 @@ var podTemplateTest = v1.PodTemplateSpec{
 					{
 						Name:      "ephemeral",
 						MountPath: "/tmp/ephemeral",
+					},
+					{
+						Name:      "configMap",
+						MountPath: "/tmp/configmap",
+					},
+					{
+						Name:      "secret",
+						MountPath: "/tmp/secret",
+					},
+					{
+						Name:      "emptyDir",
+						MountPath: "/tmp/emptydir",
 					},
 				},
 			},
@@ -80,6 +93,38 @@ var podTemplateTest = v1.PodTemplateSpec{
 					},
 				},
 			},
+			{
+				Name: "configMap",
+				VolumeSource: v1.VolumeSource{
+					ConfigMap: &v1.ConfigMapVolumeSource{
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: "my-config-map",
+						},
+						Items: []v1.KeyToPath{
+							{
+								Key:  "key",
+								Path: "path",
+							},
+						},
+					},
+				},
+			},
+			{
+				Name: "secret",
+				VolumeSource: v1.VolumeSource{
+					Secret: &v1.SecretVolumeSource{
+						SecretName: "my-secret",
+					},
+				},
+			},
+			{
+				Name: "emptyDir",
+				VolumeSource: v1.VolumeSource{
+					EmptyDir: &v1.EmptyDirVolumeSource{
+						SizeLimit: &sizelimit,
+					},
+				},
+			},
 		},
 	},
 }
@@ -107,6 +152,27 @@ var expectedVolumes = []*api.Volume{
 		VolumeType:           api.Volume_EPHEMERAL,
 		Storage:              "5Gi",
 		AccessMode:           api.Volume_RWO,
+	},
+	{
+		Name:       "configMap",
+		MountPath:  "/tmp/configmap",
+		VolumeType: api.Volume_CONFIGMAP,
+		Source:     "my-config-map",
+		Items: map[string]string{
+			"key": "path",
+		},
+	},
+	{
+		Name:       "secret",
+		MountPath:  "/tmp/secret",
+		VolumeType: api.Volume_SECRET,
+		Source:     "my-secret",
+	},
+	{
+		Name:       "emptyDir",
+		MountPath:  "/tmp/emptydir",
+		VolumeType: api.Volume_EMPTY_DIR,
+		Storage:    "100Gi",
 	},
 }
 
