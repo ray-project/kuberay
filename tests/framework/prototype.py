@@ -491,11 +491,15 @@ class RayJobAddCREvent(CREvent):
         expected_head_pods = get_expected_head_pods(self.custom_resource_object)
         expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
         expected_rayclusters = 1
+        expected_job_pods = 1
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         #   (3) A RayCluster has been created.
-        #   (4) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        #   (4) Exactly one Job pod has been created.
+        #   (5) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        # We check the `expected_job_pods = 1` condition to catch situations described in
+        # https://github.com/ray-project/kuberay/issues/1381
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
@@ -509,9 +513,12 @@ class RayJobAddCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             rayjob = get_custom_object(CONST.RAY_JOB_CRD, self.namespace,
                 self.custom_resource_object['metadata']['name'])
+            jobpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector='job-name='+self.custom_resource_object['metadata']['name'])
 
             if (len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
+                    and len(jobpods.items) == expected_job_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)
                     and rayjob.get('status') is not None
                     and rayjob.get('status').get('jobStatus') == "SUCCEEDED"
@@ -532,6 +539,9 @@ class RayJobAddCREvent(CREvent):
                     if len(workerpods.items) != expected_worker_pods:
                         logger.info("expected_worker_pods: %d, actual_worker_pods: %d",
                             expected_worker_pods, len(workerpods.items))
+                    if len(jobpods.items) != expected_job_pods:
+                        logger.info("expected_job_pods: %d, actual_job_pods: %d",
+                            expected_job_pods, len(jobpods.items))
                     if not check_pod_running(headpods.items):
                         logger.info("head pods are not running yet.")
                     if not check_pod_running(workerpods.items):
