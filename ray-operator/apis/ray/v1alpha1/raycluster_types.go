@@ -45,7 +45,7 @@ type HeadGroupSpec struct {
 type WorkerGroupSpec struct {
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`
-	// Replicas is the number of desired Pods for this worker group.
+	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
 	// +kubebuilder:default:=0
 	Replicas *int32 `json:"replicas,omitempty"`
 	// MinReplicas denotes the minimum number of desired Pods for this worker group.
