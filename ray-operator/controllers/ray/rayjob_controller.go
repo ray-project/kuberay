@@ -184,8 +184,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
-	clientURL := rayJobInstance.Status.DashboardURL
-	if clientURL == "" {
+	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
 		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardPortName); err != nil || clientURL == "" {
 			if clientURL == "" {
@@ -194,11 +194,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusWaitForDashboard, err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
+		// Check the dashboard readiness by checking the err return from rayDashboardClient.GetJobInfo.
+		// Note that rayDashboardClient.GetJobInfo returns no error in the case of http.StatusNotFound.
+		// This check is a workaround for https://github.com/ray-project/kuberay/issues/1381.
+		rayDashboardClient.InitClient(clientURL)
+		if _, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); err != nil {
+			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusWaitForDashboardReady, err)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 		rayJobInstance.Status.DashboardURL = clientURL
+	} else {
+		rayDashboardClient.InitClient(clientURL)
 	}
-
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
 
 	// Check the current status of ray cluster before submitting.
 	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
