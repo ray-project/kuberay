@@ -31,7 +31,7 @@ The code below gives an example of hostPath volume definition:
 	"mountPath": "/tmp/hostPath",   # mounting path
 	"volumeType": 1,                # volume type - host path
 	"hostPathType": 0,              # host path type - directory
-	"hountPropagationMode": 1       # mount propagation - host to container
+	"mountPropagationMode": 1       # mount propagation - host to container
 }
 ````
 
@@ -41,7 +41,7 @@ A Persistent Volume Claim (PVC) is a request for storage by a user. It is simila
 and PVCs consume PV resources. Pods can request specific levels of resources (CPU and Memory). Claims can request 
 specific size and access modes (e.g., they can be mounted `ReadWriteOnce`, `ReadOnlyMany` or `ReadWriteMany`).
 
-The caveat of using PVC volumes is that the same PVC to is mounted to all nodes. As a result only PVCs with access
+The caveat of using PVC volumes is that the same PVC is mounted to all nodes. As a result only PVCs with access
 mode `ReadOnlyMany` can be used in this case.
 
 The code below gives an example of PVC volume definition:
@@ -79,7 +79,7 @@ The code below gives an example of ephemeral volume definition:
 	"name": "ephemeral",            # unique name
 	"mountPath": "/tmp/ephemeral"   # mounting path,
 	"mountPropagationMode": 0,      # mount propagation mode - None
-	"volumeType": 2,                # vlume type - ephemeral
+	"volumeType": 2,                # volume type - ephemeral
 	"storage": "5Gi",               # disk size
 	"storageClass": "default"       # storage class - optional
 	AccessMode: 0                   # access mode RWO - optional
