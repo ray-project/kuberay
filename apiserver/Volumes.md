@@ -82,7 +82,7 @@ The code below gives an example of ephemeral volume definition:
 	"volumeType": 2,                # volume type - ephemeral
 	"storage": "5Gi",               # disk size
 	"storageClass": "default"       # storage class - optional
-	AccessMode: 0                   # access mode RWO - optional
+	"accessMode": 0                 # access mode RWO - optional
 }
 ````
 
@@ -111,7 +111,7 @@ The code below gives an example of config map volume definition:
 ## Secret volumes
 
 A secret volume is used to pass sensitive information, such as passwords, to Pods. You can store secrets in the 
-Kubernetes API and mount them as files for use by pods without coupling to Kubernetes directly. secret volumes are 
+Kubernetes API and mount them as files for use by pods without coupling to Kubernetes directly. Secret volumes are 
 backed by tmpfs (a RAM-backed filesystem) so they are never written to non-volatile storage.
 
 The code below gives an example of secret volume definition:
