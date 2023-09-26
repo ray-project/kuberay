@@ -449,11 +449,11 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	serviceUnhealthySecondThreshold := int32(ServiceUnhealthySecondThreshold) // The threshold is 900 seconds by default.
 	serveAppName := "serve-app-1"
 
-	// Here are the key constants representing Ray Serve's deployment and application statuses.
+	// Here are the key representing Ray Serve deployment and application statuses.
 	const (
-		// Ray Serve's deployment statuses
+		// Ray Serve deployment status
 		DeploymentStatus = "DeploymentStatus"
-		// Ray Serve's application statuses
+		// Ray Serve application status
 		ApplicationStatus = "ApplicationStatus"
 	)
 
