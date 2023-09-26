@@ -113,7 +113,7 @@ message RayJob {
   string entrypoint = 4;
   // Metadata is data to store along with this job.
   map<string, string> metadata = 5;
-  // RuntimeEnv is base64 encoded string which stores runtime configuration
+  // RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec
   string runtime_env = 6;
   // If jobId is not set, a new jobId will be auto-generated.
   string job_id = 7;

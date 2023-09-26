@@ -378,7 +378,7 @@
         },
         "runtimeEnv": {
           "type": "string",
-          "title": "RuntimeEnv is base64 encoded string which stores runtime configuration"
+          "title": "RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
         },
         "jobId": {
           "type": "string",

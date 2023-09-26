@@ -391,7 +391,7 @@ type RayJob struct {
 	Entrypoint string `protobuf:"bytes,4,opt,name=entrypoint,proto3" json:"entrypoint,omitempty"`
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// RuntimeEnv is base64 encoded string which stores runtime configuration
+	// RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec
 	RuntimeEnv string `protobuf:"bytes,6,opt,name=runtime_env,json=runtimeEnv,proto3" json:"runtime_env,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `protobuf:"bytes,7,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
