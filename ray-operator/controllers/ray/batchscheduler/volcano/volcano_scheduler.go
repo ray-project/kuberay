@@ -65,12 +65,12 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1alpha1.R
 	return nil
 }
 
-func (v *VolcanoBatchScheduler) getAppPodGroupName(app *rayv1alpha1.RayCluster) string {
+func getAppPodGroupName(app *rayv1alpha1.RayCluster) string {
 	return fmt.Sprintf("ray-%s-pg", app.Name)
 }
 
 func (v *VolcanoBatchScheduler) syncPodGroup(app *rayv1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
-	podGroupName := v.getAppPodGroupName(app)
+	podGroupName := getAppPodGroupName(app)
 	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(context.TODO(), podGroupName, metav1.GetOptions{}); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -138,7 +138,7 @@ func createPodGroup(
 }
 
 func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1alpha1.RayCluster, pod *corev1.Pod) {
-	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = v.getAppPodGroupName(app)
+	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
 	}
