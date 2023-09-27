@@ -12,6 +12,52 @@ func PopulateVolumes(podTemplate *v1.PodTemplateSpec) []*api.Volume {
 	var volumes []*api.Volume
 	for _, vol := range podTemplate.Spec.Volumes {
 		mount := GetVolumeMount(podTemplate, vol.Name)
+		if vol.VolumeSource.ConfigMap != nil {
+			volume := api.Volume{
+				Name:       vol.Name,
+				MountPath:  mount.MountPath,
+				VolumeType: api.Volume_CONFIGMAP,
+				Source:     vol.ConfigMap.LocalObjectReference.Name,
+			}
+			if len(vol.ConfigMap.Items) > 0 {
+				items := make(map[string]string)
+				for _, element := range vol.ConfigMap.Items {
+					items[element.Key] = element.Path
+				}
+				volume.Items = items
+			}
+			volumes = append(volumes, &volume)
+			continue
+		}
+		if vol.VolumeSource.Secret != nil {
+			volume := api.Volume{
+				Name:       vol.Name,
+				MountPath:  mount.MountPath,
+				VolumeType: api.Volume_SECRET,
+				Source:     vol.Secret.SecretName,
+			}
+			if len(vol.Secret.Items) > 0 {
+				items := make(map[string]string)
+				for _, element := range vol.ConfigMap.Items {
+					items[element.Key] = element.Path
+				}
+				volume.Items = items
+			}
+			volumes = append(volumes, &volume)
+			continue
+		}
+		if vol.VolumeSource.EmptyDir != nil {
+			volume := api.Volume{
+				Name:       vol.Name,
+				MountPath:  mount.MountPath,
+				VolumeType: api.Volume_EMPTY_DIR,
+			}
+			if vol.EmptyDir.SizeLimit != nil {
+				volume.Storage = vol.EmptyDir.SizeLimit.String()
+			}
+			volumes = append(volumes, &volume)
+			continue
+		}
 		if vol.VolumeSource.HostPath != nil {
 			// Host Path
 			volumes = append(volumes, &api.Volume{
