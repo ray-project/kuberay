@@ -187,7 +187,7 @@ message Volume {
   }
   VolumeType volume_type = 2;
   string name = 3;    // volume name
-  string source = 4;  // volume source, for example hostpath sourse, secret or ns name, etc
+  string source = 4;  // volume source, for example hostpath source, secret or configMap name, etc
   bool read_only = 5; // Read only flag
   
   // If indicate hostpath, we need to let user indicate which type 

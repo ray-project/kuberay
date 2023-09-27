@@ -854,7 +854,7 @@ type Volume struct {
 	MountPath            string                      `protobuf:"bytes,1,opt,name=mount_path,json=mountPath,proto3" json:"mount_path,omitempty"`
 	VolumeType           Volume_VolumeType           `protobuf:"varint,2,opt,name=volume_type,json=volumeType,proto3,enum=proto.Volume_VolumeType" json:"volume_type,omitempty"`
 	Name                 string                      `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                          // volume name
-	Source               string                      `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`                      // volume source, for example hostpath sourse, secret or ns name, etc
+	Source               string                      `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`                      // volume source, for example hostpath source, secret or configMap name, etc
 	ReadOnly             bool                        `protobuf:"varint,5,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"` // Read only flag
 	HostPathType         Volume_HostPathType         `protobuf:"varint,6,opt,name=host_path_type,json=hostPathType,proto3,enum=proto.Volume_HostPathType" json:"host_path_type,omitempty"`
 	MountPropagationMode Volume_MountPropagationMode `protobuf:"varint,7,opt,name=mount_propagation_mode,json=mountPropagationMode,proto3,enum=proto.Volume_MountPropagationMode" json:"mount_propagation_mode,omitempty"`
