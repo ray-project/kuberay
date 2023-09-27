@@ -529,6 +529,65 @@ func newHostPathType(pathType string) *v1.HostPathType {
 func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 	var vols []v1.Volume
 	for _, rayVol := range apiVolumes {
+		if rayVol.VolumeType == api.Volume_CONFIGMAP {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					ConfigMap: &v1.ConfigMapVolumeSource{
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: rayVol.Source,
+						},
+					},
+				},
+			}
+			if len(rayVol.Items) > 0 {
+				// Add items
+				items := []v1.KeyToPath{}
+				for key, value := range rayVol.Items {
+					items = append(vol.ConfigMap.Items, v1.KeyToPath{Key: key, Path: value})
+				}
+				vol.ConfigMap.Items = items
+			}
+			vols = append(vols, vol)
+		}
+		if rayVol.VolumeType == api.Volume_SECRET {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					Secret: &v1.SecretVolumeSource{
+						SecretName: rayVol.Source,
+					},
+				},
+			}
+			if len(rayVol.Items) > 0 {
+				// Add items
+				items := []v1.KeyToPath{}
+				for key, value := range rayVol.Items {
+					items = append(vol.ConfigMap.Items, v1.KeyToPath{Key: key, Path: value})
+				}
+				vol.Secret.Items = items
+			}
+			vols = append(vols, vol)
+		}
+		if rayVol.VolumeType == api.Volume_EMPTY_DIR {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					EmptyDir: &v1.EmptyDirVolumeSource{},
+				},
+			}
+			if rayVol.Storage != "" {
+				// Max Storage size is  defined
+				// Ensure that storage size is formatted correctly
+				_, err := resource.ParseQuantity(rayVol.Storage)
+				if err != nil {
+					return nil, errors.New("storage for empty dir volume is not specified correctly")
+				}
+				limit := resource.MustParse(rayVol.Storage)
+				vol.EmptyDir.SizeLimit = &limit
+			}
+			vols = append(vols, vol)
+		}
 		if rayVol.VolumeType == api.Volume_HOST_PATH {
 			vol := v1.Volume{
 				Name: rayVol.Name,

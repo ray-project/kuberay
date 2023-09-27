@@ -181,11 +181,14 @@ message Volume {
     PERSISTENT_VOLUME_CLAIM = 0;
     HOST_PATH = 1;
     EPHEMERAL = 2;    // Ephemeral (https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/#generic-ephemeral-volumes)
+    CONFIGMAP = 3;    // Require map name and items, see https://kubernetes.io/docs/concepts/storage/volumes/#configmap
+    SECRET    = 4;    // Require secret name and optional items, see https://stackoverflow.com/questions/53296057/how-do-i-mount-a-single-file-from-a-secret-in-kubernetes
+    EMPTY_DIR = 5;    // Requires size limit, see https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
   }
   VolumeType volume_type = 2;
-  string name = 3;
-  string source = 4;
-  bool read_only = 5;
+  string name = 3;    // volume name
+  string source = 4;  // volume source, for example hostpath source, secret or configMap name, etc
+  bool read_only = 5; // Read only flag
   
   // If indicate hostpath, we need to let user indicate which type 
   // they would like to use.
@@ -209,7 +212,8 @@ message Volume {
     RWX = 2;    // ReadWriteMany  
   }
   AccessMode accessMode = 9;
-  string storage = 10;          // For ephemeral - required storage, GB
+  string storage = 10;          // For ephemeral - required storage, GB, for empty dir - MB
+  map<string, string> items = 11; // Items used for configMap and secrets
 }
 
 message HeadGroupSpec {

@@ -11,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var sizelimit = resource.MustParse("100Gi")
+
 var testVolume = &api.Volume{
 	Name:       "hdfs",
 	VolumeType: api.Volume_HOST_PATH,
@@ -43,6 +45,30 @@ var testEphemeralVolume = &api.Volume{
 	VolumeType: api.Volume_EPHEMERAL,
 	MountPath:  "/ephimeral/dir",
 	Storage:    "10Gi",
+}
+
+var testConfigMapVolume = &api.Volume{
+	Name:       "configMap",
+	MountPath:  "/tmp/configmap",
+	VolumeType: api.Volume_CONFIGMAP,
+	Source:     "my-config-map",
+	Items: map[string]string{
+		"key": "path",
+	},
+}
+
+var testSecretVolume = &api.Volume{
+	Name:       "secret",
+	MountPath:  "/tmp/secret",
+	VolumeType: api.Volume_SECRET,
+	Source:     "my-secret",
+}
+
+var testEmptyDirVolume = &api.Volume{
+	Name:       "emptyDir",
+	MountPath:  "/tmp/emptydir",
+	VolumeType: api.Volume_EMPTY_DIR,
+	Storage:    "100Gi",
 }
 
 // Spec for testing
@@ -185,6 +211,41 @@ func TestBuildVolumes(t *testing.T) {
 		},
 	}
 
+	targetConfigMapVolume := v1.Volume{
+		Name: "configMap",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "my-config-map",
+				},
+				Items: []v1.KeyToPath{
+					{
+						Key:  "key",
+						Path: "path",
+					},
+				},
+			},
+		},
+	}
+
+	targetSecretVolume := v1.Volume{
+		Name: "secret",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: "my-secret",
+			},
+		},
+	}
+
+	targetEmptyDirVolume := v1.Volume{
+		Name: "emptyDir",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				SizeLimit: &sizelimit,
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -206,6 +267,21 @@ func TestBuildVolumes(t *testing.T) {
 			"ephemeral test",
 			[]*api.Volume{testEphemeralVolume},
 			[]v1.Volume{targetEphemeralVolume},
+		},
+		{
+			"configmap test",
+			[]*api.Volume{testConfigMapVolume},
+			[]v1.Volume{targetConfigMapVolume},
+		},
+		{
+			"secret test",
+			[]*api.Volume{testSecretVolume},
+			[]v1.Volume{targetSecretVolume},
+		},
+		{
+			"empty dir test",
+			[]*api.Volume{testEmptyDirVolume},
+			[]v1.Volume{targetEmptyDirVolume},
 		},
 	}
 	for _, tt := range tests {

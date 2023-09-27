@@ -234,7 +234,10 @@
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
         "HOST_PATH",
-        "EPHEMERAL"
+        "EPHEMERAL",
+        "CONFIGMAP",
+        "SECRET",
+        "EMPTY_DIR"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -508,6 +511,12 @@
         },
         "storage": {
           "type": "string"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

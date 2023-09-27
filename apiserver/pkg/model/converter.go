@@ -300,14 +300,18 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 		User:                     job.Labels[util.RayClusterUserLabelKey],
 		Entrypoint:               job.Spec.Entrypoint,
 		Metadata:                 job.Spec.Metadata,
-		RuntimeEnv:               job.Spec.RuntimeEnv,
+		RuntimeEnv:               job.Spec.RuntimeEnvYAML,
 		JobId:                    job.Status.JobId,
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
-		ClusterSelector:          job.Spec.ClusterSelector,
 		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
 		JobStatus:                string(job.Status.JobStatus),
 		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
 		Message:                  job.Status.Message,
+	}
+
+	// Add optional params
+	if job.Spec.ClusterSelector != nil {
+		pbJob.ClusterSelector = job.Spec.ClusterSelector
 	}
 
 	if job.Spec.RayClusterSpec != nil {
