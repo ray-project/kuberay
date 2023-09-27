@@ -85,7 +85,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	assert.Nil(t, err)
 
 	// check ingress.class annotation
-	actualResult := ingress.Labels[utils.RayClusterLabelKey]
+	actualResult := ingress[0].Labels[RayClusterLabelKey]
 	expectedResult := instanceWithIngressEnabled.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -95,30 +95,30 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	// and `spec.ingressClassName` is a replacement for this annotation. See
 	// kubernetes.io/docs/concepts/services-networking/ingress/#deprecated-annotation
 	// for more details.
-	actualResult = ingress.Annotations[IngressClassAnnotationKey]
+	actualResult = ingress[0].Annotations[IngressClassAnnotationKey]
 	expectedResult = ""
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualResult = *ingress.Spec.IngressClassName
+	actualResult = *ingress[0].Spec.IngressClassName
 	expectedResult = instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey]
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
 	// rules count
-	assert.Equal(t, 1, len(ingress.Spec.Rules))
+	assert.Equal(t, 1, len(ingress[0].Spec.Rules))
 
 	// paths count
 	expectedPaths := 1 // dashboard only
-	actualPaths := len(ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths)
+	actualPaths := len(ingress[0].Spec.Rules[0].IngressRuleValue.HTTP.Paths)
 	if !reflect.DeepEqual(expectedPaths, actualPaths) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedPaths, actualPaths)
 	}
 
 	// path names
-	paths := ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths
+	paths := ingress[0].Spec.Rules[0].IngressRuleValue.HTTP.Paths
 	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instanceWithIngressEnabled.Spec, instanceWithIngressEnabled.Name)
 	assert.Nil(t, err)
 	for _, path := range paths {

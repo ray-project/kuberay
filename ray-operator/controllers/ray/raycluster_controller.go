@@ -438,20 +438,23 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	}
 
 	if headRoutes.Items == nil || len(headRoutes.Items) == 0 {
-		route, err := common.BuildRouteForHeadService(*instance)
+		routes, err := common.BuildRouteForHeadService(*instance)
 		if err != nil {
 			r.Log.Error(err, "Failed building route!", "Route.Error", err)
 			return err
 		}
-
-		if err := ctrl.SetControllerReference(instance, route, r.Scheme); err != nil {
-			return err
+		for _, route := range routes {
+			if err := ctrl.SetControllerReference(instance, route, r.Scheme); err != nil {
+				return err
+			}
 		}
 
-		err = r.createHeadRoute(ctx, route, instance)
-		if err != nil {
-			r.Log.Error(err, "Failed creating route!", "Route.Error", err)
-			return err
+		for _, route := range routes {
+			err = r.createHeadRoute(ctx, route, instance)
+			if err != nil {
+				r.Log.Error(err, "Failed creating route!", "Route.Error", err)
+				return err
+			}
 		}
 	}
 
@@ -471,18 +474,20 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(*instance)
+		ingresses, err := common.BuildIngressForHeadService(*instance)
 		if err != nil {
 			return err
 		}
-
-		if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-			return err
+		for _, ingress := range ingresses {
+			if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
+				return err
+			}
 		}
-
-		err = r.createHeadIngress(ctx, ingress, instance)
-		if err != nil {
-			return err
+		for _, ingress := range ingresses {
+			err = r.createHeadIngress(ctx, ingress, instance)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

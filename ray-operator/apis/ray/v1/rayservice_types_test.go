@@ -147,6 +147,9 @@ var expected = `{
                "object-store-memory":"100000000",
                "port":"6379"
             },
+            "ingressOptions":{
+               
+            },
             "template":{
                "metadata":{
                   "creationTimestamp":null,

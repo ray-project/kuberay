@@ -471,6 +471,37 @@ spec:
                             type: object
                         type: object
                     type: object
+                  ingressOptions:
+                    properties:
+                      ingresses:
+                        items:
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            host:
+                              type: string
+                            ingressClassName:
+                              type: string
+                            ingressName:
+                              type: string
+                            path:
+                              type: string
+                            pathType:
+                              type: string
+                            port:
+                              type: integer
+                            tlsConfig:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - ingressName
+                          - port
+                          type: object
+                        type: array
+                    type: object
                   rayStartParams:
                     additionalProperties:
                       type: string
@@ -7576,6 +7607,37 @@ spec:
                                 type: array
                             type: object
                         type: object
+                    type: object
+                  ingressOptions:
+                    properties:
+                      ingresses:
+                        items:
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            host:
+                              type: string
+                            ingressClassName:
+                              type: string
+                            ingressName:
+                              type: string
+                            path:
+                              type: string
+                            pathType:
+                              type: string
+                            port:
+                              type: integer
+                            tlsConfig:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - ingressName
+                          - port
+                          type: object
+                        type: array
                     type: object
                   rayStartParams:
                     additionalProperties:
