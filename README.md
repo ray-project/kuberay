@@ -24,7 +24,7 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 ## Documentation
 
-From September 2023, all user-facing KubeRay documentation will be hosted on the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html). 
+From September 2023, all user-facing KubeRay documentation will be hosted on the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
 The KubeRay repository only contains documentation related to the development and maintenance of KubeRay.
 
 ## Quick Start
@@ -70,7 +70,7 @@ helm repo update
 # Confirm the repo exists
 helm search repo kuberay --devel
 
-# Install both CRDs and KubeRay operator v0.6.0.
+# Install both CRDs and KubeRay operator v1.0.0.
 helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.0
 
 # Check the KubeRay operator Pod in `default` namespace
