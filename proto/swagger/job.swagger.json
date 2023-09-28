@@ -40,45 +40,6 @@
         "tags": [
           "RayJobService"
         ]
-      },
-      "post": {
-        "summary": "Creates a new job.",
-        "operationId": "RayJobService_CreateRayJob",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "description": "The job to be created.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          {
-            "name": "namespace",
-            "description": "The namespace of the job to be created.",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "RayJobService"
-        ]
       }
     },
     "/apis/v1alpha2/namespaces/{namespace}/jobs": {
@@ -106,6 +67,45 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "RayJobService"
+        ]
+      },
+      "post": {
+        "summary": "Creates a new job.",
+        "operationId": "RayJobService_CreateRayJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the job to be created",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The job to be created.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
           }
         ],
         "tags": [
@@ -191,6 +191,15 @@
     }
   },
   "definitions": {
+    "VolumeAccessMode": {
+      "type": "string",
+      "enum": [
+        "RWO",
+        "ROX",
+        "RWX"
+      ],
+      "default": "RWO"
+    },
     "VolumeHostPathType": {
       "type": "string",
       "enum": [
@@ -213,7 +222,11 @@
       "type": "string",
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
-        "HOST_PATH"
+        "HOST_PATH",
+        "EPHEMERAL",
+        "CONFIGMAP",
+        "SECRET",
+        "EMPTY_DIR"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -266,12 +279,16 @@
           "type": "string",
           "title": "Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node"
         },
+        "enableIngress": {
+          "type": "boolean",
+          "title": "Optional. Enable Ingress\nif Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class"
+        },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start params of head node group"
+          "description": "Optional. The ray start params of head node group."
         },
         "volumes": {
           "type": "array",
@@ -361,7 +378,7 @@
         },
         "runtimeEnv": {
           "type": "string",
-          "title": "RuntimeEnv is base64 encoded string which stores runtime configuration"
+          "title": "RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
         },
         "jobId": {
           "type": "string",
@@ -435,6 +452,22 @@
         },
         "mountPropagationMode": {
           "$ref": "#/definitions/VolumeMountPropagationMode"
+        },
+        "storageClassName": {
+          "type": "string",
+          "title": "If indicate ephemeral, we need to let user specify volumeClaimTemplate"
+        },
+        "accessMode": {
+          "$ref": "#/definitions/VolumeAccessMode"
+        },
+        "storage": {
+          "type": "string"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

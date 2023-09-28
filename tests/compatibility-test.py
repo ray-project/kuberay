@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 import logging
 import unittest
-import time
 import os
 import random
 import string
 
 import kuberay_utils.utils as utils
 from framework.prototype import (
-    CurlServiceRule,
     EasyJobRule,
-    RuleSet,
     show_cluster_info
 )
 
@@ -31,10 +28,10 @@ logging.basicConfig(
 )
 
 # Default Ray version
-ray_version = '2.5.0'
+ray_version = '2.7.0'
 
 # Default docker images
-ray_image = 'rayproject/ray:2.5.0'
+ray_image = 'rayproject/ray:2.7.0'
 kuberay_operator_image = 'kuberay/operator:nightly'
 
 
@@ -46,8 +43,8 @@ class BasicRayTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Create a Kind cluster, a KubeRay operator, and a RayCluster."""
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
@@ -80,8 +77,8 @@ class RayFTTestCase(unittest.TestCase):
     def setUpClass(cls):
         if not utils.is_feature_supported(ray_version, CONST.RAY_FT):
             raise unittest.SkipTest(f"{CONST.RAY_FT} is not supported")
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
@@ -89,26 +86,6 @@ class RayFTTestCase(unittest.TestCase):
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
         utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
-
-    @unittest.skip("Skip test_kill_head due to its flakiness.")
-    def test_kill_head(self):
-        # This test will delete head node and wait for a new replacement to
-        # come up.
-        shell_subprocess_run(
-            'kubectl delete pod $(kubectl get pods -A | grep -e "-head" | awk "{print \$2}")')
-
-        # wait for new head node to start
-        time.sleep(80)
-        shell_subprocess_run('kubectl get pods -A')
-
-        # make sure the new head is ready
-        # shell_assert_success('kubectl wait --for=condition=Ready pod/$(kubectl get pods -A | grep -e "-head" | awk "{print \$2}") --timeout=900s')
-        # make sure both head and worker pods are ready
-        rtn = shell_subprocess_run(
-                'kubectl wait --for=condition=ready pod -l rayCluster=raycluster-compatibility-test --all --timeout=900s', check = False)
-        if rtn != 0:
-            show_cluster_info("default")
-            raise Exception(f"Nonzero return code {rtn} in test_kill_head()")
 
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
@@ -119,6 +96,19 @@ class RayFTTestCase(unittest.TestCase):
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
 
+        # In `test_detached_actor`, we create 1 head Pod and 1 worker Pod. Afterward, we kill the
+        # GCS process of the head Pod to trigger its restart. Next, we terminate the head Pod,
+        # and KubeRay will create a new one in its place. However, Ray may take several seconds to
+        # realize that the old head Pod is gone. Therefore, using `ray list nodes` might show more
+        # than 1 "ALIVE" head nodes in the cluster temporarily. This may lead to an issue where the
+        # Serve controller believes it hasn't been scheduled to the head node, and as a result, it
+        # raises an exception. To avoid this issue, we will add a retry logic in `test_ray_serve_1`
+        # to wait until only 1 head node is alive. `ray list nodes` is for debugging purpose only.
+        pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
+            "ray list nodes",
+            check = False
+        )
+
         # Deploy a Ray Serve model.
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
             "python samples/test_ray_serve_1.py",
@@ -127,9 +117,7 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_ray_serve_1.py. The exit code is {exit_code}.")
 
         old_head_pod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         old_head_pod_name = old_head_pod.metadata.name
@@ -141,7 +129,7 @@ class RayFTTestCase(unittest.TestCase):
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.RESTART_OLD_POD, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the deployed model again
@@ -154,9 +142,7 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
 
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""
@@ -175,21 +161,20 @@ class RayFTTestCase(unittest.TestCase):
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_detached_actor_1.py. The exit code is {exit_code}.")
 
         old_head_pod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         old_head_pod_name = old_head_pod.metadata.name
         restart_count = old_head_pod.status.container_statuses[0].restart_count
 
+        # [Test 1: Kill GCS process to "restart" the head Pod]
         # Kill the gcs_server process on head node. The head node will crash after 20 seconds
         # because the value of `RAY_gcs_rpc_server_reconnect_timeout_s` is "20" in the
         # `ray-cluster.ray-ft.yaml.template` file.
         pod_exec_command(old_head_pod_name, RayFTTestCase.ray_cluster_ns, "pkill gcs_server")
 
         # Waiting for all pods become ready and running.
-        utils.wait_for_new_head(old_head_pod_name, restart_count,
+        utils.wait_for_new_head(CONST.RESTART_OLD_POD, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
         # Try to connect to the detached actor again.
@@ -198,47 +183,76 @@ class RayFTTestCase(unittest.TestCase):
         # connection succeeds.
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
+        expected_output = 3
         exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
-            f" python samples/test_detached_actor_2.py {ray_namespace}",
+            f" python samples/test_detached_actor_2.py {ray_namespace} {expected_output}",
             check = False
         )
 
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
-            raise Exception(
-                f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}."
-            )
+            self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
 
-class RayServiceTestCase(unittest.TestCase):
-    """Integration tests for RayService"""
-    service_template = 'tests/config/ray-service.yaml.template'
+        # [Test 2: Delete the head Pod and wait for a new head Pod]
+        # Delete the head Pod. The `kubectl delete pod` command has a default flag `--wait=true`,
+        # which waits for resources to be gone before returning.
+        shell_subprocess_run(
+            f'kubectl delete pod {headpod_name} -n {RayFTTestCase.ray_cluster_ns}')
+        restart_count = headpod.status.container_statuses[0].restart_count
 
-    # The previous logic for testing updates was problematic.
-    # We need to test RayService updates.
+        # Waiting for all pods become ready and running.
+        utils.wait_for_new_head(CONST.CREATE_NEW_POD, headpod_name, restart_count,
+            RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
+
+        # Try to connect to the detached actor again.
+        headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
+        headpod_name = headpod.metadata.name
+        expected_output = 4
+        exit_code = pod_exec_command(headpod_name, RayFTTestCase.ray_cluster_ns,
+            f" python samples/test_detached_actor_2.py {ray_namespace} {expected_output}",
+            check = False
+        )
+
+        if exit_code != 0:
+            show_cluster_info(RayFTTestCase.ray_cluster_ns)
+            self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
+
+class KubeRayHealthCheckTestCase(unittest.TestCase):
+    """Test KubeRay health check"""
+    cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.sidecar.yaml.template")
+    ray_cluster_ns = "default"
+
     @classmethod
     def setUpClass(cls):
-        if not utils.is_feature_supported(ray_version, CONST.RAY_SERVICE):
-            raise unittest.SkipTest(f"{CONST.RAY_SERVICE} is not supported")
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
-        K8S_CLUSTER_MANAGER.create_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
         image_dict = {
             CONST.RAY_IMAGE_KEY: ray_image,
             CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
         }
         operator_manager = OperatorManager(image_dict)
         operator_manager.prepare_operator()
+        utils.create_ray_cluster(
+            KubeRayHealthCheckTestCase.cluster_template, ray_version, ray_image)
 
-    def test_ray_serve_work(self):
-        """Create a RayService, send a request to RayService via `curl`, and compare the result."""
-        cr_event = utils.create_ray_service(
-            RayServiceTestCase.service_template, ray_version, ray_image)
-        # When Pods are READY and RUNNING, RayService still needs tens of seconds to be ready
-        # for serving requests. This `sleep` function is a workaround, and should be removed
-        # when https://github.com/ray-project/kuberay/pull/730 is merged.
-        time.sleep(60)
-        query = {"path": "/", "json_args": ["MANGO", 2], "expected_output": "6"}
-        cr_event.rulesets = [RuleSet([CurlServiceRule([query])])]
-        cr_event.check_rule_sets()
+    def test_terminated_raycontainer(self):
+        """
+        KubeRay should delete a Pod if its restart policy is "Never" and the Ray container is
+        terminated no matter whether the Pod is in the "Running" state.
+        """
+        old_head_pod = get_head_pod(KubeRayHealthCheckTestCase.ray_cluster_ns)
+        old_head_pod_name = old_head_pod.metadata.name
+        restart_count = old_head_pod.status.container_statuses[0].restart_count
+
+        # After the Ray container is terminated by `pkill ray`, the head Pod will still be in the
+        # "Running" state because there is still a sidecar container running in the Pod. KubeRay
+        # should delete the Pod and create a new one.
+        pod_exec_command(old_head_pod_name, KubeRayHealthCheckTestCase.ray_cluster_ns, "pkill ray")
+
+        # Set the mode to `CONST.CREATE_NEW_POD` to wait for a new head Pod
+        # rather than restarting the old head Pod.
+        utils.wait_for_new_head(CONST.CREATE_NEW_POD, old_head_pod_name, restart_count,
+            RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
 def parse_environment():
     global ray_version, ray_image, kuberay_operator_image

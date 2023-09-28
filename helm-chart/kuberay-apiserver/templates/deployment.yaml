@@ -4,6 +4,9 @@ metadata:
   name: {{ .Values.name }}
   labels:
 {{ include "kuberay-apiserver.labels" . | indent 4 }}
+{{- if .Values.labels }}
+{{- toYaml .Values.labels | nindent 4 }}
+{{- end }}
 spec:
   selector:
     matchLabels:
@@ -15,6 +18,13 @@ spec:
       labels:
         app.kubernetes.io/component: {{ include "kuberay-apiserver.name" . }}
         app.kubernetes.io/name: {{ .Release.Name }}
+        {{- if .Values.labels }}
+        {{- toYaml .Values.labels | nindent 8 }}
+        {{- end }}
+      {{- if .Values.annotations }}
+      annotations:
+        {{- toYaml .Values.annotations | nindent 8 }}
+      {{- end }}
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
@@ -25,6 +35,15 @@ spec:
         {{- toYaml .Values.containerPort | nindent 8 }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+
       {{- if .Values.sidecarContainers }}
       {{- toYaml .Values.sidecarContainers | nindent 6 }}
       {{- end }}

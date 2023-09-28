@@ -108,7 +108,7 @@ def show_cluster_info(cr_namespace):
     operator_namespace = shell_subprocess_check_output('kubectl get pods '
         '-l app.kubernetes.io/component=kuberay-operator -A '
         '-o jsonpath={".items[0].metadata.namespace"}')
-    shell_subprocess_run("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
+    shell_subprocess_check_output("kubectl logs -l app.kubernetes.io/component=kuberay-operator -n "
         f'{operator_namespace.decode("utf-8")} --tail=-1')
 
 # Configuration Test Framework Abstractions: (1) Mutator (2) Rule (3) RuleSet (4) CREvent
@@ -266,7 +266,7 @@ class ShutdownJobRule(Rule):
             raise TimeoutError("RayCluster hasn't been deleted in 30 seconds.")
 
         logger.info("RayCluster has been deleted.")
-        
+
 
 
     def trigger_condition(self, custom_resource=None) -> bool:
@@ -293,7 +293,7 @@ class CurlServiceRule(Rule):
         # If curl pod doesn't exist, create one
         if get_pod("default", "run=curl") is None:
             start_curl_pod("curl", cr_namespace, timeout_s=30)
-        
+
         for query in self.queries:
             cmd = self.CURL_CMD_FMT.format(
                 name=custom_resource["metadata"]["name"],
@@ -338,6 +338,7 @@ class AutoscaleRule(Rule):
             pods = k8s_v1_api.list_namespaced_pod(
                 namespace=cr_namespace, label_selector='ray.io/node-type=worker'
             )
+            logger.info("Number of worker pods: %d", len(pods.items))
             if len(pods.items) == self.expected_worker_pods:
                 logger.info(
                     "Cluster has successfully scaled to the expected number of "
@@ -345,9 +346,9 @@ class AutoscaleRule(Rule):
                     f"{time.time() - start_time} seconds."
                 )
                 break
-            
-            time.sleep(0.1)
+            time.sleep(2)
         else:
+            show_cluster_info(cr_namespace)
             raise TimeoutError(
                 "Cluster did not scale to the expected number of "
                 f"{self.expected_worker_pods} worker pod(s) within {self.timeout} "
@@ -490,11 +491,15 @@ class RayJobAddCREvent(CREvent):
         expected_head_pods = get_expected_head_pods(self.custom_resource_object)
         expected_worker_pods = get_expected_worker_pods(self.custom_resource_object)
         expected_rayclusters = 1
+        expected_job_pods = 1
         # Wait until:
         #   (1) The number of head pods and worker pods are as expected.
         #   (2) All head pods and worker pods are "Running".
         #   (3) A RayCluster has been created.
-        #   (4) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        #   (4) Exactly one Job pod has been created.
+        #   (5) RayJob named "rayjob-sample" has status "SUCCEEDED".
+        # We check the `expected_job_pods = 1` condition to catch situations described in
+        # https://github.com/ray-project/kuberay/issues/1381
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
@@ -508,9 +513,12 @@ class RayJobAddCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             rayjob = get_custom_object(CONST.RAY_JOB_CRD, self.namespace,
                 self.custom_resource_object['metadata']['name'])
+            jobpods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector='job-name='+self.custom_resource_object['metadata']['name'])
 
             if (len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
+                    and len(jobpods.items) == expected_job_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)
                     and rayjob.get('status') is not None
                     and rayjob.get('status').get('jobStatus') == "SUCCEEDED"
@@ -531,6 +539,9 @@ class RayJobAddCREvent(CREvent):
                     if len(workerpods.items) != expected_worker_pods:
                         logger.info("expected_worker_pods: %d, actual_worker_pods: %d",
                             expected_worker_pods, len(workerpods.items))
+                    if len(jobpods.items) != expected_job_pods:
+                        logger.info("expected_job_pods: %d, actual_job_pods: %d",
+                            expected_job_pods, len(jobpods.items))
                     if not check_pod_running(headpods.items):
                         logger.info("head pods are not running yet.")
                     if not check_pod_running(workerpods.items):
@@ -598,11 +609,11 @@ class GeneralTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
 
     def setUp(self):
         if not K8S_CLUSTER_MANAGER.check_cluster_exist():
-            K8S_CLUSTER_MANAGER.create_kind_cluster()
+            K8S_CLUSTER_MANAGER.initialize_cluster()
             self.operator_manager.prepare_operator()
 
     def runtest(self):
@@ -614,4 +625,4 @@ class GeneralTestCase(unittest.TestCase):
             self.cr_event.clean_up()
         except Exception as ex:
             logger.error(str(ex))
-            K8S_CLUSTER_MANAGER.delete_kind_cluster()
+            K8S_CLUSTER_MANAGER.cleanup()

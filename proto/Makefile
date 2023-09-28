@@ -1,8 +1,8 @@
 # Makefile to generate api clients from proto.
 
-IMAGE_NAME=kuberay/proto-generator
-IMAGE_TAG=$(shell git rev-parse HEAD)
-PREBUILT_REMOTE_IMAGE=kuberay/proto-generator:8210e17c28b3b373449f99561f10534e13d35969
+IMAGE_NAME ?= kuberay/proto-generator
+IMAGE_TAG ?= $(shell git rev-parse HEAD)
+PREBUILT_REMOTE_IMAGE ?= ${IMAGE_NAME}:8210e17c28b3b373449f99561f10534e13d35969
 
 OUTPUT_MODE=import
 TMP_OUTPUT=/tmp

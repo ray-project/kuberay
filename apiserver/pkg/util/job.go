@@ -1,8 +1,6 @@
 package util
 
 import (
-	"encoding/base64"
-
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,16 +13,7 @@ type RayJob struct {
 const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
-func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) *RayJob {
-	var clusterSpec *rayalphaapi.RayClusterSpec
-
-	if apiJob.ClusterSpec != nil {
-		clusterSpec = buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
-	}
-
-	// transfer json to runtimeEnv
-	encodedText := base64.StdEncoding.EncodeToString([]byte(apiJob.RuntimeEnv))
-
+func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
 	rayJob := &rayalphaapi.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiJob.Name,
@@ -35,18 +24,22 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		Spec: rayalphaapi.RayJobSpec{
 			Entrypoint:               apiJob.Entrypoint,
 			Metadata:                 apiJob.Metadata,
-			RuntimeEnv:               encodedText,
+			RuntimeEnvYAML:           apiJob.RuntimeEnv,
 			ShutdownAfterJobFinishes: apiJob.ShutdownAfterJobFinishes,
 			TTLSecondsAfterFinished:  &apiJob.TtlSecondsAfterFinished,
 			JobId:                    apiJob.JobId,
-			RayClusterSpec:           clusterSpec,
+			RayClusterSpec:           nil,
 			ClusterSelector:          apiJob.ClusterSelector,
 		},
 	}
-
-	return &RayJob{
-		rayJob,
+	if apiJob.ClusterSpec != nil {
+		clusterSpec, err := buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap)
+		if err != nil {
+			return nil, err
+		}
+		rayJob.Spec.RayClusterSpec = clusterSpec
 	}
+	return &RayJob{rayJob}, nil
 }
 
 func (j *RayJob) Get() *rayalphaapi.RayJob {

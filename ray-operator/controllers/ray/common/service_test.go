@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -28,7 +27,6 @@ var (
 		},
 		Spec: rayv1alpha1.RayServiceSpec{
 			RayClusterSpec: rayv1alpha1.RayClusterSpec{
-				RayVersion: "1.0",
 				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
 				},
@@ -41,7 +39,6 @@ var (
 			Namespace: "default",
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "1.0",
 			HeadServiceAnnotations: map[string]string{
 				headServiceAnnotationKey1: headServiceAnnotationValue1,
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
@@ -182,8 +179,7 @@ func TestGetPortsFromCluster(t *testing.T) {
 		svcNames[port] = name
 	}
 
-	index := utils.FindRayContainerIndex(instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec)
-	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
 
 	for _, cPort := range cPorts {
 		expectedResult := cPort.Name
@@ -201,8 +197,8 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 	ports := getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify any ports.
-	if ports[DefaultMetricsName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsName])
+	if ports[MetricsPortName] != int32(DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[MetricsPortName])
 	}
 
 	// Test case 2: Only a random port is specified by the user.
@@ -214,21 +210,21 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	}
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify the metrics port but specifies other ports.
-	if ports[DefaultMetricsName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[DefaultMetricsName])
+	if ports[MetricsPortName] != int32(DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[MetricsPortName])
 	}
 
 	// Test case 3: A custom metrics port is specified by the user.
 	customMetricsPort := int32(DefaultMetricsPort) + 1
 	metricsPort := corev1.ContainerPort{
-		Name:          DefaultMetricsName,
+		Name:          MetricsPortName,
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports, metricsPort)
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts uses the user's custom metrics port when the user specifies the metrics port.
-	if ports[DefaultMetricsName] != customMetricsPort {
-		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[DefaultMetricsName])
+	if ports[MetricsPortName] != customMetricsPort {
+		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[MetricsPortName])
 	}
 }
 
@@ -242,7 +238,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
 	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", headServiceAnnotationKey1: "user_override"}
 	userPort := corev1.ServicePort{Name: "userPort", Port: 12345}
-	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
+	userPortOverride := corev1.ServicePort{Name: ClientPortName, Port: 98765} // Override default client port (10001)
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
 	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
@@ -344,7 +340,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 		t.Errorf("User annotation not found or incorrect value: key=%s, expected value=%s, actual value=%s", headServiceAnnotationKey2, headServiceAnnotationValue2, headService.ObjectMeta.Annotations[headServiceAnnotationKey2])
 	}
 
-	// Test merged ports. In the case of overlap (DefaultClientPortName) the user port should be ignored.
+	// Test merged ports. In the case of overlap (ClientPortName) the user port should be ignored.
 	// DEBUG: Print out the entire head service to help with debugging.
 	headServiceJSON, err := json.MarshalIndent(headService, "", "  ")
 	if err != nil {
@@ -467,7 +463,7 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
 	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", "userAnnotationKey2": "userAnnotationValue2"}
 	userPort := corev1.ServicePort{Name: "serve", Port: 12345}
-	userPortOverride := corev1.ServicePort{Name: DefaultClientPortName, Port: 98765} // Override default client port (10001)
+	userPortOverride := corev1.ServicePort{Name: ClientPortName, Port: 98765} // Override default client port (10001)
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
 	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
@@ -512,10 +508,10 @@ func TestUserSpecifiedServeService(t *testing.T) {
 
 	// ports should only have DefaultServePort
 	ports := svc.Spec.Ports
-	expectedPortName := DefaultServingPortName
+	expectedPortName := ServingPortName
 	expectedPortNumber := int32(8000)
 	for _, port := range ports {
-		if port.Name != DefaultServingPortName {
+		if port.Name != ServingPortName {
 			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
 		}
 		if port.Port != expectedPortNumber {

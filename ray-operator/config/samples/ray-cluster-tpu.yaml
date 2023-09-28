@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/name: kuberay
     app.kubernetes.io/instance: raycluster-tpu
   name: raycluster-tpu-kuberay
-  
+
 spec:
   headGroupSpec:
     rayStartParams:
@@ -23,7 +23,7 @@ spec:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-head
-            image: rayproject/ray:2.5.0
+            image: rayproject/ray:2.7.0
             imagePullPolicy: IfNotPresent
             ports:
             - containerPort: 6379
@@ -62,13 +62,13 @@ spec:
           cloud.google.com/gke-ray-node-type: head
           app.kubernetes.io/name: kuberay
           app.kubernetes.io/instance: raycluster-tpu
-         
+
 
   workerGroupSpecs:
   - rayStartParams:
         resources: "\"{\\\"google.com/tpu\\\": 4}\""
     replicas: 1
-    minReplicas: 1 
+    minReplicas: 1
     maxReplicas: 1
     groupName: workergroup
     template:
@@ -80,7 +80,7 @@ spec:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-worker
-            image: rayproject/ray:2.5.0
+            image: rayproject/ray:2.7.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:

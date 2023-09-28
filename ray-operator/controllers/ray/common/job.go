@@ -11,6 +11,7 @@ import (
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/yaml"
 )
 
 // GetDecodedRuntimeEnv decodes the runtime environment for the Ray job from a base64-encoded string.
@@ -20,6 +21,33 @@ func GetDecodedRuntimeEnv(runtimeEnv string) (string, error) {
 		return "", fmt.Errorf("failed to decode runtimeEnv: %v: %v", runtimeEnv, err)
 	}
 	return string(decodedBytes), nil
+}
+
+// GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
+func getRuntimeEnvJson(rayJobInstance *rayv1alpha1.RayJob) (string, error) {
+	runtimeEnv := rayJobInstance.Spec.RuntimeEnv
+	runtimeEnvYAML := rayJobInstance.Spec.RuntimeEnvYAML
+
+	// Check if both runtimeEnv and RuntimeEnvYAML are specified.
+	if len(runtimeEnv) > 0 && len(runtimeEnvYAML) > 0 {
+		return "", fmt.Errorf("Both runtimeEnv and RuntimeEnvYAML are specified. Please specify only one of the fields.")
+	}
+
+	if len(runtimeEnv) > 0 {
+		return GetDecodedRuntimeEnv(runtimeEnv)
+	}
+
+	if len(runtimeEnvYAML) > 0 {
+		// Convert YAML to JSON
+		jsonData, err := yaml.YAMLToJSON([]byte(runtimeEnvYAML))
+		if err != nil {
+			return "", err
+		}
+		// We return the JSON as a string
+		return string(jsonData), nil
+	}
+
+	return "", nil
 }
 
 // GetBaseRayJobCommand returns the first part of the Ray Job command up to and including the address, e.g. "ray job submit --address http://..."
@@ -55,19 +83,21 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 // GetK8sJobCommand builds the K8s job command for the Ray job.
 func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 	address := rayJobInstance.Status.DashboardURL
-	runtimeEnv := rayJobInstance.Spec.RuntimeEnv
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
 	entrypoint := rayJobInstance.Spec.Entrypoint
+	entrypointNumCpus := rayJobInstance.Spec.EntrypointNumCpus
+	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
+	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
 	k8sJobCommand := GetBaseRayJobCommand(address)
 
-	if len(runtimeEnv) > 0 {
-		runtimeEnvDecoded, err := GetDecodedRuntimeEnv(runtimeEnv)
-		if err != nil {
-			return nil, err
-		}
-		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", runtimeEnvDecoded)
+	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
+	if err != nil {
+		return nil, err
+	}
+	if len(runtimeEnvJson) > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", runtimeEnvJson)
 	}
 
 	if len(metadata) > 0 {
@@ -80,6 +110,18 @@ func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 
 	if len(jobId) > 0 {
 		k8sJobCommand = append(k8sJobCommand, "--submission-id", jobId)
+	}
+
+	if entrypointNumCpus > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-cpus", fmt.Sprintf("%f", entrypointNumCpus))
+	}
+
+	if entrypointNumGpus > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-gpus", fmt.Sprintf("%f", entrypointNumGpus))
+	}
+
+	if len(entrypointResources) > 0 {
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", entrypointResources)
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.

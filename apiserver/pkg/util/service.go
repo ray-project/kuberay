@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/base64"
+	"errors"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
@@ -24,7 +25,13 @@ func (s *RayService) Get() *rayalphaapi.RayService {
 	return s.RayService
 }
 
-func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) *RayService {
+func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*RayService, error) {
+	// Build the spec
+	spec, err := buildRayServiceSpec(apiService, computeTemplateMap)
+	if err != nil {
+		return nil, err
+	}
+	// Build Ray service
 	rayService := &rayalphaapi.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiService.Name,
@@ -32,9 +39,9 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 			Labels:      buildRayServiceLabels(apiService),
 			Annotations: buildRayServiceAnnotations(apiService),
 		},
-		Spec: *buildRayServiceSpec(apiService, computeTemplateMap),
+		Spec: *spec,
 	}
-	return &RayService{rayService}
+	return &RayService{rayService}, nil
 }
 
 func buildRayServiceLabels(apiService *api.RayService) map[string]string {
@@ -52,41 +59,105 @@ func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
 	return annotations
 }
 
-func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayServiceSpec {
-	serveConfigSpecs := make([]rayalphaapi.ServeConfigSpec, 0)
-	for _, serveConfig := range apiService.ServeDeploymentGraphSpec.ServeConfigs {
-		serveConfigSpec := rayalphaapi.ServeConfigSpec{
-			Name:                 serveConfig.DeploymentName,
-			NumReplicas:          &serveConfig.Replicas,
-			MaxConcurrentQueries: &serveConfig.MaxConcurrentQueries,
-			RoutePrefix:          serveConfig.RoutePrefix,
-			UserConfig:           serveConfig.UserConfig,
-			AutoscalingConfig:    serveConfig.AutoscalingConfig,
-			RayActorOptions: rayalphaapi.RayActorOptionSpec{
-				RuntimeEnv:        serveConfig.ActorOptions.RuntimeEnv,
-				NumCpus:           &serveConfig.ActorOptions.CpusPerActor,
-				NumGpus:           &serveConfig.ActorOptions.GpusPerActor,
-				Memory:            &serveConfig.ActorOptions.MemoryPerActor,
-				ObjectStoreMemory: &serveConfig.ActorOptions.ObjectStoreMemoryPerActor,
-				Resources:         serveConfig.ActorOptions.CustomResource,
-				AcceleratorType:   serveConfig.ActorOptions.AccceleratorType,
-			},
-		}
-		serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
+func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayalphaapi.RayServiceSpec, error) {
+	// Ensure that at least one and only one serve config (V1 or V2) defined
+	if apiService.ServeConfig_V2 == "" && apiService.ServeDeploymentGraphSpec == nil {
+		// Serve configuration is not defined
+		return nil, errors.New("serve configuration is not defined")
 	}
-	newRayClusterSpec := *buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+
+	if apiService.ServeDeploymentGraphSpec != nil && apiService.ServeConfig_V2 != "" {
+		// Serve configuration is not defined
+		return nil, errors.New("two serve configuration are defined, only one is allowed")
+	}
+	// generate Ray cluster spec and buid cluster
+	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+	if err != nil {
+		return nil, err
+	}
 	newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports, v1.ContainerPort{
 		Name:          defaultServePortName,
 		ContainerPort: defaultServePort,
 	})
-	return &rayalphaapi.RayServiceSpec{
-		ServeDeploymentGraphSpec: rayalphaapi.ServeDeploymentGraphSpec{
-			ImportPath:       apiService.ServeDeploymentGraphSpec.ImportPath,
-			RuntimeEnv:       base64.StdEncoding.EncodeToString([]byte(apiService.ServeDeploymentGraphSpec.RuntimeEnv)),
-			ServeConfigSpecs: serveConfigSpecs,
-		},
-		RayClusterSpec: newRayClusterSpec,
+	var serviceUnhealthySecondThreshold *int32
+	if apiService.ServiceUnhealthySecondThreshold > 0 {
+		serviceUnhealthySecondThreshold = &apiService.ServiceUnhealthySecondThreshold
+	} else {
+		serviceUnhealthySecondThreshold = nil
 	}
+	var deploymentUnhealthySecondThreshold *int32
+	if apiService.DeploymentUnhealthySecondThreshold > 0 {
+		deploymentUnhealthySecondThreshold = &apiService.DeploymentUnhealthySecondThreshold
+	} else {
+		deploymentUnhealthySecondThreshold = nil
+	}
+
+	if apiService.ServeDeploymentGraphSpec != nil {
+		// V1 definition
+		serveConfigSpecs := make([]rayalphaapi.ServeConfigSpec, 0)
+		for _, serveConfig := range apiService.ServeDeploymentGraphSpec.ServeConfigs {
+			actorOptions := rayalphaapi.RayActorOptionSpec{}
+			if serveConfig.ActorOptions != nil {
+				if serveConfig.ActorOptions.RuntimeEnv != "" {
+					actorOptions.RuntimeEnv = serveConfig.ActorOptions.RuntimeEnv
+				}
+				if serveConfig.ActorOptions.CpusPerActor > 0 {
+					actorOptions.NumCpus = &serveConfig.ActorOptions.CpusPerActor
+				}
+				if serveConfig.ActorOptions.GpusPerActor > 0 {
+					actorOptions.NumGpus = &serveConfig.ActorOptions.GpusPerActor
+				}
+				if serveConfig.ActorOptions.MemoryPerActor > 0 {
+					actorOptions.Memory = &serveConfig.ActorOptions.MemoryPerActor
+				}
+				if serveConfig.ActorOptions.ObjectStoreMemoryPerActor > 0 {
+					actorOptions.ObjectStoreMemory = &serveConfig.ActorOptions.ObjectStoreMemoryPerActor
+				}
+				if serveConfig.ActorOptions.CustomResource != "" {
+					actorOptions.Resources = serveConfig.ActorOptions.CustomResource
+				}
+				if serveConfig.ActorOptions.AccceleratorType != "" {
+					actorOptions.AcceleratorType = serveConfig.ActorOptions.AccceleratorType
+				}
+			}
+			serveConfigSpec := rayalphaapi.ServeConfigSpec{
+				Name:            serveConfig.DeploymentName,
+				NumReplicas:     &serveConfig.Replicas,
+				RayActorOptions: actorOptions,
+			}
+			if serveConfig.MaxConcurrentQueries > 0 {
+				serveConfigSpec.MaxConcurrentQueries = &serveConfig.MaxConcurrentQueries
+			}
+			if serveConfig.RoutePrefix != "" {
+				serveConfigSpec.RoutePrefix = serveConfig.RoutePrefix
+			}
+			if serveConfig.UserConfig != "" {
+				serveConfigSpec.UserConfig = serveConfig.UserConfig
+			}
+			if serveConfig.AutoscalingConfig != "" {
+				serveConfigSpec.AutoscalingConfig = serveConfig.AutoscalingConfig
+			}
+
+			serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
+		}
+		return &rayalphaapi.RayServiceSpec{
+			ServeDeploymentGraphSpec: rayalphaapi.ServeDeploymentGraphSpec{
+				ImportPath:       apiService.ServeDeploymentGraphSpec.ImportPath,
+				RuntimeEnv:       apiService.ServeDeploymentGraphSpec.RuntimeEnv,
+				ServeConfigSpecs: serveConfigSpecs,
+			},
+			RayClusterSpec:                     *newRayClusterSpec,
+			ServiceUnhealthySecondThreshold:    serviceUnhealthySecondThreshold,
+			DeploymentUnhealthySecondThreshold: deploymentUnhealthySecondThreshold,
+		}, nil
+	}
+	// V2 definition
+	return &rayalphaapi.RayServiceSpec{
+		ServeConfigV2:                      apiService.ServeConfig_V2,
+		RayClusterSpec:                     *newRayClusterSpec,
+		ServiceUnhealthySecondThreshold:    serviceUnhealthySecondThreshold,
+		DeploymentUnhealthySecondThreshold: deploymentUnhealthySecondThreshold,
+	}, nil
 }
 
 func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, workerGroupSpecs []rayalphaapi.WorkerGroupSpec) []rayalphaapi.WorkerGroupSpec {

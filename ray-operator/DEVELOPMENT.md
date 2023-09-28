@@ -18,15 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.17
+### Use go v1.19
 
-Currently, Kuberay does not support go v1.16 ([#568](https://github.com/ray-project/kuberay/issues/568)) or go v1.18 ([#518](https://github.com/ray-project/kuberay/issues/518)).
-Hence, we strongly recommend you to use go v1.17. The following commands can help you switch to go v1.17.6.
+Currently, KubeRay uses go v1.19 for development.
 
 ```bash
-go install golang.org/dl/go1.17.6@latest
-go1.17.6 download
-export GOROOT=$(go1.17.6 env GOROOT)
+go install golang.org/dl/go1.19.12@latest
+go1.19.12 download
+export GOROOT=$(go1.19. env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -206,7 +205,7 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
   # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE python3 tests/compatibility-test.py
   #          These 3 environment variables are optional.
   # [Example]:
-  RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
+  RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
   ```
 ### Running configuration tests locally.
 
@@ -216,9 +215,9 @@ and `tests/test_sample_rayservice_yamls.py`. Currently, only a few of these samp
 
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.5.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 ```
 
 See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.

@@ -5,8 +5,13 @@ import (
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var sizelimit = resource.MustParse("100Gi")
 
 var testVolume = &api.Volume{
 	Name:       "hdfs",
@@ -35,6 +40,37 @@ var testPVCVolume = &api.Volume{
 	ReadOnly:   true,
 }
 
+var testEphemeralVolume = &api.Volume{
+	Name:       "test-ephemeral",
+	VolumeType: api.Volume_EPHEMERAL,
+	MountPath:  "/ephimeral/dir",
+	Storage:    "10Gi",
+}
+
+var testConfigMapVolume = &api.Volume{
+	Name:       "configMap",
+	MountPath:  "/tmp/configmap",
+	VolumeType: api.Volume_CONFIGMAP,
+	Source:     "my-config-map",
+	Items: map[string]string{
+		"key": "path",
+	},
+}
+
+var testSecretVolume = &api.Volume{
+	Name:       "secret",
+	MountPath:  "/tmp/secret",
+	VolumeType: api.Volume_SECRET,
+	Source:     "my-secret",
+}
+
+var testEmptyDirVolume = &api.Volume{
+	Name:       "emptyDir",
+	MountPath:  "/tmp/emptydir",
+	VolumeType: api.Volume_EMPTY_DIR,
+	Storage:    "100Gi",
+}
+
 // Spec for testing
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
@@ -47,6 +83,7 @@ var headGroup = api.HeadGroupSpec{
 	},
 	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
+	EnableIngress:   true,
 	Environment: map[string]string{
 		"foo": "bar",
 	},
@@ -78,6 +115,20 @@ var workerGroup = api.WorkerGroupSpec{
 	},
 	Labels: map[string]string{
 		"foo": "bar",
+	},
+}
+
+var rayCluster = api.Cluster{
+	Name:      "test_cluster",
+	Namespace: "foo",
+	Annotations: map[string]string{
+		"kubernetes.io/ingress.class": "nginx",
+	},
+	ClusterSpec: &api.ClusterSpec{
+		HeadGroupSpec: &headGroup,
+		WorkerGroupSpec: []*api.WorkerGroupSpec{
+			&workerGroup,
+		},
 	},
 }
 
@@ -134,6 +185,67 @@ func TestBuildVolumes(t *testing.T) {
 			},
 		},
 	}
+
+	targetEphemeralVolume := v1.Volume{
+		Name: testEphemeralVolume.Name,
+		VolumeSource: v1.VolumeSource{
+			Ephemeral: &v1.EphemeralVolumeSource{
+				VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app.kubernetes.io/managed-by": "kuberay-apiserver",
+						},
+					},
+					Spec: v1.PersistentVolumeClaimSpec{
+						AccessModes: []v1.PersistentVolumeAccessMode{
+							v1.ReadWriteOnce,
+						},
+						Resources: v1.ResourceRequirements{
+							Requests: v1.ResourceList{
+								v1.ResourceStorage: resource.MustParse(testEphemeralVolume.Storage),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	targetConfigMapVolume := v1.Volume{
+		Name: "configMap",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "my-config-map",
+				},
+				Items: []v1.KeyToPath{
+					{
+						Key:  "key",
+						Path: "path",
+					},
+				},
+			},
+		},
+	}
+
+	targetSecretVolume := v1.Volume{
+		Name: "secret",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: "my-secret",
+			},
+		},
+	}
+
+	targetEmptyDirVolume := v1.Volume{
+		Name: "emptyDir",
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{
+				SizeLimit: &sizelimit,
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
@@ -151,10 +263,31 @@ func TestBuildVolumes(t *testing.T) {
 			[]*api.Volume{testPVCVolume},
 			[]v1.Volume{targetPVCVolume},
 		},
+		{
+			"ephemeral test",
+			[]*api.Volume{testEphemeralVolume},
+			[]v1.Volume{targetEphemeralVolume},
+		},
+		{
+			"configmap test",
+			[]*api.Volume{testConfigMapVolume},
+			[]v1.Volume{targetConfigMapVolume},
+		},
+		{
+			"secret test",
+			[]*api.Volume{testSecretVolume},
+			[]v1.Volume{targetSecretVolume},
+		},
+		{
+			"empty dir test",
+			[]*api.Volume{testEmptyDirVolume},
+			[]v1.Volume{targetEmptyDirVolume},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildVols(tt.apiVolume)
+			got, err := buildVols(tt.apiVolume)
+			assert.Nil(t, err)
 			if !reflect.DeepEqual(got, tt.expect) {
 				t.Errorf("failed for %s ..., got %v, expected %v", tt.name, got, tt.expect)
 			}
@@ -213,7 +346,8 @@ func TestBuildVolumeMounts(t *testing.T) {
 }
 
 func TestBuildHeadPodTemplate(t *testing.T) {
-	podSpec := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	podSpec, err := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")
@@ -239,8 +373,20 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 }
 
+func TestBuildRayCluster(t *testing.T) {
+	cluster, err := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	assert.Nil(t, err)
+	if len(cluster.ObjectMeta.Annotations) != 1 {
+		t.Errorf("failed to propagate annotations")
+	}
+	if !(*cluster.Spec.HeadGroupSpec.EnableIngress) {
+		t.Errorf("failed to propagate create Ingress")
+	}
+}
+
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")

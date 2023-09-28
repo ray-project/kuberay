@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi8/go-toolset:1.17.12-11 as builder
+FROM registry.access.redhat.com/ubi8/go-toolset:1.19.10-10 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests

@@ -24,7 +24,6 @@ var instanceWithIngressEnabled = &rayv1alpha1.RayCluster{
 		},
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "1.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
@@ -49,7 +48,6 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1alpha1.RayCluster{
 		Namespace: "default",
 	},
 	Spec: rayv1alpha1.RayClusterSpec{
-		RayVersion: "1.0",
 		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
@@ -124,9 +122,11 @@ func TestBuildIngressForHeadService(t *testing.T) {
 
 	// path names
 	paths := ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instanceWithIngressEnabled.Spec, instanceWithIngressEnabled.Name)
+	assert.Nil(t, err)
 	for _, path := range paths {
 		actualResult = path.Backend.Service.Name
-		expectedResult = utils.GenerateServiceName(instanceWithIngressEnabled.Name)
+		expectedResult = headSvcName
 
 		if !reflect.DeepEqual(expectedResult, actualResult) {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)

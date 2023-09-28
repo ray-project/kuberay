@@ -7,7 +7,7 @@ on:
         description: 'Commit reference (branch or SHA) from which to build the images.'
         required: true
       tag:
-        description: 'Desired release version tag (e.g. v0.6.0-rc.0).'
+        description: 'Desired release version tag (e.g. v1.0.0-rc.0).'
         required: true
 
 jobs:
@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -76,7 +76,7 @@ jobs:
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
-    - name: Push Operator to Quay.io
+    - name: Push Apiserver to Quay.io
       run: |
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
@@ -90,10 +90,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.19.x
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17'
+        go-version: '1.19'
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2

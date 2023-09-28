@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	cmap "github.com/orcaman/concurrent-map"
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -28,7 +29,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 	// `hash2` in this case.
 	cluster := rayv1alpha1.RayCluster{
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "2.5.0",
+			RayVersion: "2.7.0",
 			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
@@ -60,7 +61,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 func TestCompareRayClusterJsonHash(t *testing.T) {
 	cluster1 := rayv1alpha1.RayCluster{
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion: "2.5.0",
+			RayVersion: "2.7.0",
 		},
 	}
 	cluster2 := cluster1.DeepCopy()
@@ -391,15 +392,18 @@ func TestFetchHeadServiceURL(t *testing.T) {
 			Namespace: namespace,
 		},
 	}
+
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	assert.Nil(t, err, "Fail to generate head service name")
 	headSvc := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.GenerateServiceName(cluster.Name),
+			Name:      headSvcName,
 			Namespace: cluster.ObjectMeta.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: common.DefaultDashboardName,
+					Name: common.DashboardPortName,
 					Port: dashboardPort,
 				},
 			},
@@ -419,7 +423,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
-	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DefaultDashboardName)
+	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DashboardPortName)
 	assert.Nil(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }
@@ -550,11 +554,106 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, isHealthy)
 	assert.False(t, isReady)
+
+	// Test 8: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
+	dashboardClient = &utils.FakeRayDashboardClient{}
+	prevRayServiceStatus = rayv1alpha1.RayServiceStatus{}
+	isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP, &serviceUnhealthySecondThreshold)
+	assert.Nil(t, err)
+	assert.True(t, isHealthy)
+	assert.False(t, isReady)
+}
+
+func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayService reconciler.
+	r := RayServiceReconciler{
+		Client:       fakeClient,
+		Recorder:     &record.FakeRecorder{},
+		Scheme:       scheme.Scheme,
+		Log:          ctrl.Log.WithName("controllers").WithName("RayService"),
+		ServeConfigs: cmap.New(),
+	}
+
+	namespace := "ray"
+	cluster := rayv1alpha1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: namespace,
+		},
+	}
+	rayService := rayv1alpha1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: cluster.ObjectMeta.Namespace,
+		},
+		Spec: rayv1alpha1.RayServiceSpec{
+			ServeConfigV2: `
+applications:
+- name: myapp
+  import_path: fruit.deployment_graph
+  runtime_env:
+  working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+  deployments:
+  - name: MangoStand
+	num_replicas: 1
+	user_config:
+	price: 3
+	ray_actor_options:
+	num_cpus: 0.1`,
+		},
+	}
+
+	// Test 1: The RayCluster is new, and this is the first reconciliation after the RayCluster becomes ready.
+	// No Serve application has been created yet, so the RayService's serve configuration has not been cached in
+	// `r.ServeConfigs`.
+	cacheKey := r.generateConfigKey(&rayService, cluster.Name)
+	_, exist := r.ServeConfigs.Get(cacheKey)
+	assert.False(t, exist)
+	shouldCreate := r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &rayv1alpha1.RayServiceStatus{})
+	assert.True(t, shouldCreate)
+
+	// Test 2: The RayCluster is not new, but the head Pod without GCS FT-enabled crashes and restarts.
+	// Hence, the RayService's Serve application status is empty, but the KubeRay operator has cached the Serve
+	// application's configuration.
+	r.ServeConfigs.Set(cacheKey, rayService.Spec.ServeConfigV2) // Simulate the Serve application's configuration has been cached.
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &rayv1alpha1.RayServiceStatus{})
+	assert.True(t, shouldCreate)
+
+	// Test 3: The Serve application has been created, and the RayService's status has been updated.
+	_, exist = r.ServeConfigs.Get(cacheKey)
+	assert.True(t, exist)
+	serveStatus := rayv1alpha1.RayServiceStatus{
+		Applications: map[string]rayv1alpha1.AppStatus{
+			"myapp": {
+				Status: rayv1alpha1.ApplicationStatusEnum.RUNNING,
+			},
+		},
+	}
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
+	assert.False(t, shouldCreate)
+
+	// Test 4: The Serve application has been created, but the Serve config has been updated.
+	// Therefore, the Serve in-place update should be triggered.
+	rayService.Spec.ServeConfigV2 = `
+applications:
+- name: new_app_name
+  import_path: fruit.deployment_graph`
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
+	assert.True(t, shouldCreate)
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
-	status := generateServeStatus(deploymentStatus, appStatus)
 	fakeDashboardClient := utils.FakeRayDashboardClient{}
+	status := generateServeStatus(deploymentStatus, appStatus)
 	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{appName: &status})
 	return &fakeDashboardClient
 }

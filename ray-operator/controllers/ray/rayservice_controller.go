@@ -629,6 +629,18 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 		return true
 	}
 
+	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
+	if len(serveStatus.Applications) == 0 {
+		r.Log.V(1).Info("shouldUpdate", "should create Serve applications", true,
+			"reason",
+			fmt.Sprintf(
+				"No Serve application found in RayCluster %s, need to create serve applications. "+
+					"A possible reason is the head Pod has crashed and GCS FT is not enabled. "+
+					"Hence, the RayService CR's Serve application status is set to empty in the previous reconcile.",
+				rayClusterInstance.Name))
+		return true
+	}
+
 	// If the Serve config has been cached, check if it needs to be updated.
 	shouldUpdate := false
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
@@ -734,8 +746,8 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 //
 // (1) `isHealthy` is used to determine whether restart the RayCluster or not.
 // (2) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
-// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a
-// 		look at dashboard agent rather than Ray Serve applications.
+// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
+
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1alpha1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, bool, error) {
 	// If the `unhealthySecondThreshold` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
 	// which can be set in a test. This is used for testing purposes.
@@ -847,6 +859,10 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		newApplications[appName] = applicationStatus
 	}
 
+	if len(newApplications) == 0 {
+		r.Log.Info("No Serve application found. The RayCluster is not ready to serve requests. Set 'isReady' to false")
+		isReady = false
+	}
 	rayServiceServeStatus.Applications = newApplications
 	r.Log.V(1).Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
 	return isHealthy, isReady, nil
@@ -1016,7 +1032,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
 		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
@@ -1071,7 +1087,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardAgentListenPortName); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
@@ -1156,8 +1172,8 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	httpProxyClient := utils.GetRayHttpProxyClientFunc()
 	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
-		rayContainer := pod.Spec.Containers[utils.FindRayContainerIndex(pod.Spec)]
-		servingPort := utils.FindContainerPort(&rayContainer, common.DefaultServingPortName, common.DefaultServingPort)
+		rayContainer := pod.Spec.Containers[common.RayContainerIndex]
+		servingPort := utils.FindContainerPort(&rayContainer, common.ServingPortName, common.DefaultServingPort)
 		httpProxyClient.SetHostIp(pod.Status.PodIP, servingPort)
 		if pod.Labels == nil {
 			pod.Labels = make(map[string]string)

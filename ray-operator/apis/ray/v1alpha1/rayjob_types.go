@@ -36,6 +36,7 @@ const (
 	JobDeploymentStatusInitializing                  JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusFailedToGetOrCreateRayCluster JobDeploymentStatus = "FailedToGetOrCreateRayCluster"
 	JobDeploymentStatusWaitForDashboard              JobDeploymentStatus = "WaitForDashboard"
+	JobDeploymentStatusWaitForDashboardReady         JobDeploymentStatus = "WaitForDashboardReady"
 	JobDeploymentStatusWaitForK8sJob                 JobDeploymentStatus = "WaitForK8sJob"
 	JobDeploymentStatusFailedJobDeploy               JobDeploymentStatus = "FailedJobDeploy"
 	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
@@ -52,7 +53,11 @@ type RayJobSpec struct {
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// RuntimeEnv is base64 encoded.
+	// This field is deprecated, please use RuntimeEnvYAML instead.
 	RuntimeEnv string `json:"runtimeEnv,omitempty"`
+	// RuntimeEnvYAML represents the runtime environment configuration
+	// provided as a multi-line YAML string.
+	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
@@ -72,6 +77,13 @@ type RayJobSpec struct {
 	Suspend bool `json:"suspend,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
 	SubmitterPodTemplate *v1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
+	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
+	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources string `json:"entrypointResources,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
@@ -97,9 +109,9 @@ type RayJobStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
 	metav1.TypeMeta   `json:",inline"`

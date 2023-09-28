@@ -1,5 +1,5 @@
-# ray-service.custom-head-service.yaml: This sample YAML file demonstrates how to set up a custom head service 
-# for a Ray cluster using the field spec.headGroupSpec.headService. 
+# ray-service.custom-head-service.yaml: This sample YAML file demonstrates how to set up a custom head service
+# for a Ray cluster using the field spec.headGroupSpec.headService.
 # For examples with more realistic resource configuration, see
 # ray-cluster.complete.large.yaml and
 # ray-cluster.autoscaler.large.yaml.
@@ -11,7 +11,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-custom-head-service.yaml
 spec:
-  rayVersion: '2.5.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.7.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
@@ -36,7 +36,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.5.0
+          image: rayproject/ray:2.7.0
           resources:
             limits:
               cpu: 1

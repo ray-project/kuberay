@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -21,7 +22,13 @@ type RayCluster struct {
 
 // NewRayCluster creates a RayCluster.
 // func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
-func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) *RayCluster {
+func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) (*RayCluster, error) {
+	// Build cluster spec
+	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap)
+	if err != nil {
+		return nil, err
+	}
+	// Build cluster
 	rayCluster := &rayalphaapi.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
@@ -29,10 +36,10 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 			Labels:      buildRayClusterLabels(apiCluster),
 			Annotations: buildRayClusterAnnotations(apiCluster),
 		},
-		Spec: *buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap),
+		Spec: *spec,
 	}
 
-	return &RayCluster{rayCluster}
+	return &RayCluster{rayCluster}, nil
 }
 
 // Build cluster labels
@@ -49,31 +56,44 @@ func buildRayClusterLabels(cluster *api.Cluster) map[string]string {
 
 // Build cluster annotations
 func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
-	annotations := map[string]string{}
-	// TODO: Add optional annotations
-	return annotations
+	if cluster.Annotations == nil {
+		return map[string]string{}
+	}
+	return cluster.Annotations
 }
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
 // such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
-func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) *rayalphaapi.RayClusterSpec {
+func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) (*rayalphaapi.RayClusterSpec, error) {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
-	headPodTemplate := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
+	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
+	if err != nil {
+		return nil, err
+	}
 	headReplicas := int32(1)
 	rayClusterSpec := &rayalphaapi.RayClusterSpec{
 		RayVersion: imageVersion,
 		HeadGroupSpec: rayalphaapi.HeadGroupSpec{
 			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
-			Template:       headPodTemplate,
+			Template:       *headPodTemplate,
 			Replicas:       &headReplicas,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
 		WorkerGroupSpecs: []rayalphaapi.WorkerGroupSpec{},
 	}
 
+	// If enable ingress is specified, add it to the head node spec.
+	if clusterSpec.HeadGroupSpec.EnableIngress {
+		rayClusterSpec.HeadGroupSpec.EnableIngress = &clusterSpec.HeadGroupSpec.EnableIngress
+	}
+
+	// Build worker groups
 	for _, spec := range clusterSpec.WorkerGroupSpec {
 		computeTemplate = computeTemplateMap[spec.ComputeTemplate]
-		workerPodTemplate := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate)
+		workerPodTemplate, err := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate)
+		if err != nil {
+			return nil, err
+		}
 
 		minReplicas := spec.Replicas
 		maxReplicas := spec.Replicas
@@ -90,13 +110,13 @@ func buildRayClusterSpec(imageVersion string, envs map[string]string, clusterSpe
 			MaxReplicas:    intPointer(maxReplicas),
 			Replicas:       intPointer(spec.Replicas),
 			RayStartParams: spec.RayStartParams,
-			Template:       workerPodTemplate,
+			Template:       *workerPodTemplate,
 		}
 
 		rayClusterSpec.WorkerGroupSpecs = append(rayClusterSpec.WorkerGroupSpecs, workerNodeSpec)
 	}
 
-	return rayClusterSpec
+	return rayClusterSpec, nil
 }
 
 // Annotations common to both head and worker nodes
@@ -108,7 +128,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 }
 
 // Build head node template
-func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) (*v1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -120,7 +140,10 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
-	vols := buildVols(spec.Volumes)
+	vols, err := buildVols(spec.Volumes)
+	if err != nil {
+		return nil, err
+	}
 
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -247,7 +270,7 @@ func buildHeadPodTemplate(imageVersion string, envs map[string]string, spec *api
 		}
 	}
 
-	return podTemplateSpec
+	return &podTemplateSpec, nil
 }
 
 // Convert Toleration operator from string
@@ -275,7 +298,7 @@ func constructRayImage(containerImage string, version string) string {
 }
 
 // Build worker pod template
-func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) v1.PodTemplateSpec {
+func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) (*v1.PodTemplateSpec, error) {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -289,7 +312,10 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
-	vols := buildVols(spec.Volumes)
+	vols, err := buildVols(spec.Volumes)
+	if err != nil {
+		return nil, err
+	}
 
 	podTemplateSpec := v1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -465,7 +491,7 @@ func buildWorkerPodTemplate(imageVersion string, envs map[string]string, spec *a
 		}
 	}
 
-	return podTemplateSpec
+	return &podTemplateSpec, nil
 }
 
 // Build Volume mounts
@@ -500,9 +526,68 @@ func newHostPathType(pathType string) *v1.HostPathType {
 }
 
 // Build volumes
-func buildVols(apiVolumes []*api.Volume) []v1.Volume {
+func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 	var vols []v1.Volume
 	for _, rayVol := range apiVolumes {
+		if rayVol.VolumeType == api.Volume_CONFIGMAP {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					ConfigMap: &v1.ConfigMapVolumeSource{
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: rayVol.Source,
+						},
+					},
+				},
+			}
+			if len(rayVol.Items) > 0 {
+				// Add items
+				items := []v1.KeyToPath{}
+				for key, value := range rayVol.Items {
+					items = append(vol.ConfigMap.Items, v1.KeyToPath{Key: key, Path: value})
+				}
+				vol.ConfigMap.Items = items
+			}
+			vols = append(vols, vol)
+		}
+		if rayVol.VolumeType == api.Volume_SECRET {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					Secret: &v1.SecretVolumeSource{
+						SecretName: rayVol.Source,
+					},
+				},
+			}
+			if len(rayVol.Items) > 0 {
+				// Add items
+				items := []v1.KeyToPath{}
+				for key, value := range rayVol.Items {
+					items = append(vol.ConfigMap.Items, v1.KeyToPath{Key: key, Path: value})
+				}
+				vol.Secret.Items = items
+			}
+			vols = append(vols, vol)
+		}
+		if rayVol.VolumeType == api.Volume_EMPTY_DIR {
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					EmptyDir: &v1.EmptyDirVolumeSource{},
+				},
+			}
+			if rayVol.Storage != "" {
+				// Max Storage size is  defined
+				// Ensure that storage size is formatted correctly
+				_, err := resource.ParseQuantity(rayVol.Storage)
+				if err != nil {
+					return nil, errors.New("storage for empty dir volume is not specified correctly")
+				}
+				limit := resource.MustParse(rayVol.Storage)
+				vol.EmptyDir.SizeLimit = &limit
+			}
+			vols = append(vols, vol)
+		}
 		if rayVol.VolumeType == api.Volume_HOST_PATH {
 			vol := v1.Volume{
 				Name: rayVol.Name,
@@ -534,9 +619,67 @@ func buildVols(apiVolumes []*api.Volume) []v1.Volume {
 			}
 			vols = append(vols, vol)
 		}
+		if rayVol.VolumeType == api.Volume_EPHEMERAL {
+			// Make sure that at least the storage size is defined
+			if rayVol.Storage == "" {
+				// Storage size is not defined
+				return nil, errors.New("storage for ephemeral volume is empty")
+			}
+			// Ensure that storage size is formatted correctly
+			_, err := resource.ParseQuantity(rayVol.Storage)
+			if err != nil {
+				return nil, errors.New("storage for ephemeral volume is not specified correctly")
+			}
+			vol := v1.Volume{
+				Name: rayVol.Name,
+				VolumeSource: v1.VolumeSource{
+					Ephemeral: &v1.EphemeralVolumeSource{
+						VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app.kubernetes.io/managed-by": "kuberay-apiserver",
+								},
+							},
+							Spec: v1.PersistentVolumeClaimSpec{
+								Resources: v1.ResourceRequirements{
+									Requests: v1.ResourceList{
+										v1.ResourceStorage: resource.MustParse(rayVol.Storage),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			if len(rayVol.StorageClassName) > 0 {
+				// Populate storage class, if defined
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.StorageClassName = &rayVol.StorageClassName
+			}
+
+			// Populate access mode if defined
+			switch rayVol.AccessMode {
+			case api.Volume_RWO:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteOnce,
+				}
+			case api.Volume_RWX:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteMany,
+				}
+			case api.Volume_ROX:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadOnlyMany,
+				}
+			default:
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
+					v1.ReadWriteOnce,
+				}
+			}
+			vols = append(vols, vol)
+		}
 	}
 
-	return vols
+	return vols, nil
 }
 
 // Init pointer
@@ -597,8 +740,8 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 func GetNodeHostIP(node *v1.Node) (net.IP, error) {
 	addresses := node.Status.Addresses
 	addressMap := make(map[v1.NodeAddressType][]v1.NodeAddress)
-	for i := range addresses {
-		addressMap[addresses[i].Type] = append(addressMap[addresses[i].Type], addresses[i])
+	for _, nodeAddress := range addresses {
+		addressMap[nodeAddress.Type] = append(addressMap[nodeAddress.Type], nodeAddress)
 	}
 	if addresses, ok := addressMap[v1.NodeInternalIP]; ok {
 		return net.ParseIP(addresses[0].Address), nil

@@ -51,7 +51,6 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayv1alpha1.RayClusterSpec{
-			RayVersion:              "1.0",
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
 				RayStartParams: map[string]string{
@@ -65,7 +64,7 @@ var _ = Context("Inside the default namespace", func() {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/ray:2.5.0",
+								Image:   "rayproject/ray:2.7.0",
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -98,7 +97,7 @@ var _ = Context("Inside the default namespace", func() {
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.5.0",
+									Image:   "rayproject/ray:2.7.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{

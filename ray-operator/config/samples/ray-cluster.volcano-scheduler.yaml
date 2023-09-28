@@ -1,0 +1,24 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: test-cluster-0
+  labels:
+    ray.io/scheduler-name: volcano
+spec:
+  rayVersion: '2.7.0'
+  headGroupSpec:
+    rayStartParams: {}
+    replicas: 1
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.7.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+  workerGroupSpecs: []

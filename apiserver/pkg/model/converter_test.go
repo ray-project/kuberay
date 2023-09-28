@@ -1,19 +1,26 @@
 package model
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
+	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	enableIngress          = false
-	headNodeReplicas int32 = 1
-	workerReplicas   int32 = 5
+	enableIngress                    = true
+	deploymentReplicas       int32   = 1
+	headNodeReplicas         int32   = 1
+	workerReplicas           int32   = 5
+	unhealthySecondThreshold int32   = 900
+	floatNumber              float64 = 1
+	secondsValue             int32   = 100
 )
 
 var headSpecTest = v1alpha1.HeadGroupSpec{
@@ -195,6 +202,114 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 	},
 }
 
+var ClusterSpecTest = v1alpha1.RayCluster{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "raycluster-sample",
+		Namespace: "default",
+		Annotations: map[string]string{
+			"kubernetes.io/ingress.class": "nginx",
+		},
+	},
+	Spec: v1alpha1.RayClusterSpec{
+		HeadGroupSpec: headSpecTest,
+		WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
+			workerSpecTest,
+		},
+	},
+}
+
+var JobNewClusteTest = v1alpha1.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayJobSpec{
+		Entrypoint: "python /home/ray/samples/sample_code.py",
+		Metadata: map[string]string{
+			"job_submission_id": "123",
+		},
+		RuntimeEnvYAML:          "mytest yaml",
+		TTLSecondsAfterFinished: &secondsValue,
+		RayClusterSpec:          &ClusterSpecTest.Spec,
+	},
+}
+
+var JobExistingClusteTest = v1alpha1.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayJobSpec{
+		Entrypoint:              "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:          "mytest yaml",
+		TTLSecondsAfterFinished: &secondsValue,
+		ClusterSelector: map[string]string{
+			util.RayClusterUserLabelKey: "test",
+		},
+	},
+}
+
+var ServiceV1Test = v1alpha1.RayService{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayServiceSpec{
+		ServeDeploymentGraphSpec: v1alpha1.ServeDeploymentGraphSpec{
+			ImportPath: "fruit.deployment_graph",
+			RuntimeEnv: "working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"",
+			ServeConfigSpecs: []v1alpha1.ServeConfigSpec{
+				{
+					Name:        "MangoStand",
+					NumReplicas: &deploymentReplicas,
+					UserConfig:  "price: 3",
+					RayActorOptions: v1alpha1.RayActorOptionSpec{
+						NumCpus: &floatNumber,
+					},
+				},
+				{
+					Name:        "OrangeStand",
+					NumReplicas: &deploymentReplicas,
+				},
+				{
+					Name:        "PearStand",
+					NumReplicas: &deploymentReplicas,
+					UserConfig:  "price: 1",
+					RayActorOptions: v1alpha1.RayActorOptionSpec{
+						NumCpus: &floatNumber,
+					},
+				},
+			},
+		},
+		RayClusterSpec:                  ClusterSpecTest.Spec,
+		ServiceUnhealthySecondThreshold: &unhealthySecondThreshold,
+	},
+}
+
+var ServiceV2Test = v1alpha1.RayService{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayServiceSpec{
+		ServeConfigV2:                      "Some yaml value",
+		RayClusterSpec:                     ClusterSpecTest.Spec,
+		DeploymentUnhealthySecondThreshold: &unhealthySecondThreshold,
+	},
+}
+
 var expectedAnnotations = map[string]string{
 	"custom": "value",
 }
@@ -219,6 +334,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 
 	if groupSpec.ServiceAccount != "account" {
 		t.Errorf("failed to convert service account")
+	}
+	if groupSpec.EnableIngress != *headSpecTest.EnableIngress {
+		t.Errorf("failed to convert enableIngress")
 	}
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
@@ -254,6 +372,13 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 }
 
+func TestPopulateRayClusterSpec(t *testing.T) {
+	cluster := FromCrdToApiCluster(&ClusterSpecTest, []v1.Event{})
+	if len(cluster.Annotations) != 1 {
+		t.Errorf("failed to convert cluster's annotations")
+	}
+}
+
 func TestPopulateTemplate(t *testing.T) {
 	template := FromKubeToAPIComputeTemplate(&configMapWithoutTolerations)
 	if len(template.Tolerations) != 0 {
@@ -274,4 +399,55 @@ func TestPopulateTemplate(t *testing.T) {
 
 func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
+}
+
+func TestPopulateJob(t *testing.T) {
+	job := FromCrdToApiJob(&JobNewClusteTest)
+	fmt.Printf("jobWithCluster = %#v\n", job)
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.Greater(t, len(job.RuntimeEnv), 1)
+	assert.Nil(t, job.ClusterSelector)
+	assert.NotNil(t, job.ClusterSpec)
+
+	job = FromCrdToApiJob(&JobExistingClusteTest)
+	fmt.Printf("jobReferenceCluster = %#v\n", job)
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.Greater(t, len(job.RuntimeEnv), 1)
+	assert.NotNil(t, job.ClusterSelector)
+	assert.Nil(t, job.ClusterSpec)
+}
+
+func TestPopulateService(t *testing.T) {
+	service := FromCrdToApiService(&ServiceV1Test, make([]v1.Event, 0))
+	fmt.Printf("serviceV1 = %#v\n", service)
+	if service.Name != "test" {
+		t.Errorf("failed to convert name")
+	}
+	if service.Namespace != "test" {
+		t.Errorf("failed to convert namespace")
+	}
+	if service.User != "user" {
+		t.Errorf("failed to convert user")
+	}
+	if service.ServeDeploymentGraphSpec == nil {
+		t.Errorf("failed to convert v1 serve spec")
+	}
+	if service.ServeConfig_V2 != "" {
+		t.Errorf("unexpected v2 server spec")
+	}
+	if len(service.ServeDeploymentGraphSpec.ServeConfigs) != 3 {
+		t.Errorf("failed to convert serveConfiggs")
+	}
+	service = FromCrdToApiService(&ServiceV2Test, make([]v1.Event, 0))
+	fmt.Printf("serviceV2 = %#v\n", service)
+	if service.ServeDeploymentGraphSpec != nil {
+		t.Errorf("unexpected v1 serve spec")
+	}
+	if service.ServeConfig_V2 == "" {
+		t.Errorf("failed to convert v2 server spec")
+	}
 }

@@ -32,6 +32,15 @@ const (
 	DefaultDomainName   = "cluster.local"
 )
 
+// TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
+type CRDType string
+
+const (
+	RayClusterCRD CRDType = "RayCluster"
+	RayJobCRD     CRDType = "RayJob"
+	RayServiceCRD CRDType = "RayService"
+)
+
 // GetClusterDomainName returns cluster's domain name
 func GetClusterDomainName() string {
 	if domain := os.Getenv(ClusterDomainEnvKey); len(domain) > 0 {
@@ -129,25 +138,46 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 	return metaData.Namespace
 }
 
-// GenerateServiceName generates a Ray head service name from cluster name
-func GenerateServiceName(clusterName string) string {
-	return CheckName(fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "svc"))
+// GenerateHeadServiceName generates a Ray head service name. Note that there are two types of head services:
+//
+// (1) For RayCluster: If `HeadService.Name` in the cluster spec is not empty, it will be used as the head service name.
+// Otherwise, the name is generated based on the RayCluster CR's name.
+// (2) For RayService: It's important to note that the RayService CR not only possesses a head service owned by its RayCluster CR
+// but also maintains a separate head service for itself to facilitate zero-downtime upgrades. The name of the head service owned
+// by the RayService CR is generated based on the RayService CR's name.
+//
+// @param crdType: The type of the CRD that owns the head service.
+// @param clusterSpec: `RayClusterSpec`
+// @param ownerName: The name of the CR that owns the head service.
+func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayClusterSpec, ownerName string) (string, error) {
+	switch crdType {
+	case RayServiceCRD:
+		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc")), nil
+	case RayClusterCRD:
+		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc"))
+		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
+			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
+		}
+		return headSvcName, nil
+	default:
+		return "", fmt.Errorf("unknown CRD type: %s", crdType)
+	}
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
-func GenerateFQDNServiceName(clusterName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.%s", GenerateServiceName(clusterName), namespace, GetClusterDomainName())
+func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) string {
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		logrus.Errorf("Failed to generate head service name: %v", err)
+		return ""
+	}
+	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
 }
 
 // ExtractRayIPFromFQDN extracts the head service name (i.e., RAY_IP, deprecated) from a fully qualified
 // domain name (FQDN). This function is provided for backward compatibility purposes only.
 func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 	return strings.Split(fqdnRayIP, ".")[0]
-}
-
-// GenerateDashboardServiceName generates a ray head service name from cluster name
-func GenerateDashboardServiceName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, DashboardName, "svc")
 }
 
 // GenerateServeServiceName generates name for serve service.
@@ -165,6 +195,11 @@ func GenerateIngressName(clusterName string) string {
 	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "ingress")
 }
 
+// GenerateRouteName generates an ingress name from cluster name
+func GenerateRouteName(clusterName string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "route")
+}
+
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
 	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
@@ -180,21 +215,31 @@ func GenerateIdentifier(clusterName string, nodeType rayv1alpha1.RayNodeType) st
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-// TODO: find target container through name instead of using index 0.
-// FindRayContainerIndex finds the ray head/worker container's index in the pod
-func FindRayContainerIndex(spec corev1.PodSpec) (index int) {
-	// We only support one container at this moment. We definitely need a better way to filter out sidecar containers.
-	if len(spec.Containers) > 1 {
-		logrus.Warnf("Pod has multiple containers, we choose index=0 as Ray container")
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1alpha1.WorkerGroupSpec) int32 {
+	// Always adhere to min/max replicas constraints.
+	var workerReplicas int32
+	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
+		logrus.Warn(
+			fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
+				"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		workerReplicas = *workerGroupSpec.MaxReplicas
+	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
+		// Add this check to make testing easier.
+		workerReplicas = *workerGroupSpec.MinReplicas
+	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
+		workerReplicas = *workerGroupSpec.MaxReplicas
+	} else {
+		workerReplicas = *workerGroupSpec.Replicas
 	}
-	return 0
+	return workerReplicas
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
 func CalculateDesiredReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += *nodeGroup.Replicas
+		count += GetWorkerGroupDesiredReplicas(nodeGroup)
 	}
 
 	return count

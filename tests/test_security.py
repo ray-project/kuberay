@@ -39,9 +39,9 @@ class PodSecurityTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        K8S_CLUSTER_MANAGER.delete_kind_cluster()
+        K8S_CLUSTER_MANAGER.cleanup()
         kind_config = CONST.REPO_ROOT.joinpath("ray-operator/config/security/kind-config.yaml")
-        K8S_CLUSTER_MANAGER.create_kind_cluster(kind_config = kind_config)
+        K8S_CLUSTER_MANAGER.initialize_cluster(kind_config = kind_config)
         # Apply the restricted Pod security standard to all Pods in the namespace pod-security.
         # The label pod-security.kubernetes.io/enforce=restricted means that the Pod that violates
         # the policies will be rejected.
@@ -55,7 +55,7 @@ class PodSecurityTestCase(unittest.TestCase):
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
         # Install the KubeRay operator in the namespace pod-security.
         image_dict = {
-            CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.5.0',
+            CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.7.0',
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         logger.info(image_dict)

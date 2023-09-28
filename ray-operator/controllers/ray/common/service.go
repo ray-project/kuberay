@@ -51,7 +51,10 @@ func BuildServiceForHeadPod(cluster rayv1alpha1.RayCluster, labels map[string]st
 		annotations = make(map[string]string)
 	}
 
-	default_name := utils.GenerateServiceName(cluster.Name)
+	default_name, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		return nil, err
+	}
 	default_namespace := cluster.Namespace
 	default_type := cluster.Spec.HeadGroupSpec.ServiceType
 
@@ -132,7 +135,12 @@ func BuildHeadServiceForRayService(rayService rayv1alpha1.RayService, rayCluster
 		return nil, err
 	}
 
-	service.ObjectMeta.Name = utils.GenerateServiceName(rayService.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	service.ObjectMeta.Name = headSvcName
 	service.ObjectMeta.Namespace = rayService.Namespace
 	service.ObjectMeta.Labels = map[string]string{
 		RayServiceLabelKey:  rayService.Name,
@@ -162,7 +170,7 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 	ports_int := getServicePorts(rayCluster)
 	ports := []corev1.ServicePort{}
 	for name, port := range ports_int {
-		if name == DefaultServingPortName {
+		if name == ServingPortName {
 			svcPort := corev1.ServicePort{Name: name, Port: port}
 			ports = append(ports, svcPort)
 			break
@@ -194,7 +202,7 @@ func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluste
 		} else {
 			ports := []corev1.ServicePort{}
 			for _, port := range serveService.Spec.Ports {
-				if port.Name == DefaultServingPortName {
+				if port.Name == ServingPortName {
 					svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
 					ports = append(ports, svcPort)
 					break
@@ -287,17 +295,17 @@ func getServicePorts(cluster rayv1alpha1.RayCluster) map[string]int32 {
 	}
 
 	// Check if agent port is defined. If not, check if enable agent service.
-	if _, agentDefined := ports[DefaultDashboardAgentListenPortName]; !agentDefined {
+	if _, agentDefined := ports[DashboardAgentListenPortName]; !agentDefined {
 		enableAgentServiceValue, exist := cluster.Annotations[EnableAgentServiceKey]
 		if exist && enableAgentServiceValue == EnableAgentServiceTrue {
 			// If agent port is not in the config, add default value for it.
-			ports[DefaultDashboardAgentListenPortName] = DefaultDashboardAgentListenPort
+			ports[DashboardAgentListenPortName] = DefaultDashboardAgentListenPort
 		}
 	}
 
 	// check if metrics port is defined. If not, add default value for it.
-	if _, metricsDefined := ports[DefaultMetricsName]; !metricsDefined {
-		ports[DefaultMetricsName] = DefaultMetricsPort
+	if _, metricsDefined := ports[MetricsPortName]; !metricsDefined {
+		ports[MetricsPortName] = DefaultMetricsPort
 	}
 
 	return ports
@@ -309,8 +317,7 @@ func getServicePorts(cluster rayv1alpha1.RayCluster) map[string]int32 {
 func getPortsFromCluster(cluster rayv1alpha1.RayCluster) (map[string]int32, error) {
 	svcPorts := map[string]int32{}
 
-	index := utils.FindRayContainerIndex(cluster.Spec.HeadGroupSpec.Template.Spec)
-	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[index].Ports
+	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
 	for _, port := range cPorts {
 		if port.Name == "" {
 			port.Name = fmt.Sprint(port.ContainerPort) + "-port"
@@ -323,10 +330,10 @@ func getPortsFromCluster(cluster rayv1alpha1.RayCluster) (map[string]int32, erro
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
-		DefaultClientPortName:  DefaultClientPort,
-		DefaultRedisPortName:   DefaultRedisPort,
-		DefaultDashboardName:   DefaultDashboardPort,
-		DefaultMetricsName:     DefaultMetricsPort,
-		DefaultServingPortName: DefaultServingPort,
+		ClientPortName:    DefaultClientPort,
+		RedisPortName:     DefaultRedisPort,
+		DashboardPortName: DefaultDashboardPort,
+		MetricsPortName:   DefaultMetricsPort,
+		ServingPortName:   DefaultServingPort,
 	}
 }

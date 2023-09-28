@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     NAMESPACE = 'default'
     SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
-    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml']
+    YAMLs = ['ray_v1alpha1_rayjob.yaml', 'ray_v1alpha1_rayjob.shutdown.yaml', 'ray-job.custom-head-svc.yaml', 'ray_v1alpha1_rayjob.resources.yaml']
 
     sample_yaml_files = []
     for filename in YAMLs:
@@ -33,12 +33,12 @@ if __name__ == '__main__':
                         {'path': filepath, 'name': filename, 'cr': k8s_object}
                     )
                     break
-    # NOTE: The Ray Job "SUCCEEDED" status is checked in the `RayJobAddCREvent` itself. 
+    # NOTE: The Ray Job "SUCCEEDED" status is checked in the `RayJobAddCREvent` itself.
     # (The event is not considered "converged" until the job has succeeded.) The EasyJobRule
     # is only used to additionally check that the Ray Cluster remains alive and functional.
     rs = RuleSet([EasyJobRule(), ShutdownJobRule()])
     image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.5.0'),
+        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
         CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
     }
     logger.info(image_dict)

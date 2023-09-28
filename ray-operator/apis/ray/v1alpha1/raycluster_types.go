@@ -16,7 +16,7 @@ type RayClusterSpec struct {
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
-	// RayVersion is the version of ray being used. This determines the autoscaler's image version.
+	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
 	RayVersion string `json:"rayVersion,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
@@ -45,12 +45,14 @@ type HeadGroupSpec struct {
 type WorkerGroupSpec struct {
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`
-	// Replicas Number of desired pods in this pod group. This is a pointer to distinguish between explicit
-	// zero and not specified. Defaults to 1.
-	Replicas *int32 `json:"replicas"`
-	// MinReplicas defaults to 1
+	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
+	// +kubebuilder:default:=0
+	Replicas *int32 `json:"replicas,omitempty"`
+	// MinReplicas denotes the minimum number of desired Pods for this worker group.
+	// +kubebuilder:default:=0
 	MinReplicas *int32 `json:"minReplicas"`
-	// MaxReplicas defaults to maxInt32
+	// MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32.
+	// +kubebuilder:default:=2147483647
 	MaxReplicas *int32 `json:"maxReplicas"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
@@ -86,12 +88,13 @@ type AutoscalerOptions struct {
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 	SecurityContext *v1.SecurityContext `json:"securityContext,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-	// Defaults to 60 (one minute).
+	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
 	// Aggressive: An alias for Default; upscaling is not rate-limited.
+	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 }
 
@@ -146,10 +149,11 @@ type HeadInfo struct {
 type RayNodeType string
 
 const (
-	// HeadNode means that this pod will be ray cluster head
-	HeadNode RayNodeType = "head"
-	// WorkerNode means that this pod will be ray cluster worker
+	HeadNode   RayNodeType = "head"
 	WorkerNode RayNodeType = "worker"
+	// RedisCleanupNode is a Pod managed by a Kubernetes Job that cleans up Redis data after
+	// a RayCluster with GCS fault tolerance enabled is deleted.
+	RedisCleanupNode RayNodeType = "redis-cleanup"
 )
 
 // RayCluster is the Schema for the RayClusters API

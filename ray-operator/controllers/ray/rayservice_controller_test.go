@@ -144,7 +144,7 @@ applications:
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.5.0",
+									Image: "rayproject/ray:2.7.0",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -218,7 +218,7 @@ applications:
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.5.0",
+										Image:   "rayproject/ray:2.7.0",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
@@ -258,7 +258,7 @@ applications:
 	fakeRayDashboardClient := prepareFakeRayDashboardClient()
 
 	utils.GetRayDashboardClientFunc = func() utils.RayDashboardClientInterface {
-		return &fakeRayDashboardClient
+		return fakeRayDashboardClient
 	}
 
 	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
@@ -311,13 +311,13 @@ applications:
 					// Each worker Pod should have a container port with the name "dashboard-agent"
 					exist := false
 					for _, port := range pod.Spec.Containers[0].Ports {
-						if port.Name == common.DefaultDashboardAgentListenPortName {
+						if port.Name == common.DashboardAgentListenPortName {
 							exist = true
 							break
 						}
 					}
 					if !exist {
-						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DefaultDashboardAgentListenPortName))
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DashboardAgentListenPortName))
 					}
 				}
 			}
@@ -331,8 +331,10 @@ applications:
 
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
+			headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, myRayService.Spec.RayClusterSpec, myRayService.Name)
+			Expect(err).To(BeNil(), "failed to generate head service name")
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServiceName(myRayService.Name), Namespace: "default"}, svc),
+				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
 			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
 		})
@@ -646,8 +648,8 @@ applications:
 	})
 })
 
-func prepareFakeRayDashboardClient() utils.FakeRayDashboardClient {
-	client := utils.FakeRayDashboardClient{}
+func prepareFakeRayDashboardClient() *utils.FakeRayDashboardClient {
+	client := &utils.FakeRayDashboardClient{}
 
 	client.SetSingleApplicationStatus(generateServeStatus(rayv1alpha1.DeploymentStatusEnum.HEALTHY, rayv1alpha1.ApplicationStatusEnum.RUNNING))
 

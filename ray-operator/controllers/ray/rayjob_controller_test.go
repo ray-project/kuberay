@@ -17,12 +17,14 @@ package ray
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -70,7 +72,7 @@ var myRayJob = &rayv1alpha1.RayJob{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.5.0",
+								Image: "rayproject/ray:2.7.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -136,7 +138,7 @@ var myRayJob = &rayv1alpha1.RayJob{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.5.0",
+									Image:   "rayproject/ray:2.7.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -359,6 +361,51 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 		})
 	})
 })
+
+var _ = Context("With a delayed dashboard client", func() {
+	ctx := context.TODO()
+	myRayJob := myRayJob.DeepCopy()
+	myRayJob.Name = "rayjob-delayed-dashbaord"
+
+	mockedGetJobInfo := func(_ context.Context, jobId string) (*utils.RayJobInfo, error) {
+		return nil, errors.New("dashboard is not ready")
+	}
+
+	Describe("When creating a rayjob", func() {
+		It("should create a rayjob object", func() {
+			// setup mock first
+			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(&mockedGetJobInfo)
+			err := k8sClient.Create(ctx, myRayJob)
+			Expect(err).NotTo(HaveOccurred(), "failed to create test RayJob resource")
+		})
+
+		It("should see a rayjob object with JobDeploymentStatusWaitForDashboardReady", func() {
+			Eventually(
+				getJobDeploymentStatusOfRayJob(ctx, myRayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1alpha1.JobDeploymentStatusWaitForDashboardReady), "My myRayJob  = %v", myRayJob.Name)
+		})
+
+		It("Dashboard URL should be set and deployment status should leave the JobDeploymentStatusWaitForDashboardReady", func() {
+			// clear mock to back to normal behavior
+			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(nil)
+			Eventually(
+				getDashboardURLForRayJob(ctx, myRayJob),
+				time.Second*15, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
+			Eventually(
+				getJobDeploymentStatusOfRayJob(ctx, myRayJob),
+				time.Second*3, time.Millisecond*500).Should(Not(Equal(rayv1alpha1.JobDeploymentStatusWaitForDashboardReady)), "My myRayJob  = %v", myRayJob.Name)
+		})
+	})
+})
+
+func getJobDeploymentStatusOfRayJob(ctx context.Context, rayJob *rayv1alpha1.RayJob) func() (rayv1alpha1.JobDeploymentStatus, error) {
+	return func() (rayv1alpha1.JobDeploymentStatus, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+			return "", err
+		}
+		return rayJob.Status.JobDeploymentStatus, nil
+	}
+}
 
 func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayv1alpha1.RayJob) func() (string, error) {
 	return func() (string, error) {

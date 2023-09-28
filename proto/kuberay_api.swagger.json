@@ -534,45 +534,6 @@
         "tags": [
           "RayJobService"
         ]
-      },
-      "post": {
-        "summary": "Creates a new job.",
-        "operationId": "RayJobService_CreateRayJob",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "description": "The job to be created.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          {
-            "name": "namespace",
-            "description": "The namespace of the job to be created.",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "RayJobService"
-        ]
       }
     },
     "/apis/v1alpha2/namespaces/{namespace}/jobs": {
@@ -600,6 +561,45 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "RayJobService"
+        ]
+      },
+      "post": {
+        "summary": "Creates a new job.",
+        "operationId": "RayJobService_CreateRayJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the job to be created",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The job to be created.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
           }
         ],
         "tags": [
@@ -992,6 +992,15 @@
       "default": "DEV",
       "description": "Optional field."
     },
+    "VolumeAccessMode": {
+      "type": "string",
+      "enum": [
+        "RWO",
+        "ROX",
+        "RWX"
+      ],
+      "default": "RWO"
+    },
     "VolumeHostPathType": {
       "type": "string",
       "enum": [
@@ -1014,7 +1023,11 @@
       "type": "string",
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
-        "HOST_PATH"
+        "HOST_PATH",
+        "EPHEMERAL",
+        "CONFIGMAP",
+        "SECRET",
+        "EMPTY_DIR"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -1062,6 +1075,20 @@
           "$ref": "#/definitions/protoClusterSpec",
           "title": "Required field. This field indicates ray cluster configuration"
         },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. Annotations, for example, \"kubernetes.io/ingress.class\" to define Ingress class"
+        },
+        "envs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional input field. Container environment variables from user."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -1089,13 +1116,6 @@
             "type": "string"
           },
           "title": "Output. The service endpoint of the cluster"
-        },
-        "envs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Optional input field. Container environment variables from user."
         }
       }
     },
@@ -1175,12 +1195,16 @@
           "type": "string",
           "title": "Optional. The service type (ClusterIP, NodePort, Load balancer) of the head node"
         },
+        "enableIngress": {
+          "type": "boolean",
+          "title": "Optional. Enable Ingress\nif Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class"
+        },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start params of head node group"
+          "description": "Optional. The ray start params of head node group."
         },
         "volumes": {
           "type": "array",
@@ -1267,6 +1291,22 @@
         },
         "mountPropagationMode": {
           "$ref": "#/definitions/VolumeMountPropagationMode"
+        },
+        "storageClassName": {
+          "type": "string",
+          "title": "If indicate ephemeral, we need to let user specify volumeClaimTemplate"
+        },
+        "accessMode": {
+          "$ref": "#/definitions/VolumeAccessMode"
+        },
+        "storage": {
+          "type": "string"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1560,7 +1600,7 @@
         },
         "runtimeEnv": {
           "type": "string",
-          "title": "RuntimeEnv is base64 encoded string which stores runtime configuration"
+          "title": "RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
         },
         "jobId": {
           "type": "string",
@@ -1706,7 +1746,21 @@
         },
         "serveDeploymentGraphSpec": {
           "$ref": "#/definitions/protoServeDeploymentGraphSpec",
-          "description": "The config for ray serve deployments."
+          "description": "The config for ray serve deployments V1."
+        },
+        "serveConfigV2": {
+          "type": "string",
+          "title": "Config for serve deployment V2. Note that only one config V1 or V2 can be specified"
+        },
+        "serviceUnhealthySecondThreshold": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Serve deployment related health check"
+        },
+        "deploymentUnhealthySecondThreshold": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Dashboard agent related health check"
         },
         "clusterSpec": {
           "$ref": "#/definitions/protoClusterSpec",

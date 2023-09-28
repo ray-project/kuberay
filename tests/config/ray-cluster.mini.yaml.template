@@ -16,11 +16,6 @@ spec:
       num-cpus: '1'
     #pod template
     template:
-      metadata:
-        labels:
-          # Enables Ray client command execution via the NodePort service
-          # configured in tests/config/raycluster-service.yaml.
-          ray.io/test: compatibility-test-label
       spec:
         containers:
         - name: ray-head

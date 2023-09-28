@@ -1,44 +1,34 @@
-# This config demonstrates KubeRay's Ray autoscaler integration.
-# The resource requests and limits in this config are too small for production!
-# For an example with more realistic resource configuration, see
-# ray-cluster.autoscaler.large.yaml.
 apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-    # A unique identifier for the head node and workers of this cluster.
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.5.0'
-  # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
-  # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
-  # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
+  rayVersion: '2.7.0'
+  # If `enableInTreeAutoscaling` is true, the Autoscaler sidecar will be added to the Ray head pod.
+  # Ray Autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
-  # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
+  # `autoscalerOptions` is an OPTIONAL field specifying configuration overrides for the Ray Autoscaler.
   # The example configuration shown below below represents the DEFAULT values.
   # (You may delete autoscalerOptions if the defaults are suitable.)
   autoscalerOptions:
-    # upscalingMode is "Default" or "Aggressive."
+    # `upscalingMode` is "Default" or "Aggressive."
     # Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
     # Default: Upscaling is not rate-limited.
     # Aggressive: An alias for Default; upscaling is not rate-limited.
     upscalingMode: Default
-    # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+    # `idleTimeoutSeconds` is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     idleTimeoutSeconds: 60
-    # image optionally overrides the autoscaler's container image.
-    # If instance.spec.rayVersion is at least "2.0.0", the autoscaler will default to the same image as
-    # the ray container. For older Ray versions, the autoscaler will default to using the Ray 2.0.0 image.
+    # `image` optionally overrides the Autoscaler's container image. The Autoscaler uses the same image as the Ray container by default.
     ## image: "my-repo/my-custom-autoscaler-image:tag"
-    # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
+    # `imagePullPolicy` optionally overrides the Autoscaler container's default image pull policy (IfNotPresent).
     imagePullPolicy: IfNotPresent
-    # Optionally specify the autoscaler container's securityContext.
+    # Optionally specify the Autoscaler container's securityContext.
     securityContext: {}
     env: []
     envFrom: []
-    # resources specifies optional resource request and limit overrides for the autoscaler container.
-    # The default autoscaler resource limits and requests should be sufficient for production use-cases.
+    # resources specifies optional resource request and limit overrides for the Autoscaler container.
+    # The default Autoscaler resource limits and requests should be sufficient for production use-cases.
     # However, for large Ray clusters, we recommend monitoring container resource usage to determine if overriding the defaults is required.
     resources:
       limits:
@@ -53,18 +43,19 @@ spec:
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
-      dashboard-host: '0.0.0.0'
+      # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.
+      num-cpus: "0"
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
       # Currently, `resources` must be provided in the specific format demonstrated below:
       # resources: '"{\"Custom1\": 1, \"Custom2\": 5}"'
-    #pod template
+    # Pod template
     template:
       spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.5.0
+          image: rayproject/ray:2.7.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -76,71 +67,80 @@ spec:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
-          # The resource requests and limits in this config are too small for production!
-          # For an example with more realistic resource configuration, see
-          # ray-cluster.autoscaler.large.yaml.
-          # It is better to use a few large Ray pod than many small ones.
-          # For production, it is ideal to size each Ray pod to take up the
-          # entire Kubernetes node on which it is scheduled.
           resources:
             limits:
               cpu: "1"
               memory: "2G"
             requests:
-              # For production use-cases, we recommend specifying integer CPU reqests and limits.
-              # We also recommend setting requests equal to limits for both CPU and memory.
-              # For this example, we use a 500m CPU request to accomodate resource-constrained local
-              # Kubernetes testing environments such as KinD and minikube.
-              cpu: "500m"
-              # The rest state memory usage of the Ray head node is around 1Gb. We do not
-              # recommend allocating less than 2Gb memory for the Ray head pod.
-              # For production use-cases, we recommend allocating at least 8Gb memory for each Ray container.
+              cpu: "1"
               memory: "2G"
+          volumeMounts:
+            - mountPath: /home/ray/samples
+              name: ray-example-configmap
+        volumes:
+          - name: ray-example-configmap
+            configMap:
+              name: ray-example
+              defaultMode: 0777
+              items:
+                - key: detached_actor.py
+                  path: detached_actor.py
+                - key: terminate_detached_actor.py
+                  path: terminate_detached_actor.py
   workerGroupSpecs:
-  # the pod replicas in this group typed worker
-  - replicas: 1
-    minReplicas: 1
+  # the Pod replicas in this group typed worker
+  - replicas: 0
+    minReplicas: 0
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
-    # If worker pods need to be added, we can increment the replicas.
-    # If worker pods need to be removed, we decrement the replicas, and populate the workersToDelete list.
-    # The operator will remove pods from the list until the desired number of replicas is satisfied.
-    # If the difference between the current replica count and the desired replicas is greater than the
-    # number of entries in workersToDelete, random worker pods will be deleted.
+    # If worker pods need to be added, Ray Autoscaler can increment the `replicas`.
+    # If worker pods need to be removed, Ray Autoscaler decrements the replicas, and populates the `workersToDelete` list.
+    # KubeRay operator will remove Pods from the list until the desired number of replicas is satisfied.
     #scaleStrategy:
     #  workersToDelete:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
-    # The `rayStartParams` are used to configure the `ray start` command.
-    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams: {}
-    #pod template
+    # Pod template
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.5.0
+          image: rayproject/ray:2.7.0
           lifecycle:
             preStop:
               exec:
                 command: ["/bin/sh","-c","ray stop"]
-          # The resource requests and limits in this config are too small for production!
-          # For an example with more realistic resource configuration, see
-          # ray-cluster.autoscaler.large.yaml.
-          # It is better to use a few large Ray pod than many small ones.
-          # For production, it is ideal to size each Ray pod to take up the
-          # entire Kubernetes node on which it is scheduled.
           resources:
             limits:
               cpu: "1"
               memory: "1G"
-            # For production use-cases, we recommend specifying integer CPU reqests and limits.
-            # We also recommend setting requests equal to limits for both CPU and memory.
-            # For this example, we use a 500m CPU request to accomodate resource-constrained local
-            # Kubernetes testing environments such as KinD and minikube.
             requests:
-              cpu: "500m"
+              cpu: "1"
               memory: "1G"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-example
+data:
+  detached_actor.py: |
+    import ray
+    import sys
+
+    @ray.remote(num_cpus=1)
+    class Actor:
+      pass
+
+    ray.init(namespace="default_namespace")
+    Actor.options(name=sys.argv[1], lifetime="detached").remote()
+
+  terminate_detached_actor.py: |
+    import ray
+    import sys
+
+    ray.init(namespace="default_namespace")
+    detached_actor = ray.get_actor(sys.argv[1])
+    ray.kill(detached_actor)

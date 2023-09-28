@@ -5,15 +5,17 @@ const (
 	// Default application name
 	DefaultServeAppName = "default"
 	// Belows used as label key
-	RayServiceLabelKey                 = "ray.io/service"
-	RayClusterLabelKey                 = "ray.io/cluster"
-	RayNodeTypeLabelKey                = "ray.io/node-type"
-	RayNodeGroupLabelKey               = "ray.io/group"
-	RayNodeLabelKey                    = "ray.io/is-ray-node"
-	RayIDLabelKey                      = "ray.io/identifier"
-	RayClusterDashboardServiceLabelKey = "ray.io/cluster-dashboard"
-	RayClusterServingServiceLabelKey   = "ray.io/serve"
-	RayServiceClusterHashKey           = "ray.io/cluster-hash"
+	RayServiceLabelKey               = "ray.io/service"
+	RayClusterLabelKey               = "ray.io/cluster"
+	RayNodeTypeLabelKey              = "ray.io/node-type"
+	RayNodeGroupLabelKey             = "ray.io/group"
+	RayNodeLabelKey                  = "ray.io/is-ray-node"
+	RayIDLabelKey                    = "ray.io/identifier"
+	RayClusterServingServiceLabelKey = "ray.io/serve"
+	RayServiceClusterHashKey         = "ray.io/cluster-hash"
+
+	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
+	RayContainerIndex = 0
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
@@ -23,7 +25,9 @@ const (
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
-	RayNodeHealthStateAnnotationKey   = "ray.io/health-state"
+
+	// Finalizers for GCS fault tolerance
+	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
 	// Pod health state values
 	PodUnhealthy = "Unhealthy"
@@ -51,12 +55,12 @@ const (
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
-	DefaultClientPortName               = "client"
-	DefaultRedisPortName                = "redis"
-	DefaultDashboardName                = "dashboard"
-	DefaultMetricsName                  = "metrics"
-	DefaultDashboardAgentListenPortName = "dashboard-agent"
-	DefaultServingPortName              = "serve"
+	ClientPortName               = "client"
+	RedisPortName                = "redis"
+	DashboardPortName            = "dashboard"
+	MetricsPortName              = "metrics"
+	DashboardAgentListenPortName = "dashboard-agent"
+	ServingPortName              = "serve"
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
@@ -74,7 +78,6 @@ const (
 	PodReadyFilepath = "POD_READY_FILEPATH"
 
 	// Use as container env variable
-	NAMESPACE                               = "NAMESPACE"
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
 	RAY_IP                                  = "RAY_IP"
 	FQ_RAY_IP                               = "FQ_RAY_IP"
@@ -98,24 +101,27 @@ const (
 	// removed if the default behavior is stable enoguh.
 	ENABLE_RANDOM_POD_DELETE = "ENABLE_RANDOM_POD_DELETE"
 
+	// This KubeRay operator environment variable is used to determine if the Redis
+	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
+	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
+
 	// Ray core default configurations
-	DefaultRedisPassword                 = "5241590000000000"
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
 	LOCAL_HOST = "127.0.0.1"
 	// Ray FT default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
 	DefaultReadinessProbeTimeoutSeconds      = 1
-	DefaultReadinessProbePeriodSeconds       = 3
-	DefaultReadinessProbeSuccessThreshold    = 0
-	DefaultReadinessProbeFailureThreshold    = 20
+	DefaultReadinessProbePeriodSeconds       = 5
+	DefaultReadinessProbeSuccessThreshold    = 1
+	DefaultReadinessProbeFailureThreshold    = 10
 
 	// Ray FT default liveness probe values
-	DefaultLivenessProbeInitialDelaySeconds = 10
+	DefaultLivenessProbeInitialDelaySeconds = 30
 	DefaultLivenessProbeTimeoutSeconds      = 1
-	DefaultLivenessProbePeriodSeconds       = 3
-	DefaultLivenessProbeSuccessThreshold    = 0
-	DefaultLivenessProbeFailureThreshold    = 40
+	DefaultLivenessProbePeriodSeconds       = 5
+	DefaultLivenessProbeSuccessThreshold    = 1
+	DefaultLivenessProbeFailureThreshold    = 120
 
 	// Ray health check related configurations
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"

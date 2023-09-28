@@ -31,6 +31,7 @@ import (
 const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
+	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -183,21 +184,28 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
-	clientURL := rayJobInstance.Status.DashboardURL
-	if clientURL == "" {
+	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
-		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DefaultDashboardName); err != nil || clientURL == "" {
+		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardPortName); err != nil || clientURL == "" {
 			if clientURL == "" {
 				err = fmt.Errorf("empty dashboardURL")
 			}
 			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusWaitForDashboard, err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
+		// Check the dashboard readiness by checking the err return from rayDashboardClient.GetJobInfo.
+		// Note that rayDashboardClient.GetJobInfo returns no error in the case of http.StatusNotFound.
+		// This check is a workaround for https://github.com/ray-project/kuberay/issues/1381.
+		rayDashboardClient.InitClient(clientURL)
+		if _, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); err != nil {
+			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1alpha1.JobDeploymentStatusWaitForDashboardReady, err)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 		rayJobInstance.Status.DashboardURL = clientURL
+	} else {
+		rayDashboardClient.InitClient(clientURL)
 	}
-
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
 
 	// Check the current status of ray cluster before submitting.
 	if rayClusterInstance.Status.State != rayv1alpha1.Ready {
@@ -359,16 +367,27 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJ
 	}
 
 	// If the command in the submitter pod template isn't set, use the default command.
-	if len(submitterTemplate.Spec.Containers[0].Command) == 0 {
+	if len(submitterTemplate.Spec.Containers[common.RayContainerIndex].Command) == 0 {
+		// Check for deprecated 'runtimeEnv' field usage and log a warning.
+		if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
+			r.Log.Info("Warning: The 'runtimeEnv' field is deprecated. Please use 'runtimeEnvYAML' instead.")
+		}
+
 		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
 		if err != nil {
 			return v1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[0].Command = k8sJobCommand
+		submitterTemplate.Spec.Containers[common.RayContainerIndex].Command = k8sJobCommand
 		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
-		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[0].Command)
+		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
 	}
+
+	// Set PYTHONUNBUFFERED=1 for real-time logging
+	submitterTemplate.Spec.Containers[common.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[common.RayContainerIndex].Env, v1.EnvVar{
+		Name:  PythonUnbufferedEnvVarName,
+		Value: "1",
+	})
 
 	return submitterTemplate, nil
 }

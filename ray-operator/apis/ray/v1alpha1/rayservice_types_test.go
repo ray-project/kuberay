@@ -70,7 +70,6 @@ var myRayService = &RayService{
 			},
 		},
 		RayClusterSpec: RayClusterSpec{
-			RayVersion: "1.12.1",
 			HeadGroupSpec: HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
@@ -94,7 +93,7 @@ var myRayService = &RayService{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.5.0",
+								Image: "rayproject/ray:2.7.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -160,7 +159,7 @@ var myRayService = &RayService{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.5.0",
+									Image:   "rayproject/ray:2.7.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -260,7 +259,7 @@ var expected = `{
                   "containers":[
                      {
                         "name":"ray-head",
-                        "image":"rayproject/ray:2.5.0",
+                        "image":"rayproject/ray:2.7.0",
                         "ports":[
                            {
                               "name":"gcs-server",
@@ -327,7 +326,7 @@ var expected = `{
                      "containers":[
                         {
                            "name":"ray-worker",
-                           "image":"rayproject/ray:2.5.0",
+                           "image":"rayproject/ray:2.7.0",
                            "command":[
                               "echo"
                            ],
@@ -355,8 +354,7 @@ var expected = `{
 
                }
             }
-         ],
-         "rayVersion":"1.12.1"
+         ]
       }
    },
    "status":{
