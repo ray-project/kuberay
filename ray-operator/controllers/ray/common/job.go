@@ -119,8 +119,8 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 							v1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("1"),
-							v1.ResourceMemory: resource.MustParse("1Gi"),
+							v1.ResourceCPU:    resource.MustParse("500m"),
+							v1.ResourceMemory: resource.MustParse("200Mi"),
 						},
 					},
 				},
