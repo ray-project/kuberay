@@ -2,6 +2,7 @@ package util
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -442,6 +443,14 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if len(podSpec.Spec.Containers[0].Env) != 6 {
 		t.Errorf("failed to propagate environment")
 	}
+	// Sort values for comparison
+	sort.SliceStable(podSpec.Spec.Containers[0].Env, func(i, j int) bool {
+		return podSpec.Spec.Containers[0].Env[i].Name < podSpec.Spec.Containers[0].Env[j].Name
+	})
+	sort.SliceStable(expectedHeadNodeEnv, func(i, j int) bool {
+		return expectedHeadNodeEnv[i].Name < expectedHeadNodeEnv[j].Name
+	})
+
 	if !reflect.DeepEqual(podSpec.Spec.Containers[0].Env, expectedHeadNodeEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", podSpec.Spec.Containers[0].Env, expectedHeadNodeEnv)
 	}

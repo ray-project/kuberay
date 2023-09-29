@@ -2,55 +2,56 @@
 
 One of the issue for long-running Ray applications, for example, Ray Serve is that Ray Head node is a single
 point of failure, which means that if the Head node dies, complete cluster has to be restarted. Fortunately,
-KubeRay cluster provides an option to create 
+KubeRay cluster provides an option to create
 [fault tolerance Ray cluster](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html).
 The similar type of highly available Ray cluster can also be created using API server. The foundation of this
-approach is ensuring high availability Global Control Service (GCS) data. GCS manages cluster-level 
-metadata. By default, the GCS lacks fault tolerance as it stores all data in-memory, and a failure can cause the 
-entire Ray cluster to fail. To make the GCS fault tolerant, you must have a high-availability Redis. This way, 
-in the event of a GCS restart, it retrieves all the data from the Redis instance and resumes its regular 
+approach is ensuring high availability Global Control Service (GCS) data. GCS manages cluster-level
+metadata. By default, the GCS lacks fault tolerance as it stores all data in-memory, and a failure can cause the
+entire Ray cluster to fail. To make the GCS fault tolerant, you must have a high-availability Redis. This way,
+in the event of a GCS restart, it retrieves all the data from the Redis instance and resumes its regular
 functioning.
 
 ## Creating external Redis cluster
 
-A comprehensive documentation on creating Redis cluster on Kubernetes can be found 
-[here]( https://www.dragonflydb.io/guides/redis-kubernetes). For this example we will use a rather simple 
+A comprehensive documentation on creating Redis cluster on Kubernetes can be found
+[here]( https://www.dragonflydb.io/guides/redis-kubernetes). For this example we will use a rather simple
 [yaml file](test/cluster/redis/redis.yaml). To create Redis run:
 
-````
+```sh
 kubectl create ns redis
 kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis.yaml -n redis
-````
-Note that here we are deploying redis to the `redis` namespace, that we are creating here. 
+```
+
+Note that here we are deploying redis to the `redis` namespace, that we are creating here.
 
 Alternatively, if you run on the cloud you can use managed version of HA Redis, which will not require
 you to stand up, run, manage and monitor your own version of redis.
 
 ## Creating Redis password secret
 
-Before creating your cluster, you also need to create [secret](test/cluster/redis/redis_passwrd.yaml) in the 
-namespace where you want to create your Ray cluster (remember, that secret is visible only within a given 
+Before creating your cluster, you also need to create [secret](test/cluster/redis/redis_passwrd.yaml) in the
+namespace where you want to create your Ray cluster (remember, that secret is visible only within a given
 namespace). To create a secret for using external redis run:
 
-````
+```sh
 kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_passwrd.yaml
-````
+```
 
 ## Ray Code for testing
 
 For both Ray jobs and Ray Serve we are recommending packaging the code in the image. For a simple testing here
-we will create a [config map](test/cluster/code_configmap.yaml), containg simple code, that we will use for 
+we will create a [config map](test/cluster/code_configmap.yaml), containg simple code, that we will use for
 testing. To deploy it run the following:
 
-````
+```sh
 kubectl apply -f <your location>/kuberay/apiserver/test/cluster/code_configmap.yaml
-````
+```
 
 ## API server request
 
 To create a a cluster we can use the following curl command:
 
-````
+```sh
 curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
@@ -131,26 +132,29 @@ curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
     ]
   }
 }'  
-````
+```
 
 Lets discuss the importaant pieces here:
 You need to specify annotation, that tells Ray that this is cluster with GCS fault tolerance
 
-````
+```sh
 ray.io/ft-enabled: "true" 
-````
+```
+
 For the `headGroupSpec` you need the following. In the `rayStartParams` you need to add information about Redis
 password.
-````
+
+```sh
 "redis-password:: "$REDIS_PASSWORD"
 "num-cpu": "0"
-````
+```
 
-Where the value of `REDIS_PASSWORD` comes from environment variable (below). We also ensure that that no 
+Where the value of `REDIS_PASSWORD` comes from environment variable (below). We also ensure that that no
 application code runs on a head node.
 
 The following environment variable have to be added here:
-````
+
+```sh
        "environment": {
          "values": {
             "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
@@ -163,21 +167,21 @@ The following environment variable have to be added here:
             }
          }
        },
-````
+```
 
 For the `workerGroupSpecs` you might want to increase `gcs_rpc_server_reconnect_timeout` by specifying the following
 environment variable:
 
-````
+```sh
         "environment": {
            "values": {
              "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
            } 
         },
-````
+```
 
-This environment variable allows to increase GCS heartbeat timeout, which is 60 sec by default. The reason for 
-increasing it is because restart of the head node can take some time, and we want to make sure that the workwer node 
+This environment variable allows to increase GCS heartbeat timeout, which is 60 sec by default. The reason for
+increasing it is because restart of the head node can take some time, and we want to make sure that the workwer node
 will not be killed during this time.
 
 ## Testing resulting cluster
@@ -185,26 +189,27 @@ will not be killed during this time.
 Once the cluster is created, we can validate that it is working correctly. To do this first create a detached actor.
 To do this, note the name of the head node and create a detached actor using the following command:
 
-````
+```sh
 kubectl exec -it <head node pod name> -- python3 /home/ray/samples/detached_actor.py
-````
-Once this is done, open Ray dashboard (using pod-forward). In the cluster tab you should see 2 nodes and in the 
+```
+
+Once this is done, open Ray dashboard (using pod-forward). In the cluster tab you should see 2 nodes and in the
 actor pane you should see created actor.
 
 Now you can delete head node pode:
 
-````
+```sh
 kubectl delete pods <head node pod name>
-````
-The operator will recreate it. Make sure that only head node is recreated (note that it now has a different name), 
-while worker node stays as is. Now you can go to the dashboard and make sure that in the cluster tab you still see 
+```
+
+The operator will recreate it. Make sure that only head node is recreated (note that it now has a different name),
+while worker node stays as is. Now you can go to the dashboard and make sure that in the cluster tab you still see
 2 nodes and in the actor pane you still see created actor.
 
 For additional test run the following command:
 
-````
+```sh
 kubectl exec -it <head node pod name> -- python3 /home/ray/samples/increment_counter.py
-````
+```
 
 and make sure that it executes correctly. Note that the name of the head node here is different
-
