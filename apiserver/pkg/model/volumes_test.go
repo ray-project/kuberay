@@ -102,8 +102,12 @@ var podTemplateTest = v1.PodTemplateSpec{
 						},
 						Items: []v1.KeyToPath{
 							{
-								Key:  "key",
-								Path: "path",
+								Key:  "key1",
+								Path: "path1",
+							},
+							{
+								Key:  "key2",
+								Path: "path2",
 							},
 						},
 					},
@@ -159,7 +163,8 @@ var expectedVolumes = []*api.Volume{
 		VolumeType: api.Volume_CONFIGMAP,
 		Source:     "my-config-map",
 		Items: map[string]string{
-			"key": "path",
+			"key1": "path1",
+			"key2": "path2",
 		},
 	},
 	{

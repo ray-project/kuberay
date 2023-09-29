@@ -202,6 +202,17 @@
       "default": "DEV",
       "description": "Optional field."
     },
+    "EnvValueFromSource": {
+      "type": "string",
+      "enum": [
+        "CONFIGMAP",
+        "SECRET",
+        "RESOURCEFIELD",
+        "FIELD"
+      ],
+      "default": "CONFIGMAP",
+      "title": "Source of environment variable"
+    },
     "VolumeAccessMode": {
       "type": "string",
       "enum": [
@@ -293,10 +304,7 @@
           "title": "Optional. Annotations, for example, \"kubernetes.io/ingress.class\" to define Ingress class"
         },
         "envs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
+          "$ref": "#/definitions/protoEnvironmentVariables",
           "description": "Optional input field. Container environment variables from user."
         },
         "createdAt": {
@@ -390,6 +398,40 @@
         }
       }
     },
+    "protoEnvValueFrom": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/EnvValueFromSource"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name for config map or secret, container name for resource, path for field"
+        },
+        "key": {
+          "type": "string",
+          "title": "Key for config map or secret, resource name for resource"
+        }
+      }
+    },
+    "protoEnvironmentVariables": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "valuesFrom": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/protoEnvValueFrom"
+          }
+        }
+      },
+      "title": "This allows to specify both - environment variables containing values and environment values containing valueFrom"
+    },
     "protoHeadGroupSpec": {
       "type": "object",
       "properties": {
@@ -432,10 +474,7 @@
           "title": "Optional. image pull secret used by head pod"
         },
         "environment": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
+          "$ref": "#/definitions/protoEnvironmentVariables",
           "title": "Optional. Environment variables for head pod"
         },
         "annotations": {
@@ -573,10 +612,7 @@
           "title": "Optional. image pull secret used by worker pod"
         },
         "environment": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
+          "$ref": "#/definitions/protoEnvironmentVariables",
           "title": "Optional. Environment variables for worker pod"
         },
         "annotations": {

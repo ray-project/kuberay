@@ -53,7 +53,8 @@ var testConfigMapVolume = &api.Volume{
 	VolumeType: api.Volume_CONFIGMAP,
 	Source:     "my-config-map",
 	Items: map[string]string{
-		"key": "path",
+		"key1": "path1",
+		"key2": "path2",
 	},
 }
 
@@ -84,8 +85,31 @@ var headGroup = api.HeadGroupSpec{
 	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
 	EnableIngress:   true,
-	Environment: map[string]string{
-		"foo": "bar",
+	Environment: &api.EnvironmentVariables{
+		Values: map[string]string{
+			"AWS_KEY": "123",
+		},
+		ValuesFrom: map[string]*api.EnvValueFrom{
+			"REDIS_PASSWORD": {
+				Source: api.EnvValueFrom_SECRET,
+				Name:   "redis-password-secret",
+				Key:    "password",
+			},
+			"CONFIGMAP": {
+				Source: api.EnvValueFrom_CONFIGMAP,
+				Name:   "special-config",
+				Key:    "special.how",
+			},
+			"ResourceFieldRef": {
+				Source: api.EnvValueFrom_RESOURCEFIELD,
+				Name:   "my-container",
+				Key:    "resource",
+			},
+			"FieldRef": {
+				Source: api.EnvValueFrom_FIELD,
+				Key:    "path",
+			},
+		},
 	},
 	Annotations: map[string]string{
 		"foo": "bar",
@@ -107,8 +131,10 @@ var workerGroup = api.WorkerGroupSpec{
 	},
 	ServiceAccount:  "account",
 	ImagePullSecret: "foo",
-	Environment: map[string]string{
-		"foo": "bar",
+	Environment: &api.EnvironmentVariables{
+		Values: map[string]string{
+			"foo": "bar",
+		},
 	},
 	Annotations: map[string]string{
 		"foo": "bar",
@@ -154,6 +180,60 @@ var expectedToleration = v1.Toleration{
 
 var expectedLabels = map[string]string{
 	"foo": "bar",
+}
+
+var expectedHeadNodeEnv = []v1.EnvVar{
+	{
+		Name: "MY_POD_IP",
+		ValueFrom: &v1.EnvVarSource{
+			FieldRef: &v1.ObjectFieldSelector{
+				FieldPath: "status.podIP",
+			},
+		},
+	},
+	{
+		Name:  "AWS_KEY",
+		Value: "123",
+	},
+	{
+		Name: "REDIS_PASSWORD",
+		ValueFrom: &v1.EnvVarSource{
+			SecretKeyRef: &v1.SecretKeySelector{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "redis-password-secret",
+				},
+				Key: "password",
+			},
+		},
+	},
+	{
+		Name: "CONFIGMAP",
+		ValueFrom: &v1.EnvVarSource{
+			ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "special-config",
+				},
+				Key: "special.how",
+			},
+		},
+	},
+	{
+		Name: "ResourceFieldRef",
+		ValueFrom: &v1.EnvVarSource{
+			ResourceFieldRef: &v1.ResourceFieldSelector{
+				ContainerName: "my-container",
+				Resource:      "resource",
+			},
+		},
+	},
+	{
+		Name: "FieldRef",
+		ValueFrom: &v1.EnvVarSource{
+			FieldRef: &v1.ObjectFieldSelector{
+				FieldPath: "path",
+			},
+		},
+	},
 }
 
 func TestBuildVolumes(t *testing.T) {
@@ -220,8 +300,12 @@ func TestBuildVolumes(t *testing.T) {
 				},
 				Items: []v1.KeyToPath{
 					{
-						Key:  "key",
-						Path: "path",
+						Key:  "key1",
+						Path: "path1",
+					},
+					{
+						Key:  "key2",
+						Path: "path2",
 					},
 				},
 			},
@@ -346,7 +430,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 }
 
 func TestBuildHeadPodTemplate(t *testing.T) {
-	podSpec, err := buildHeadPodTemplate("2.4", make(map[string]string), &headGroup, &template)
+	podSpec, err := buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template)
 	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
@@ -355,9 +439,13 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
 		t.Errorf("failed to propagate image pull secret")
 	}
-	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
+	if len(podSpec.Spec.Containers[0].Env) != 6 {
 		t.Errorf("failed to propagate environment")
 	}
+	if !reflect.DeepEqual(podSpec.Spec.Containers[0].Env, expectedHeadNodeEnv) {
+		t.Errorf("failed to convert environment, got %v, expected %v", podSpec.Spec.Containers[0].Env, expectedHeadNodeEnv)
+	}
+
 	if len(podSpec.Spec.Tolerations) != 1 {
 		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
 	}
@@ -385,7 +473,7 @@ func TestBuildRayCluster(t *testing.T) {
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec, err := buildWorkerPodTemplate("2.4", make(map[string]string), &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &template)
 	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {

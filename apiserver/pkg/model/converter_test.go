@@ -76,20 +76,43 @@ var headSpecTest = v1alpha1.HeadGroupSpec{
 							Value: "123",
 						},
 						{
-							Name:  "AWS_SECRET",
-							Value: "1234",
+							Name: "REDIS_PASSWORD",
+							ValueFrom: &v1.EnvVarSource{
+								SecretKeyRef: &v1.SecretKeySelector{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: "redis-password-secret",
+									},
+									Key: "password",
+								},
+							},
 						},
 						{
-							Name:  "RAY_PORT",
-							Value: "6379",
+							Name: "CONFIGMAP",
+							ValueFrom: &v1.EnvVarSource{
+								ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: "special-config",
+									},
+									Key: "special.how",
+								},
+							},
 						},
 						{
-							Name:  "RAY_ADDRESS",
-							Value: "127.0.0.1:6379",
+							Name: "ResourceFieldRef",
+							ValueFrom: &v1.EnvVarSource{
+								ResourceFieldRef: &v1.ResourceFieldSelector{
+									ContainerName: "my-container",
+									Resource:      "resource",
+								},
+							},
 						},
 						{
-							Name:  "RAY_USAGE_STATS_KUBERAY_IN_USE",
-							Value: "1",
+							Name: "FieldRef",
+							ValueFrom: &v1.EnvVarSource{
+								FieldRef: &v1.ObjectFieldSelector{
+									FieldPath: "path",
+								},
+							},
 						},
 					},
 				},
@@ -318,9 +341,39 @@ var expectedLabels = map[string]string{
 	"test": "value",
 }
 
-var expectedEnv = map[string]string{
-	"AWS_KEY":    "123",
-	"AWS_SECRET": "1234",
+var expectedHeadEnv = &api.EnvironmentVariables{
+	Values: map[string]string{
+		"AWS_KEY": "123",
+	},
+	ValuesFrom: map[string]*api.EnvValueFrom{
+		"REDIS_PASSWORD": {
+			Source: api.EnvValueFrom_SECRET,
+			Name:   "redis-password-secret",
+			Key:    "password",
+		},
+		"CONFIGMAP": {
+			Source: api.EnvValueFrom_CONFIGMAP,
+			Name:   "special-config",
+			Key:    "special.how",
+		},
+		"ResourceFieldRef": {
+			Source: api.EnvValueFrom_RESOURCEFIELD,
+			Name:   "my-container",
+			Key:    "resource",
+		},
+		"FieldRef": {
+			Source: api.EnvValueFrom_FIELD,
+			Key:    "path",
+		},
+	},
+}
+
+var expectedEnv = &api.EnvironmentVariables{
+	Values: map[string]string{
+		"AWS_KEY":    "123",
+		"AWS_SECRET": "1234",
+	},
+	ValuesFrom: map[string]*api.EnvValueFrom{},
 }
 
 var expectedTolerations = api.PodToleration{
@@ -347,8 +400,8 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	if !reflect.DeepEqual(groupSpec.Labels, expectedLabels) {
 		t.Errorf("failed to convert labels, got %v, expected %v", groupSpec.Labels, expectedLabels)
 	}
-	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
-		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Environment, expectedEnv)
+	if !reflect.DeepEqual(groupSpec.Environment, expectedHeadEnv) {
+		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedHeadEnv)
 	}
 }
 
@@ -368,7 +421,7 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 		t.Errorf("failed to convert labels, got %v, expected %v", groupSpec.Labels, expectedLabels)
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
-		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Environment, expectedEnv)
+		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedEnv)
 	}
 }
 
