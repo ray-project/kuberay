@@ -27,7 +27,7 @@ class CONST:
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
-    KUBERAY_LATEST_RELEASE = "kuberay/operator:v0.6.0"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.0.0-rc.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
