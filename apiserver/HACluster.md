@@ -134,7 +134,9 @@ curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
 }'  
 ```
 
-Lets discuss the importaant pieces here:
+Note that template here has to be created using this [command](test/cluster//template/simple)
+
+Lets discuss the important pieces here:
 You need to specify annotation, that tells Ray that this is cluster with GCS fault tolerance
 
 ```sh
