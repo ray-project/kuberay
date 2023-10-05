@@ -29,9 +29,9 @@ you to stand up, run, manage and monitor your own version of redis.
 
 ## Creating Redis password secret
 
-Before creating your cluster, you also need to create [secret](test/cluster/redis/redis_passwrd.yaml) in the
-namespace where you want to create your Ray cluster (remember, that secret is visible only within a given
-namespace). To create a secret for using external redis run:
+Before creating your cluster, you need to create [secret](test/cluster/redis/redis_passwrd.yaml) in the
+namespace where you are planning to create your Ray cluster (remember, that secret is visible only within a given
+namespace). To create a secret for using external redis, run:
 
 ```sh
 kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_passwrd.yaml
@@ -39,7 +39,7 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_pass
 
 ## Ray Code for testing
 
-For both Ray jobs and Ray Serve we are recommending packaging the code in the image. For a simple testing here
+For both Ray jobs and Ray Serve we recommend packaging user code in the image. For a simple testing here
 we will create a [config map](test/cluster/code_configmap.yaml), containg simple code, that we will use for
 testing. To deploy it run the following:
 
