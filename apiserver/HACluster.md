@@ -39,8 +39,8 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_pass
 
 ## Ray Code for testing
 
-For both Ray jobs and Ray Serve we recommend packaging user code in the image. For a simple testing here
-we will create a [config map](test/cluster/code_configmap.yaml), containg simple code, that we will use for
+For both Ray Jobs and Ray Serve we recommend packaging user code in the image. For a simple testing here
+we will create a [config map](test/cluster/code_configmap.yaml), containging simple code, that we will use for
 testing. To deploy it run the following:
 
 ```sh
@@ -49,7 +49,7 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/code_configmap.y
 
 ## API server request
 
-To create a a cluster we can use the following curl command:
+To create a Ray cluster we can use the following curl command:
 
 ```sh
 curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
@@ -134,7 +134,7 @@ curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
 }'  
 ```
 
-Note that template here has to be created using this [command](test/cluster//template/simple)
+Note that computeTemplate here has to be created using this [command](test/cluster//template/simple)
 
 Lets discuss the important pieces here:
 You need to specify annotation, that tells Ray that this is cluster with GCS fault tolerance
@@ -151,8 +151,8 @@ password.
 "num-cpu": "0"
 ```
 
-Where the value of `REDIS_PASSWORD` comes from environment variable (below). We also ensure that that no
-application code runs on a head node.
+Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus: 0` ensures 
+that that no application code runs on a head node.
 
 The following environment variable have to be added here:
 
@@ -183,7 +183,7 @@ environment variable:
 ```
 
 This environment variable allows to increase GCS heartbeat timeout, which is 60 sec by default. The reason for
-increasing it is because restart of the head node can take some time, and we want to make sure that the workwer node
+increasing it is because restart of the head node can take some time, and we want to make sure that the worker node
 will not be killed during this time.
 
 ## Testing resulting cluster
@@ -195,18 +195,18 @@ To do this, note the name of the head node and create a detached actor using the
 kubectl exec -it <head node pod name> -- python3 /home/ray/samples/detached_actor.py
 ```
 
-Once this is done, open Ray dashboard (using pod-forward). In the cluster tab you should see 2 nodes and in the
-actor pane you should see created actor.
+Once this is done, open Ray dashboard (using port-forward). In the cluster tab you should see 2 nodes and in the
+Actor's pane you should see created actor.
 
-Now you can delete head node pode:
+Now you can delete head node pod:
 
 ```sh
 kubectl delete pods <head node pod name>
 ```
 
 The operator will recreate it. Make sure that only head node is recreated (note that it now has a different name),
-while worker node stays as is. Now you can go to the dashboard and make sure that in the cluster tab you still see
-2 nodes and in the actor pane you still see created actor.
+while worker node stays as is. Now you can go to the dashboard and make sure that in the Cluster tab you still see
+2 nodes and in the Actor's pane you still see created actor.
 
 For additional test run the following command:
 
