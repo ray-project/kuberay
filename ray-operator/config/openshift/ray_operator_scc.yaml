@@ -1,0 +1,11 @@
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: run-as-ray-user
+seLinuxContext:
+  type: MustRunAs
+runAsUser:
+  type: MustRunAs
+  uid: 1000
+users:
+  - 'system:serviceaccount:$(namespace):kuberay-operator'

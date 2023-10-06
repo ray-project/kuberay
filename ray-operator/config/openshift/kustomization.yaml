@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: opendatahub
+
+configMapGenerator:
+- name: ray-config
+  envs:
+    - params.env
+
+configurations:
+  - params.yaml
+
+vars:
+- name: namespace
+  objref:
+    kind: ConfigMap
+    name: ray-config
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.namespace
+- name: image
+  objref:
+    kind: ConfigMap
+    name: ray-config
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.odh-kuberay-operator-controller-image
+
+resources:
+- ray_operator_scc.yaml
+- ../default
+
+commonLabels:
+  app.kubernetes.io/name: kuberay
+  app.kubernetes.io/component: kuberay-operator
+
+patches:
+- path: kuberay-operator-image-patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kuberay-operator
