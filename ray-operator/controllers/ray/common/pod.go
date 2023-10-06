@@ -189,6 +189,8 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 			// GKE's Autopilot does not support GPU-using init containers, so we explicitly specify the resources for the
 			// init container instead of reusing the resources of the Ray container.
 			Resources: v1.ResourceRequirements{
+				// The init container's resource consumption remains constant, as it solely sends requests to check the GCS status at a fixed frequency.
+				// Therefore, hard-coding the resources is acceptable.
 				Limits: v1.ResourceList{
 					v1.ResourceCPU:    resource.MustParse("200m"),
 					v1.ResourceMemory: resource.MustParse("256Mi"),
