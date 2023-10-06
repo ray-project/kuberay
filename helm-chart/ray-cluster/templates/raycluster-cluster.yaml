@@ -129,8 +129,8 @@ spec:
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
             imagePullPolicy: {{ $values.image.pullPolicy }}
             {{- else }}
-            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
+            imagePullPolicy: {{ $.Values.image.pullPolicy }}
             {{- end }}
             resources: {{- toYaml $values.resources | nindent 14 }}
             securityContext:
