@@ -903,9 +903,7 @@ func TestDefaultInitContainer(t *testing.T) {
 		}
 	}
 
-	// The values of `Resources` should be the same in both Ray container and health-check container.
 	assert.NotEmpty(t, rayContainer.Resources, "The test only makes sense if the Ray container has resource limit/request.")
-	assert.Equal(t, rayContainer.Resources, healthCheckContainer.Resources)
 }
 
 func TestDefaultInitContainerImagePullPolicy(t *testing.T) {

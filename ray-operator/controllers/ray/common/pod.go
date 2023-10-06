@@ -185,8 +185,19 @@ func DefaultWorkerPodTemplate(instance rayv1alpha1.RayCluster, workerSpec rayv1a
 			// For more details, please refer to: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication.
 			Env:          deepCopyRayContainer.Env,
 			VolumeMounts: deepCopyRayContainer.VolumeMounts,
-			// If users specify ResourceQuota for the namespace, the init container need to specify resource explicitly.
-			Resources: deepCopyRayContainer.Resources,
+			// If users specify a ResourceQuota for the namespace, the init container needs to specify resources explicitly.
+			// GKE's Autopilot does not support GPU-using init containers, so we explicitly specify the resources for the
+			// init container instead of reusing the resources of the Ray container.
+			Resources: v1.ResourceRequirements{
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+			},
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
