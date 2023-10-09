@@ -40,7 +40,7 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_pass
 ## Ray Code for testing
 
 For both Ray Jobs and Ray Serve we recommend packaging user code in the image. For a simple testing here
-we will create a [config map](test/cluster/code_configmap.yaml), containging simple code, that we will use for
+we will create a [config map](test/cluster/code_configmap.yaml), containing simple code, that we will use for
 testing. To deploy it run the following:
 
 ```sh
