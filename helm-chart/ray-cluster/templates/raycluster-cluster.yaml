@@ -110,8 +110,8 @@ spec:
       {{- end }}
     {{- end }}
     replicas: {{ $values.replicas }}
-    minReplicas: {{ $values.minReplicas | default (default 0 $values.miniReplicas) }}
-    maxReplicas: {{ $values.maxReplicas | default (default 2147483647 $values.maxiReplicas) }}
+    minReplicas: {{ $values.minReplicas | default 0 }}
+    maxReplicas: {{ $values.maxReplicas | default 2147483647 }}
     groupName: {{ $groupName }}
     template:
       spec:
@@ -185,8 +185,8 @@ spec:
       {{- end }}
     {{- end }}
     replicas: {{ .Values.worker.replicas }}
-    minReplicas: {{ .Values.worker.minReplicas | default (default 0 .Values.worker.miniReplicas) }}
-    maxReplicas: {{ .Values.worker.maxReplicas | default (default 2147483647 .Values.worker.maxiReplicas) }}
+    minReplicas: {{ .Values.worker.minReplicas | default 0 }}
+    maxReplicas: {{ .Values.worker.maxReplicas | default 2147483647 }}
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
