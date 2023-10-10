@@ -390,11 +390,9 @@ class RayClusterAddCREvent(CREvent):
 
     def clean_up(self):
         """Delete added RayCluster"""
-        if not self.filepath:
-            delete_custom_object(CONST.RAY_CLUSTER_CRD,
-                self.namespace, self.custom_resource_object['metadata']['name'])
-        else:
-            shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath}")
+        delete_custom_object(CONST.RAY_CLUSTER_CRD,
+            self.namespace, self.custom_resource_object['metadata']['name'])
+
         # Wait pods to be deleted
         converge = False
         k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
@@ -404,7 +402,9 @@ class RayClusterAddCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=head')
             workerpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
-            if (len(headpods.items) == 0 and len(workerpods.items) == 0):
+            rediscleanuppods = k8s_v1_api.list_namespaced_pod(
+                namespace = self.namespace, label_selector='ray.io/node-type=redis-cleanup')
+            if (len(headpods.items) == 0 and len(workerpods.items) == 0 and len(rediscleanuppods.items) == 0):
                 converge = True
                 logger.info("--- Cleanup RayCluster %s seconds ---", time.time() - start_time)
                 break
@@ -416,6 +416,15 @@ class RayClusterAddCREvent(CREvent):
             logger.info("expected_head_pods: 0, expected_worker_pods: 0")
             show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
+
+        """Make sure the external redis has been cleaned"""
+        if search_path(self.custom_resource_object, ['metadata', 'annotations', 'ray.io/ft-enabled']) == 'true':
+            if shell_subprocess_run("test $(kubectl exec deploy/redis -- redis-cli --no-auth-warning -a $(kubectl get secret redis-password-secret -o jsonpath='{.data.password}' | base64 --decode) DBSIZE) = '0'") != 0:
+                raise Exception("The external redis is not cleaned")
+
+        """Delete other resources in the yaml"""
+        if self.filepath:
+            shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath} --ignore-not-found=true")
 
 class RayServiceFullCREvent(CREvent):
     """CREvent for RayService addition"""
