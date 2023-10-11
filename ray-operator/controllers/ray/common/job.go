@@ -8,7 +8,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/google/shlex"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"

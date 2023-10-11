@@ -25,7 +25,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 var (

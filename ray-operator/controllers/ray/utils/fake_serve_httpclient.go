@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type FakeRayDashboardClient struct {
