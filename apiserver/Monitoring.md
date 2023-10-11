@@ -57,3 +57,6 @@ kubectl port-forward svc/prometheus-operated -n prometheus-system 9090
 
 Now you can point your browser to `http://localhost:9090/` to get a PromQL panel. Start typing `ray` and
 you will see all of the Ray cluster metrics in Prometheus.
+
+Also take a look at the Ray [documentation](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
+for additional monitoring features, including Recording rules, Alerts and Grafana integration.
