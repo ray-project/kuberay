@@ -1,4 +1,4 @@
-package v1alpha1
+package v1
 
 import (
 	v1 "k8s.io/api/core/v1"
@@ -7,7 +7,7 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-// var app appsv1.Deployment{}
+
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -159,7 +159,6 @@ const (
 // RayCluster is the Schema for the RayClusters API
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
 // +kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0
 // +kubebuilder:printcolumn:name="status",type="string",JSONPath=".status.state",priority=0
