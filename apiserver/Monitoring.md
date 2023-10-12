@@ -26,11 +26,11 @@ kubectl delete podmonitor ray-workers-monitor -n prometheus-system
 To install API server, please follow the instructions from the [README.md](README.md) on installing
 API server using Helm
 
-Now we can install a [service monitor](test/api_server_service_monitor.yaml) to scrape Api Server metrics into
+Now we can install a [service monitor](deploy/prometheus/api_server_service_monitor.yaml) to scrape Api Server metrics into
 Prometheus using the following command:
 
 ```shell
-kubectl apply -f test/api_server_service_monitor.yaml
+kubectl apply -f deploy/prometheus/api_server_service_monitor.yaml
 ```
 
 With this in place, you can use port-forward to expose Prometheus:
@@ -48,11 +48,11 @@ Ray provides [documentation](https://docs.ray.io/en/master/cluster/kubernetes/k8
 describing how to monitor Ray cluster created using KubeRay operator. Because API server is using KubeRay operator
 to create the cluster. this documentation can be used directly. Here we will show a slightly simpler approach to
 monitor cluster. Instead of creating `service monitor` for scraping head node and `pod monitor` for scraping worker
-nodes we suggest we create a single [pod monitor](test/ray_cluster_pod_monitor.yaml) that can be installed using
+nodes we suggest we create a single [pod monitor](deploy/prometheus/ray_cluster_pod_monitor.yaml) that can be installed using
 the following command:
 
 ```shell
-kubectl apply -f test/ray_cluster_pod_monitor.yaml
+kubectl apply -f deploy/prometheus/ray_cluster_pod_monitor.yaml
 ```
 
 With this in place, you can again use port-forward to expose Prometheus:
