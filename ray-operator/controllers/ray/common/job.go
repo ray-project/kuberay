@@ -8,7 +8,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/google/shlex"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
@@ -24,7 +24,7 @@ func GetDecodedRuntimeEnv(runtimeEnv string) (string, error) {
 }
 
 // GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
-func getRuntimeEnvJson(rayJobInstance *rayv1alpha1.RayJob) (string, error) {
+func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
 	runtimeEnv := rayJobInstance.Spec.RuntimeEnv
 	runtimeEnvYAML := rayJobInstance.Spec.RuntimeEnvYAML
 
@@ -81,7 +81,7 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 }
 
 // GetK8sJobCommand builds the K8s job command for the Ray job.
-func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
+func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	address := rayJobInstance.Status.DashboardURL
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
@@ -137,7 +137,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1alpha1.RayJob) ([]string, error) {
 }
 
 // getDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTemplateSpec {
+func GetDefaultSubmitterTemplate(rayJobInstance *rayv1.RayJob) v1.PodTemplateSpec {
 	// Use the image of the Ray head to be defensive against version mismatch issues
 	var image string
 	if rayJobInstance.Spec.RayClusterSpec != nil &&

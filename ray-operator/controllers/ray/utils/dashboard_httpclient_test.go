@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 
 var _ = Describe("RayFrameworkGenerator", func() {
 	var (
-		rayJob             *rayv1alpha1.RayJob
+		rayJob             *rayv1.RayJob
 		expectJobId        string
 		errorJobId         string
 		rayDashboardClient *RayDashboardClient
@@ -30,12 +30,12 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	BeforeEach(func() {
 		expectJobId = "raysubmit_test001"
 		encodedRuntimeEnv := base64.StdEncoding.EncodeToString([]byte(runtimeEnvStr))
-		rayJob = &rayv1alpha1.RayJob{
+		rayJob = &rayv1.RayJob{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "rayjob-sample",
 				Namespace: "default",
 			},
-			Spec: rayv1alpha1.RayJobSpec{
+			Spec: rayv1.RayJobSpec{
 				Entrypoint: "python samply.py",
 				Metadata: map[string]string{
 					"owner": "test1",
@@ -68,7 +68,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+expectJobId,
 			func(req *http.Request) (*http.Response, error) {
 				body := &RayJobInfo{
-					JobStatus:  rayv1alpha1.JobStatusRunning,
+					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
 				}
@@ -88,7 +88,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		rayJobInfo, err := rayDashboardClient.GetJobInfo(context.TODO(), jobId)
 		Expect(err).To(BeNil())
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
-		Expect(rayJobInfo.JobStatus).To(Equal(rayv1alpha1.JobStatusRunning))
+		Expect(rayJobInfo.JobStatus).To(Equal(rayv1.JobStatusRunning))
 
 		_, err = rayDashboardClient.GetJobInfo(context.TODO(), errorJobId)
 		Expect(err).NotTo(BeNil())
@@ -127,7 +127,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
 			func(req *http.Request) (*http.Response, error) {
 				body := &RayJobInfo{
-					JobStatus:  rayv1alpha1.JobStatusSucceeded,
+					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
 				}

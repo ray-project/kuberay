@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/go-logr/logr"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -48,7 +48,7 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1alpha1.RayCluster) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error {
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if app.Spec.EnableInTreeAutoscaling == nil || !*app.Spec.EnableInTreeAutoscaling {
@@ -65,11 +65,11 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1alpha1.R
 	return nil
 }
 
-func getAppPodGroupName(app *rayv1alpha1.RayCluster) string {
+func getAppPodGroupName(app *rayv1.RayCluster) string {
 	return fmt.Sprintf("ray-%s-pg", app.Name)
 }
 
-func (v *VolcanoBatchScheduler) syncPodGroup(app *rayv1alpha1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+func (v *VolcanoBatchScheduler) syncPodGroup(app *rayv1.RayCluster, size int32, totalResource corev1.ResourceList) error {
 	podGroupName := getAppPodGroupName(app)
 	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(context.TODO(), podGroupName, metav1.GetOptions{}); err != nil {
 		if !errors.IsNotFound(err) {
@@ -104,7 +104,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(app *rayv1alpha1.RayCluster, size i
 }
 
 func createPodGroup(
-	app *rayv1alpha1.RayCluster,
+	app *rayv1.RayCluster,
 	podGroupName string,
 	size int32,
 	totalResource corev1.ResourceList,
@@ -114,7 +114,7 @@ func createPodGroup(
 			Namespace: app.Namespace,
 			Name:      podGroupName,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(app, rayv1alpha1.SchemeGroupVersion.WithKind("RayCluster")),
+				*metav1.NewControllerRef(app, rayv1.SchemeGroupVersion.WithKind("RayCluster")),
 			},
 		},
 		Spec: v1beta1.PodGroupSpec{
@@ -137,7 +137,7 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1alpha1.RayCluster, pod *corev1.Pod) {
+func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, pod *corev1.Pod) {
 	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
@@ -187,6 +187,6 @@ func (vf *VolcanoBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) 
 	return b.
 		Watches(&source.Kind{Type: &v1beta1.PodGroup{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
-			OwnerType:    &rayv1alpha1.RayCluster{},
+			OwnerType:    &rayv1.RayCluster{},
 		})
 }

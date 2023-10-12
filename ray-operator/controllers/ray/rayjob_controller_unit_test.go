@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -18,18 +18,18 @@ import (
 
 func TestGetOrCreateK8sJob(t *testing.T) {
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
-	rayCluster := &rayv1alpha1.RayCluster{
+	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-raycluster",
 			Namespace: "default",
 		},
 	}
 
-	rayJob := &rayv1alpha1.RayJob{
+	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-rayjob",
 			Namespace: "default",
@@ -73,8 +73,8 @@ func TestGetOrCreateK8sJob(t *testing.T) {
 
 func TestGetSubmitterTemplate(t *testing.T) {
 	// RayJob instance with user-provided submitter pod template.
-	rayJobInstanceWithTemplate := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
+	rayJobInstanceWithTemplate := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
 			Entrypoint: "echo hello world",
 			SubmitterPodTemplate: &corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -86,18 +86,18 @@ func TestGetSubmitterTemplate(t *testing.T) {
 				},
 			},
 		},
-		Status: rayv1alpha1.RayJobStatus{
+		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
 		},
 	}
 
 	// RayJob instance without user-provided submitter pod template.
 	// In this case we should use the image of the Ray Head, so specify the image so we can test it.
-	rayJobInstanceWithoutTemplate := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
+	rayJobInstanceWithoutTemplate := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
 			Entrypoint: "echo hello world",
-			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
-				HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
@@ -110,7 +110,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 				},
 			},
 		},
-		Status: rayv1alpha1.RayJobStatus{
+		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
 		},
 	}

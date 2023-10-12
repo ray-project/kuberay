@@ -1,7 +1,7 @@
 package common
 
 import (
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -9,7 +9,7 @@ import (
 )
 
 // BuildServiceAccount creates a new ServiceAccount for a head pod with autoscaler.
-func BuildServiceAccount(cluster *rayv1alpha1.RayCluster) (*v1.ServiceAccount, error) {
+func BuildServiceAccount(cluster *rayv1.RayCluster) (*v1.ServiceAccount, error) {
 	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.GetHeadGroupServiceAccountName(cluster),
@@ -26,7 +26,7 @@ func BuildServiceAccount(cluster *rayv1alpha1.RayCluster) (*v1.ServiceAccount, e
 }
 
 // BuildRole creates a new Role for an RayCluster resource.
-func BuildRole(cluster *rayv1alpha1.RayCluster) (*rbacv1.Role, error) {
+func BuildRole(cluster *rayv1.RayCluster) (*rbacv1.Role, error) {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
@@ -55,7 +55,7 @@ func BuildRole(cluster *rayv1alpha1.RayCluster) (*rbacv1.Role, error) {
 }
 
 // BuildRole
-func BuildRoleBinding(cluster *rayv1alpha1.RayCluster) (*rbacv1.RoleBinding, error) {
+func BuildRoleBinding(cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
 	serviceAccountName := utils.GetHeadGroupServiceAccountName(cluster)
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{

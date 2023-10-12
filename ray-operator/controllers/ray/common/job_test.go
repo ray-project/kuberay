@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 	"testing"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 )
 
-var testRayJob = &rayv1alpha1.RayJob{
-	Spec: rayv1alpha1.RayJobSpec{
+var testRayJob = &rayv1.RayJob{
+	Spec: rayv1.RayJobSpec{
 		RuntimeEnv: "eyJ0ZXN0IjoidGVzdCJ9", // {"test":"test"} in base64
 		Metadata: map[string]string{
 			"testKey": "testValue",
 		},
-		RayClusterSpec: &rayv1alpha1.RayClusterSpec{
+		RayClusterSpec: &rayv1.RayClusterSpec{
 			RayVersion: "2.6.0",
 		},
 		Entrypoint:          "echo hello",
@@ -22,7 +22,7 @@ var testRayJob = &rayv1alpha1.RayJob{
 		EntrypointNumGpus:   0.5,
 		EntrypointResources: `{"Custom_1": 1, "Custom_2": 5.5}`,
 	},
-	Status: rayv1alpha1.RayJobStatus{
+	Status: rayv1.RayJobStatus{
 		DashboardURL: "http://127.0.0.1:8265",
 		JobId:        "testJobId",
 	},
@@ -42,8 +42,8 @@ func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
 }
 
 func TestGetRuntimeEnvJsonFromYAML(t *testing.T) {
-	rayJobWithYAML := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
+	rayJobWithYAML := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: `
 working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
 pip: ["python-multipart==0.0.6"]
@@ -66,8 +66,8 @@ pip: ["python-multipart==0.0.6"]
 }
 
 func TestGetRuntimeEnvJsonErrorWithBothFields(t *testing.T) {
-	rayJobWithBoth := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
+	rayJobWithBoth := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
 			RuntimeEnv:     "eyJ0ZXN0IjoidGVzdCJ9",
 			RuntimeEnvYAML: `pip: ["python-multipart==0.0.6"]`,
 		},
@@ -108,8 +108,8 @@ func TestGetK8sJobCommand(t *testing.T) {
 }
 
 func TestGetK8sJobCommandWithYAML(t *testing.T) {
-	rayJobWithYAML := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
+	rayJobWithYAML := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: `
 working_dir: "https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip"
 pip: ["python-multipart==0.0.6"]
@@ -117,12 +117,12 @@ pip: ["python-multipart==0.0.6"]
 			Metadata: map[string]string{
 				"testKey": "testValue",
 			},
-			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: "2.6.0",
 			},
 			Entrypoint: "echo hello",
 		},
-		Status: rayv1alpha1.RayJobStatus{
+		Status: rayv1.RayJobStatus{
 			DashboardURL: "http://127.0.0.1:8265",
 			JobId:        "testJobId",
 		},
@@ -165,9 +165,9 @@ pip: ["python-multipart==0.0.6"]
 }
 
 func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
-	rayJob := &rayv1alpha1.RayJob{
-		Spec: rayv1alpha1.RayJobSpec{
-			RayClusterSpec: &rayv1alpha1.RayClusterSpec{
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: "2.5.0",
 			},
 			Metadata: map[string]string{

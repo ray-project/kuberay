@@ -7,16 +7,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
-func HeadServiceLabels(cluster rayv1alpha1.RayCluster) map[string]string {
+func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
 	return map[string]string{
 		RayClusterLabelKey:                cluster.Name,
-		RayNodeTypeLabelKey:               string(rayv1alpha1.HeadNode),
-		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1alpha1.HeadNode)),
+		RayNodeTypeLabelKey:               string(rayv1.HeadNode),
+		RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 		KubernetesApplicationNameLabelKey: ApplicationName,
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
@@ -24,7 +24,7 @@ func HeadServiceLabels(cluster rayv1alpha1.RayCluster) map[string]string {
 
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceForHeadPod(cluster rayv1alpha1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
+func BuildServiceForHeadPod(cluster rayv1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -129,7 +129,7 @@ func BuildServiceForHeadPod(cluster rayv1alpha1.RayCluster, labels map[string]st
 // BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
-func BuildHeadServiceForRayService(rayService rayv1alpha1.RayService, rayCluster rayv1alpha1.RayCluster) (*corev1.Service, error) {
+func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
 	service, err := BuildServiceForHeadPod(rayCluster, nil, nil)
 	if err != nil {
 		return nil, err
@@ -144,15 +144,15 @@ func BuildHeadServiceForRayService(rayService rayv1alpha1.RayService, rayCluster
 	service.ObjectMeta.Namespace = rayService.Namespace
 	service.ObjectMeta.Labels = map[string]string{
 		RayServiceLabelKey:  rayService.Name,
-		RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
-		RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1alpha1.HeadNode)),
+		RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
 	}
 
 	return service, nil
 }
 
 // BuildServeServiceForRayService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
-func BuildServeServiceForRayService(rayService rayv1alpha1.RayService, rayCluster rayv1alpha1.RayCluster) (*corev1.Service, error) {
+func BuildServeServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
 	labels := map[string]string{
 		RayServiceLabelKey:               rayService.Name,
 		RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(rayService.Name),
@@ -287,7 +287,7 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 }
 
 // getServicePorts will either user passing ports or default ports to create service.
-func getServicePorts(cluster rayv1alpha1.RayCluster) map[string]int32 {
+func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 	ports, err := getPortsFromCluster(cluster)
 	// Assign default ports
 	if err != nil || len(ports) == 0 {
@@ -314,7 +314,7 @@ func getServicePorts(cluster rayv1alpha1.RayCluster) map[string]int32 {
 // getPortsFromCluster get the ports from head container and directly map them in service
 // It's user's responsibility to maintain rayStartParam ports and container ports mapping
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
-func getPortsFromCluster(cluster rayv1alpha1.RayCluster) (map[string]int32, error) {
+func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 	svcPorts := map[string]int32{}
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports

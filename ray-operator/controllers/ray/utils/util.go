@@ -18,7 +18,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -149,12 +149,12 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 // @param crdType: The type of the CRD that owns the head service.
 // @param clusterSpec: `RayClusterSpec`
 // @param ownerName: The name of the CR that owns the head service.
-func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayClusterSpec, ownerName string) (string, error) {
+func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
 	case RayServiceCRD:
-		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc")), nil
+		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")), nil
 	case RayClusterCRD:
-		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1alpha1.HeadNode, "svc"))
+		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"))
 		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
 			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
 		}
@@ -165,7 +165,7 @@ func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1alpha1.RayCluster
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
-func GenerateFQDNServiceName(cluster rayv1alpha1.RayCluster, namespace string) string {
+func GenerateFQDNServiceName(cluster rayv1.RayCluster, namespace string) string {
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
 	if err != nil {
 		logrus.Errorf("Failed to generate head service name: %v", err)
@@ -192,12 +192,12 @@ func GenerateServeServiceLabel(serviceName string) string {
 
 // GenerateIngressName generates an ingress name from cluster name
 func GenerateIngressName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "ingress")
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1.HeadNode, "ingress")
 }
 
 // GenerateRouteName generates an ingress name from cluster name
 func GenerateRouteName(clusterName string) string {
-	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1alpha1.HeadNode, "route")
+	return fmt.Sprintf("%s-%s-%s", clusterName, rayv1.HeadNode, "route")
 }
 
 // GenerateRayClusterName generates a ray cluster name from ray service name
@@ -211,11 +211,11 @@ func GenerateRayJobId(rayjob string) string {
 }
 
 // GenerateIdentifier generates identifier of same group pods
-func GenerateIdentifier(clusterName string, nodeType rayv1alpha1.RayNodeType) string {
+func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1alpha1.WorkerGroupSpec) int32 {
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
@@ -236,7 +236,7 @@ func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1alpha1.WorkerGroupSpec) 
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
-func CalculateDesiredReplicas(cluster *rayv1alpha1.RayCluster) int32 {
+func CalculateDesiredReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		count += GetWorkerGroupDesiredReplicas(nodeGroup)
@@ -246,7 +246,7 @@ func CalculateDesiredReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 }
 
 // CalculateMinReplicas calculates min worker replicas at the cluster level
-func CalculateMinReplicas(cluster *rayv1alpha1.RayCluster) int32 {
+func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		count += *nodeGroup.MinReplicas
@@ -256,7 +256,7 @@ func CalculateMinReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 }
 
 // CalculateMaxReplicas calculates max worker replicas at the cluster level
-func CalculateMaxReplicas(cluster *rayv1alpha1.RayCluster) int32 {
+func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		count += *nodeGroup.MaxReplicas
@@ -270,7 +270,7 @@ func CalculateMaxReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	count := int32(0)
 	for _, pod := range pods.Items {
-		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1alpha1.WorkerNode) {
+		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1.WorkerNode) {
 			continue
 		}
 		if pod.Status.Phase == corev1.PodRunning {
@@ -281,7 +281,7 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	return count
 }
 
-func CalculateDesiredResources(cluster *rayv1alpha1.RayCluster) corev1.ResourceList {
+func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
@@ -296,7 +296,7 @@ func CalculateDesiredResources(cluster *rayv1alpha1.RayCluster) corev1.ResourceL
 	return sumResourceList(desiredResourcesList)
 }
 
-func CalculateMinResources(cluster *rayv1alpha1.RayCluster) corev1.ResourceList {
+func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
@@ -368,7 +368,7 @@ func FilterContainerByName(containers []corev1.Container, name string) (corev1.C
 
 // GetHeadGroupServiceAccountName returns the head group service account if it exists.
 // Otherwise, it returns the name of the cluster itself.
-func GetHeadGroupServiceAccountName(cluster *rayv1alpha1.RayCluster) string {
+func GetHeadGroupServiceAccountName(cluster *rayv1.RayCluster) string {
 	headGroupServiceAccountName := cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName
 	if headGroupServiceAccountName != "" {
 		return headGroupServiceAccountName

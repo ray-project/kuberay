@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -54,7 +54,7 @@ func NewSchedulerManager(config *rest.Config) *SchedulerManager {
 	return &manager
 }
 
-func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1alpha1.RayCluster) (schedulerinterface.BatchScheduler, error) {
+func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {
 	if schedulerName, ok := app.ObjectMeta.Labels[common.RaySchedulerName]; ok {
 		return batch.GetScheduler(schedulerName)
 	}

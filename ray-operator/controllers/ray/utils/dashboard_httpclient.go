@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 var (
@@ -42,9 +42,9 @@ type RayDashboardClientInterface interface {
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
-	ConvertServeConfigV1(rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments
+	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
-	SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error)
+	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error)
 	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
 }
 
@@ -66,7 +66,7 @@ type RayDashboardClient struct {
 
 // FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
 // and the port with the given port name (defaultPortName).
-func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1alpha1.RayCluster, defaultPortName string) (string, error) {
+func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
 	headSvc := &corev1.Service{}
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
 	if err != nil {
@@ -258,7 +258,7 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
-func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.ServeDeploymentGraphSpec) ServingClusterDeployments {
+func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments {
 	applicationRuntimeEnv := make(map[string]interface{})
 	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
 
@@ -313,13 +313,13 @@ func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1alpha1.Serv
 // RayJobInfo is the response of "ray job status" api.
 // Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
 type RayJobInfo struct {
-	JobStatus  rayv1alpha1.JobStatus `json:"status,omitempty"`
-	Entrypoint string                `json:"entrypoint,omitempty"`
-	Message    string                `json:"message,omitempty"`
-	ErrorType  *string               `json:"error_type,omitempty"`
-	StartTime  int64                 `json:"start_time,omitempty"`
-	EndTime    int64                 `json:"end_time,omitempty"`
-	Metadata   map[string]string     `json:"metadata,omitempty"`
+	JobStatus  rayv1.JobStatus   `json:"status,omitempty"`
+	Entrypoint string            `json:"entrypoint,omitempty"`
+	Message    string            `json:"message,omitempty"`
+	ErrorType  *string           `json:"error_type,omitempty"`
+	StartTime  int64             `json:"start_time,omitempty"`
+	EndTime    int64             `json:"end_time,omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
 }
 
 // RayJobRequest is the request body to submit.
@@ -369,7 +369,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
 	request, err := ConvertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
@@ -431,14 +431,14 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 			return err
 		}
 		// StopJob only returns an error when JobStatus is not in terminal states (STOPPED / SUCCEEDED / FAILED)
-		if !rayv1alpha1.IsJobTerminal(jobInfo.JobStatus) {
+		if !rayv1.IsJobTerminal(jobInfo.JobStatus) {
 			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
 		}
 	}
 	return nil
 }
 
-func ConvertRayJobToReq(rayJob *rayv1alpha1.RayJob) (*RayJobRequest, error) {
+func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	req := &RayJobRequest{
 		Entrypoint: rayJob.Spec.Entrypoint,
 		Metadata:   rayJob.Spec.Metadata,
