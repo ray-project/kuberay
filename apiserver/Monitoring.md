@@ -23,11 +23,8 @@ kubectl delete servicemonitor ray-head-monitor -n prometheus-system
 kubectl delete podmonitor ray-workers-monitor -n prometheus-system
 ```
 
-Install API server from the project using the following command:
-
-```shell
-helm install apiserver /Users/boris/Projects/kuberay/helm-chart/kuberay-apiserver
-```
+To install API server, please follow the instructions from the [README.md](README.md) on installing
+API server using Helm
 
 Now we can install a [service monitor](test/api_server_service_monitor.yaml) to scrape Api Server metrics into
 Prometheus using the following command:
