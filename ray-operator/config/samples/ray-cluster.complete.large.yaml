@@ -5,7 +5,7 @@
 # (AWS: m5.4xlarge, GCP: e2-standard-16, Azure: Standard_D5_v2)
 # Optimal resource allocation will depend on your Kubernetes infrastructure and might
 # require some experimentation.
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:

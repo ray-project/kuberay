@@ -111,7 +111,7 @@ class RayServiceUpdateCREvent(CREvent):
             group="ray.io",
             namespace=self.namespace,
             name=self.name,
-            version="v1alpha1",
+            version="v1",
             plural="rayservices",
         )
 
