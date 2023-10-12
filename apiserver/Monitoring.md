@@ -1,14 +1,14 @@
 # Monitoring of the API server and created Ray clusters
 
 In order to ensure a proper functioning of the API server and created Ray clusters, it is typically necessary to
-monitor the API server itself and created Ray clusters. This document describes how to insstrument both API server
+monitor the API server itself and created Ray clusters. This document describes how to instrument both API server
 and created clusters with Prometheus and Grafana
 
 ## Monitoring of the API server
 
 Current implementation of the API server provides a flag `collectMetricsFlag` that defines whether to collect and
 expose Prometheus metrics, which is by default set to `true`. To disable metrics collection, this flag needs to
-be set to `false` and the API server needs to be rebuild.
+be set to `false` and the API server image needs to be rebuild.
 
 If this flag is enabled, an `http` port at `/metrics` endpoint provides API server metrics in Prometheus format.
 
@@ -30,7 +30,11 @@ helm install apiserver /Users/boris/Projects/kuberay/helm-chart/kuberay-apiserve
 ```
 
 Now we can install a [service monitor](test/api_server_service_monitor.yaml) to scrape Api Server metrics into
-Prometheus.
+Prometheus using the following command:
+
+```shell
+kubectl apply -f test/api_server_service_monitor.yaml
+```
 
 With this in place, you can use port-forward to expose Prometheus:
 
@@ -47,7 +51,12 @@ Ray provides [documentation](https://docs.ray.io/en/master/cluster/kubernetes/k8
 describing how to monitor Ray cluster created using KubeRay operator. Because API server is using KubeRay operator
 to create the cluster. this documentation can be used directly. Here we will show a slightly simpler approach to
 monitor cluster. Instead of creating `service monitor` for scraping head node and `pod monitor` for scraping worker
-nodes we suggest we create a single [pod monitor](test/ray_cluster_pod_monitor.yaml).
+nodes we suggest we create a single [pod monitor](test/ray_cluster_pod_monitor.yaml) that can be installed using
+the following command:
+
+```shell
+kubectl apply -f test/ray_cluster_pod_monitor.yaml
+```
 
 With this in place, you can again use port-forward to expose Prometheus:
 
