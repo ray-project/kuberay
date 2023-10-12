@@ -30,11 +30,6 @@ logging.basicConfig(
 # Default Ray version
 ray_version = '2.7.0'
 
-# Default docker images
-ray_image = 'rayproject/ray:2.7.0'
-kuberay_operator_image = 'kuberay/operator:nightly'
-
-
 class BasicRayTestCase(unittest.TestCase):
     """Test the basic functionalities of RayCluster by executing simple jobs."""
     cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.mini.yaml.template")
@@ -45,11 +40,7 @@ class BasicRayTestCase(unittest.TestCase):
         """Create a Kind cluster, a KubeRay operator, and a RayCluster."""
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
-        image_dict = {
-            CONST.RAY_IMAGE_KEY: ray_image,
-            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
-        }
-        operator_manager = OperatorManager(image_dict)
+        operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         utils.create_ray_cluster(BasicRayTestCase.cluster_template, ray_version, ray_image)
 
@@ -79,11 +70,7 @@ class RayFTTestCase(unittest.TestCase):
             raise unittest.SkipTest(f"{CONST.RAY_FT} is not supported")
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
-        image_dict = {
-            CONST.RAY_IMAGE_KEY: ray_image,
-            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
-        }
-        operator_manager = OperatorManager(image_dict)
+        operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
 
@@ -226,11 +213,7 @@ class KubeRayHealthCheckTestCase(unittest.TestCase):
     def setUpClass(cls):
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
-        image_dict = {
-            CONST.RAY_IMAGE_KEY: ray_image,
-            CONST.OPERATOR_IMAGE_KEY: kuberay_operator_image
-        }
-        operator_manager = OperatorManager(image_dict)
+        operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         utils.create_ray_cluster(
             KubeRayHealthCheckTestCase.cluster_template, ray_version, ray_image)
