@@ -7,19 +7,19 @@ import (
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type ServiceClientInterface interface {
-	RayServiceClient(namespace string) rayiov1alpha1.RayServiceInterface
+	RayServiceClient(namespace string) rayv1.RayServiceInterface
 }
 
 type RayServiceClient struct {
-	client rayiov1alpha1.RayV1alpha1Interface
+	client rayv1.RayV1Interface
 }
 
-func (cc RayServiceClient) RayServiceClient(namespace string) rayiov1alpha1.RayServiceInterface {
+func (cc RayServiceClient) RayServiceClient(namespace string) rayv1.RayServiceInterface {
 	return cc.client.RayServices(namespace)
 }
 
@@ -31,6 +31,6 @@ func NewRayServiceClientOrFatal(initConnectionTimeout time.Duration, options uti
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
 
-	rayServiceClient := rayclient.NewForConfigOrDie(cfg).RayV1alpha1()
+	rayServiceClient := rayclient.NewForConfigOrDie(cfg).RayV1()
 	return &RayServiceClient{client: rayServiceClient}
 }

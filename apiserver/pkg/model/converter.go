@@ -11,7 +11,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -87,7 +87,7 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster, clusterEventsMap map[string][]v1.Event) []*api.Cluster {
+func FromCrdToApiClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]v1.Event) []*api.Cluster {
 	apiClusters := make([]*api.Cluster, 0)
 	for _, cluster := range clusters {
 		apiClusters = append(apiClusters, FromCrdToApiCluster(cluster, clusterEventsMap[cluster.Name]))
@@ -95,7 +95,7 @@ func FromCrdToApiClusters(clusters []*v1alpha1.RayCluster, clusterEventsMap map[
 	return apiClusters
 }
 
-func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.Cluster {
+func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []v1.Event) *api.Cluster {
 	pbCluster := &api.Cluster{
 		Name:         cluster.Name,
 		Namespace:    cluster.Namespace,
@@ -136,14 +136,14 @@ func FromCrdToApiCluster(cluster *v1alpha1.RayCluster, events []v1.Event) *api.C
 	return pbCluster
 }
 
-func PopulateRayClusterSpec(spec v1alpha1.RayClusterSpec) *api.ClusterSpec {
+func PopulateRayClusterSpec(spec rayv1api.RayClusterSpec) *api.ClusterSpec {
 	clusterSpec := &api.ClusterSpec{}
 	clusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(spec.HeadGroupSpec)
 	clusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(spec.WorkerGroupSpecs)
 	return clusterSpec
 }
 
-func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
+func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {
 	headNodeSpec := &api.HeadGroupSpec{
 		RayStartParams:  spec.RayStartParams,
 		ServiceType:     string(spec.ServiceType),
@@ -186,7 +186,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 	return headNodeSpec
 }
 
-func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroupSpec {
+func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroupSpec {
 	var workerNodeSpecs []*api.WorkerGroupSpec
 
 	for _, spec := range specs {
@@ -326,7 +326,7 @@ func FromKubeToAPIComputeTemplates(configMaps []*v1.ConfigMap) []*api.ComputeTem
 	return apiComputeTemplates
 }
 
-func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
+func FromCrdToApiJobs(jobs []*rayv1api.RayJob) []*api.RayJob {
 	apiJobs := make([]*api.RayJob, 0)
 	for _, job := range jobs {
 		apiJobs = append(apiJobs, FromCrdToApiJob(job))
@@ -334,7 +334,7 @@ func FromCrdToApiJobs(jobs []*v1alpha1.RayJob) []*api.RayJob {
 	return apiJobs
 }
 
-func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
+func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -377,7 +377,7 @@ func FromCrdToApiJob(job *v1alpha1.RayJob) (pbJob *api.RayJob) {
 	return pbJob
 }
 
-func FromCrdToApiServices(services []*v1alpha1.RayService, serviceEventsMap map[string][]v1.Event) []*api.RayService {
+func FromCrdToApiServices(services []*rayv1api.RayService, serviceEventsMap map[string][]v1.Event) []*api.RayService {
 	apiServices := make([]*api.RayService, 0)
 	for _, service := range services {
 		apiServices = append(apiServices, FromCrdToApiService(service, serviceEventsMap[service.Name]))
@@ -385,7 +385,7 @@ func FromCrdToApiServices(services []*v1alpha1.RayService, serviceEventsMap map[
 	return apiServices
 }
 
-func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.RayService {
+func FromCrdToApiService(service *rayv1api.RayService, events []v1.Event) *api.RayService {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -413,8 +413,8 @@ func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.R
 	return pbService
 }
 
-func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
-	if reflect.DeepEqual(spec, v1alpha1.ServeDeploymentGraphSpec{}) {
+func PopulateServeDeploymentGraphSpec(spec rayv1api.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
+	if reflect.DeepEqual(spec, rayv1api.ServeDeploymentGraphSpec{}) {
 		return nil
 	}
 	return &api.ServeDeploymentGraphSpec{
@@ -424,11 +424,11 @@ func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *a
 	}
 }
 
-func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.ServeConfig {
+func PopulateServeConfig(serveConfigSpecs []rayv1api.ServeConfigSpec) []*api.ServeConfig {
 	serveConfigs := make([]*api.ServeConfig, 0)
 	for _, serveConfigSpec := range serveConfigSpecs {
 		var actorOptions *api.ActorOptions
-		if reflect.DeepEqual(serveConfigSpec.RayActorOptions, v1alpha1.RayActorOptionSpec{}) {
+		if reflect.DeepEqual(serveConfigSpec.RayActorOptions, rayv1api.RayActorOptionSpec{}) {
 			actorOptions = nil
 		} else {
 			actorOptions = &api.ActorOptions{
@@ -475,7 +475,7 @@ func PoplulateUnhealthySecondThreshold(value *int32) int32 {
 	return *value
 }
 
-func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {
+func PoplulateRayServiceStatus(serviceName string, serviceStatus rayv1api.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {
 	status := &api.RayServiceStatus{
 		RayServiceEvents:       PopulateRayServiceEvent(serviceName, events),
 		RayClusterName:         serviceStatus.ActiveServiceStatus.RayClusterName,
@@ -489,7 +489,7 @@ func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RaySer
 	return status
 }
 
-func PopulateServeApplicationStatus(serveApplicationStatuses map[string]v1alpha1.AppStatus) []*api.ServeApplicationStatus {
+func PopulateServeApplicationStatus(serveApplicationStatuses map[string]rayv1api.AppStatus) []*api.ServeApplicationStatus {
 	appStatuses := make([]*api.ServeApplicationStatus, 0)
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
@@ -503,7 +503,7 @@ func PopulateServeApplicationStatus(serveApplicationStatuses map[string]v1alpha1
 	return appStatuses
 }
 
-func PopulateServeDeploymentStatus(serveDeploymentStatuses map[string]v1alpha1.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
+func PopulateServeDeploymentStatus(serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
 	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{

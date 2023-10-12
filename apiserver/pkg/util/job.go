@@ -2,26 +2,26 @@ package util
 
 import (
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type RayJob struct {
-	*rayalphaapi.RayJob
+	*rayv1api.RayJob
 }
 
 const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
 func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
-	rayJob := &rayalphaapi.RayJob{
+	rayJob := &rayv1api.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiJob.Name,
 			Namespace:   apiJob.Namespace,
 			Labels:      buildRayJobLabels(apiJob),
 			Annotations: buildRayJobAnnotations(apiJob),
 		},
-		Spec: rayalphaapi.RayJobSpec{
+		Spec: rayv1api.RayJobSpec{
 			Entrypoint:               apiJob.Entrypoint,
 			Metadata:                 apiJob.Metadata,
 			RuntimeEnvYAML:           apiJob.RuntimeEnv,
@@ -42,7 +42,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 	return &RayJob{rayJob}, nil
 }
 
-func (j *RayJob) Get() *rayalphaapi.RayJob {
+func (j *RayJob) Get() *rayv1api.RayJob {
 	return j.RayJob
 }
 
