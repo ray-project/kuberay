@@ -128,7 +128,7 @@ func startHttpProxy() {
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()
-	// Seems /apis (matches /apis/v1/clusters) works fine
+	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
 	topMux.Handle("/", runtimeMux)
 	topMux.Handle("/metrics", promhttp.Handler())
 	topMux.HandleFunc("/swagger/", serveSwaggerFile)
