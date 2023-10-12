@@ -7,12 +7,12 @@ This section walks through how to build and test the operator in a running Kuber
 software  | version | link
 :-------------  | :---------------:| -------------:
 kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.17|[download](https://golang.org/dl/)
+go  | v1.19|[download](https://golang.org/dl/)
 docker   | 19.03+|[download](https://docs.docker.com/install/)
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
 
-The instructions assume you have access to a running Kubernetes cluster via `kubectl`. If you want to test locally, consider using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
+The instructions assume you have access to a running Kubernetes cluster via `kubectl`. If you want to test locally, consider using [Kind](https://kind.sigs.k8s.io/) or [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
 
 ### Setup on Kind
 
@@ -120,29 +120,29 @@ IMG=kuberay/operator:nightly make deploy
 
 KubeRay uses the gofumpt linter.
 
-Download gofumpt version **0.2.1**. 0.2.1 is the latest version still compatible with go1.17. Run this command to download it:
+Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.19. Run this command to download it:
 
 ```bash
-go install mvdan.cc/gofumpt@v0.2.1
+go install mvdan.cc/gofumpt@v0.5.0
 ```
 
 As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
 
-Check that the `gofumpt` version is 0.2.1:
+Check that the `gofumpt` version is 0.5.0:
 
 ```bash
 gofumpt --version
-# v0.2.1
+# v0.5.0 (go1.19)
 ```
 
-Make sure your `go` version is still 1.17:
+Make sure your `go` version is still 1.19:
 
 ```bash
 go version
-# go version go1.17.13 darwin/arm64
+# go version go1.19 darwin/amd64
 ```
 
-If your `go` version isn’t 1.17 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). gofumpt versions later than 0.2.1 are built on later go version and will update your go version. If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `go version`. It should be back to 1.17.
+If your `go` version isn’t 1.19 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.19`. It should be back to 1.19.x.
 
 Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
 
