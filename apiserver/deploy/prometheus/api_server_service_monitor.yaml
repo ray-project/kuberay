@@ -11,7 +11,7 @@ spec:
         path: /metrics
   namespaceSelector:
     matchNames:
-      - default               # ns where api server is deployed
+      - default               # ns where API server is deployed
   selector:
     matchLabels:
       app.kubernetes.io/component: kuberay-apiserver

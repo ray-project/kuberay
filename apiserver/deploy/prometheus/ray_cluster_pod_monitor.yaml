@@ -10,7 +10,7 @@ spec:
     - port: metrics
   namespaceSelector:
     matchNames:
-      - default               # ns where ray cluster is deployed
+      - default               # ns where Ray cluster is deployed
   selector:
     matchLabels:
       app.kubernetes.io/name: kuberay
