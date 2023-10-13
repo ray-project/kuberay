@@ -19,6 +19,8 @@ spec:
   # A list of endpoints allowed as part of this ServiceMonitor.
   endpoints:
     - port: metrics
+    - port: as-metrics # autoscaler metrics
+    - port: dash-metrics # dashboard metrics
   targetLabels:
   - ray.io/cluster
 
