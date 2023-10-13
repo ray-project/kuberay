@@ -100,9 +100,9 @@ class ExternalClusterManager(ClusterManager):
         self.cleanup_timeout = 120
     
     def cleanup(self, namespace = "default") -> None:
-        self.__delete_all_crs("ray.io", "v1alpha1", namespace, "rayservices")
-        self.__delete_all_crs("ray.io", "v1alpha1", namespace, "rayjobs")
-        self.__delete_all_crs("ray.io", "v1alpha1", namespace, "rayclusters")
+        self.__delete_all_crs("ray.io", "v1", namespace, "rayservices")
+        self.__delete_all_crs("ray.io", "v1", namespace, "rayjobs")
+        self.__delete_all_crs("ray.io", "v1", namespace, "rayclusters")
 
         k8s_v1_api = self.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
         start_time = time.time()
@@ -401,7 +401,7 @@ def create_custom_object(namespace, cr_object):
     if crd == CONST.RAY_CLUSTER_CRD:
         k8s_cr_api.create_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayclusters",
             body=cr_object,
@@ -409,7 +409,7 @@ def create_custom_object(namespace, cr_object):
     elif crd == CONST.RAY_SERVICE_CRD:
         k8s_cr_api.create_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayservices",
             body=cr_object,
@@ -417,7 +417,7 @@ def create_custom_object(namespace, cr_object):
     elif crd == CONST.RAY_JOB_CRD:
         k8s_cr_api.create_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayjobs",
             body=cr_object,
@@ -430,7 +430,7 @@ def delete_custom_object(crd, namespace, cr_name):
     if crd == CONST.RAY_CLUSTER_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayclusters",
             name=cr_name,
@@ -438,7 +438,7 @@ def delete_custom_object(crd, namespace, cr_name):
     elif crd == CONST.RAY_SERVICE_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayservices",
             name=cr_name,
@@ -446,7 +446,7 @@ def delete_custom_object(crd, namespace, cr_name):
     elif crd == CONST.RAY_JOB_CRD:
         k8s_cr_api.delete_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayjobs",
             name=cr_name,
@@ -459,7 +459,7 @@ def get_custom_object(crd, namespace, cr_name):
     if crd == CONST.RAY_CLUSTER_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayclusters",
             name=cr_name,
@@ -467,7 +467,7 @@ def get_custom_object(crd, namespace, cr_name):
     elif crd == CONST.RAY_SERVICE_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayservices",
             name=cr_name,
@@ -475,7 +475,7 @@ def get_custom_object(crd, namespace, cr_name):
     elif crd == CONST.RAY_JOB_CRD:
         return k8s_cr_api.get_namespaced_custom_object(
             group="ray.io",
-            version="v1alpha1",
+            version="v1",
             namespace=namespace,
             plural="rayjobs",
             name=cr_name,

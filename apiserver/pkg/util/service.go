@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,10 +18,10 @@ const (
 )
 
 type RayService struct {
-	*rayalphaapi.RayService
+	*rayv1api.RayService
 }
 
-func (s *RayService) Get() *rayalphaapi.RayService {
+func (s *RayService) Get() *rayv1api.RayService {
 	return s.RayService
 }
 
@@ -32,7 +32,7 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 		return nil, err
 	}
 	// Build Ray service
-	rayService := &rayalphaapi.RayService{
+	rayService := &rayv1api.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiService.Name,
 			Namespace:   apiService.Namespace,
@@ -59,7 +59,7 @@ func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
 	return annotations
 }
 
-func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayalphaapi.RayServiceSpec, error) {
+func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayServiceSpec, error) {
 	// Ensure that at least one and only one serve config (V1 or V2) defined
 	if apiService.ServeConfig_V2 == "" && apiService.ServeDeploymentGraphSpec == nil {
 		// Serve configuration is not defined
@@ -94,9 +94,9 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 
 	if apiService.ServeDeploymentGraphSpec != nil {
 		// V1 definition
-		serveConfigSpecs := make([]rayalphaapi.ServeConfigSpec, 0)
+		serveConfigSpecs := make([]rayv1api.ServeConfigSpec, 0)
 		for _, serveConfig := range apiService.ServeDeploymentGraphSpec.ServeConfigs {
-			actorOptions := rayalphaapi.RayActorOptionSpec{}
+			actorOptions := rayv1api.RayActorOptionSpec{}
 			if serveConfig.ActorOptions != nil {
 				if serveConfig.ActorOptions.RuntimeEnv != "" {
 					actorOptions.RuntimeEnv = serveConfig.ActorOptions.RuntimeEnv
@@ -120,7 +120,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 					actorOptions.AcceleratorType = serveConfig.ActorOptions.AccceleratorType
 				}
 			}
-			serveConfigSpec := rayalphaapi.ServeConfigSpec{
+			serveConfigSpec := rayv1api.ServeConfigSpec{
 				Name:            serveConfig.DeploymentName,
 				NumReplicas:     &serveConfig.Replicas,
 				RayActorOptions: actorOptions,
@@ -140,8 +140,8 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 
 			serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
 		}
-		return &rayalphaapi.RayServiceSpec{
-			ServeDeploymentGraphSpec: rayalphaapi.ServeDeploymentGraphSpec{
+		return &rayv1api.RayServiceSpec{
+			ServeDeploymentGraphSpec: rayv1api.ServeDeploymentGraphSpec{
 				ImportPath:       apiService.ServeDeploymentGraphSpec.ImportPath,
 				RuntimeEnv:       apiService.ServeDeploymentGraphSpec.RuntimeEnv,
 				ServeConfigSpecs: serveConfigSpecs,
@@ -152,7 +152,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		}, nil
 	}
 	// V2 definition
-	return &rayalphaapi.RayServiceSpec{
+	return &rayv1api.RayServiceSpec{
 		ServeConfigV2:                      apiService.ServeConfig_V2,
 		RayClusterSpec:                     *newRayClusterSpec,
 		ServiceUnhealthySecondThreshold:    serviceUnhealthySecondThreshold,
@@ -160,7 +160,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 	}, nil
 }
 
-func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, workerGroupSpecs []rayalphaapi.WorkerGroupSpec) []rayalphaapi.WorkerGroupSpec {
+func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, workerGroupSpecs []rayv1api.WorkerGroupSpec) []rayv1api.WorkerGroupSpec {
 	specMap := map[string]*api.WorkerGroupUpdateSpec{}
 	for _, spec := range updateSpecs {
 		if spec != nil {
@@ -176,7 +176,7 @@ func UpdateRayServiceWorkerGroupSpecs(updateSpecs []*api.WorkerGroupUpdateSpec, 
 	return workerGroupSpecs
 }
 
-func updateWorkerGroupSpec(updateSpec *api.WorkerGroupUpdateSpec, workerGroupSpec rayalphaapi.WorkerGroupSpec) rayalphaapi.WorkerGroupSpec {
+func updateWorkerGroupSpec(updateSpec *api.WorkerGroupUpdateSpec, workerGroupSpec rayv1api.WorkerGroupSpec) rayv1api.WorkerGroupSpec {
 	replicas := updateSpec.Replicas
 	minReplicas := updateSpec.MinReplicas
 	maxReplicas := updateSpec.MaxReplicas
@@ -187,7 +187,7 @@ func updateWorkerGroupSpec(updateSpec *api.WorkerGroupUpdateSpec, workerGroupSpe
 	return workerGroupSpec
 }
 
-func UpdateServeDeploymentGraphSpec(updateSpecs *api.ServeDeploymentGraphSpec, serveDeploymentGraphspec rayalphaapi.ServeDeploymentGraphSpec) rayalphaapi.ServeDeploymentGraphSpec {
+func UpdateServeDeploymentGraphSpec(updateSpecs *api.ServeDeploymentGraphSpec, serveDeploymentGraphspec rayv1api.ServeDeploymentGraphSpec) rayv1api.ServeDeploymentGraphSpec {
 	if updateSpecs.ImportPath != "" {
 		serveDeploymentGraphspec.ImportPath = updateSpecs.ImportPath
 	}
@@ -212,7 +212,7 @@ func UpdateServeDeploymentGraphSpec(updateSpecs *api.ServeDeploymentGraphSpec, s
 	return serveDeploymentGraphspec
 }
 
-func updateServeConfigSpec(updateSpec *api.ServeConfig, serveConfigSpec rayalphaapi.ServeConfigSpec) rayalphaapi.ServeConfigSpec {
+func updateServeConfigSpec(updateSpec *api.ServeConfig, serveConfigSpec rayv1api.ServeConfigSpec) rayv1api.ServeConfigSpec {
 	if updateSpec.Replicas != 0 {
 		serveConfigSpec.NumReplicas = &updateSpec.Replicas
 	}

@@ -25,7 +25,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -61,7 +61,7 @@ var (
 	expectReplicaNum        int32
 	testPods                []runtime.Object
 	testPodsNoHeadIP        []runtime.Object
-	testRayCluster          *rayv1alpha1.RayCluster
+	testRayCluster          *rayv1.RayCluster
 	headSelector            labels.Selector
 	headNodeIP              string
 	testServices            []runtime.Object
@@ -88,7 +88,7 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayNodeLabelKey:      "yes",
 					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+					common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
@@ -272,7 +272,7 @@ func setupTest(t *testing.T) {
 				Labels: map[string]string{
 					common.RayNodeLabelKey:      "yes",
 					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+					common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 					common.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
@@ -282,14 +282,14 @@ func setupTest(t *testing.T) {
 			},
 		},
 	}
-	testRayCluster = &rayv1alpha1.RayCluster{
+	testRayCluster = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instanceName,
 			Namespace: namespaceStr,
 		},
-		Spec: rayv1alpha1.RayClusterSpec{
+		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
-			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
@@ -321,7 +321,7 @@ func setupTest(t *testing.T) {
 					},
 				},
 			},
-			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Replicas:    pointer.Int32Ptr(expectReplicaNum),
 					MinReplicas: pointer.Int32Ptr(0),
@@ -353,7 +353,7 @@ func setupTest(t *testing.T) {
 							},
 						},
 					},
-					ScaleStrategy: rayv1alpha1.ScaleStrategy{
+					ScaleStrategy: rayv1.ScaleStrategy{
 						WorkersToDelete: workersToDelete,
 					},
 				},
@@ -969,7 +969,7 @@ func TestReconcileHeadService(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Mock data
@@ -980,7 +980,7 @@ func TestReconcileHeadService(t *testing.T) {
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:  cluster.Name,
-				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
 	}
@@ -993,7 +993,7 @@ func TestReconcileHeadService(t *testing.T) {
 	ctx := context.TODO()
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
 		common.RayClusterLabelKey:  cluster.Name,
-		common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+		common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 	})
 
 	// Initialize RayCluster reconciler.
@@ -1182,7 +1182,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	setupTest(t)
 
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
 	ctx := context.Background()
@@ -1191,7 +1191,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 		Name:      instanceName,
 		Namespace: namespaceStr,
 	}
-	cluster := rayv1alpha1.RayCluster{}
+	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.Reason, "Cluster reason should be empty")
@@ -1247,7 +1247,7 @@ func TestGetHeadPodIP(t *testing.T) {
 			Namespace: namespaceStr,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:   instanceName,
-				common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 				common.RayNodeGroupLabelKey: headGroupNameStr,
 			},
 		},
@@ -1376,7 +1376,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// To update the status of RayCluster with `r.Status().Update()`,
@@ -1404,7 +1404,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 		Name:      instanceName,
 		Namespace: namespaceStr,
 	}
-	cluster := rayv1alpha1.RayCluster{}
+	cluster := rayv1.RayCluster{}
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
@@ -1430,7 +1430,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	setupTest(t)
 
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
 	ctx := context.Background()
@@ -1439,7 +1439,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 		Name:      instanceName,
 		Namespace: namespaceStr,
 	}
-	cluster := rayv1alpha1.RayCluster{}
+	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.State, "Cluster state should be empty")
@@ -1451,7 +1451,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
-	state := rayv1alpha1.Ready
+	state := rayv1.Ready
 	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
 	assert.Nil(t, err, "Fail to update cluster state")
 
@@ -1462,7 +1462,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 
 func TestInconsistentRayClusterStatus(t *testing.T) {
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects().Build()
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -1473,8 +1473,8 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Mock data
 	timeNow := metav1.Now()
-	oldStatus := rayv1alpha1.RayClusterStatus{
-		State:                   rayv1alpha1.Ready,
+	oldStatus := rayv1.RayClusterStatus{
+		State:                   rayv1.Ready,
 		AvailableWorkerReplicas: 1,
 		DesiredWorkerReplicas:   1,
 		MinWorkerReplicas:       1,
@@ -1486,7 +1486,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 			"gcs":       "6379",
 			"metrics":   "8080",
 		},
-		Head: rayv1alpha1.HeadInfo{
+		Head: rayv1.HeadInfo{
 			PodIP:     "10.244.0.6",
 			ServiceIP: "10.96.140.249",
 		},
@@ -1500,7 +1500,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Case 1: `State` is different => return true
 	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1alpha1.Failed
+	newStatus.State = rayv1.Failed
 	assert.True(t, r.inconsistentRayClusterStatus(oldStatus, *newStatus))
 
 	// Case 2: `Reason` is different => return true
@@ -1554,7 +1554,7 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Mock data
@@ -1568,7 +1568,7 @@ func TestCalculateStatus(t *testing.T) {
 			Namespace: namespaceStr,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:  instanceName,
-				common.RayNodeTypeLabelKey: string(rayv1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
 		Status: corev1.PodStatus{
@@ -1731,7 +1731,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Only one head Pod and no worker Pods in the RayCluster.
@@ -1798,7 +1798,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Only one head Pod and no worker Pods in the RayCluster.
@@ -1872,7 +1872,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			Phase: corev1.PodFailed,
 		},
 	}
-	shouldDelete, _ := shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
 	assert.False(t, shouldDelete)
 
 	// [Case 2]: The restart policy is `Always`, the Pod is not in a terminate state,
@@ -1888,7 +1888,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			},
 		},
 	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.False(t, shouldDelete)
 
 	// [Case 3]: The restart policy is `Always`, the Pod is not in a terminate state,
@@ -1904,18 +1904,18 @@ func Test_ShouldDeletePod(t *testing.T) {
 			},
 		},
 	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.False(t, shouldDelete)
 
 	// [Case 4]: The restart policy is `Never` and the Pod is in a terminate state.
 	// The expected behavior is that the controller will delete the Pod.
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 	pod.Status.Phase = corev1.PodFailed
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.True(t, shouldDelete)
 
 	pod.Status.Phase = corev1.PodSucceeded
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.True(t, shouldDelete)
 
 	// [Case 5]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
@@ -1931,7 +1931,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			},
 		},
 	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.False(t, shouldDelete)
 
 	// [Case 6]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
@@ -1947,7 +1947,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			},
 		},
 	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1alpha1.HeadNode)
+	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
 	assert.True(t, shouldDelete)
 }
 
@@ -1957,7 +1957,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	defer os.Unsetenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)
 
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
 	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
@@ -2010,7 +2010,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
-			rayClusterList := rayv1alpha1.RayClusterList{}
+			rayClusterList := rayv1.RayClusterList{}
 			err := fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 			assert.Nil(t, err, "Fail to get RayCluster list")
 			assert.Equal(t, 1, len(rayClusterList.Items))
@@ -2033,7 +2033,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			}
 
 			// Check the RayCluster's finalizer
-			rayClusterList = rayv1alpha1.RayClusterList{}
+			rayClusterList = rayv1.RayClusterList{}
 			err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 			assert.Nil(t, err, "Fail to get RayCluster list")
 			assert.Equal(t, 1, len(rayClusterList.Items))
@@ -2066,7 +2066,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 func Test_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()
-	_ = rayv1alpha1.AddToScheme(newScheme)
+	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
 
@@ -2092,7 +2092,7 @@ func Test_RedisCleanup(t *testing.T) {
 			Namespace: gcsFTEnabledcluster.Namespace,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
-				common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+				common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 				common.RayNodeGroupLabelKey: headGroupName,
 			},
 		},
@@ -2103,7 +2103,7 @@ func Test_RedisCleanup(t *testing.T) {
 			Namespace: gcsFTEnabledcluster.Namespace,
 			Labels: map[string]string{
 				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
-				common.RayNodeTypeLabelKey:  string(rayv1alpha1.WorkerNode),
+				common.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
 				common.RayNodeGroupLabelKey: gcsFTEnabledcluster.Spec.WorkerGroupSpecs[0].GroupName,
 			},
 		},
@@ -2155,7 +2155,7 @@ func Test_RedisCleanup(t *testing.T) {
 					client.MatchingLabels{
 						common.RayClusterLabelKey:   cluster.Name,
 						common.RayNodeGroupLabelKey: headGroupName,
-						common.RayNodeTypeLabelKey:  string(rayv1alpha1.HeadNode),
+						common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 					})
 				assert.Nil(t, err)
 				assert.Equal(t, 1, len(headPods.Items))
@@ -2166,7 +2166,7 @@ func Test_RedisCleanup(t *testing.T) {
 					client.MatchingLabels{
 						common.RayClusterLabelKey:   cluster.Name,
 						common.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
-						common.RayNodeTypeLabelKey:  string(rayv1alpha1.WorkerNode),
+						common.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
 					})
 				assert.Nil(t, err)
 				assert.Equal(t, 1, len(workerPods.Items))
@@ -2197,7 +2197,7 @@ func Test_RedisCleanup(t *testing.T) {
 
 			if tc.expectedNumJobs > 0 {
 				// Check RayCluster's finalizer
-				rayClusterList := rayv1alpha1.RayClusterList{}
+				rayClusterList := rayv1.RayClusterList{}
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 1, len(rayClusterList.Items))
