@@ -1,4 +1,4 @@
-apiVersion: ray.io/v1
+apiVersion: ray.io/v1alpha1
 kind: RayCluster
 metadata:
   name: raycluster-embed-grafana
@@ -26,6 +26,12 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+          # The name of a containerPort cannot be longer than 15 characters.
+          # Hence, we use the name "as-metrics" instead of "autoscaler-metrics".
+          - containerPort: 44217
+            name: as-metrics # autoscaler
+          - containerPort: 44227
+            name: dash-metrics # dashboard
           lifecycle:
             preStop:
               exec:
