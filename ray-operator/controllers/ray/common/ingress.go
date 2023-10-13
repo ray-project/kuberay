@@ -5,7 +5,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,10 +15,10 @@ const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
 // This is used to expose dashboard for external traffic.
-func BuildIngressForHeadService(cluster rayv1alpha1.RayCluster) (*networkingv1.Ingress, error) {
+func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
 	labels := map[string]string{
 		RayClusterLabelKey:                cluster.Name,
-		RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1alpha1.HeadNode),
+		RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
 		KubernetesApplicationNameLabelKey: ApplicationName,
 		KubernetesCreatedByLabelKey:       ComponentName,
 	}
@@ -99,7 +99,7 @@ func BuildIngressForHeadService(cluster rayv1alpha1.RayCluster) (*networkingv1.I
 // BuildIngressForRayService Builds the ingress for head service dashboard for RayService.
 // This is used to expose dashboard for external traffic.
 // RayService controller updates the ingress whenever a new RayCluster serves the traffic.
-func BuildIngressForRayService(service rayv1alpha1.RayService, cluster rayv1alpha1.RayCluster) (*networkingv1.Ingress, error) {
+func BuildIngressForRayService(service rayv1.RayService, cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
 	ingress, err := BuildIngressForHeadService(cluster)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func BuildIngressForRayService(service rayv1alpha1.RayService, cluster rayv1alph
 	ingress.ObjectMeta.Namespace = service.Namespace
 	ingress.ObjectMeta.Labels = map[string]string{
 		RayServiceLabelKey: service.Name,
-		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1alpha1.HeadNode)),
+		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
 	}
 
 	return ingress, nil

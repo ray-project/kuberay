@@ -3,7 +3,7 @@
 # For examples with more realistic resource configuration, see
 # ray-cluster.complete.large.yaml and
 # ray-cluster.autoscaler.large.yaml.
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:

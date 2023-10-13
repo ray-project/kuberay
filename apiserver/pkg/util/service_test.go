@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -68,7 +68,7 @@ func TestBuildService(t *testing.T) {
 	}
 	got, err := NewRayService(apiServiceV1, map[string]*api.ComputeTemplate{"foo": &template})
 	assert.Nil(t, err)
-	if reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1alpha1.ServeDeploymentGraphSpec{}) {
+	if reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1api.ServeDeploymentGraphSpec{}) {
 		t.Errorf("Got empty V1")
 	}
 	if got.RayService.Spec.ServeConfigV2 != "" {
@@ -83,7 +83,7 @@ func TestBuildService(t *testing.T) {
 	if got.RayService.Spec.ServeConfigV2 == "" {
 		t.Errorf("Got empty V2")
 	}
-	if !reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1alpha1.ServeDeploymentGraphSpec{}) {
+	if !reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1api.ServeDeploymentGraphSpec{}) {
 		t.Errorf("Got non empty V1")
 	}
 	assert.NotNil(t, got.Spec.ServiceUnhealthySecondThreshold)

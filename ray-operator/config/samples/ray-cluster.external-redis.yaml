@@ -72,7 +72,7 @@ data:
   # echo -n "5241590000000000" | base64
   password: NTI0MTU5MDAwMDAwMDAwMA==
 ---
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   annotations:

@@ -27,7 +27,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -45,14 +45,14 @@ var _ = Context("Inside the default namespace", func() {
 	var headPods corev1.PodList
 	enableInTreeAutoscaling := true
 
-	myRayCluster := &rayv1alpha1.RayCluster{
+	myRayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
 		},
-		Spec: rayv1alpha1.RayClusterSpec{
+		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
-			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
@@ -82,7 +82,7 @@ var _ = Context("Inside the default namespace", func() {
 					},
 				},
 			},
-			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Replicas:    pointer.Int32(3),
 					MinReplicas: pointer.Int32(0),
@@ -139,7 +139,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: "raycluster-sample-head-svc", Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1alpha1.HeadNode)))
+			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1.HeadNode)))
 		})
 
 		It("should create 3 workers", func() {
@@ -203,7 +203,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("cluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1alpha1.Ready))
+				time.Second*(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("should re-create a deleted worker", func() {
@@ -315,9 +315,9 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 	}
 }
 
-func getClusterState(ctx context.Context, namespace string, clusterName string) func() rayv1alpha1.ClusterState {
-	return func() rayv1alpha1.ClusterState {
-		var cluster rayv1alpha1.RayCluster
+func getClusterState(ctx context.Context, namespace string, clusterName string) func() rayv1.ClusterState {
+	return func() rayv1.ClusterState {
+		var cluster rayv1.RayCluster
 		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
 			log.Fatal(err)
 		}

@@ -3,7 +3,7 @@ package volcano
 import (
 	"testing"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -52,19 +52,19 @@ func TestCreatePodGroup(t *testing.T) {
 		},
 	}
 
-	cluster := rayv1alpha1.RayCluster{
+	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
 		},
-		Spec: rayv1alpha1.RayClusterSpec{
-			HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: headSpec,
 				},
 				Replicas: pointer.Int32Ptr(1),
 			},
-			WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
 						Spec: workerSpec,

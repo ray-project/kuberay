@@ -1,7 +1,7 @@
 # This YAML file is primarily for testing purposes. It specifies a custom head service name for the
 # RayCluster associated with the RayJob. The head service allows worker Pods to connect to the head
 # Pod and enables the Kubernetes Job, owned by the RayJob, to submit tasks to the RayCluster.
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-sample

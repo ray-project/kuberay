@@ -7,19 +7,19 @@ import (
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
-	rayiov1alpha1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type JobClientInterface interface {
-	RayJobClient(namespace string) rayiov1alpha1.RayJobInterface
+	RayJobClient(namespace string) rayv1.RayJobInterface
 }
 
 type RayJobClient struct {
-	client rayiov1alpha1.RayV1alpha1Interface
+	client rayv1.RayV1Interface
 }
 
-func (cc RayJobClient) RayJobClient(namespace string) rayiov1alpha1.RayJobInterface {
+func (cc RayJobClient) RayJobClient(namespace string) rayv1.RayJobInterface {
 	return cc.client.RayJobs(namespace)
 }
 
@@ -31,6 +31,6 @@ func NewRayJobClientOrFatal(initConnectionTimeout time.Duration, options util.Cl
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
 
-	rayJobClient := rayclient.NewForConfigOrDie(cfg).RayV1alpha1()
+	rayJobClient := rayclient.NewForConfigOrDie(cfg).RayV1()
 	return &RayJobClient{client: rayJobClient}
 }

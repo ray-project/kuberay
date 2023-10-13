@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +12,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var instanceWithRouteEnabled = &rayv1alpha1.RayCluster{
+var instanceWithRouteEnabled = &rayv1.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
@@ -20,8 +20,8 @@ var instanceWithRouteEnabled = &rayv1alpha1.RayCluster{
 			IngressClassAnnotationKey: "nginx",
 		},
 	},
-	Spec: rayv1alpha1.RayClusterSpec{
-		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+	Spec: rayv1.RayClusterSpec{
+		HeadGroupSpec: rayv1.HeadGroupSpec{
 			Replicas:      pointer.Int32Ptr(1),
 			EnableIngress: pointer.BoolPtr(true),
 			Template: corev1.PodTemplateSpec{

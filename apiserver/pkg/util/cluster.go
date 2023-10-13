@@ -10,14 +10,14 @@ import (
 	klog "k8s.io/klog/v2"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayalphaapi "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type RayCluster struct {
-	*rayalphaapi.RayCluster
+	*rayv1api.RayCluster
 }
 
 // NewRayCluster creates a RayCluster.
@@ -29,7 +29,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 		return nil, err
 	}
 	// Build cluster
-	rayCluster := &rayalphaapi.RayCluster{
+	rayCluster := &rayv1api.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiCluster.Name,
 			Namespace:   apiCluster.Namespace,
@@ -64,22 +64,22 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
 // such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
-func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) (*rayalphaapi.RayClusterSpec, error) {
+func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayClusterSpec, error) {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
 	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
 	if err != nil {
 		return nil, err
 	}
 	headReplicas := int32(1)
-	rayClusterSpec := &rayalphaapi.RayClusterSpec{
+	rayClusterSpec := &rayv1api.RayClusterSpec{
 		RayVersion: imageVersion,
-		HeadGroupSpec: rayalphaapi.HeadGroupSpec{
+		HeadGroupSpec: rayv1api.HeadGroupSpec{
 			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
 			Template:       *headPodTemplate,
 			Replicas:       &headReplicas,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
-		WorkerGroupSpecs: []rayalphaapi.WorkerGroupSpec{},
+		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{},
 	}
 
 	// If enable ingress is specified, add it to the head node spec.
@@ -104,7 +104,7 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 			maxReplicas = spec.MaxReplicas
 		}
 
-		workerNodeSpec := rayalphaapi.WorkerGroupSpec{
+		workerNodeSpec := rayv1api.WorkerGroupSpec{
 			GroupName:      spec.GroupName,
 			MinReplicas:    intPointer(minReplicas),
 			MaxReplicas:    intPointer(maxReplicas),
@@ -748,8 +748,8 @@ func intPointer(value int32) *int32 {
 	return &value
 }
 
-// Get converts this object to a rayalphaapi.Workflow.
-func (c *RayCluster) Get() *rayalphaapi.RayCluster {
+// Get converts this object to a rayv1api.Workflow.
+func (c *RayCluster) Get() *rayv1api.RayCluster {
 	return c.RayCluster
 }
 

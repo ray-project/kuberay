@@ -253,7 +253,7 @@ class ShutdownJobRule(Rule):
         logger.info("Waiting for RayCluster to be deleted...")
         for i in range(30):
             rayclusters = custom_api.list_namespaced_custom_object(
-                group = 'ray.io', version = 'v1alpha1', namespace = cr_namespace,
+                group = 'ray.io', version = 'v1', namespace = cr_namespace,
                 plural = 'rayclusters')
             # print debug log
             if i != 0:
@@ -514,7 +514,7 @@ class RayJobAddCREvent(CREvent):
         custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         for i in range(self.timeout):
             rayclusters = custom_api.list_namespaced_custom_object(
-                group = 'ray.io', version = 'v1alpha1', namespace = self.namespace,
+                group = 'ray.io', version = 'v1', namespace = self.namespace,
                 plural = 'rayclusters')["items"]
             headpods = k8s_v1_api.list_namespaced_pod(
                 namespace = self.namespace, label_selector='ray.io/node-type=head')

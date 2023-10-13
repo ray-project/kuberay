@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type FakeRayDashboardClient struct {
@@ -63,7 +63,7 @@ func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (
 	return nil, nil
 }
 
-func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1alpha1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
 	return "", nil
 }
 

@@ -7,7 +7,7 @@ import (
 
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +23,7 @@ var (
 	secondsValue             int32   = 100
 )
 
-var headSpecTest = v1alpha1.HeadGroupSpec{
+var headSpecTest = rayv1api.HeadGroupSpec{
 	ServiceType:   "ClusterIP",
 	EnableIngress: &enableIngress,
 	Replicas:      &headNodeReplicas,
@@ -144,7 +144,7 @@ var configMapWithTolerations = v1.ConfigMap{
 	},
 }
 
-var workerSpecTest = v1alpha1.WorkerGroupSpec{
+var workerSpecTest = rayv1api.WorkerGroupSpec{
 	GroupName:   "",
 	Replicas:    &workerReplicas,
 	MinReplicas: &workerReplicas,
@@ -225,7 +225,7 @@ var workerSpecTest = v1alpha1.WorkerGroupSpec{
 	},
 }
 
-var ClusterSpecTest = v1alpha1.RayCluster{
+var ClusterSpecTest = rayv1api.RayCluster{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "raycluster-sample",
 		Namespace: "default",
@@ -233,15 +233,15 @@ var ClusterSpecTest = v1alpha1.RayCluster{
 			"kubernetes.io/ingress.class": "nginx",
 		},
 	},
-	Spec: v1alpha1.RayClusterSpec{
+	Spec: rayv1api.RayClusterSpec{
 		HeadGroupSpec: headSpecTest,
-		WorkerGroupSpecs: []v1alpha1.WorkerGroupSpec{
+		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
 			workerSpecTest,
 		},
 	},
 }
 
-var JobNewClusteTest = v1alpha1.RayJob{
+var JobNewClusteTest = rayv1api.RayJob{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -249,7 +249,7 @@ var JobNewClusteTest = v1alpha1.RayJob{
 			"ray.io/user": "user",
 		},
 	},
-	Spec: v1alpha1.RayJobSpec{
+	Spec: rayv1api.RayJobSpec{
 		Entrypoint: "python /home/ray/samples/sample_code.py",
 		Metadata: map[string]string{
 			"job_submission_id": "123",
@@ -260,7 +260,7 @@ var JobNewClusteTest = v1alpha1.RayJob{
 	},
 }
 
-var JobExistingClusteTest = v1alpha1.RayJob{
+var JobExistingClusteTest = rayv1api.RayJob{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -268,7 +268,7 @@ var JobExistingClusteTest = v1alpha1.RayJob{
 			"ray.io/user": "user",
 		},
 	},
-	Spec: v1alpha1.RayJobSpec{
+	Spec: rayv1api.RayJobSpec{
 		Entrypoint:              "python /home/ray/samples/sample_code.py",
 		RuntimeEnvYAML:          "mytest yaml",
 		TTLSecondsAfterFinished: &secondsValue,
@@ -278,7 +278,7 @@ var JobExistingClusteTest = v1alpha1.RayJob{
 	},
 }
 
-var ServiceV1Test = v1alpha1.RayService{
+var ServiceV1Test = rayv1api.RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -286,16 +286,16 @@ var ServiceV1Test = v1alpha1.RayService{
 			"ray.io/user": "user",
 		},
 	},
-	Spec: v1alpha1.RayServiceSpec{
-		ServeDeploymentGraphSpec: v1alpha1.ServeDeploymentGraphSpec{
+	Spec: rayv1api.RayServiceSpec{
+		ServeDeploymentGraphSpec: rayv1api.ServeDeploymentGraphSpec{
 			ImportPath: "fruit.deployment_graph",
 			RuntimeEnv: "working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"",
-			ServeConfigSpecs: []v1alpha1.ServeConfigSpec{
+			ServeConfigSpecs: []rayv1api.ServeConfigSpec{
 				{
 					Name:        "MangoStand",
 					NumReplicas: &deploymentReplicas,
 					UserConfig:  "price: 3",
-					RayActorOptions: v1alpha1.RayActorOptionSpec{
+					RayActorOptions: rayv1api.RayActorOptionSpec{
 						NumCpus: &floatNumber,
 					},
 				},
@@ -307,7 +307,7 @@ var ServiceV1Test = v1alpha1.RayService{
 					Name:        "PearStand",
 					NumReplicas: &deploymentReplicas,
 					UserConfig:  "price: 1",
-					RayActorOptions: v1alpha1.RayActorOptionSpec{
+					RayActorOptions: rayv1api.RayActorOptionSpec{
 						NumCpus: &floatNumber,
 					},
 				},
@@ -318,7 +318,7 @@ var ServiceV1Test = v1alpha1.RayService{
 	},
 }
 
-var ServiceV2Test = v1alpha1.RayService{
+var ServiceV2Test = rayv1api.RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -326,7 +326,7 @@ var ServiceV2Test = v1alpha1.RayService{
 			"ray.io/user": "user",
 		},
 	},
-	Spec: v1alpha1.RayServiceSpec{
+	Spec: rayv1api.RayServiceSpec{
 		ServeConfigV2:                      "Some yaml value",
 		RayClusterSpec:                     ClusterSpecTest.Spec,
 		DeploymentUnhealthySecondThreshold: &unhealthySecondThreshold,
@@ -406,7 +406,7 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 }
 
 func TestPopulateWorkerNodeSpec(t *testing.T) {
-	groupSpec := PopulateWorkerNodeSpec([]v1alpha1.WorkerGroupSpec{workerSpecTest})[0]
+	groupSpec := PopulateWorkerNodeSpec([]rayv1api.WorkerGroupSpec{workerSpecTest})[0]
 
 	if groupSpec.ServiceAccount != "account" {
 		t.Errorf("failed to convert service account")
