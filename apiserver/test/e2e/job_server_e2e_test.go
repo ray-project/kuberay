@@ -13,6 +13,7 @@ import (
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 func TestCreateJobWithDisposableClusters(t *testing.T) {
@@ -332,7 +333,7 @@ func TestGetJobsInNamespace(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
-	require.NotEmpty(t, response.Jobs, "A list of compute templates is required")
+	require.NotEmpty(t, response.Jobs, "A list of jobs is required")
 	found_name := false
 	for _, job := range response.Jobs {
 		if testJobRequest.Job.Name == job.Name && tCtx.GetNamespaceName() == job.Namespace {
@@ -575,7 +576,7 @@ func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string,
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
-		if err00 != nil {
+		if err00 != nil && !k8sApiErrors.IsNotFound(err00) {
 			return true, err00
 		}
 		t.Logf("Found ray job with state '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)

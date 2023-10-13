@@ -14,6 +14,7 @@ type ClientManagerInterface interface {
 	ServiceClient() client.ServiceClientInterface
 	KubernetesClient() client.KubernetesClientInterface
 	Time() util.TimeInterface
+	GetConnectionConfig() (time.Duration, util.ClientOptions)
 }
 
 // Container for all service clients
@@ -24,7 +25,9 @@ type ClientManager struct {
 	serviceClient    client.ServiceClientInterface
 	kubernetesClient client.KubernetesClientInterface
 	// auxiliary tools
-	time util.TimeInterface
+	time                          util.TimeInterface
+	initConnectionTimeout         time.Duration
+	defaultKubernetesClientConfig util.ClientOptions
 }
 
 func (c *ClientManager) ClusterClient() client.ClusterClientInterface {
@@ -52,8 +55,8 @@ func (c *ClientManager) init() {
 	klog.Info("Initializing client manager")
 
 	// configure configs
-	initConnectionTimeout := 15 * time.Second
-	defaultKubernetesClientConfig := util.ClientOptions{
+	c.initConnectionTimeout = 15 * time.Second
+	c.defaultKubernetesClientConfig = util.ClientOptions{
 		QPS:   5,
 		Burst: 10,
 	}
@@ -63,10 +66,10 @@ func (c *ClientManager) init() {
 
 	// TODO: Potentially, we may need storage layer clients to help persist the data.
 	// 2. kubernetes client initialization
-	c.clusterClient = client.NewRayClusterClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
-	c.jobClient = client.NewRayJobClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
-	c.serviceClient = client.NewRayServiceClientOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
-	c.kubernetesClient = client.CreateKubernetesCoreOrFatal(initConnectionTimeout, defaultKubernetesClientConfig)
+	c.clusterClient = client.NewRayClusterClientOrFatal(c.initConnectionTimeout, c.defaultKubernetesClientConfig)
+	c.jobClient = client.NewRayJobClientOrFatal(c.initConnectionTimeout, c.defaultKubernetesClientConfig)
+	c.serviceClient = client.NewRayServiceClientOrFatal(c.initConnectionTimeout, c.defaultKubernetesClientConfig)
+	c.kubernetesClient = client.CreateKubernetesCoreOrFatal(c.initConnectionTimeout, c.defaultKubernetesClientConfig)
 
 	klog.Infof("Client manager initialized successfully")
 }
@@ -76,4 +79,8 @@ func NewClientManager() ClientManager {
 	clientManager.init()
 
 	return clientManager
+}
+
+func (c *ClientManager) GetConnectionConfig() (time.Duration, util.ClientOptions) {
+	return c.initConnectionTimeout, c.defaultKubernetesClientConfig
 }

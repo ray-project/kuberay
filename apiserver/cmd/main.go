@@ -23,6 +23,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/ray-project/kuberay/apiserver/pkg/client"
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
@@ -37,6 +38,7 @@ var (
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 	healthy            int32
+	useCodeFlare       = flag.Bool("useCodeFlare", false, "Enable the submission of RayKube CRDs via CodeFlare Operator AppWrapper CRD. Default value is false")
 )
 
 func main() {
@@ -51,7 +53,18 @@ func main() {
 	}
 
 	clientManager := manager.NewClientManager()
-	resourceManager := manager.NewResourceManager(&clientManager)
+	var resourceManager manager.ResourceManager
+	var err error
+	if *useCodeFlare {
+		klog.Info("useCodeFlare flag is set, starting api server with MCAD AppWrapper support")
+		mcadClient := client.NewMCADClientOrFatal(clientManager.GetConnectionConfig())
+		resourceManager, err = manager.NewCodeFlareResourceManager(&clientManager, mcadClient)
+		if err != nil {
+			klog.Fatal("Could not instantiate the CodeFlare Resource manger", err)
+		}
+	} else {
+		resourceManager = manager.NewDefaultResourceManager(&clientManager)
+	}
 
 	atomic.StoreInt32(&healthy, 1)
 	go startRpcServer(resourceManager)
@@ -70,7 +83,7 @@ func main() {
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
-func startRpcServer(resourceManager *manager.ResourceManager) {
+func startRpcServer(resourceManager manager.ResourceManager) {
 	klog.Info("Starting gRPC server")
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)

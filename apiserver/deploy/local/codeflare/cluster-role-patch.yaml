@@ -1,0 +1,19 @@
+- op: add
+  path: /rules/4
+  value:
+    apiGroups:
+      - workload.codeflare.dev
+    resources:
+      - appwrappers
+      - appwrappers/finalizers
+      - appwrappers/status
+      - schedulingspecs
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch  

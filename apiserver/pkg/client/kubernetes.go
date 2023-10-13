@@ -42,14 +42,14 @@ func (c *KubernetesClient) NamespaceClient() v1.NamespaceInterface {
 func CreateKubernetesCoreOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) KubernetesClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		klog.Fatalf("Failed to create TokenReview client. Error: %v", err)
+		klog.Fatalf("Failed to create kubernetes client: %w", err)
 	}
 	cfg.QPS = options.QPS
 	cfg.Burst = options.Burst
 
 	clientSet, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Failed to create pod client. Error: %v", err)
+		klog.Fatalf("Failed to create pod client: %w", err)
 	}
 	return &KubernetesClient{clientSet.CoreV1()}
 }

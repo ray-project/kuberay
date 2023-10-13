@@ -18,7 +18,7 @@ type ComputeTemplateServerOptions struct {
 // implements `type ComputeTemplateServiceServer interface` in runtime_grpc.pb.go
 // ComputeTemplateServer is the server API for ClusterRuntimeService.
 type ComputeTemplateServer struct {
-	resourceManager *manager.ResourceManager
+	resourceManager manager.ResourceManager
 	options         *ComputeTemplateServerOptions
 	api.UnimplementedComputeTemplateServiceServer
 }
@@ -122,6 +122,6 @@ func ValidateCreateComputeTemplateRequest(request *api.CreateComputeTemplateRequ
 	return nil
 }
 
-func NewComputeTemplateServer(resourceManager *manager.ResourceManager, options *ComputeTemplateServerOptions) *ComputeTemplateServer {
+func NewComputeTemplateServer(resourceManager manager.ResourceManager, options *ComputeTemplateServerOptions) *ComputeTemplateServer {
 	return &ComputeTemplateServer{resourceManager: resourceManager, options: options}
 }
