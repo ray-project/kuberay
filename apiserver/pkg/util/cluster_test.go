@@ -373,6 +373,15 @@ func TestBuildVolumes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := buildVols(tt.apiVolume)
 			assert.Nil(t, err)
+			if tt.name == "configmap test" {
+				// Sort items for comparison
+				sort.SliceStable(got[0].ConfigMap.Items, func(i, j int) bool {
+					return got[0].ConfigMap.Items[i].Key < got[0].ConfigMap.Items[j].Key
+				})
+				sort.SliceStable(tt.expect[0].ConfigMap.Items, func(i, j int) bool {
+					return tt.expect[0].ConfigMap.Items[i].Key < tt.expect[0].ConfigMap.Items[j].Key
+				})
+			}
 			if !reflect.DeepEqual(got, tt.expect) {
 				t.Errorf("failed for %s ..., got %v, expected %v", tt.name, got, tt.expect)
 			}
