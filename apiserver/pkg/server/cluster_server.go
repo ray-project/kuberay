@@ -28,7 +28,7 @@ type ClusterServer struct {
 // Creates a new Cluster.
 func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateClusterRequest) (*api.Cluster, error) {
 	if err := ValidateCreateClusterRequest(request); err != nil {
-		return nil, util.Wrap(err, "Validate cluster request failed.")
+		return nil, util.Wrap(err, "Validate create cluster request failed.")
 	}
 
 	// use the namespace in the request to override the namespace in the cluster definition
