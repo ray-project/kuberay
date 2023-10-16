@@ -383,6 +383,10 @@ func BuildAutoscalerContainer(autoscalerImage string) v1.Container {
 					},
 				},
 			},
+			{
+				Name:  "KUBERAY_CRD_VER",
+				Value: "v1",
+			},
 		},
 		Command: []string{
 			"ray",
