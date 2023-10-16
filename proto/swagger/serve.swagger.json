@@ -40,7 +40,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the ray services to be retrieved.",
+            "description": "Required. The namespace of the ray services to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -85,14 +85,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the ray service to be created.",
+            "description": "Required. The namespace of the ray service to be created.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "body",
-            "description": "The ray service to be created.",
+            "description": "Required. The ray service to be created.",
             "in": "body",
             "required": true,
             "schema": {
@@ -126,14 +126,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace used for retrieving the ray service.",
+            "description": "Required. The namespace used for retrieving the ray service.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name used for retrieving the ray service.",
+            "description": "Required. The name used for retrieving the ray service.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -200,21 +200,21 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the ray service to be updated.",
+            "description": "Required. The namespace of the ray service to be updated.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the ray service to be updated.",
+            "description": "Required. The name of the ray service to be updated.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "body",
-            "description": "The ray service to be updated.",
+            "description": "Required. The ray service to be updated.",
             "in": "body",
             "required": true,
             "schema": {
@@ -248,21 +248,21 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the ray service to be updated.",
+            "description": "Required. The namespace of the ray service to be updated.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of ray service to be updated.",
+            "description": "Required. The name of ray service to be updated.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "body",
-            "description": "The ray service to be updated.",
+            "description": "Required. The ray service to be updated.",
             "in": "body",
             "required": true,
             "schema": {
@@ -395,17 +395,26 @@
         "cpusPerActor": {
           "type": "number",
           "format": "double",
-          "description": "The number of CPUs required by the deployment's application per replica."
+          "description": "Required. The number of CPUs required by the deployment's application per replica.",
+          "required": [
+            "cpus_per_actor"
+          ]
         },
         "gpusPerActor": {
           "type": "number",
           "format": "double",
-          "description": "The number of GPUs required by the deployment's application per replica."
+          "description": "Required. The number of GPUs required by the deployment's application per replica.",
+          "required": [
+            "gpus_per_actor"
+          ]
         },
         "memoryPerActor": {
           "type": "string",
           "format": "uint64",
-          "description": "Restrict the heap memory usage of each replica."
+          "description": "Required. Restrict the heap memory usage of each replica.",
+          "required": [
+            "memory_per_actor"
+          ]
         },
         "objectStoreMemoryPerActor": {
           "type": "string",
@@ -421,23 +430,29 @@
           "description": "Forces replicas to run on nodes with the specified accelerator type."
         }
       },
-      "description": "ActorOptions config actor configuration related to one serve deployement."
+      "description": "ActorOptions config actor configuration related to one serve deployement.",
+      "required": [
+        "cpusPerActor",
+        "gpusPerActor",
+        "memoryPerActor"
+      ]
     },
     "protoClusterSpec": {
       "type": "object",
       "properties": {
         "headGroupSpec": {
           "$ref": "#/definitions/protoHeadGroupSpec",
-          "title": "The head group configuration"
+          "title": "Required. The head group configuration"
         },
         "workerGroupSpec": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoWorkerGroupSpec"
           },
-          "title": "The worker group configurations"
+          "title": "Optional. The worker group configurations"
         }
-      }
+      },
+      "description": "Cluster specification."
     },
     "protoEnvValueFrom": {
       "type": "object",
@@ -478,7 +493,10 @@
       "properties": {
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -497,7 +515,10 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Optional. The ray start params of head node group."
+          "description": "Required. The ray start params of head node group.",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -532,7 +553,12 @@
           },
           "title": "Optional. Labels for the head pod"
         }
-      }
+      },
+      "title": "Cluster HeadGroup specification",
+      "required": [
+        "computeTemplate",
+        "rayStartParams"
+      ]
     },
     "protoListAllRayServicesResponse": {
       "type": "object",
@@ -541,16 +567,20 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoRayService"
-          }
+          },
+          "description": "A list of services.",
+          "readOnly": true
         },
         "totalSize": {
           "type": "integer",
           "format": "int32",
-          "description": "The total number of RayServices for the given query."
+          "description": "The total number of RayServices for the given query.",
+          "readOnly": true
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices."
+          "description": "The token to list the next page of RayServices.",
+          "readOnly": true
         }
       }
     },
@@ -561,16 +591,20 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoRayService"
-          }
+          },
+          "title": "List of services",
+          "readOnly": true
         },
         "totalSize": {
           "type": "integer",
           "format": "int32",
-          "description": "The total number of RayServices for the given query."
+          "description": "The total number of RayServices for the given query.",
+          "readOnly": true
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices."
+          "description": "The token to list the next page of RayServices.",
+          "readOnly": true
         }
       }
     },
@@ -579,15 +613,24 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Required input field. Unique ray service name provided by user."
+          "description": "Required input field. Unique ray service name provided by user.",
+          "required": [
+            "name"
+          ]
         },
         "namespace": {
           "type": "string",
-          "title": "Required input field. ray service namespace provided by user"
+          "title": "Required input field. ray service namespace provided by user",
+          "required": [
+            "namespace"
+          ]
         },
         "user": {
           "type": "string",
-          "description": "Required field. This field indicates the user who owns the ray service."
+          "description": "Required field. This field indicates the user who owns the ray service.",
+          "required": [
+            "user"
+          ]
         },
         "serveDeploymentGraphSpec": {
           "$ref": "#/definitions/protoServeDeploymentGraphSpec",
@@ -609,7 +652,7 @@
         },
         "clusterSpec": {
           "$ref": "#/definitions/protoClusterSpec",
-          "description": "The cluster template."
+          "description": "Required. The cluster template."
         },
         "rayServiceStatus": {
           "$ref": "#/definitions/protoRayServiceStatus",
@@ -618,14 +661,21 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the ray service created."
+          "description": "Output. The time that the ray service created.",
+          "readOnly": true
         },
         "deleteAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the ray service deleted."
+          "description": "Output. The time that the ray service deleted.",
+          "readOnly": true
         }
-      }
+      },
+      "required": [
+        "name",
+        "namespace",
+        "user"
+      ]
     },
     "protoRayServiceEvent": {
       "type": "object",
@@ -750,12 +800,18 @@
       "properties": {
         "deploymentName": {
           "type": "string",
-          "description": "Required input field. Unique ray service deployment name provided by user."
+          "description": "Required. Input field. Unique ray service deployment name provided by user.",
+          "required": [
+            "deployment_name"
+          ]
         },
         "replicas": {
           "type": "integer",
           "format": "int32",
-          "description": "ray service deployment replicas, default set to 1."
+          "description": "Rquired. Ray service deployment replicas, default set to 1.",
+          "required": [
+            "replicas"
+          ]
         },
         "routePrefix": {
           "type": "string",
@@ -776,16 +832,23 @@
         },
         "actorOptions": {
           "$ref": "#/definitions/protoActorOptions",
-          "description": "actor options indicated resource of each deployment's actor."
+          "description": "Required. Actor options indicated resource of each deployment's actor."
         }
-      }
+      },
+      "required": [
+        "deploymentName",
+        "replicas"
+      ]
     },
     "protoServeDeploymentGraphSpec": {
       "type": "object",
       "properties": {
         "importPath": {
           "type": "string",
-          "description": "Required input field. Import path for load the ray serve."
+          "description": "Required input field. Import path for load the ray serve.",
+          "required": [
+            "import_path"
+          ]
         },
         "runtimeEnv": {
           "type": "string",
@@ -796,9 +859,16 @@
           "items": {
             "$ref": "#/definitions/protoServeConfig"
           },
-          "description": "deployments config of the ray serve."
+          "description": "Required. Deployments config of the ray serve.",
+          "required": [
+            "serve_configs"
+          ]
         }
-      }
+      },
+      "required": [
+        "importPath",
+        "serveConfigs"
+      ]
     },
     "protoServeDeploymentStatus": {
       "type": "object",
@@ -825,13 +895,19 @@
           "items": {
             "$ref": "#/definitions/protoWorkerGroupUpdateSpec"
           },
-          "title": "specify the worker group to be update"
+          "title": "Required. Specify the worker group to be update",
+          "required": [
+            "worker_group_update_spec"
+          ]
         },
         "serveDeploymentGraphSpec": {
           "$ref": "#/definitions/protoServeDeploymentGraphSpec",
-          "description": "deployments config of the ray serve."
+          "description": "Required. Deployments config of the ray serve."
         }
-      }
+      },
+      "required": [
+        "workerGroupUpdateSpec"
+      ]
     },
     "protoVolume": {
       "type": "object",
@@ -880,11 +956,17 @@
       "properties": {
         "groupName": {
           "type": "string",
-          "title": "Required. Group name of the current worker group"
+          "title": "Required. Group name of the current worker group",
+          "required": [
+            "group_name"
+          ]
         },
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -893,24 +975,33 @@
         "replicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Required. Desired replicas of the worker group"
+          "title": "Required. Desired replicas of the worker group",
+          "required": [
+            "replicas"
+          ]
         },
         "minReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Min replicas of the worker group"
+          "description": "Optional. Min replicas of the worker group, can't be greater than max_replicas."
         },
         "maxReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Max replicas of the worker group"
+          "title": "Required. Max replicas of the worker group (\u003e0)",
+          "required": [
+            "max_replicas"
+          ]
         },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start parames of worker node group"
+          "title": "Required. The ray start parameters of worker node group",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -945,7 +1036,14 @@
           },
           "title": "Optional. Labels for the worker pod"
         }
-      }
+      },
+      "required": [
+        "groupName",
+        "computeTemplate",
+        "replicas",
+        "maxReplicas",
+        "rayStartParams"
+      ]
     },
     "protoWorkerGroupUpdateSpec": {
       "type": "object",
@@ -957,19 +1055,33 @@
         "replicas": {
           "type": "integer",
           "format": "int32",
-          "description": "The replicas of the worker group to be updated."
+          "description": "Required. The replicas of the worker group to be updated.",
+          "required": [
+            "replicas"
+          ]
         },
         "minReplicas": {
           "type": "integer",
           "format": "int32",
-          "description": "The min replicas of the worker group to be updated."
+          "description": "Required. The min replicas of the worker group to be updated.",
+          "required": [
+            "min_replicas"
+          ]
         },
         "maxReplicas": {
           "type": "integer",
           "format": "int32",
-          "description": "The max replicas of the worker group to be updated."
+          "description": "Required. The max replicas of the worker group to be updated.",
+          "required": [
+            "max_replicas"
+          ]
         }
-      }
+      },
+      "required": [
+        "replicas",
+        "minReplicas",
+        "maxReplicas"
+      ]
     },
     "protobufAny": {
       "type": "object",

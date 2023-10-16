@@ -4,6 +4,7 @@ option go_package = "github.com/ray-project/kuberay/proto/go_client";
 package proto;
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -81,47 +82,47 @@ service RayServeService {
 }
 
 message CreateRayServiceRequest {
-  // The ray service to be created.
-  RayService service = 1;
-  // The namespace of the ray service to be created.
-  string namespace = 2;
+  // Required. The ray service to be created.
+  RayService service = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the ray service to be created.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateRayServiceRequest {
-  // The ray service to be updated.
-  RayService service = 1;
-  // The namespace of the ray service to be updated.
-  string namespace = 2;
-  // The name of the ray service to be updated.
-  string name = 3;
+  // Required. The ray service to be updated.
+  RayService service = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the ray service to be updated.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
+  // Required. The name of the ray service to be updated.
+  string name = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateRayServiceConfigsRequest {
-  // The name of ray service to be updated.
-  string name = 1;
-  // The namespace of the ray service to be updated.
-  string namespace = 2;
-  // The ray service to be updated.
-  UpdateRayServiceBody update_service = 3;
+  // Required. The name of ray service to be updated.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the ray service to be updated.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
+  // Required. The ray service to be updated.
+  UpdateRayServiceBody update_service = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message UpdateRayServiceBody {
-  // specify the worker group to be update
-  repeated WorkerGroupUpdateSpec worker_group_update_spec = 1;
-  // deployments config of the ray serve.
-  ServeDeploymentGraphSpec serve_deployment_graph_spec = 2; 
+  // Required. Specify the worker group to be update
+  repeated WorkerGroupUpdateSpec worker_group_update_spec = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. Deployments config of the ray serve.
+  ServeDeploymentGraphSpec serve_deployment_graph_spec = 2 [(google.api.field_behavior) = REQUIRED]; 
 }
 
 message GetRayServiceRequest {
-  // The name used for retrieving the ray service.
-  string name = 1;
-  // The namespace used for retrieving the ray service.
-  string namespace = 2;
+  // Required. The name used for retrieving the ray service.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace used for retrieving the ray service.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListRayServicesRequest {
-  // The namespace of the ray services to be retrieved.
-  string namespace = 1;
+  // Required. The namespace of the ray services to be retrieved.
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
   // A page token to request the next page of results. The token is acquried
   // from the nextPageToken field of the response from the previous
   // ListRayServices call or can be omitted when fetching the first page.
@@ -133,11 +134,12 @@ message ListRayServicesRequest {
 }
 
 message ListRayServicesResponse {
-  repeated RayService services = 1; 
+  // List of services
+  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY]; 
   // The total number of RayServices for the given query.
-  int32 total_size = 2;
+  int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
-  string next_page_token = 3;
+  string next_page_token = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllRayServicesRequest {
@@ -152,27 +154,28 @@ message ListAllRayServicesRequest {
 }
 
 message ListAllRayServicesResponse {
-  repeated RayService services = 1; 
+  // A list of services.
+  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY]; 
   // The total number of RayServices for the given query.
-  int32 total_size = 2;
+  int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
-  string next_page_token = 3;
+  string next_page_token = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteRayServiceRequest {
   // The name of the ray service to be deleted.
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
   // The namespace of the ray service to be deleted.
-  string namespace = 2;
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message RayService {
   // Required input field. Unique ray service name provided by user.
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
   // Required input field. ray service namespace provided by user
-  string namespace = 2;
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required field. This field indicates the user who owns the ray service.
-  string user = 3;
+  string user = 3 [(google.api.field_behavior) = REQUIRED];
   // The config for ray serve deployments V1.
   ServeDeploymentGraphSpec serve_deployment_graph_spec = 4;
   // Config for serve deployment V2. Note that only one config V1 or V2 can be specified
@@ -181,30 +184,30 @@ message RayService {
   int32 service_unhealthy_second_threshold = 10;
   // Dashboard agent related health check
 	int32 deployment_unhealthy_second_threshold = 11;         
-  // The cluster template.
-  ClusterSpec cluster_spec = 5;
+  // Required. The cluster template.
+  ClusterSpec cluster_spec = 5 [(google.api.field_behavior) = REQUIRED];
   // Output. The status for the ray service.
-  RayServiceStatus ray_service_status = 6;
+  RayServiceStatus ray_service_status = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the ray service created.
-  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp created_at = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the ray service deleted.     
-  google.protobuf.Timestamp delete_at = 8;
+  google.protobuf.Timestamp delete_at = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ServeDeploymentGraphSpec {
     // Required input field. Import path for load the ray serve.
-    string import_path = 1;
+    string import_path = 1 [(google.api.field_behavior) = REQUIRED];
     // runtime env for loading the ray serve.
     string runtime_env = 2;
-    // deployments config of the ray serve.
-    repeated ServeConfig serve_configs = 3;
+    // Required. Deployments config of the ray serve.
+    repeated ServeConfig serve_configs = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ServeConfig {
-  // Required input field. Unique ray service deployment name provided by user.
-  string deployment_name = 1;
-  // ray service deployment replicas, default set to 1.  
-  int32 replicas = 2;
+  // Required. Input field. Unique ray service deployment name provided by user.
+  string deployment_name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Rquired. Ray service deployment replicas, default set to 1.  
+  int32 replicas = 2 [(google.api.field_behavior) = REQUIRED];
   // ray service deployment route prefix indicated by user.
   string route_prefix = 3;
   // max concurrent queries indicate for each ray service deployment.
@@ -213,7 +216,7 @@ message ServeConfig {
   string user_config = 5;
   // auto scaling config for ray serve deployment indicate by user.
   string autoscaling_config = 6;
-  // actor options indicated resource of each deployment's actor.
+  // Required. Actor options indicated resource of each deployment's actor.
   ActorOptions actor_options = 7;
 }
 
@@ -221,12 +224,12 @@ message ServeConfig {
 message ActorOptions {
   // This deployment's runtime_env used by the actor.
   string runtime_env = 1;
-  // The number of CPUs required by the deployment's application per replica.
-  double cpus_per_actor = 2;
-  // The number of GPUs required by the deployment's application per replica.
-  double gpus_per_actor = 3;
-  // Restrict the heap memory usage of each replica.
-  uint64 memory_per_actor = 4;
+  // Required. The number of CPUs required by the deployment's application per replica.
+  double cpus_per_actor = 2 [(google.api.field_behavior) = REQUIRED];
+  // Required. The number of GPUs required by the deployment's application per replica.
+  double gpus_per_actor = 3 [(google.api.field_behavior) = REQUIRED];
+  // Required. Restrict the heap memory usage of each replica.
+  uint64 memory_per_actor = 4 [(google.api.field_behavior) = REQUIRED];
   // Restrict the object store memory used per replica when creating objects.
   uint64 object_store_memory_per_actor = 5;
   // The custom resources required by each replica.
@@ -299,10 +302,10 @@ message RayServiceEvent {
 message WorkerGroupUpdateSpec {
   // The name of the worker group to be updated.
   string group_name = 1;
-  // The replicas of the worker group to be updated.
-  int32 replicas = 2;
-  // The min replicas of the worker group to be updated.
-  int32 min_replicas = 3;
-  // The max replicas of the worker group to be updated.
-  int32 max_replicas = 4;
+  // Required. The replicas of the worker group to be updated.
+  int32 replicas = 2 [(google.api.field_behavior) = REQUIRED];
+  // Required. The min replicas of the worker group to be updated.
+  int32 min_replicas = 3 [(google.api.field_behavior) = REQUIRED];
+  // Required. The max replicas of the worker group to be updated.
+  int32 max_replicas = 4 [(google.api.field_behavior) = REQUIRED];
 }
