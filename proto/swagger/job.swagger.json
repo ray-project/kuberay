@@ -446,6 +446,24 @@
           "format": "int32",
           "description": "TTLSecondsAfterFinished is the TTL to clean up RayCluster."
         },
+        "jobSubmitter": {
+          "$ref": "#/definitions/protoRayJobSubmitter",
+          "title": "Optional Ray Job submitter"
+        },
+        "entrypointNumCpus": {
+          "type": "number",
+          "format": "float",
+          "description": "Optional entrypointNumCpus specifies the number of cpus to reserve for the entrypoint command."
+        },
+        "entrypointNumGpus": {
+          "type": "number",
+          "format": "float",
+          "description": "Optional entrypointNumGpus specifies the number of gpus to reserve for the entrypoint command."
+        },
+        "entrypointResources": {
+          "type": "string",
+          "description": "Optional entrypointResources specifies the custom resources and quantities to reserve for the\nentrypoint command."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -469,7 +487,25 @@
           "description": "Output. A human-readable description of the status of this operation."
         }
       },
-      "title": "RayJob defination"
+      "title": "RayJob definition"
+    },
+    "protoRayJobSubmitter": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string",
+          "title": "Required base image for job submitter. Make sure that Python/Ray version\nof the image corresponds to the one used in the cluster"
+        },
+        "cpu": {
+          "type": "string",
+          "title": "Optional number of CPUs for submitter - default \"1\""
+        },
+        "memory": {
+          "type": "string",
+          "title": "Optional memory for the submitter - default \"1Gi\""
+        }
+      },
+      "title": "Ray Job Submitter definition"
     },
     "protoVolume": {
       "type": "object",

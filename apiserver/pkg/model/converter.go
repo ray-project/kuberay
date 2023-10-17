@@ -374,6 +374,27 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		pbJob.DeleteAt = &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()}
 	}
 
+	if job.Spec.SubmitterPodTemplate != nil {
+		pbJob.JobSubmitter = &api.RayJobSubmitter{
+			Image: job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image,
+		}
+		if job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String() != "1" {
+			pbJob.JobSubmitter.Cpu = job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String()
+		}
+		if job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String() != "1Gi" {
+			pbJob.JobSubmitter.Memory = job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String()
+		}
+	}
+	if job.Spec.EntrypointNumCpus > 0 {
+		pbJob.EntrypointNumCpus = job.Spec.EntrypointNumCpus
+	}
+	if job.Spec.EntrypointNumGpus > 0 {
+		pbJob.EntrypointNumGpus = job.Spec.EntrypointNumGpus
+	}
+	if job.Spec.EntrypointResources != "" {
+		pbJob.EntrypointResources = job.Spec.EntrypointResources
+	}
+
 	return pbJob
 }
 
