@@ -147,7 +147,7 @@ func (s *RayServiceServer) DeleteRayService(ctx context.Context, request *api.De
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
 	}
-	if err := s.resourceManager.DeleteCluster(ctx, request.Name, request.Namespace); err != nil {
+	if err := s.resourceManager.DeleteService(ctx, request.Name, request.Namespace); err != nil {
 		return nil, err
 	}
 

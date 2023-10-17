@@ -1,9 +1,9 @@
 package model
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	klog "k8s.io/klog/v2"
@@ -346,23 +346,28 @@ func FromCrdToApiService(service *v1alpha1.RayService, events []v1.Event) *api.R
 		deleteTime = service.DeletionTimestamp.Unix()
 	}
 	pbService := &api.RayService{
-		Name:                     service.Name,
-		Namespace:                service.Namespace,
-		User:                     service.Labels[util.RayClusterUserLabelKey],
-		ServeDeploymentGraphSpec: PopulateServeDeploymentGraphSpec(service.Spec.ServeDeploymentGraphSpec),
-		ClusterSpec:              PopulateRayClusterSpec(service.Spec.RayClusterSpec),
-		RayServiceStatus:         PoplulateRayServiceStatus(service.Name, service.Status, events),
-		CreatedAt:                &timestamp.Timestamp{Seconds: service.CreationTimestamp.Unix()},
-		DeleteAt:                 &timestamp.Timestamp{Seconds: deleteTime},
+		Name:                               service.Name,
+		Namespace:                          service.Namespace,
+		User:                               service.Labels[util.RayClusterUserLabelKey],
+		ServeDeploymentGraphSpec:           PopulateServeDeploymentGraphSpec(service.Spec.ServeDeploymentGraphSpec),
+		ServeConfig_V2:                     service.Spec.ServeConfigV2,
+		ClusterSpec:                        PopulateRayClusterSpec(service.Spec.RayClusterSpec),
+		ServiceUnhealthySecondThreshold:    PoplulateUnhealthySecondThreshold(service.Spec.ServiceUnhealthySecondThreshold),
+		DeploymentUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(service.Spec.DeploymentUnhealthySecondThreshold),
+		RayServiceStatus:                   PoplulateRayServiceStatus(service.Name, service.Status, events),
+		CreatedAt:                          &timestamp.Timestamp{Seconds: service.CreationTimestamp.Unix()},
+		DeleteAt:                           &timestamp.Timestamp{Seconds: deleteTime},
 	}
 	return pbService
 }
 
 func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
-	runtimeEnv, _ := base64.StdEncoding.DecodeString(spec.RuntimeEnv)
+	if reflect.DeepEqual(spec, v1alpha1.ServeDeploymentGraphSpec{}) {
+		return nil
+	}
 	return &api.ServeDeploymentGraphSpec{
 		ImportPath:   spec.ImportPath,
-		RuntimeEnv:   string(runtimeEnv),
+		RuntimeEnv:   spec.RuntimeEnv,
 		ServeConfigs: PopulateServeConfig(spec.ServeConfigSpecs),
 	}
 }
@@ -370,26 +375,52 @@ func PopulateServeDeploymentGraphSpec(spec v1alpha1.ServeDeploymentGraphSpec) *a
 func PopulateServeConfig(serveConfigSpecs []v1alpha1.ServeConfigSpec) []*api.ServeConfig {
 	serveConfigs := make([]*api.ServeConfig, 0)
 	for _, serveConfigSpec := range serveConfigSpecs {
-		serveConfig := &api.ServeConfig{
-			DeploymentName:       serveConfigSpec.Name,
-			Replicas:             *serveConfigSpec.NumReplicas,
-			RoutePrefix:          serveConfigSpec.RoutePrefix,
-			MaxConcurrentQueries: *serveConfigSpec.MaxConcurrentQueries,
-			UserConfig:           serveConfigSpec.UserConfig,
-			AutoscalingConfig:    serveConfigSpec.AutoscalingConfig,
-			ActorOptions: &api.ActorOptions{
-				RuntimeEnv:                serveConfigSpec.RayActorOptions.RuntimeEnv,
-				CpusPerActor:              *serveConfigSpec.RayActorOptions.NumCpus,
-				GpusPerActor:              *serveConfigSpec.RayActorOptions.NumGpus,
-				MemoryPerActor:            *serveConfigSpec.RayActorOptions.Memory,
-				ObjectStoreMemoryPerActor: *serveConfigSpec.RayActorOptions.ObjectStoreMemory,
-				CustomResource:            serveConfigSpec.RayActorOptions.Resources,
-				AccceleratorType:          serveConfigSpec.RayActorOptions.AcceleratorType,
-			},
+		var actorOptions *api.ActorOptions
+		if reflect.DeepEqual(serveConfigSpec.RayActorOptions, v1alpha1.RayActorOptionSpec{}) {
+			actorOptions = nil
+		} else {
+			actorOptions = &api.ActorOptions{
+				RuntimeEnv:       serveConfigSpec.RayActorOptions.RuntimeEnv,
+				CustomResource:   serveConfigSpec.RayActorOptions.Resources,
+				AccceleratorType: serveConfigSpec.RayActorOptions.AcceleratorType,
+			}
+			if serveConfigSpec.RayActorOptions.NumCpus != nil {
+				actorOptions.CpusPerActor = *serveConfigSpec.RayActorOptions.NumCpus
+			}
+			if serveConfigSpec.RayActorOptions.NumGpus != nil {
+				actorOptions.GpusPerActor = *serveConfigSpec.RayActorOptions.NumGpus
+			}
+			if serveConfigSpec.RayActorOptions.Memory != nil {
+				actorOptions.MemoryPerActor = *serveConfigSpec.RayActorOptions.Memory
+			}
+			if serveConfigSpec.RayActorOptions.ObjectStoreMemory != nil {
+				actorOptions.ObjectStoreMemoryPerActor = *serveConfigSpec.RayActorOptions.ObjectStoreMemory
+			}
 		}
+		serveConfig := &api.ServeConfig{
+			DeploymentName:    serveConfigSpec.Name,
+			AutoscalingConfig: serveConfigSpec.AutoscalingConfig,
+			UserConfig:        serveConfigSpec.UserConfig,
+			RoutePrefix:       serveConfigSpec.RoutePrefix,
+			ActorOptions:      actorOptions,
+		}
+		if serveConfigSpec.NumReplicas != nil {
+			serveConfig.Replicas = *serveConfigSpec.NumReplicas
+		}
+		if serveConfigSpec.MaxConcurrentQueries != nil {
+			serveConfig.MaxConcurrentQueries = *serveConfigSpec.MaxConcurrentQueries
+		}
+
 		serveConfigs = append(serveConfigs, serveConfig)
 	}
 	return serveConfigs
+}
+
+func PoplulateUnhealthySecondThreshold(value *int32) int32 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func PoplulateRayServiceStatus(serviceName string, serviceStatus v1alpha1.RayServiceStatuses, events []v1.Event) *api.RayServiceStatus {

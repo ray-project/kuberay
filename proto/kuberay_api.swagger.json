@@ -1737,7 +1737,21 @@
         },
         "serveDeploymentGraphSpec": {
           "$ref": "#/definitions/protoServeDeploymentGraphSpec",
-          "description": "The config for ray serve deployments."
+          "description": "The config for ray serve deployments V1."
+        },
+        "serveConfigV2": {
+          "type": "string",
+          "title": "Config for serve deployment V2. Note that only one config V1 or V2 can be specified"
+        },
+        "serviceUnhealthySecondThreshold": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Serve deployment related health check"
+        },
+        "deploymentUnhealthySecondThreshold": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Dashboard agent related health check"
         },
         "clusterSpec": {
           "$ref": "#/definitions/protoClusterSpec",

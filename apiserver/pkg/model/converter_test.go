@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -11,9 +12,12 @@ import (
 )
 
 var (
-	enableIngress          = true
-	headNodeReplicas int32 = 1
-	workerReplicas   int32 = 5
+	enableIngress                    = true
+	deploymentReplicas       int32   = 1
+	headNodeReplicas         int32   = 1
+	workerReplicas           int32   = 5
+	unhealthySecondThreshold int32   = 900
+	floatNumber              float64 = 1
 )
 
 var headSpecTest = v1alpha1.HeadGroupSpec{
@@ -211,6 +215,61 @@ var ClusterSpecTest = v1alpha1.RayCluster{
 	},
 }
 
+var ServiceV1Test = v1alpha1.RayService{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayServiceSpec{
+		ServeDeploymentGraphSpec: v1alpha1.ServeDeploymentGraphSpec{
+			ImportPath: "fruit.deployment_graph",
+			RuntimeEnv: "working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"",
+			ServeConfigSpecs: []v1alpha1.ServeConfigSpec{
+				{
+					Name:        "MangoStand",
+					NumReplicas: &deploymentReplicas,
+					UserConfig:  "price: 3",
+					RayActorOptions: v1alpha1.RayActorOptionSpec{
+						NumCpus: &floatNumber,
+					},
+				},
+				{
+					Name:        "OrangeStand",
+					NumReplicas: &deploymentReplicas,
+				},
+				{
+					Name:        "PearStand",
+					NumReplicas: &deploymentReplicas,
+					UserConfig:  "price: 1",
+					RayActorOptions: v1alpha1.RayActorOptionSpec{
+						NumCpus: &floatNumber,
+					},
+				},
+			},
+		},
+		RayClusterSpec:                  ClusterSpecTest.Spec,
+		ServiceUnhealthySecondThreshold: &unhealthySecondThreshold,
+	},
+}
+
+var ServiceV2Test = v1alpha1.RayService{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: v1alpha1.RayServiceSpec{
+		ServeConfigV2:                      "Some yaml value",
+		RayClusterSpec:                     ClusterSpecTest.Spec,
+		DeploymentUnhealthySecondThreshold: &unhealthySecondThreshold,
+	},
+}
+
 var expectedAnnotations = map[string]string{
 	"custom": "value",
 }
@@ -300,4 +359,35 @@ func TestPopulateTemplate(t *testing.T) {
 
 func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
+}
+
+func TestPopulateService(t *testing.T) {
+	service := FromCrdToApiService(&ServiceV1Test, make([]v1.Event, 0))
+	fmt.Printf("serviceV1 = %#v\n", service)
+	if service.Name != "test" {
+		t.Errorf("failed to convert name")
+	}
+	if service.Namespace != "test" {
+		t.Errorf("failed to convert namespace")
+	}
+	if service.User != "user" {
+		t.Errorf("failed to convert user")
+	}
+	if service.ServeDeploymentGraphSpec == nil {
+		t.Errorf("failed to convert v1 serve spec")
+	}
+	if service.ServeConfig_V2 != "" {
+		t.Errorf("unexpected v2 server spec")
+	}
+	if len(service.ServeDeploymentGraphSpec.ServeConfigs) != 3 {
+		t.Errorf("failed to convert serveConfiggs")
+	}
+	service = FromCrdToApiService(&ServiceV2Test, make([]v1.Event, 0))
+	fmt.Printf("serviceV2 = %#v\n", service)
+	if service.ServeDeploymentGraphSpec != nil {
+		t.Errorf("unexpected v1 serve spec")
+	}
+	if service.ServeConfig_V2 == "" {
+		t.Errorf("failed to convert v2 server spec")
+	}
 }
