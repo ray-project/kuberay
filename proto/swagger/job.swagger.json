@@ -63,7 +63,7 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the job to be retrieved.",
+            "description": "Required. The namespace of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -93,14 +93,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the job to be created",
+            "description": "Required. The namespace of the job to be created",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "body",
-            "description": "The job to be created.",
+            "description": "Required. The job to be created.",
             "in": "body",
             "required": true,
             "schema": {
@@ -134,14 +134,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the job to be retrieved.",
+            "description": "Required. The namespace of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the job to be retrieved.",
+            "description": "Required. The name of the job to be retrieved.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -171,14 +171,14 @@
         "parameters": [
           {
             "name": "namespace",
-            "description": "The namespace of the job to be deleted.",
+            "description": "Required. The namespace of the job to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "name",
-            "description": "The name of the job to be deleted.",
+            "description": "Required. The name of the job to be deleted.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -264,16 +264,17 @@
       "properties": {
         "headGroupSpec": {
           "$ref": "#/definitions/protoHeadGroupSpec",
-          "title": "The head group configuration"
+          "title": "Required. The head group configuration"
         },
         "workerGroupSpec": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoWorkerGroupSpec"
           },
-          "title": "The worker group configurations"
+          "title": "Optional. The worker group configurations"
         }
-      }
+      },
+      "description": "Cluster specification."
     },
     "protoEnvValueFrom": {
       "type": "object",
@@ -314,7 +315,10 @@
       "properties": {
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -333,7 +337,10 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Optional. The ray start params of head node group."
+          "description": "Required. The ray start params of head node group.",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -368,7 +375,12 @@
           },
           "title": "Optional. Labels for the head pod"
         }
-      }
+      },
+      "title": "Cluster HeadGroup specification",
+      "required": [
+        "computeTemplate",
+        "rayStartParams"
+      ]
     },
     "protoListAllRayJobsResponse": {
       "type": "object",
@@ -377,7 +389,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoRayJob"
-          }
+          },
+          "readOnly": true
         }
       }
     },
@@ -388,7 +401,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/protoRayJob"
-          }
+          },
+          "readOnly": true
         }
       }
     },
@@ -397,15 +411,24 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Required input field. Unique job name provided by user."
+          "description": "Required input field. Unique job name provided by user.",
+          "required": [
+            "name"
+          ]
         },
         "namespace": {
           "type": "string",
-          "title": "Required input field. job namespace provided by user"
+          "title": "Required input field. job namespace provided by user",
+          "required": [
+            "namespace"
+          ]
         },
         "user": {
           "type": "string",
-          "description": "Required field. This field indicates the user who owns the job."
+          "description": "Required field. This field indicates the user who owns the job.",
+          "required": [
+            "user"
+          ]
         },
         "entrypoint": {
           "type": "string",
@@ -416,35 +439,35 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Metadata is data to store along with this job."
+          "description": "Optional. Metadata is data to store along with this job."
         },
         "runtimeEnv": {
           "type": "string",
-          "title": "RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
+          "title": "Optional. RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
         },
         "jobId": {
           "type": "string",
-          "description": "If jobId is not set, a new jobId will be auto-generated."
+          "description": "Optional. If jobId is not set, a new jobId will be auto-generated."
         },
         "shutdownAfterJobFinishes": {
           "type": "boolean",
-          "title": "If set to true, the rayCluster will be deleted after the rayJob finishes"
+          "description": "Optional. If set to true, the rayCluster will be deleted after the rayJob finishes. Defaults to false."
         },
         "clusterSelector": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "The label selector to choose exiting clusters"
+          "description": "Optional. The label selectors to choose exiting clusters. If not specified, cluster_spec must be set."
         },
         "clusterSpec": {
           "$ref": "#/definitions/protoClusterSpec",
-          "title": "The cluster template"
+          "description": "Optional. The cluster template, required if the cluster_selector is not specified."
         },
         "ttlSecondsAfterFinished": {
           "type": "integer",
           "format": "int32",
-          "description": "TTLSecondsAfterFinished is the TTL to clean up RayCluster."
+          "description": "Optional. TTLSecondsAfterFinished is the TTL to clean up RayCluster."
         },
         "jobSubmitter": {
           "$ref": "#/definitions/protoRayJobSubmitter",
@@ -467,26 +490,32 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the job created."
+          "description": "Output. The time that the job created.",
+          "readOnly": true
         },
         "deleteAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The time that the job deleted."
+          "description": "Output. The time that the job deleted.",
+          "readOnly": true
         },
         "jobStatus": {
           "type": "string",
-          "title": "Output. The current job status"
+          "title": "Output. The current job status",
+          "readOnly": true
         },
         "jobDeploymentStatus": {
           "type": "string",
-          "title": "Output. The current job deployment status"
+          "title": "Output. The current job deployment status",
+          "readOnly": true
         },
         "message": {
           "type": "string",
-          "description": "Output. A human-readable description of the status of this operation."
+          "description": "Output. A human-readable description of the status of this operation.",
+          "readOnly": true
         }
       },
+
       "title": "RayJob definition"
     },
     "protoRayJobSubmitter": {
@@ -506,6 +535,14 @@
         }
       },
       "title": "Ray Job Submitter definition"
+
+      "title": "RayJob definition",
+      "required": [
+        "name",
+        "namespace",
+        "user"
+      ]
+
     },
     "protoVolume": {
       "type": "object",
@@ -554,11 +591,17 @@
       "properties": {
         "groupName": {
           "type": "string",
-          "title": "Required. Group name of the current worker group"
+          "title": "Required. Group name of the current worker group",
+          "required": [
+            "group_name"
+          ]
         },
         "computeTemplate": {
           "type": "string",
-          "title": "Optional. The computeTemplate of head node group"
+          "title": "Required. The computeTemplate of head node group",
+          "required": [
+            "compute_template"
+          ]
         },
         "image": {
           "type": "string",
@@ -567,24 +610,33 @@
         "replicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Required. Desired replicas of the worker group"
+          "title": "Required. Desired replicas of the worker group",
+          "required": [
+            "replicas"
+          ]
         },
         "minReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Min replicas of the worker group"
+          "description": "Optional. Min replicas of the worker group, can't be greater than max_replicas."
         },
         "maxReplicas": {
           "type": "integer",
           "format": "int32",
-          "title": "Optional. Max replicas of the worker group"
+          "title": "Required. Max replicas of the worker group (\u003e0)",
+          "required": [
+            "max_replicas"
+          ]
         },
         "rayStartParams": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Optional. The ray start parames of worker node group"
+          "title": "Required. The ray start parameters of worker node group",
+          "required": [
+            "ray_start_params"
+          ]
         },
         "volumes": {
           "type": "array",
@@ -619,7 +671,14 @@
           },
           "title": "Optional. Labels for the worker pod"
         }
-      }
+      },
+      "required": [
+        "groupName",
+        "computeTemplate",
+        "replicas",
+        "maxReplicas",
+        "rayStartParams"
+      ]
     },
     "protobufAny": {
       "type": "object",
