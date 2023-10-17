@@ -476,8 +476,7 @@ type RayJob struct {
 	EntrypointNumCpus float32 `protobuf:"fixed32,18,opt,name=entrypointNumCpus,proto3" json:"entrypointNumCpus,omitempty"`
 	// Optional entrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
 	EntrypointNumGpus float32 `protobuf:"fixed32,19,opt,name=entrypointNumGpus,proto3" json:"entrypointNumGpus,omitempty"`
-	// Optional entrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
+	// Optional entrypointResources specifies the custom resources and quantities to reserve for the entrypoint command.
 	EntrypointResources string `protobuf:"bytes,20,opt,name=entrypointResources,proto3" json:"entrypointResources,omitempty"`
 	// Output. The time that the job created.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`

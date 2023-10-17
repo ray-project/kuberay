@@ -485,7 +485,7 @@
         },
         "entrypointResources": {
           "type": "string",
-          "description": "Optional entrypointResources specifies the custom resources and quantities to reserve for the\nentrypoint command."
+          "description": "Optional entrypointResources specifies the custom resources and quantities to reserve for the entrypoint command."
         },
         "createdAt": {
           "type": "string",

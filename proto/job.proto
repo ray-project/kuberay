@@ -142,8 +142,7 @@ message RayJob {
   float entrypointNumCpus = 18;
   // Optional entrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
   float entrypointNumGpus = 19;
-  // Optional entrypointResources specifies the custom resources and quantities to reserve for the
-  // entrypoint command.
+  // Optional entrypointResources specifies the custom resources and quantities to reserve for the entrypoint command.
   string entrypointResources = 20;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
