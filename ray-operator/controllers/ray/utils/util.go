@@ -215,11 +215,31 @@ func GenerateIdentifier(clusterName string, nodeType rayv1alpha1.RayNodeType) st
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1alpha1.WorkerGroupSpec) int32 {
+	// Always adhere to min/max replicas constraints.
+	var workerReplicas int32
+	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
+		logrus.Warn(
+			fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
+				"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		workerReplicas = *workerGroupSpec.MaxReplicas
+	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
+		// Add this check to make testing easier.
+		workerReplicas = *workerGroupSpec.MinReplicas
+	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
+		workerReplicas = *workerGroupSpec.MaxReplicas
+	} else {
+		workerReplicas = *workerGroupSpec.Replicas
+	}
+	return workerReplicas
+}
+
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
 func CalculateDesiredReplicas(cluster *rayv1alpha1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += *nodeGroup.Replicas
+		count += GetWorkerGroupDesiredReplicas(nodeGroup)
 	}
 
 	return count
