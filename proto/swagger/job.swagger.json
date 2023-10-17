@@ -40,45 +40,6 @@
         "tags": [
           "RayJobService"
         ]
-      },
-      "post": {
-        "summary": "Creates a new job.",
-        "operationId": "RayJobService_CreateRayJob",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "description": "The job to be created.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoRayJob"
-            }
-          },
-          {
-            "name": "namespace",
-            "description": "The namespace of the job to be created.",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "RayJobService"
-        ]
       }
     },
     "/apis/v1alpha2/namespaces/{namespace}/jobs": {
@@ -106,6 +67,45 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "RayJobService"
+        ]
+      },
+      "post": {
+        "summary": "Creates a new job.",
+        "operationId": "RayJobService_CreateRayJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "The namespace of the job to be created",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "description": "The job to be created.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoRayJob"
+            }
           }
         ],
         "tags": [
@@ -223,7 +223,10 @@
       "enum": [
         "PERSISTENT_VOLUME_CLAIM",
         "HOST_PATH",
-        "EPHEMERAL"
+        "EPHEMERAL",
+        "CONFIGMAP",
+        "SECRET",
+        "EMPTY_DIR"
       ],
       "default": "PERSISTENT_VOLUME_CLAIM"
     },
@@ -375,7 +378,7 @@
         },
         "runtimeEnv": {
           "type": "string",
-          "title": "RuntimeEnv is base64 encoded string which stores runtime configuration"
+          "title": "RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec"
         },
         "jobId": {
           "type": "string",
@@ -459,6 +462,12 @@
         },
         "storage": {
           "type": "string"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
