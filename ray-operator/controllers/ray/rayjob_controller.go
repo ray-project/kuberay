@@ -326,7 +326,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 	}
-	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+
+	if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+		// Requeue the RayJob to poll its status from the running Ray job
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	}
+	// Otherwise only reconcile the RayJob upon new events for watched resources
+	// to avoid infinite reconciliation.
+	return ctrl.Result{}, nil
 }
 
 // getOrCreateK8sJob creates a Kubernetes Job for the Ray Job if it doesn't exist, otherwise returns the existing one. It returns the Job name and a boolean indicating whether the Job was created.
@@ -400,6 +407,9 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
+			Labels: map[string]string{
+				common.KubernetesCreatedByLabelKey: common.ComponentName,
+			},
 		},
 		Spec: batchv1.JobSpec{
 			Template: submitterTemplate,
@@ -465,6 +475,7 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rayv1.RayJob{}).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
 

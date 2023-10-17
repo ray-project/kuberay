@@ -7,21 +7,25 @@ import (
 	"strings"
 
 	"github.com/go-logr/zapr"
-	"go.uber.org/zap"
-	"gopkg.in/natefinch/lumberjack.v2"
-
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
-	routev1 "github.com/openshift/api/route/v1"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"gopkg.in/natefinch/lumberjack.v2"
 
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -39,7 +43,8 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1.AddToScheme(scheme))
-	utilruntime.Must(routev1.AddToScheme(scheme))
+	utilruntime.Must(routev1.Install(scheme))
+	utilruntime.Must(batchv1.AddToScheme(scheme))
 	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
@@ -116,7 +121,7 @@ func main() {
 		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
 	}
 
-	watchNamespaces := strings.Split(watchNamespace, ",")
+	// Manager options
 	options := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -126,50 +131,66 @@ func main() {
 		LeaderElectionID:       "ray-operator-leader",
 	}
 
-	if len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")`` is still 1.
+	// Manager Cache
+	// Set the informers label selectors to narrow the scope of the resources being watched and cached.
+	// This improves the scalability of the system, both for KubeRay itself by reducing the size of the
+	// informers cache, and for the API server / etcd, by reducing the number of watch events.
+	// For example, KubeRay is only interested in the batch Jobs it creates when reconciling RayJobs,
+	// so the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job it creates,
+	// and that label is provided to the manager cache as a selector for Job resources.
+	selectorsByObject, err := cacheSelectors()
+	exitOnError(err, "unable to create cache selectors")
+	if watchNamespaces := strings.Split(watchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
 		options.Namespace = watchNamespaces[0]
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
 		} else {
 			setupLog.Info(fmt.Sprintf("Only watch custom resources in the namespace: %s", watchNamespaces[0]))
 		}
+		options.NewCache = cache.BuilderWithOptions(cache.Options{SelectorsByObject: selectorsByObject})
 	} else {
-		options.NewCache = cache.MultiNamespacedCacheBuilder(watchNamespaces)
+		options.NewCache = func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+			opts.SelectorsByObject = selectorsByObject
+			return cache.MultiNamespacedCacheBuilder(watchNamespaces)(config, opts)
+		}
 		setupLog.Info(fmt.Sprintf("Only watch custom resources in multiple namespaces: %v", watchNamespaces))
 	}
+
 	setupLog.Info("Setup manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
+	exitOnError(err, "unable to start manager")
 
-	if err = ray.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RayCluster")
-		os.Exit(1)
-	}
-	if err = ray.NewRayServiceReconciler(mgr).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RayService")
-		os.Exit(1)
-	}
-	if err = ray.NewRayJobReconciler(mgr).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RayJob")
-		os.Exit(1)
-	}
+	exitOnError(ray.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency),
+		"unable to create controller", "controller", "RayCluster")
+	exitOnError(ray.NewRayServiceReconciler(mgr).SetupWithManager(mgr),
+		"unable to create controller", "controller", "RayService")
+	exitOnError(ray.NewRayJobReconciler(mgr).SetupWithManager(mgr),
+		"unable to create controller", "controller", "RayJob")
+
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
+	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
+	exitOnError(mgr.AddReadyzCheck("readyz", healthz.Ping), "unable to set up ready check")
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	exitOnError(mgr.Start(ctrl.SetupSignalHandler()), "problem running manager")
+}
+
+func cacheSelectors() (cache.SelectorsByObject, error) {
+	label, err := labels.NewRequirement(common.KubernetesCreatedByLabelKey, selection.Equals, []string{common.ComponentName})
+	if err != nil {
+		return nil, err
+	}
+	selector := labels.NewSelector().Add(*label)
+
+	return cache.SelectorsByObject{
+		&batchv1.Job{}: {Label: selector},
+	}, nil
+}
+
+func exitOnError(err error, msg string, keysAndValues ...interface{}) {
+	if err != nil {
+		setupLog.Error(err, msg, keysAndValues)
 		os.Exit(1)
 	}
 }
