@@ -6,6 +6,8 @@ metadata:
     prometheus.io/path: /metrics
     prometheus.io/scrape: "true"
     prometheus.io/port: "8888"
+  labels:
+    app.kubernetes.io/component: kuberay-apiserver
 spec:
   type: {{ .Values.service.type }}
   selector:
