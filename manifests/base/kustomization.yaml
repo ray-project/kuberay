@@ -11,8 +11,8 @@ resources:
 images:
 - name: kuberay/apiserver
   newName: kuberay/apiserver
-  newTag: v1.0.0-rc.0
+  newTag: v1.0.0-rc.1
 - name: kuberay/operator
   newName: kuberay/operator
-  newTag: v1.0.0-rc.0
+  newTag: v1.0.0-rc.1
 

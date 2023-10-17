@@ -7,7 +7,7 @@ replicaCount: 1
 name: "kuberay-apiserver"
 image:
   repository: kuberay/apiserver
-  tag: v1.0.0-rc.0
+  tag: v1.0.0-rc.1
   pullPolicy: IfNotPresent
 
 ## Install Default RBAC roles and bindings
