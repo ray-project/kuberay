@@ -52,7 +52,6 @@ if __name__ == '__main__':
             'Skip this test because it requires a lot of resources.',
         'ray-cluster-tpu.yaml': 'Skip this test because it requires TPU resources.',
         'ray-cluster.gke-bucket.yaml': 'Skip this test because it requires GKE and k8s service accounts.',
-        'ray-cluster.external-redis.yaml': 'Skip this test because it requires external Redis.',
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
