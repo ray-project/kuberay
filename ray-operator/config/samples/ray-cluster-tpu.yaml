@@ -1,7 +1,7 @@
 # This template contains a Kuberay cluster using a 2x2x2 TPU v4 PodSlice.
 # To get access to TPU resources, please follow instructions in this doc:
 # https://docs.google.com/document/d/1TRwtfi2pzXbT6We0WQdwNzDdKHruk3u1XeLLJwW38kE/edit#heading=h.8ntu2hqwqvhl
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:

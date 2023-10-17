@@ -11,7 +11,7 @@
 # To achieve Kubernetes node autoscaling with this example, we recommend setting up an autoscaling node group/pool with
 # - 2 nodes minimum for the Ray head pod and Ray worker pod
 # - 11 nodes maximum to accommodate up to 10 Ray worker pods.
-apiVersion: ray.io/v1alpha1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:

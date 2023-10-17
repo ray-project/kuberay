@@ -1,7 +1,7 @@
 package schedulerinterface
 
 import (
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -16,11 +16,11 @@ type BatchScheduler interface {
 
 	// DoBatchSchedulingOnSubmission handles submitting the RayCluster to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
-	DoBatchSchedulingOnSubmission(app *rayv1alpha1.RayCluster) error
+	DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error
 
 	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToPod(app *rayv1alpha1.RayCluster, pod *v1.Pod)
+	AddMetadataToPod(app *rayv1.RayCluster, pod *v1.Pod)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -49,11 +49,11 @@ func (d *DefaultBatchScheduler) Name() string {
 	return GetDefaultPluginName()
 }
 
-func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1alpha1.RayCluster) error {
+func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error {
 	return nil
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToPod(app *rayv1alpha1.RayCluster, pod *v1.Pod) {
+func (d *DefaultBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, pod *v1.Pod) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(config *rest.Config) (BatchScheduler, error) {

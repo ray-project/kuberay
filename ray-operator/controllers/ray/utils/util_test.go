@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -118,17 +118,17 @@ func createSomePod() (pod *corev1.Pod) {
 
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
 	tests := map[string]struct {
-		input *rayv1alpha1.RayCluster
+		input *rayv1.RayCluster
 		want  string
 	}{
 		"Ray cluster with head group service account": {
-			input: &rayv1alpha1.RayCluster{
+			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
-				Spec: rayv1alpha1.RayClusterSpec{
-					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								ServiceAccountName: "my-service-account",
@@ -140,13 +140,13 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 			want: "my-service-account",
 		},
 		"Ray cluster without head group service account": {
-			input: &rayv1alpha1.RayCluster{
+			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
 					Namespace: "default",
 				},
-				Spec: rayv1alpha1.RayClusterSpec{
-					HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{},
 						},
@@ -349,7 +349,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod1",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayv1alpha1.HeadNode),
+						"ray.io/node-type": string(rayv1.HeadNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -360,7 +360,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -371,7 +371,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -382,7 +382,7 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod2",
 					Labels: map[string]string{
-						"ray.io/node-type": string(rayv1alpha1.WorkerNode),
+						"ray.io/node-type": string(rayv1.WorkerNode),
 					},
 				},
 				Status: corev1.PodStatus{
@@ -428,14 +428,14 @@ func TestGenerateHeadServiceName(t *testing.T) {
 
 	// [RayCluster]
 	// Test 1: `HeadService.Name` is empty.
-	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1alpha1.RayClusterSpec{}, "raycluster-sample")
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1.RayClusterSpec{}, "raycluster-sample")
 	expectedGeneratedSvcName := "raycluster-sample-head-svc"
 	assert.Nil(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
 
 	// Test 2: `HeadService.Name` is not empty.
-	clusterSpecWithHeadService := rayv1alpha1.RayClusterSpec{
-		HeadGroupSpec: rayv1alpha1.HeadGroupSpec{
+	clusterSpecWithHeadService := rayv1.RayClusterSpec{
+		HeadGroupSpec: rayv1.HeadGroupSpec{
 			HeadService: &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "my-head-svc",
@@ -450,7 +450,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 
 	// [RayService]
 	// Test 3: `HeadService.Name` is empty.
-	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1alpha1.RayClusterSpec{}, "rayservice-sample")
+	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1.RayClusterSpec{}, "rayservice-sample")
 	expectedGeneratedSvcName = "rayservice-sample-head-svc"
 	assert.Nil(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
@@ -461,7 +461,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
 
 	// Invalid CRD type
-	_, err = GenerateHeadServiceName(RayJobCRD, rayv1alpha1.RayClusterSpec{}, "rayjob-sample")
+	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
 	assert.NotNil(t, err)
 }
 
@@ -471,7 +471,7 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	minReplicas := int32(1)
 	maxReplicas := int32(5)
 
-	workerGroupSpec := rayv1alpha1.WorkerGroupSpec{
+	workerGroupSpec := rayv1.WorkerGroupSpec{
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
 	}
@@ -540,9 +540,9 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			cluster := rayv1alpha1.RayCluster{
-				Spec: rayv1alpha1.RayClusterSpec{
-					WorkerGroupSpecs: []rayv1alpha1.WorkerGroupSpec{
+			cluster := rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 						{
 							GroupName:   "group1",
 							Replicas:    tc.group1Replicas,
