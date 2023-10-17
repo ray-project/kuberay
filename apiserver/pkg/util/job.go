@@ -1,6 +1,8 @@
 package util
 
 import (
+	"errors"
+
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	v1 "k8s.io/api/core/v1"
@@ -16,6 +18,10 @@ const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
 func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
+	if apiJob.ClusterSelector != nil && apiJob.JobSubmitter == nil {
+		// If cluster selector is specified, ensure that Job submitter is present
+		return nil, errors.New("external Ray cluster requires Job submitter definition")
+	}
 	rayJob := &rayv1api.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiJob.Name,
@@ -42,7 +48,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		rayJob.Spec.RayClusterSpec = clusterSpec
 	}
 	if apiJob.JobSubmitter != nil {
-		// Job submitter is specified, create
+		// Job submitter is specified, create SubmitterPodTemplate
 		cpus := "1"
 		memorys := "1Gi"
 		if apiJob.JobSubmitter.Cpu != "" {

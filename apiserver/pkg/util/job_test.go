@@ -69,16 +69,8 @@ func TestBuildRayJob(t *testing.T) {
 	assert.NotNil(t, job.Spec.RayClusterSpec)
 
 	// Test request without cluster creation
-	job, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Nil(t, err)
-	assert.Equal(t, "test", job.ObjectMeta.Name)
-	assert.Equal(t, "test", job.ObjectMeta.Namespace)
-	assert.Equal(t, 4, len(job.ObjectMeta.Labels))
-	assert.Equal(t, "test", job.ObjectMeta.Labels[RayClusterUserLabelKey])
-	assert.Greater(t, len(job.Spec.RuntimeEnvYAML), 1)
-	assert.Equal(t, len(job.Spec.RuntimeEnv), 0)
-	assert.NotNil(t, job.Spec.ClusterSelector)
-	assert.Nil(t, job.Spec.RayClusterSpec)
+	_, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	assert.NotNil(t, err)
 
 	// Test request with cluster creation with submitter
 	job, err = NewRayJob(apiJobExistingClusterSubmitter, map[string]*api.ComputeTemplate{"foo": &template})
