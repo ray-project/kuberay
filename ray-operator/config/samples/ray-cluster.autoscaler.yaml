@@ -4,7 +4,7 @@ metadata:
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.6.3'
+  rayVersion: '2.7.0'
   # If `enableInTreeAutoscaling` is true, the Autoscaler sidecar will be added to the Ray head pod.
   # Ray Autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
@@ -44,7 +44,7 @@ spec:
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
       # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.
-      num-cpus: "0" 
+      num-cpus: "0"
       # Use `resources` to optionally specify custom resource annotations for the Ray node.
       # The value of `resources` is a string-integer mapping.
       # Currently, `resources` must be provided in the specific format demonstrated below:
@@ -55,7 +55,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.6.3
+          image: rayproject/ray:2.7.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -108,7 +108,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.6.3
+          image: rayproject/ray:2.7.0
           lifecycle:
             preStop:
               exec:

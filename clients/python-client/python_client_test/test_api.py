@@ -14,7 +14,7 @@ test_cluster_body: dict = {
         "name": "raycluster-complete-raw",
     },
     "spec": {
-        "rayVersion": "2.6.3",
+        "rayVersion": "2.7.0",
         "headGroupSpec": {
             "rayStartParams": {"dashboard-host": "0.0.0.0"},
             "template": {
@@ -23,7 +23,7 @@ test_cluster_body: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.6.3",
+                            "image": "rayproject/ray:2.7.0",
                             "ports": [
                                 {"containerPort": 6379, "name": "gcs"},
                                 {"containerPort": 8265, "name": "dashboard"},
@@ -59,7 +59,7 @@ test_cluster_body: dict = {
                         "containers": [
                             {
                                 "name": "ray-worker",
-                                "image": "rayproject/ray:2.6.3",
+                                "image": "rayproject/ray:2.7.0",
                                 "lifecycle": {
                                     "preStop": {
                                         "exec": {
@@ -77,7 +77,7 @@ test_cluster_body: dict = {
                             },
                             {
                                 "name": "side-car",
-                                "image": "rayproject/ray:2.6.3",
+                                "image": "rayproject/ray:2.7.0",
                                 "resources": {
                                     "limits": {"cpu": "1", "memory": "1G"},
                                     "requests": {"cpu": "500m", "memory": "1G"},
@@ -129,5 +129,3 @@ class TestUtils(unittest.TestCase):
     # mock the get_ray_cluster_status method
     def get_ray_cluster_status_mock(self, name: str, k8s_namespace: str = "default", timeout: int = 5, delay_between_attempts: int = 5):
         return test_cluster_body["status"]
-
-
