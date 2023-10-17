@@ -260,13 +260,13 @@ var ComputeTemplateService_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ImageTemplateServiceClient interface {
-	// Creates a new ImageTemplate.
+	// Not implemented. Creates a new ImageTemplate.
 	CreateImageTemplate(ctx context.Context, in *CreateImageTemplateRequest, opts ...grpc.CallOption) (*ImageTemplate, error)
-	// Finds a specific ImageTemplate by ID.
+	// Not implemented. Finds a specific ImageTemplate by ID.
 	GetImageTemplate(ctx context.Context, in *GetImageTemplateRequest, opts ...grpc.CallOption) (*ImageTemplate, error)
-	// Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
+	// Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
 	ListImageTemplates(ctx context.Context, in *ListImageTemplatesRequest, opts ...grpc.CallOption) (*ListImageTemplatesResponse, error)
-	// Deletes an ImageTemplate.
+	// Not implemented. Deletes an ImageTemplate.
 	DeleteImageTemplate(ctx context.Context, in *DeleteImageTemplateRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -318,13 +318,13 @@ func (c *imageTemplateServiceClient) DeleteImageTemplate(ctx context.Context, in
 // All implementations must embed UnimplementedImageTemplateServiceServer
 // for forward compatibility
 type ImageTemplateServiceServer interface {
-	// Creates a new ImageTemplate.
+	// Not implemented. Creates a new ImageTemplate.
 	CreateImageTemplate(context.Context, *CreateImageTemplateRequest) (*ImageTemplate, error)
-	// Finds a specific ImageTemplate by ID.
+	// Not implemented. Finds a specific ImageTemplate by ID.
 	GetImageTemplate(context.Context, *GetImageTemplateRequest) (*ImageTemplate, error)
-	// Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
+	// Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
 	ListImageTemplates(context.Context, *ListImageTemplatesRequest) (*ListImageTemplatesResponse, error)
-	// Deletes an ImageTemplate.
+	// Not implemented. Deletes an ImageTemplate.
 	DeleteImageTemplate(context.Context, *DeleteImageTemplateRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedImageTemplateServiceServer()
 }

@@ -4,6 +4,7 @@ option go_package = "github.com/ray-project/kuberay/proto/go_client";
 package proto;
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -63,76 +64,76 @@ service RayJobService {
 }
 
 message CreateRayJobRequest {
-  // The job to be created.
-  RayJob job = 1;
-  // The namespace of the job to be created
-  string namespace = 2;
+  // Required. The job to be created.
+  RayJob job = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the job to be created
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message GetRayJobRequest {
-  // The name of the job to be retrieved.
-  string name = 1;
-  // The namespace of the job to be retrieved.
-  string namespace = 2;
+  // Required. The name of the job to be retrieved.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the job to be retrieved.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 message ListRayJobsRequest {
-  // The namespace of the job to be retrieved. 
-  string namespace = 1;
+  // Required. The namespace of the job to be retrieved. 
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
   // TODO: support paganation later
 }
 
 message ListRayJobsResponse {
-  repeated RayJob jobs = 1;
+  repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllRayJobsRequest {
-  // TODO: support paganation later
+  // TODO: support pagination later
 }
 
 message ListAllRayJobsResponse {
-  repeated RayJob jobs = 1;
+  repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteRayJobRequest {
-  // The name of the job to be deleted.
-  string name = 1;
-  // The namespace of the job to be deleted.
-  string namespace = 2;
+  // Required. The name of the job to be deleted.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The namespace of the job to be deleted.
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
-// RayJob defination
+// RayJob definition
 message RayJob {
   // Required input field. Unique job name provided by user.
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
   // Required input field. job namespace provided by user
-  string namespace = 2;
+  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required field. This field indicates the user who owns the job.
-  string user = 3;
+  string user = 3 [(google.api.field_behavior) = REQUIRED];
   // The entrypoint of the RayJob
   string entrypoint = 4;
-  // Metadata is data to store along with this job.
+  // Optional. Metadata is data to store along with this job.
   map<string, string> metadata = 5;
-  // RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec
+  // Optional. RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec
   string runtime_env = 6;
-  // If jobId is not set, a new jobId will be auto-generated.
+  // Optional. If jobId is not set, a new jobId will be auto-generated.
   string job_id = 7;
-  // If set to true, the rayCluster will be deleted after the rayJob finishes
+  // Optional. If set to true, the rayCluster will be deleted after the rayJob finishes. Defaults to false.
   bool shutdown_after_job_finishes = 8;
-  // The label selector to choose exiting clusters
+  // Optional. The label selectors to choose exiting clusters. If not specified, cluster_spec must be set.
   map<string, string> cluster_selector = 9;
-  // The cluster template
+  // Optional. The cluster template, required if the cluster_selector is not specified.    
   ClusterSpec cluster_spec = 10;
-  // TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+  // Optional. TTLSecondsAfterFinished is the TTL to clean up RayCluster.
   int32 ttl_seconds_after_finished = 11;
   // Output. The time that the job created.
-  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the job deleted.     
-  google.protobuf.Timestamp delete_at = 13;
+  google.protobuf.Timestamp delete_at = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The current job status
-  string job_status = 14;
+  string job_status = 14 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The current job deployment status
-  string job_deployment_status = 15;
+  string job_deployment_status = 15 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. A human-readable description of the status of this operation.
-  string message = 16;
+  string message = 16 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
