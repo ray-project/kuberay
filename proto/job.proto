@@ -102,11 +102,10 @@ message DeleteRayJobRequest {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
-// Ray Job Submitter definition
 message RayJobSubmitter{
   // Required base image for job submitter. Make sure that Python/Ray version
   // of the image corresponds to the one used in the cluster
-  string image = 1;
+  string image = 1 [(google.api.field_behavior) = REQUIRED];
   // Optional number of CPUs for submitter - default "1"
   string cpu = 2;
   // Optional memory for the submitter - default "1Gi"
