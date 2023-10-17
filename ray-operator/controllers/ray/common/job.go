@@ -10,6 +10,7 @@ import (
 	"github.com/google/shlex"
 	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
 )
 
@@ -154,6 +155,16 @@ func GetDefaultSubmitterTemplate(rayJobInstance *rayv1alpha1.RayJob) v1.PodTempl
 				{
 					Name:  "ray-job-submitter",
 					Image: image,
+					Resources: v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("1"),
+							v1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("500m"),
+							v1.ResourceMemory: resource.MustParse("200Mi"),
+						},
+					},
 				},
 			},
 			RestartPolicy: v1.RestartPolicyNever,
