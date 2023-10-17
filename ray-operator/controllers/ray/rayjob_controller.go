@@ -305,7 +305,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
 	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
-		if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
+			// RayCluster down.
 			if rayJobInstance.Spec.TTLSecondsAfterFinished != nil {
 				r.Log.V(3).Info("TTLSecondsAfterSetting", "end_time", rayJobInstance.Status.EndTime.Time, "now", time.Now(), "ttl", *rayJobInstance.Spec.TTLSecondsAfterFinished)
 				ttlDuration := time.Duration(*rayJobInstance.Spec.TTLSecondsAfterFinished) * time.Second
@@ -488,7 +490,6 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
 			}
 			rayJob.Status.RayClusterName = useValue
-			rayJob.Spec.ShutdownAfterJobFinishes = false
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
