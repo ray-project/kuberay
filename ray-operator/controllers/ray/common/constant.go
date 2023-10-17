@@ -29,9 +29,6 @@ const (
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
-	// Pod health state values
-	PodUnhealthy = "Unhealthy"
-
 	EnableAgentServiceKey  = "ray.io/enableAgentService"
 	EnableAgentServiceTrue = "true"
 
@@ -73,9 +70,6 @@ const (
 
 	// The defaule RayService Identifier.
 	RayServiceCreatorLabelValue = "rayservice"
-
-	// Check node if ready by checking the path exists or not
-	PodReadyFilepath = "POD_READY_FILEPATH"
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
@@ -126,9 +120,6 @@ const (
 	// Ray health check related configurations
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
-
-	// Default autoscaler image when running Ray at versions older than 2.0.0
-	FallbackDefaultAutoscalerImage = "rayproject/ray:2.0.0"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
