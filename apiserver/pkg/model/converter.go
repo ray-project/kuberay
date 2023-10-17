@@ -53,7 +53,6 @@ func getHeadNodeEnv() []string {
 		"RAY_PORT",
 		"RAY_ADDRESS",
 		"RAY_USAGE_STATS_KUBERAY_IN_USE",
-		"REDIS_PASSWORD",
 	}
 }
 
@@ -173,13 +172,7 @@ func PopulateHeadNodeSpec(spec v1alpha1.HeadGroupSpec) *api.HeadGroupSpec {
 
 	// Here we update environment only for a container named 'ray-head'
 	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
-		env := make(map[string]string)
-		for _, kv := range container.Env {
-			if !contains(getHeadNodeEnv(), kv.Name) {
-				env[kv.Name] = kv.Value
-			}
-		}
-		headNodeSpec.Environment = env
+		headNodeSpec.Environment = convert_env_variables(container.Env, true)
 	}
 
 	if len(spec.Template.Spec.ServiceAccountName) > 1 {
@@ -224,13 +217,7 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 
 		// Here we update environment only for a container named 'ray-worker'
 		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
-			env := make(map[string]string)
-			for _, kv := range container.Env {
-				if !contains(getWorkNodeEnv(), kv.Name) {
-					env[kv.Name] = kv.Value
-				}
-			}
-			workerNodeSpec.Environment = env
+			workerNodeSpec.Environment = convert_env_variables(container.Env, false)
 		}
 
 		if len(spec.Template.Spec.ServiceAccountName) > 1 {
@@ -245,6 +232,67 @@ func PopulateWorkerNodeSpec(specs []v1alpha1.WorkerGroupSpec) []*api.WorkerGroup
 	}
 
 	return workerNodeSpecs
+}
+
+func convert_env_variables(cenv []v1.EnvVar, header bool) *api.EnvironmentVariables {
+	env := api.EnvironmentVariables{
+		Values:     make(map[string]string),
+		ValuesFrom: make(map[string]*api.EnvValueFrom),
+	}
+	for _, kv := range cenv {
+		if header {
+			if contains(getHeadNodeEnv(), kv.Name) {
+				continue
+			}
+		} else {
+			if contains(getWorkNodeEnv(), kv.Name) {
+				// Skip reserved names
+				continue
+			}
+		}
+		if kv.ValueFrom != nil {
+			// this is value from
+			if kv.ValueFrom.ConfigMapKeyRef != nil {
+				// This is config map
+				env.ValuesFrom[kv.Name] = &api.EnvValueFrom{
+					Source: api.EnvValueFrom_CONFIGMAP,
+					Name:   kv.ValueFrom.ConfigMapKeyRef.Name,
+					Key:    kv.ValueFrom.ConfigMapKeyRef.Key,
+				}
+				continue
+			}
+			if kv.ValueFrom.SecretKeyRef != nil {
+				// This is Secret
+				env.ValuesFrom[kv.Name] = &api.EnvValueFrom{
+					Source: api.EnvValueFrom_SECRET,
+					Name:   kv.ValueFrom.SecretKeyRef.Name,
+					Key:    kv.ValueFrom.SecretKeyRef.Key,
+				}
+				continue
+			}
+			if kv.ValueFrom.ResourceFieldRef != nil {
+				// This resource ref
+				env.ValuesFrom[kv.Name] = &api.EnvValueFrom{
+					Source: api.EnvValueFrom_RESOURCEFIELD,
+					Name:   kv.ValueFrom.ResourceFieldRef.ContainerName,
+					Key:    kv.ValueFrom.ResourceFieldRef.Resource,
+				}
+				continue
+			}
+			if kv.ValueFrom.FieldRef != nil {
+				// This resource ref
+				env.ValuesFrom[kv.Name] = &api.EnvValueFrom{
+					Source: api.EnvValueFrom_FIELD,
+					Key:    kv.ValueFrom.FieldRef.FieldPath,
+				}
+				continue
+			}
+		} else {
+			// This is value
+			env.Values[kv.Name] = kv.Value
+		}
+	}
+	return &env
 }
 
 func FromKubeToAPIComputeTemplate(configMap *v1.ConfigMap) *api.ComputeTemplate {

@@ -122,6 +122,27 @@ message DeleteClusterRequest {
   string namespace = 2;
 }
 
+message EnvValueFrom {
+  // Source of environment variable
+  enum Source{
+    CONFIGMAP = 0;
+    SECRET = 1;
+    RESOURCEFIELD = 2;
+    FIELD = 3;
+  }
+  Source source = 1;
+  // Name for config map or secret, container name for resource, path for field
+  string name = 2;
+  // Key for config map or secret, resource name for resource 
+  string key = 3;
+}
+
+// This allows to specify both - environment variables containing values and environment values containing valueFrom
+message EnvironmentVariables {
+  map<string, string> values = 1;
+  map<string, EnvValueFrom> valuesFrom = 2;
+}
+
 message Cluster {
   // Required input field. Unique cluster name provided by user.
   string name = 1;
@@ -150,7 +171,7 @@ message Cluster {
   map<string, string> annotations = 7;
 
   // Optional input field. Container environment variables from user.
-  map<string, string> envs = 8;
+  EnvironmentVariables envs = 8;
 
   // Output. The time that the cluster created.
   google.protobuf.Timestamp created_at = 9;
@@ -236,7 +257,7 @@ message HeadGroupSpec {
   // Optional. image pull secret used by head pod
   string image_pull_secret = 8;  
   // Optional. Environment variables for head pod
-  map<string, string> environment = 9;
+  EnvironmentVariables environment = 9;
   // Optional. Annotations for the head pod
   map<string, string> annotations = 10;
   // Optional. Labels for the head pod
@@ -266,7 +287,7 @@ message WorkerGroupSpec {
   // Optional. image pull secret used by worker pod
   string image_pull_secret = 10;  
   // Optional. Environment variables for worker pod
-  map<string, string> environment = 11;
+  EnvironmentVariables environment = 11;
   // Optional. Annotations for the worker pod
   map<string, string> annotations = 12;
   // Optional. Labels for the worker pod
