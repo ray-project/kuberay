@@ -725,7 +725,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 			err = fmt.Errorf(
 				"Fail to create / update Serve applications. If you observe this error consistently, "+
 					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
-					"https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+					"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
 					"err: %v", err)
 			return err
 		}
