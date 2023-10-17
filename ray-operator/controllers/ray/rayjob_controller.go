@@ -343,7 +343,7 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 				r.Log.Error(err, "failed to get submitter template")
 				return "", false, err
 			}
-			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate, rayClusterInstance)
+			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
 
 		// Some other error occurred while trying to get the Job
@@ -395,7 +395,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and a boolean indicating whether a new Job was created.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec, rayClusterInstance *rayv1.RayCluster) (string, bool, error) {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec) (string, bool, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
@@ -407,7 +407,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
-	if err := ctrl.SetControllerReference(rayClusterInstance, job, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
 		return "", false, err
 	}
