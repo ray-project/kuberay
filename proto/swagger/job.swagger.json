@@ -485,7 +485,7 @@
         },
         "entrypointResources": {
           "type": "string",
-          "description": "Optional entrypointResources specifies the custom resources and quantities to reserve for the entrypoint command."
+          "description": "Optional entrypointResources specifies the custom resources and quantities to reserve \nfor the entrypoint command."
         },
         "createdAt": {
           "type": "string",
@@ -515,34 +515,12 @@
           "readOnly": true
         }
       },
-
-      "title": "RayJob definition"
-    },
-    "protoRayJobSubmitter": {
-      "type": "object",
-      "properties": {
-        "image": {
-          "type": "string",
-          "title": "Required base image for job submitter. Make sure that Python/Ray version\nof the image corresponds to the one used in the cluster"
-        },
-        "cpu": {
-          "type": "string",
-          "title": "Optional number of CPUs for submitter - default \"1\""
-        },
-        "memory": {
-          "type": "string",
-          "title": "Optional memory for the submitter - default \"1Gi\""
-        }
-      },
-      "title": "Ray Job Submitter definition"
-
       "title": "RayJob definition",
       "required": [
         "name",
         "namespace",
         "user"
       ]
-
     },
     "protoRayJobSubmitter": {
       "type": "object",
