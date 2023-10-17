@@ -489,7 +489,6 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 			}
 			rayJob.Status.RayClusterName = useValue
 			rayJob.Spec.ShutdownAfterJobFinishes = false
-			return nil
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
