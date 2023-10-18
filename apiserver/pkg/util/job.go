@@ -61,7 +61,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:  apiJob.Name + "-submitter",
+						Name:  "ray-job-submitter",
 						Image: apiJob.JobSubmitter.Image,
 						Resources: v1.ResourceRequirements{
 							Limits: v1.ResourceList{
