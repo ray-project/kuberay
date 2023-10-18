@@ -35,8 +35,8 @@ helm version
     # Install the KubeRay helm repo
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-    # Install KubeRay Operator v1.0.0-rc.0.
-    helm install kuberay-operator kuberay/kuberay-operator --version v1.0.0-rc.0
+    # Install KubeRay Operator v1.0.0-rc.1.
+    helm install kuberay-operator kuberay/kuberay-operator --version v1.0.0-rc.1
 
     # Check the KubeRay Operator Pod in `default` namespace
     kubectl get pods
@@ -47,7 +47,7 @@ helm version
 ### Install KubeRay APIServer
 
 ```text
-Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0-rc.0` does not yet contain critical fixes
+Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0-rc.1` does not yet contain critical fixes
 to the api server that would allow Kuberay Serve endpoints to work properly
 ```
 
@@ -98,8 +98,8 @@ To list the deployments:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0-rc.0               
-# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0-rc.0                
+# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0-rc.1               
+# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0-rc.1                
 ```
 
 ### Uninstall the Chart
