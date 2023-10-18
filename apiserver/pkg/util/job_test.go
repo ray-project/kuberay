@@ -85,7 +85,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Nil(t, job.Spec.RayClusterSpec)
 	assert.Equal(t, float32(2), job.Spec.EntrypointNumCpus)
 	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
-	assert.Equal(t, "test-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
+	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
 	assert.Equal(t, "2", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String())
 }
