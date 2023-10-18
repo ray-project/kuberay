@@ -60,7 +60,7 @@ Describe the single node cluster:
 kubectl describe node kind-control-plane
 ```
 
-Expect the `cpu` and `memroy` in the `Allocatable` section to be similar to:
+Expect the `cpu` and `memory` in the `Allocatable` section to be similar to:
 ```
 Allocatable:
   cpu:            8
