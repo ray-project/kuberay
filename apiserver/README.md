@@ -1084,6 +1084,244 @@ Examples:
   }
   ```
 
+The above example creates a new Ray cluster, executes a job on it and optionally deletes a cluster. As an alternative, the same command allows creating a new job on the existing cluster by referencing it in the payload.
+
+Examples:
+
+Start from creating Ray cluster (We assume here that the [template](test/cluster/template/simple) and [configmap](test/job/code.yaml) are already created).
+
+* Request
+  
+```sh
+curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "job-test",
+  "namespace": "default",
+  "user": "boris",
+  "version": "2.7.0",
+  "environment": "DEV",
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "default-template",
+      "image": "rayproject/ray:2.7.0-py310",
+      "serviceType": "NodePort",
+      "rayStartParams": {
+         "dashboard-host": "0.0.0.0",
+         "metrics-export-port": "8080"
+       },
+       "volumes": [
+         {
+           "name": "code-sample",
+           "mountPath": "/home/ray/samples",
+           "volumeType": "CONFIGMAP",
+           "source": "ray-job-code-sample",
+           "items": {"sample_code.py" : "sample_code.py"}
+         }
+       ]
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "small-wg",
+        "computeTemplate": "default-template",
+        "image": "rayproject/ray:2.7.0-py310",
+        "replicas": 1,
+        "minReplicas": 0,
+        "maxReplicas": 5,
+        "rayStartParams": {
+           "node-ip-address": "$MY_POD_IP"
+         },
+        "volumes": [
+          {
+            "name": "code-sample",
+            "mountPath": "/home/ray/samples",
+            "volumeType": "CONFIGMAP",
+            "source": "ray-job-code-sample",
+            "items": {"sample_code.py" : "sample_code.py"}
+          }
+        ]
+      }
+    ]
+  }
+}'
+```
+
+* Response
+
+```json
+{
+   "name":"job-test",
+   "namespace":"default",
+   "user":"boris",
+   "version":"2.7.0",
+   "clusterSpec":{
+      "headGroupSpec":{
+         "computeTemplate":"default-template",
+         "image":"rayproject/ray:2.7.0-py310",
+         "serviceType":"NodePort",
+         "rayStartParams":{
+            "dashboard-host":"0.0.0.0",
+            "metrics-export-port":"8080"
+         },
+         "volumes":[
+            {
+               "mountPath":"/home/ray/samples",
+               "volumeType":3,
+               "name":"code-sample",
+               "source":"ray-job-code-sample",
+               "items":{
+                  "sample_code.py":"sample_code.py"
+               }               
+            }
+         ],
+         "environment":{
+            
+         }
+      },
+      "workerGroupSpec":[
+         {
+            "groupName":"small-wg",
+            "computeTemplate":"default-template",
+            "image":"rayproject/ray:2.7.0-py310",
+            "replicas":1,
+            "minReplicas":5,
+            "maxReplicas":1,
+            "rayStartParams":{
+               "node-ip-address":"$MY_POD_IP"
+            },
+            "volumes":[
+               {
+                  "mountPath":"/home/ray/samples",
+                  "volumeType":3,
+                  "name":"code-sample",
+                  "source":"ray-job-code-sample",
+                  "items":{
+                     "sample_code.py":"sample_code.py"
+                  }
+               }
+            ],
+            "environment":{
+               
+            }
+         }
+      ]
+   },
+   "annotations":{
+      "ray.io/creation-timestamp":"2023-10-18 08:47:48.058576 +0000 UTC"
+   },
+   "createdAt":"2023-10-18T08:47:48Z"
+}
+```
+
+Once the cluster is created, we can create a job to run on it.
+
+* Request
+  
+```sh
+curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "job-test",
+  "namespace": "default",
+  "user": "boris",
+  "entrypoint": "python /home/ray/samples/sample_code.py",
+   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "clusterSelector": {
+    "ray.io/cluster": "job-test"
+  }
+}'  
+```
+
+This request fails with the message:
+
+```json
+{
+   "code":3,
+   "message":"Failed to create a Ray Job: Create Job failed.: InvalidInputError: Failed to create a Ray Job: external Ray cluster requires Job submitter definition"
+}
+```
+
+The reason for this failure is that in the case of the existing cluster the oprator can not figure out Python/Ray version of the cluster's nodes. To make it work, we need to add `jobSubmitter` component to the request to ensure that job submitter's Python/Ray version are the same as the ones of the cluster.
+
+* Request
+  
+```sh
+curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "job-test",
+  "namespace": "default",
+  "user": "boris",
+  "entrypoint": "python /home/ray/samples/sample_code.py",
+   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "clusterSelector": {
+    "ray.io/cluster": "job-test"
+  },
+  "jobSubmitter": {
+    "image": "rayproject/ray:2.7.0-py310"
+  }
+}'  
+```
+
+* Response
+
+```json
+{
+   "name":"job-test",
+   "namespace":"default",
+   "user":"boris",
+   "entrypoint":"python /home/ray/samples/sample_code.py",
+   "runtimeEnv":"pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+   "clusterSelector":{
+      "ray.io/cluster":"job-test"
+   },
+   "jobSubmitter":{
+      "image":"rayproject/ray:2.7.0-py310"
+   },
+   "createdAt":"2023-10-18T10:19:49Z"
+}
+```
+
+You should also see job submitter job completed, something like:
+
+```text
+job-test-2hhmf                   0/1     Completed   0          15s
+```
+
+To see job execution results run:
+
+```sh
+kubectl logs job-test-2hhmf 
+```
+
+And you should get something similar to:
+
+```text
+2023-10-18 03:19:51,524	INFO cli.py:36 -- Job submission server address: http://job-test-head-svc.default.svc.cluster.local:8265
+2023-10-18 03:19:52,197	SUCC cli.py:60 -- -------------------------------------------
+2023-10-18 03:19:52,197	SUCC cli.py:61 -- Job 'job-test-bbfqs' submitted successfully
+2023-10-18 03:19:52,197	SUCC cli.py:62 -- -------------------------------------------
+2023-10-18 03:19:52,197	INFO cli.py:274 -- Next steps
+2023-10-18 03:19:52,197	INFO cli.py:275 -- Query the logs of the job:
+2023-10-18 03:19:52,198	INFO cli.py:277 -- ray job logs job-test-bbfqs
+2023-10-18 03:19:52,198	INFO cli.py:279 -- Query the status of the job:
+2023-10-18 03:19:52,198	INFO cli.py:281 -- ray job status job-test-bbfqs
+2023-10-18 03:19:52,198	INFO cli.py:283 -- Request the job to be stopped:
+2023-10-18 03:19:52,198	INFO cli.py:285 -- ray job stop job-test-bbfqs
+2023-10-18 03:19:52,203	INFO cli.py:292 -- Tailing logs until the job exits (disable with --no-wait):
+2023-10-18 03:20:00,014	INFO worker.py:1329 -- Using address 10.244.0.10:6379 set in the environment variable RAY_ADDRESS
+2023-10-18 03:20:00,014	INFO worker.py:1458 -- Connecting to existing Ray cluster at address: 10.244.0.10:6379...
+2023-10-18 03:20:00,032	INFO worker.py:1633 -- Connected to Ray cluster. View the dashboard at 10.244.0.10:8265 
+test_counter got 1
+test_counter got 2
+test_counter got 3
+test_counter got 4
+test_counter got 5
+2023-10-18 03:20:03,304	SUCC cli.py:60 -- ------------------------------
+2023-10-18 03:20:03,304	SUCC cli.py:61 -- Job 'job-test-bbfqs' succeeded
+2023-10-18 03:20:03,304	SUCC cli.py:62 -- ------------------------------
+```
+
 #### List all jobs in a given namespace
 
 ```text
