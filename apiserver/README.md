@@ -1093,7 +1093,7 @@ Start from creating Ray cluster (We assume here that the [template](test/cluster
 * Request
   
 ```sh
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
@@ -1218,7 +1218,7 @@ Once the cluster is created, we can create a job to run on it.
 * Request
   
 ```sh
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
@@ -1246,7 +1246,7 @@ The reason for this failure is that in the case of the existing cluster the opra
 * Request
   
 ```sh
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
