@@ -378,11 +378,11 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		pbJob.JobSubmitter = &api.RayJobSubmitter{
 			Image: job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image,
 		}
-		if job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String() != "1" {
-			pbJob.JobSubmitter.Cpu = job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String()
+		if cpu := job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String(); cpu != "1" {
+			pbJob.JobSubmitter.Cpu = cpu
 		}
-		if job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String() != "1Gi" {
-			pbJob.JobSubmitter.Memory = job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String()
+		if mem := job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String(); mem != "1Gi" {
+			pbJob.JobSubmitter.Memory = mem
 		}
 	}
 	if job.Spec.EntrypointNumCpus > 0 {
