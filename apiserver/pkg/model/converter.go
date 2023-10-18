@@ -385,14 +385,14 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 			pbJob.JobSubmitter.Memory = mem
 		}
 	}
-	if job.Spec.EntrypointNumCpus > 0 {
-		pbJob.EntrypointNumCpus = job.Spec.EntrypointNumCpus
+	if jcpus := job.Spec.EntrypointNumCpus; jcpus > 0 {
+		pbJob.EntrypointNumCpus = jcpus
 	}
-	if job.Spec.EntrypointNumGpus > 0 {
-		pbJob.EntrypointNumGpus = job.Spec.EntrypointNumGpus
+	if jgpus := job.Spec.EntrypointNumGpus; jgpus > 0 {
+		pbJob.EntrypointNumGpus = jgpus
 	}
-	if job.Spec.EntrypointResources != "" {
-		pbJob.EntrypointResources = job.Spec.EntrypointResources
+	if jres := job.Spec.EntrypointResources; jres != "" {
+		pbJob.EntrypointResources = jres
 	}
 
 	return pbJob
@@ -457,17 +457,17 @@ func PopulateServeConfig(serveConfigSpecs []rayv1api.ServeConfigSpec) []*api.Ser
 				CustomResource:   serveConfigSpec.RayActorOptions.Resources,
 				AccceleratorType: serveConfigSpec.RayActorOptions.AcceleratorType,
 			}
-			if serveConfigSpec.RayActorOptions.NumCpus != nil {
-				actorOptions.CpusPerActor = *serveConfigSpec.RayActorOptions.NumCpus
+			if ncpus := serveConfigSpec.RayActorOptions.NumCpus; ncpus != nil {
+				actorOptions.CpusPerActor = *ncpus
 			}
-			if serveConfigSpec.RayActorOptions.NumGpus != nil {
-				actorOptions.GpusPerActor = *serveConfigSpec.RayActorOptions.NumGpus
+			if ngpus := serveConfigSpec.RayActorOptions.NumGpus; ngpus != nil {
+				actorOptions.GpusPerActor = *ngpus
 			}
-			if serveConfigSpec.RayActorOptions.Memory != nil {
-				actorOptions.MemoryPerActor = *serveConfigSpec.RayActorOptions.Memory
+			if mem := serveConfigSpec.RayActorOptions.Memory; mem != nil {
+				actorOptions.MemoryPerActor = *mem
 			}
-			if serveConfigSpec.RayActorOptions.ObjectStoreMemory != nil {
-				actorOptions.ObjectStoreMemoryPerActor = *serveConfigSpec.RayActorOptions.ObjectStoreMemory
+			if omem := serveConfigSpec.RayActorOptions.ObjectStoreMemory; omem != nil {
+				actorOptions.ObjectStoreMemoryPerActor = *omem
 			}
 		}
 		serveConfig := &api.ServeConfig{
