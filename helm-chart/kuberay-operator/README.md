@@ -16,8 +16,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both CRDs and KubeRay operator v1.0.0-rc.0.
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.0
+  # Install both CRDs and KubeRay operator v1.0.0-rc.1.
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.1
 
   # Check the KubeRay operator Pod in `default` namespace
   kubectl get pods
@@ -40,10 +40,10 @@ helm version
   * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
-  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v1.0.0-rc.0&timeout=90s"
+  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v1.0.0-rc.1&timeout=90s"
 
   # Step 2: Install KubeRay operator only. (for developer)
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.0 --skip-crds
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0-rc.1 --skip-crds
   ``` 
 
 ## List the chart
@@ -53,7 +53,7 @@ To list the `my-release` deployment:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.0.0-rc.0
+# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.0.0-rc.1
 ```
 
 ## Uninstall the Chart
