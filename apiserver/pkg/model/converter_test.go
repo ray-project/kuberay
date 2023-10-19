@@ -10,6 +10,7 @@ import (
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -241,7 +242,7 @@ var ClusterSpecTest = rayv1api.RayCluster{
 	},
 }
 
-var JobNewClusteTest = rayv1api.RayJob{
+var JobNewClusterTest = rayv1api.RayJob{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -260,7 +261,7 @@ var JobNewClusteTest = rayv1api.RayJob{
 	},
 }
 
-var JobExistingClusteTest = rayv1api.RayJob{
+var JobExistingClusterTest = rayv1api.RayJob{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "test",
@@ -274,6 +275,45 @@ var JobExistingClusteTest = rayv1api.RayJob{
 		TTLSecondsAfterFinished: &secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
+		},
+	},
+}
+
+var JobExistingClusterSubmitterTest = rayv1api.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: rayv1api.RayJobSpec{
+		Entrypoint:              "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:          "mytest yaml",
+		TTLSecondsAfterFinished: &secondsValue,
+		ClusterSelector: map[string]string{
+			util.RayClusterUserLabelKey: "test",
+		},
+		SubmitterPodTemplate: &v1.PodTemplateSpec{
+			Spec: v1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:  "test-submitter",
+						Image: "image",
+						Resources: v1.ResourceRequirements{
+							Limits: v1.ResourceList{
+								v1.ResourceCPU:    resource.MustParse("2"),
+								v1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+							Requests: v1.ResourceList{
+								v1.ResourceCPU:    resource.MustParse("500m"),
+								v1.ResourceMemory: resource.MustParse("200Mi"),
+							},
+						},
+					},
+				},
+				RestartPolicy: v1.RestartPolicyNever,
+			},
 		},
 	},
 }
@@ -455,7 +495,7 @@ func tolerationToString(toleration *api.PodToleration) string {
 }
 
 func TestPopulateJob(t *testing.T) {
-	job := FromCrdToApiJob(&JobNewClusteTest)
+	job := FromCrdToApiJob(&JobNewClusterTest)
 	fmt.Printf("jobWithCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -464,7 +504,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Nil(t, job.ClusterSelector)
 	assert.NotNil(t, job.ClusterSpec)
 
-	job = FromCrdToApiJob(&JobExistingClusteTest)
+	job = FromCrdToApiJob(&JobExistingClusterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -472,6 +512,17 @@ func TestPopulateJob(t *testing.T) {
 	assert.Greater(t, len(job.RuntimeEnv), 1)
 	assert.NotNil(t, job.ClusterSelector)
 	assert.Nil(t, job.ClusterSpec)
+
+	job = FromCrdToApiJob(&JobExistingClusterSubmitterTest)
+	fmt.Printf("jobReferenceCluster = %#v\n", job)
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.Greater(t, len(job.RuntimeEnv), 1)
+	assert.NotNil(t, job.ClusterSelector)
+	assert.Nil(t, job.ClusterSpec)
+	assert.Equal(t, "image", job.JobSubmitter.Image)
+	assert.Equal(t, "2", job.JobSubmitter.Cpu)
 }
 
 func TestPopulateService(t *testing.T) {
