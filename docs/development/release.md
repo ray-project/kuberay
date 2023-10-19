@@ -74,7 +74,7 @@ You will prompted for a commit reference and an image tag. The commit reference 
     git push upstream v0.5.0-rc.0
     ```
 
-* Tag the tip of the release branch as `ray-operator/vX.Y.Z-rc.0`. Without this tag, users won't be able to use `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` to install the Go module.
+* Tag the tip of the release branch as `ray-operator/vX.Y.Z-rc.0`. Without this tag, users won't be able to use `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` to install the Go module. KubeRay starts supporting Go modules from v0.6.0.
     ```sh
     git tag ray-operator/v0.5.0-rc.0
     git push upstream ray-operator/v0.5.0-rc.0
