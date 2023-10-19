@@ -136,25 +136,15 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	return k8sJobCommand, nil
 }
 
-// getDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayJobInstance *rayv1.RayJob) v1.PodTemplateSpec {
-	// Use the image of the Ray head to be defensive against version mismatch issues
-	var image string
-	if rayJobInstance.Spec.RayClusterSpec != nil &&
-		len(rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers) > 0 {
-		image = rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image
-	}
-
-	if len(image) == 0 {
-		// If we can't find the image of the Ray head, fall back to the latest stable release.
-		image = "rayproject/ray:latest"
-	}
+// GetDefaultSubmitterTemplate creates a default submitter template for the Ray job.
+func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) v1.PodTemplateSpec {
 	return v1.PodTemplateSpec{
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name:  "ray-job-submitter",
-					Image: image,
+					Name: "ray-job-submitter",
+					// Use the image of the Ray head to be defensive against version mismatch issues
+					Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Image,
 					Resources: v1.ResourceRequirements{
 						Limits: v1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("1"),

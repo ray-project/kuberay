@@ -27,6 +27,19 @@ func TestGetOrCreateK8sJob(t *testing.T) {
 			Name:      "test-raycluster",
 			Namespace: "default",
 		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	rayJob := &rayv1.RayJob{
@@ -114,30 +127,45 @@ func TestGetSubmitterTemplate(t *testing.T) {
 			DashboardURL: "test-url",
 		},
 	}
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray:custom-version",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 
 	r := &RayJobReconciler{
 		Log: ctrl.Log.WithName("controllers").WithName("RayJob"),
 	}
 
 	// Test 1: User provided template with command
-	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstanceWithTemplate)
+	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[common.RayContainerIndex].Command = []string{}
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate)
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	assert.Equal(t, ([]string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}), submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[common.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate)
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 	found := false
 	for _, envVar := range submitterTemplate.Spec.Containers[common.RayContainerIndex].Env {
