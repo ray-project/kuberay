@@ -74,6 +74,27 @@ You will prompted for a commit reference and an image tag. The commit reference 
     git push upstream v0.5.0-rc.0
     ```
 
+* Tag the tip of the release branch as `ray-operator/vX.Y.Z-rc.0`. Without this tag, users won't be able to use `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` to install the Go module. KubeRay starts supporting Go modules from v0.6.0.
+    ```sh
+    git tag ray-operator/v0.5.0-rc.0
+    git push upstream ray-operator/v0.5.0-rc.0
+
+    # Install the module. This step is highly possible to fail because the module is not available in the proxy server.
+    go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
+
+    # Make the module available by running the go list command to prompt Go to update its index of modules with information about the module you’re publishing.
+    # See https://go.dev/doc/modules/publishing for more details.
+    GOPROXY=proxy.golang.org go list -m github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
+    # [Expected output]: github.com/ray-project/kuberay/ray-operator v0.5.0-rc.0
+
+    # Wait for a while until the URL https://sum.golang.org/lookup/github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0 no longer displays "not found". This may take 15 mins based on my experience.
+    go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
+
+    # Check the module is installed successfully.
+    ls $GOPATH/pkg/mod/github.com/ray-project/kuberay/
+    # [Expected output]: ray-operator@v0.5.0-rc.0
+    ```
+
 * Release rc0 Helm charts following the [instructions](../release/helm-chart.md).
 
 * Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass ([example](https://github.com/ray-project/ray/pull/33987)). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/17146#01873a69-5ccf-4c71-b06c-ae3a4dd9aecb) passes before merging.
