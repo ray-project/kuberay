@@ -102,6 +102,16 @@ message DeleteRayJobRequest {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
+message RayJobSubmitter{
+  // Required base image for job submitter. Make sure that Python/Ray version
+  // of the image corresponds to the one used in the cluster
+  string image = 1 [(google.api.field_behavior) = REQUIRED];
+  // Optional number of CPUs for submitter - default "1"
+  string cpu = 2;
+  // Optional memory for the submitter - default "1Gi"
+  string memory = 3;
+}
+
 // RayJob definition
 message RayJob {
   // Required input field. Unique job name provided by user.
@@ -126,6 +136,15 @@ message RayJob {
   ClusterSpec cluster_spec = 10;
   // Optional. TTLSecondsAfterFinished is the TTL to clean up RayCluster.
   int32 ttl_seconds_after_finished = 11;
+  // Optional Ray Job submitter
+  RayJobSubmitter jobSubmitter = 17;
+  // Optional entrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+  float entrypointNumCpus = 18;
+  // Optional entrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
+  float entrypointNumGpus = 19;
+  // Optional entrypointResources specifies the custom resources and quantities to reserve 
+  // for the entrypoint command.
+  string entrypointResources = 20;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the job deleted.     

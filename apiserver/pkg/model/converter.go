@@ -374,6 +374,27 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		pbJob.DeleteAt = &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()}
 	}
 
+	if job.Spec.SubmitterPodTemplate != nil {
+		pbJob.JobSubmitter = &api.RayJobSubmitter{
+			Image: job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image,
+		}
+		if cpu := job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String(); cpu != "1" {
+			pbJob.JobSubmitter.Cpu = cpu
+		}
+		if mem := job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String(); mem != "1Gi" {
+			pbJob.JobSubmitter.Memory = mem
+		}
+	}
+	if jcpus := job.Spec.EntrypointNumCpus; jcpus > 0 {
+		pbJob.EntrypointNumCpus = jcpus
+	}
+	if jgpus := job.Spec.EntrypointNumGpus; jgpus > 0 {
+		pbJob.EntrypointNumGpus = jgpus
+	}
+	if jres := job.Spec.EntrypointResources; jres != "" {
+		pbJob.EntrypointResources = jres
+	}
+
 	return pbJob
 }
 
@@ -436,17 +457,17 @@ func PopulateServeConfig(serveConfigSpecs []rayv1api.ServeConfigSpec) []*api.Ser
 				CustomResource:   serveConfigSpec.RayActorOptions.Resources,
 				AccceleratorType: serveConfigSpec.RayActorOptions.AcceleratorType,
 			}
-			if serveConfigSpec.RayActorOptions.NumCpus != nil {
-				actorOptions.CpusPerActor = *serveConfigSpec.RayActorOptions.NumCpus
+			if ncpus := serveConfigSpec.RayActorOptions.NumCpus; ncpus != nil {
+				actorOptions.CpusPerActor = *ncpus
 			}
-			if serveConfigSpec.RayActorOptions.NumGpus != nil {
-				actorOptions.GpusPerActor = *serveConfigSpec.RayActorOptions.NumGpus
+			if ngpus := serveConfigSpec.RayActorOptions.NumGpus; ngpus != nil {
+				actorOptions.GpusPerActor = *ngpus
 			}
-			if serveConfigSpec.RayActorOptions.Memory != nil {
-				actorOptions.MemoryPerActor = *serveConfigSpec.RayActorOptions.Memory
+			if mem := serveConfigSpec.RayActorOptions.Memory; mem != nil {
+				actorOptions.MemoryPerActor = *mem
 			}
-			if serveConfigSpec.RayActorOptions.ObjectStoreMemory != nil {
-				actorOptions.ObjectStoreMemoryPerActor = *serveConfigSpec.RayActorOptions.ObjectStoreMemory
+			if omem := serveConfigSpec.RayActorOptions.ObjectStoreMemory; omem != nil {
+				actorOptions.ObjectStoreMemoryPerActor = *omem
 			}
 		}
 		serveConfig := &api.ServeConfig{
