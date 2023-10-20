@@ -310,7 +310,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "Active RayCluster = %v", myRayCluster.Name)
-				*myRayCluster.Spec.WorkerGroupSpecs[0].Replicas++
+				*myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = *myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas + 1
 				return k8sClient.Update(ctx, myRayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to update RayCluster replica")
