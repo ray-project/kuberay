@@ -49,6 +49,7 @@ The KubeRay repository only contains documentation related to the development an
 * [Profiling with py-spy](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/pyspy.html#kuberay-pyspy-integration)
 * [KubeRay integration with Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html#kuberay-volcano)
 * [Kubeflow: an interactive development solution](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html#kuberay-kubeflow-integration)
+* [MCAD: A Kubernetes Solution for Queuing and Gang Dispatching jobs on Single or Multi-Cluster environment](https://github.com/ray-project/kuberay/blob/master/docs/guidance/kuberay-with-MCAD.md)
 
 ## Blogs
 
