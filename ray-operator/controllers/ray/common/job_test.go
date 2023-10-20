@@ -6,6 +6,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var testRayJob = &rayv1.RayJob{
@@ -177,4 +178,24 @@ func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
 	}
 	_, err := GetMetadataJson(rayJob.Spec.Metadata, rayJob.Spec.RayClusterSpec.RayVersion)
 	assert.Error(t, err)
+}
+
+func TestGetDefaultSubmitterTemplate(t *testing.T) {
+	rayCluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray:test-submitter-template",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	template := GetDefaultSubmitterTemplate(rayCluster)
+	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Image)
 }
