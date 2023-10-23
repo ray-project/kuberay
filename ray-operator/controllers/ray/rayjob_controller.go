@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -412,7 +413,12 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			},
 		},
 		Spec: batchv1.JobSpec{
-			Template: submitterTemplate,
+			// Reduce the number of retries, which defaults to 6, so the ray job submission command
+			// is attempted 3 times at the maximum, but still mitigates the case of unrecoverable
+			// application-level errors, where the maximum number of retries is reached, and the job
+			// completion time increases with no benefits, but wasted resource cycles.
+			BackoffLimit: pointer.Int32(2),
+			Template:     submitterTemplate,
 		},
 	}
 
