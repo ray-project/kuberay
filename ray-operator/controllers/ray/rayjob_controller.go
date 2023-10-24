@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -154,8 +155,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
-	// Set rayClusterName and rayJobId first, to avoid duplicate submission
-	err = r.setRayJobIdAndRayClusterNameIfNeed(ctx, rayJobInstance)
+	// Set rayClusterName and rayJobId first, to avoid duplicate submission.
+	// Initialize the job status to Pending and deployment status to Initializing.
+	err = r.initRayJobStatusIfNeed(ctx, rayJobInstance)
 	if err != nil {
 		r.Log.Error(err, "failed to set jobId or rayCluster name", "RayJob", request.NamespacedName)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -305,7 +307,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
 	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
-		if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
+			// RayCluster down.
 			if rayJobInstance.Spec.TTLSecondsAfterFinished != nil {
 				r.Log.V(3).Info("TTLSecondsAfterSetting", "end_time", rayJobInstance.Status.EndTime.Time, "now", time.Now(), "ttl", *rayJobInstance.Spec.TTLSecondsAfterFinished)
 				ttlDuration := time.Duration(*rayJobInstance.Spec.TTLSecondsAfterFinished) * time.Second
@@ -324,7 +328,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 	}
-	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+
+	if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+		// Requeue the RayJob to poll its status from the running Ray job
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	}
+	// Otherwise only reconcile the RayJob upon new events for watched resources
+	// to avoid infinite reconciliation.
+	return ctrl.Result{}, nil
 }
 
 // getOrCreateK8sJob creates a Kubernetes Job for the Ray Job if it doesn't exist, otherwise returns the existing one. It returns the Job name and a boolean indicating whether the Job was created.
@@ -341,7 +352,7 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 				r.Log.Error(err, "failed to get submitter template")
 				return "", false, err
 			}
-			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate, rayClusterInstance)
+			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
 
 		// Some other error occurred while trying to get the Job
@@ -393,19 +404,27 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and a boolean indicating whether a new Job was created.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec, rayClusterInstance *rayv1.RayCluster) (string, bool, error) {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec) (string, bool, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
+			Labels: map[string]string{
+				common.KubernetesCreatedByLabelKey: common.ComponentName,
+			},
 		},
 		Spec: batchv1.JobSpec{
-			Template: submitterTemplate,
+			// Reduce the number of retries, which defaults to 6, so the ray job submission command
+			// is attempted 3 times at the maximum, but still mitigates the case of unrecoverable
+			// application-level errors, where the maximum number of retries is reached, and the job
+			// completion time increases with no benefits, but wasted resource cycles.
+			BackoffLimit: pointer.Int32(2),
+			Template:     submitterTemplate,
 		},
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
-	if err := ctrl.SetControllerReference(rayClusterInstance, job, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
 		return "", false, err
 	}
@@ -463,10 +482,11 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rayv1.RayJob{}).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
 
-func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
+func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	shouldUpdateStatus := false
 	if rayJob.Status.JobId == "" {
 		shouldUpdateStatus = true
@@ -488,11 +508,14 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
 			}
 			rayJob.Status.RayClusterName = useValue
-			rayJob.Spec.ShutdownAfterJobFinishes = false
-			return nil
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
+	}
+
+	if rayJob.Status.JobStatus == "" {
+		shouldUpdateStatus = true
+		rayJob.Status.JobStatus = rayv1.JobStatusPending
 	}
 
 	if shouldUpdateStatus {
