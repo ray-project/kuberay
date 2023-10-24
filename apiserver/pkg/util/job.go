@@ -1,7 +1,7 @@
 package util
 
 import (
-	"errors"
+	"fmt"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -51,7 +51,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			// Ensure that CPU size is formatted correctly
 			_, err := resource.ParseQuantity(apiJob.JobSubmitter.Cpu)
 			if err != nil {
-				return nil, errors.New("cpu for ray job submitter is not specified correctly")
+				return nil, fmt.Errorf("cpu for ray job submitter %s is not specified correctly: %w", apiJob.JobSubmitter.Cpu, err)
 			}
 			cpus = apiJob.JobSubmitter.Cpu
 		}
@@ -59,7 +59,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			// Ensure that memory size is formatted correctly
 			_, err := resource.ParseQuantity(apiJob.JobSubmitter.Memory)
 			if err != nil {
-				return nil, errors.New("memory for ray job submitter is not specified correctly")
+				return nil, fmt.Errorf("memory for ray job submitter %s is not specified correctly: %w", apiJob.JobSubmitter.Memory, err)
 			}
 			memorys = apiJob.JobSubmitter.Memory
 		}
