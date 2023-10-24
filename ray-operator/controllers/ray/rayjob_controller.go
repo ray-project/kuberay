@@ -155,8 +155,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
-	// Set rayClusterName and rayJobId first, to avoid duplicate submission
-	err = r.setRayJobIdAndRayClusterNameIfNeed(ctx, rayJobInstance)
+	// Set rayClusterName and rayJobId first, to avoid duplicate submission.
+	// Initialize the job status to Pending and deployment status to Initializing.
+	err = r.initRayJobStatusIfNeed(ctx, rayJobInstance)
 	if err != nil {
 		r.Log.Error(err, "failed to set jobId or rayCluster name", "RayJob", request.NamespacedName)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -485,7 +486,7 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
+func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	shouldUpdateStatus := false
 	if rayJob.Status.JobId == "" {
 		shouldUpdateStatus = true
@@ -510,6 +511,11 @@ func (r *RayJobReconciler) setRayJobIdAndRayClusterNameIfNeed(ctx context.Contex
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
+	}
+
+	if rayJob.Status.JobStatus == "" {
+		shouldUpdateStatus = true
+		rayJob.Status.JobStatus = rayv1.JobStatusPending
 	}
 
 	if shouldUpdateStatus {
