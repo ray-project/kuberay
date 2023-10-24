@@ -37,6 +37,7 @@ var testFileVolume = &api.Volume{
 var testPVCVolume = &api.Volume{
 	Name:       "test-pvc",
 	VolumeType: api.Volume_PERSISTENT_VOLUME_CLAIM,
+	Source:     "my-pvc",
 	MountPath:  "/pvc/dir",
 	ReadOnly:   true,
 }
@@ -261,7 +262,7 @@ func TestBuildVolumes(t *testing.T) {
 		Name: testPVCVolume.Name,
 		VolumeSource: v1.VolumeSource{
 			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-				ClaimName: testPVCVolume.Name,
+				ClaimName: testPVCVolume.Source,
 				ReadOnly:  testPVCVolume.ReadOnly,
 			},
 		},
