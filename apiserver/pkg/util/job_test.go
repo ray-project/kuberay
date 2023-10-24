@@ -66,8 +66,8 @@ var apiJobExistingClusterSubmitterBadParams = &api.RayJob{
 		RayClusterUserLabelKey: "test",
 	},
 	JobSubmitter: &api.RayJobSubmitter{
-		Image: "image",
-		Memory:   "1GB",
+		Image:  "image",
+		Memory: "1GB",
 	},
 	EntrypointNumCpus: 2,
 }
