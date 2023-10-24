@@ -359,7 +359,6 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 
 	// Get active cluster and pending cluster instances.
 	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
-	fmt.Printf("activeRayCluster: %v\n", activeRayCluster)
 	if err != nil {
 		return nil, nil, err
 	}
