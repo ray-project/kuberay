@@ -18,10 +18,6 @@ const rayJobDefaultVersion = "1.13"
 
 // NewRayJob creates a RayJob.
 func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
-	if apiJob.ClusterSelector != nil && apiJob.JobSubmitter == nil {
-		// If cluster selector is specified, ensure that Job submitter is present
-		return nil, errors.New("external Ray cluster requires Job submitter definition")
-	}
 	rayJob := &rayv1api.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        apiJob.Name,
@@ -52,9 +48,19 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		cpus := "1"
 		memorys := "1Gi"
 		if apiJob.JobSubmitter.Cpu != "" {
+			// Ensure that CPU size is formatted correctly
+			_, err := resource.ParseQuantity(apiJob.JobSubmitter.Cpu)
+			if err != nil {
+				return nil, errors.New("cpu for ray job submitter is not specified correctly")
+			}
 			cpus = apiJob.JobSubmitter.Cpu
 		}
 		if apiJob.JobSubmitter.Memory != "" {
+			// Ensure that memory size is formatted correctly
+			_, err := resource.ParseQuantity(apiJob.JobSubmitter.Memory)
+			if err != nil {
+				return nil, errors.New("memory for ray job submitter is not specified correctly")
+			}
 			memorys = apiJob.JobSubmitter.Memory
 		}
 		rayJob.Spec.SubmitterPodTemplate = &v1.PodTemplateSpec{
