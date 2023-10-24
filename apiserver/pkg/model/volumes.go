@@ -78,6 +78,7 @@ func PopulateVolumes(podTemplate *v1.PodTemplateSpec) []*api.Volume {
 				MountPath:            mount.MountPath,
 				MountPropagationMode: GetVolumeMountPropagation(mount),
 				VolumeType:           api.Volume_PERSISTENT_VOLUME_CLAIM,
+				Source:               vol.VolumeSource.PersistentVolumeClaim.ClaimName,
 				ReadOnly:             vol.VolumeSource.PersistentVolumeClaim.ReadOnly,
 			})
 			continue

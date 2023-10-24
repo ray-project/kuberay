@@ -673,7 +673,7 @@ func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 				Name: rayVol.Name,
 				VolumeSource: v1.VolumeSource{
 					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-						ClaimName: rayVol.Name,
+						ClaimName: rayVol.Source,
 						ReadOnly:  rayVol.ReadOnly,
 					},
 				},

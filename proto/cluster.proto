@@ -299,30 +299,30 @@ message WorkerGroupSpec {
 }
 
 message ClusterEvent {
-  // Output. Unique Event Id.
-  string id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Unique Event Id.
+  string id = 1;
 
-  // Output. Human readable name for event.
-  string name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Human readable name for event.
+  string name = 2;
 
-  // Output. The creation time of the event. 
-  google.protobuf.Timestamp created_at = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Event creation time. 
+  google.protobuf.Timestamp created_at = 3;
 
-  // Output. The last time the event occur.
-  google.protobuf.Timestamp first_timestamp = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The first time the event occur.
+  google.protobuf.Timestamp first_timestamp = 4;
 
-  // Output. The first time the event occur
-  google.protobuf.Timestamp last_timestamp = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The last time the event occur
+  google.protobuf.Timestamp last_timestamp = 5;
 
-  // Output. The reason for the transition into the object's current status.
-  string reason = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The reason for the transition into the object's current status.
+  string reason = 6;
 
-  // Output. A human-readable description of the status of this operation.
-  string message = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // A human-readable description of the status of this operation.
+  string message = 7;
 
-  // Output. Type of this event (Normal, Warning), new types could be added in the future
-  string type = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Type of this event (Normal, Warning), new types could be added in the future
+  string type = 8;
   
-  // Output. The number of times this event has occurred.
-  int32 count = 9 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The number of times this event has occurred.
+  int32 count = 9;
 }
