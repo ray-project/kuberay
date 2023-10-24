@@ -778,7 +778,8 @@ func TestReconcileRayCluster(t *testing.T) {
 				service.Status.ActiveServiceStatus.RayClusterName = tc.activeCluster.Name
 			}
 			assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
-			r.reconcileRayCluster(ctx, service)
+			_, _, err = r.reconcileRayCluster(ctx, service)
+			assert.Nil(t, err)
 
 			// If KubeRay operator is preparing a new cluster, the `PendingServiceStatus.RayClusterName` should be set by calling the function `markRestart`.
 			if tc.shouldPrepareNewCluster {
