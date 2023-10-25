@@ -101,3 +101,7 @@ env:
 # If not set or set to "true", KubeRay will clean up the Redis storage namespace when a GCS FT-enabled RayCluster is deleted.
 # - name: ENABLE_GCS_FT_REDIS_CLEANUP
 #   value: "true"
+# For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
+# Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+# - name: ENABLE_ZERO_DOWNTIME
+#   value: "true"
