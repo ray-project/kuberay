@@ -12,7 +12,7 @@ class TolerationEffect(enum.Enum):
     NoExecute = "NoExecute"
 
 
-class Toleration(object):
+class Toleration:
     """
     Toleration is used by compute template to pick specific nodes for placing pods.
     It provides APIs to create, stringify and convert to dict.
@@ -56,7 +56,7 @@ class Toleration(object):
 # NVIDIA - gpu accelerator nvidia.com/gpu
 
 
-class Template(object):
+class Template:
     """
     Template is used to define specific nodes configuration.
     It provides APIs to create, stringify and convert to dict.

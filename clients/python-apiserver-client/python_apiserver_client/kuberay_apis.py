@@ -7,7 +7,7 @@ from .params import *
 _headers = {"Content-Type": "application/json", "accept": "application/json"}
 
 
-class KubeRayAPIs(object):
+class KubeRayAPIs:
     """
         This class implements KubeRay APIs based on the API server.
         To create a classe, the following parameters are required:
@@ -30,7 +30,7 @@ class KubeRayAPIs(object):
     def list_compute_templates(self) -> tuple[int, str, list[Template]]:
         # Execute HTTP request
         url = self.base + self.api_base + "compute_templates"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -48,7 +48,7 @@ class KubeRayAPIs(object):
     def list_compute_templates_namespace(self, ns: str) -> tuple[int, str, list[Template]]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{ns}/compute_templates"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -67,7 +67,7 @@ class KubeRayAPIs(object):
     def get_compute_template(self, ns: str, name: str) -> tuple[int, str, Template]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{ns}/compute_templates/{name}"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -84,7 +84,7 @@ class KubeRayAPIs(object):
     def create_compute_template(self, template: Template) -> tuple[int, str]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{template.namespace}/compute_templates"
-        response = requests.post(url, json=template.to_dict(), headers=_headers)
+        response = requests.post(url, json=template.to_dict(), headers=_headers, timeout=(10, 10))
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"]
         return response.status_code, None
@@ -101,7 +101,7 @@ class KubeRayAPIs(object):
     def delete_compute_template(self, ns: str, name: str) -> tuple[int, str]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{ns}/compute_templates/{name}"
-        response = requests.delete(url, headers=_headers)
+        response = requests.delete(url, headers=_headers, timeout=(10, 10))
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"]
         return response.status_code, None
@@ -116,7 +116,7 @@ class KubeRayAPIs(object):
     def list_clusters(self) -> tuple[int, str, list[Cluster]]:
         # Execute HTTP request
         url = self.base + self.api_base + "clusters"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -134,7 +134,7 @@ class KubeRayAPIs(object):
     def list_clusters_namespace(self, ns: str) -> tuple[int, str, list[Cluster]]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{ns}/clusters"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -153,7 +153,7 @@ class KubeRayAPIs(object):
     def get_cluster(self, ns: str, name: str) -> tuple[int, str, Cluster]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{ns}/clusters/{name}"
-        response = requests.get(url, headers=_headers)
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -170,7 +170,7 @@ class KubeRayAPIs(object):
     def create_cluster(self, cluster: Cluster) -> tuple[int, str]:
         # Execute HTTP request
         url = self.base + self.api_base + f"namespaces/{cluster.namespace}/clusters"
-        response = requests.post(url, json=cluster.to_dict(), headers=_headers)
+        response = requests.post(url, json=cluster.to_dict(), headers=_headers, timeout=(10, 10))
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"]
         return response.status_code, None

@@ -18,7 +18,7 @@ class AccessMode(enum.Enum):
     RWX = 2
 
 
-class BaseVolume(object):
+class BaseVolume:
     """
      KubeRay currently support several types of volumes, including hostPat, PVC,
      ephemeral volumes, config maps, secrets and empty dir. All of them use slightly

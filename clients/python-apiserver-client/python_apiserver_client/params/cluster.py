@@ -8,7 +8,7 @@ class Environment(enum.Enum):
     PRODUCTION = 3
 
 
-class ClusterSpec(object):
+class ClusterSpec:
     """
     ClusterSpec is used to define Ray cluster.
     It provides APIs to create, stringify, convert to dict and json.
@@ -39,7 +39,7 @@ class ClusterSpec(object):
         return dst
 
 
-class ClusterEvent(object):
+class ClusterEvent:
     """
     Cluster event is used to define events emitted during cluster creation.
     It provides APIs to create and stringify. Its output only data, so we do not need to implement to_dict
@@ -73,7 +73,7 @@ class ClusterEvent(object):
                 f"reason = {self.reason}, message = {self.message}, type = {self.type}, count = {self.count}")
 
 
-class Cluster(object):
+class Cluster:
     """
     Cluster is used to define Ray cluster.
     It provides APIs to create, stringify, convert to dict and json.
