@@ -4,7 +4,7 @@ from .environmentvariables import *
 DEFAULT_WORKER_START_PARAMS = {"node-ip-address": "$MY_POD_IP"}
 
 
-class WorkerNodeSpec(object):
+class WorkerNodeSpec:
     """
     WorkerNodeSpec is used to define Ray cluster worker node pool configuration.
     It provides APIs to create, stringify and convert to dict.
@@ -33,9 +33,9 @@ class WorkerNodeSpec(object):
 
         # Validate replicas
         if min_replicas > replicas:
-            raise Exception(f"min_replicas {min_replicas} is can't be greater then replicas {replicas} ")
+            raise RuntimeError(f"min_replicas {min_replicas} is can't be greater then replicas {replicas} ")
         if replicas > max_replicas:
-            raise Exception(f"replicas {replicas} is can't be greater then max_replicas {max_replicas} ")
+            raise RuntimeError(f"replicas {replicas} is can't be greater then max_replicas {max_replicas} ")
 
         self.group_name = group_name
         self.compute_template = compute_template

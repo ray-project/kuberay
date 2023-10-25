@@ -10,7 +10,7 @@ class ServiceType(enum.Enum):
     LoadBalancer = "LoadBalancer"
 
 
-class HeadNodeSpec(object):
+class HeadNodeSpec:
     """
     HeadNodeSpec is used to define Ray cluster head node configuration.
     It provides APIs to create, stringify and convert to dict.

@@ -8,7 +8,7 @@ class EnvarSource(enum.Enum):
     FIELD = 3
 
 
-class EnvVarFrom(object):
+class EnvVarFrom:
     """
     EnvVarFrom is used to define an environment variable from one of the sorces (EnvarSource).
     It provides APIs to create, stringify, convert to dict and json.
@@ -33,7 +33,7 @@ class EnvVarFrom(object):
         return {"source": self.source.value, "name": self.name, "key": self.key}
 
 
-class EnvironmentVariables(object):
+class EnvironmentVariables:
     """
     EnvironmentVariables is used to define environment variables.
     It provides APIs to create, stringify, convert to dict and json.
