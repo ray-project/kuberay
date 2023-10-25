@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ const (
 	ServiceRestartRequeueDuration      = 10 * time.Second
 	RayClusterDeletionDelayDuration    = 60 * time.Second
 	DeploymentUnhealthySecondThreshold = 300.0 // Dashboard agent related health check.
+	ENABLE_ZERO_DOWNTIME               = "ENABLE_ZERO_DOWNTIME"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -367,7 +369,17 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	if r.shouldPrepareNewRayCluster(rayServiceInstance, activeRayCluster) {
-		r.markRestart(rayServiceInstance)
+		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
+		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+		enableZeroDowntime := true
+		if s := os.Getenv(ENABLE_ZERO_DOWNTIME); strings.ToLower(s) == "false" {
+			enableZeroDowntime = false
+		}
+		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
+			r.markRestart(rayServiceInstance)
+		} else {
+			r.Log.Info("Zero-downtime upgrade is disabled (ENABLE_ZERO_DOWNTIME: false). Skip preparing a new RayCluster.")
+		}
 		return activeRayCluster, nil, nil
 	}
 
