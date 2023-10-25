@@ -1,8 +1,7 @@
 import requests
 import time
 
-from .params.templates import *
-from .params.cluster import *
+from .params import *
 
 
 _headers = {"Content-Type": "application/json", "accept": "application/json"}
