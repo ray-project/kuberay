@@ -1,12 +1,4 @@
-from python_client.kuberay_apis import *
-
-from python_client.params.templates import *
-from python_client.params.cluster import *
-from python_client.params.headnode import *
-from python_client.params.workernode import *
-from python_client.params.volumes import *
-from python_client.params.environmentvariables import *
-
+from python_apiserver_client import *
 
 def test_templates():
     apis = KubeRayAPIs()
