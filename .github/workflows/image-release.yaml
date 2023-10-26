@@ -154,3 +154,14 @@ jobs:
         docker push quay.io/kuberay/operator:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/operator:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/operator:${{ github.event.inputs.tag }};
         docker push quay.io/kuberay/operator:${{ github.event.inputs.tag }}
+
+    - name: Create tag
+      uses: actions/github-script@v6
+      with:
+        script: |
+          await github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: 'refs/tags/ray-operator/${{ github.event.inputs.tag }}',
+            sha: '${{ github.event.inputs.commit }}'
+          })
