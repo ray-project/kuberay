@@ -74,8 +74,8 @@ You will be prompted for a commit reference and an image tag. The commit referen
     git push upstream v0.5.0-rc.0
     ```
 
-* Publish the `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` Go module. KubeRay starts supporting Go modules from v0.6.0.
-
+* The [image release CI pipeline](https://github.com/ray-project/kuberay/blob/master/.github/workflows/image-release.yaml) also publishes the `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` Go module. KubeRay has supported Go modules since v0.6.0. Follow these instructions to verify the Go module installation.
+    ```sh
     # Install the module. This step is highly possible to fail because the module is not available in the proxy server.
     go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
 
