@@ -73,28 +73,32 @@ class PVCVolume(BaseVolume):
         This class implements PVC volume. In addition to name and mount path it requires
         PVC volume specific parameters:
            source - PVC claim name
-           readOnly - read only flag
+           read_only - read only flag
            mountPropagationMode - mount propagation: None (0), host to container (1) or bidirectional (2)
     """
-    def __init__(self, name: str, mount_path: str, source: str, readonly: bool = False,
+    def __init__(self, name: str, mount_path: str, source: str, read_only: bool = False,
                  mountpropagation: MountPropagationMode = None) -> None:
         self.name = name
         self.mount_path = mount_path
         self.source = source
         self.volume_type = 0
         self.mountpropagation = mountpropagation
-        self.readonly = readonly
+        self.readonly = read_only
 
     def to_string(self) -> str:
         val = (f"name = {self.name}, mount_path = {self.mount_path}, source = {self.source}, "
-               f"volume type = PVC, read only = {str(self.readonly).lower()}")
+               f"volume type = PVC")
+        if self.readonly:
+            val += ", read only = True"
         if self.mountpropagation is not None:
             val += f", mount propagation = {self.mountpropagation.name}"
         return val
 
     def to_dict(self) -> dict[str, any]:
         dst = {"name": self.name, "mountPath": self.mount_path, "source": self.source,
-               "readOnly": str(self.readonly).lower(), "volumeType": self.volume_type}
+               "volumeType": self.volume_type}
+        if self.readonly:
+            dst["readOnly"] = True
         if self.mountpropagation is not None:
             dst["mountPropagationMode"] = self.mountpropagation.value
         return dst
@@ -252,7 +256,7 @@ def volume_decoder(dst: dict[str, any]) -> BaseVolume:
         case 0:
             # PVC
             return PVCVolume(name=dst.get("name", ""), mount_path=dst.get("mountPath", ""),
-                             source=dst.get("source", ""), readonly=dst.get("readOnly", "false").lower() == "true",
+                             source=dst.get("source", ""), read_only=dst.get("readOnly", False),
                              mountpropagation=_getmountpropagatio())
         case 1:
             # hostpath

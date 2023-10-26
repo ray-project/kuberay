@@ -115,8 +115,8 @@ def worker_node_spec_decoder(dct: dict[str, any]) -> WorkerNodeSpec:
     if "environment" in dct and len(dct.get("environment")) > 0:
         environments = environmentvariables_decoder(dct.get("environment"))
     return WorkerNodeSpec(group_name=dct.get("groupName"), compute_template=dct.get("computeTemplate"),
-                          replicas=int(dct.get("replicas", "0")), min_replicas=int(dct.get("minReplicas", "0")),
-                          max_replicas=int(dct.get("maxReplicas", "0")), ray_start_params=dct.get("rayStartParams"),
+                          replicas=dct.get("replicas", 0), min_replicas=dct.get("minReplicas", 0),
+                          max_replicas=dct.get("maxReplicas", 0), ray_start_params=dct.get("rayStartParams"),
                           image=dct.get("image"), volumes=volumes, service_account=dct.get("service_account"),
                           image_pull_secret=dct.get("imagePullSecret"), environment=environments,
                           annotations=dct.get("annotations"), labels=dct.get("labels"))

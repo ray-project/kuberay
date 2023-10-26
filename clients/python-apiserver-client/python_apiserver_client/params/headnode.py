@@ -21,7 +21,7 @@ class HeadNodeSpec:
         ray_start_params - required, Ray start parameters
         image - optional, image used for head node
         service_type - optional (ServiceType), service type foe headnode
-        enableIngress - optional, allow to enable ingress for dashboard
+        enable_ingress - optional, allow to enable ingress for dashboard
         volumes - optional, a list of volumes to attach to head node
         service_account - optional, a service account (has to exist) to run head node
         image_pull_secret - optional, secret to pull head node image from registry
@@ -55,7 +55,7 @@ class HeadNodeSpec:
         if self.service_type is not None:
             val += f", service_type = {self.service_type.name}"
         if self.enable_ingress:
-            val += ", enableIngress = true"
+            val += ", enable_ingress = True"
         if self.service_account is not None:
             val += f", service_account = {self.service_account}"
         if self.image_pull_secret is not None:
@@ -85,7 +85,7 @@ class HeadNodeSpec:
         if self.service_type is not None:
             dct["serviceType"] = self.service_type.value
         if self.enable_ingress:
-            dct["enableIngress"] = "true"
+            dct["enableIngress"] = True
         if self.service_account is not None:
             dct["service_account"] = self.service_account
         if self.image_pull_secret is not None:
@@ -119,7 +119,7 @@ def head_node_spec_decoder(dct: dict[str, any]) -> HeadNodeSpec:
         environments = environmentvariables_decoder(dct.get("environment"))
     return HeadNodeSpec(compute_template=dct.get("computeTemplate"), ray_start_params=dct.get("rayStartParams"),
                         image=dct.get("image"), service_type=service_type,
-                        enable_ingress=dct.get("enableIngress", "false").lower() == "true",
+                        enable_ingress=dct.get("enableIngress", False),
                         volumes=volumes, service_account=dct.get("service_account"),
                         image_pull_secret=dct.get("image_pull_secret"),
                         environment=environments, annotations=dct.get("annotations"),

@@ -49,7 +49,7 @@ def test_volumes():
     print(f"host path volume json: {vol_json}")
     assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
 
-    vol = PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", readonly=True,
+    vol = PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
                     mountpropagation=MountPropagationMode.BIDIRECTIONAL)
     print(f"PVC volume: {vol.to_string()}")
     vol_json = json.dumps(vol.to_dict())
@@ -114,7 +114,7 @@ def test_head_node_spec():
 
     env_v = EnvVarFrom(source=EnvarSource.SECRET, name="my-secret", key="key")
     env_s = EnvironmentVariables(keyvalue={"key": "val"}, fromref={"key_ref": env_v})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", readonly=True,
+    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
                          mountpropagation=MountPropagationMode.BIDIRECTIONAL),
                EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
 
@@ -131,7 +131,7 @@ def test_worker_node_spec():
 
     env_v = EnvVarFrom(source=EnvarSource.SECRET, name="my-secret", key="key")
     env_s = EnvironmentVariables(keyvalue={"key": "val"}, fromref={"key_ref": env_v})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", readonly=True,
+    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
                          mountpropagation=MountPropagationMode.BIDIRECTIONAL),
                EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
 
@@ -148,7 +148,7 @@ def test_cluster_spec():
     env_s = EnvironmentVariables(keyvalue={"key": "val"},
                                  fromref={"key_ref": EnvVarFrom(source=EnvarSource.SECRET,
                                                                 name="my-secret", key="key")})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", readonly=True,
+    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
                          mountpropagation=MountPropagationMode.BIDIRECTIONAL),
                EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
     spec = ClusterSpec(head_node=HeadNodeSpec(compute_template="template", ray_start_params=DEFAULT_HEAD_START_PARAMS,
@@ -176,7 +176,7 @@ def test_cluster():
     env_s = EnvironmentVariables(keyvalue={"key": "val"},
                                  fromref={"key_ref": EnvVarFrom(source=EnvarSource.SECRET, name="my-secret",
                                                                 key="key")})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", readonly=True,
+    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
                          mountpropagation=MountPropagationMode.BIDIRECTIONAL),
                EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
     spec = ClusterSpec(head_node=HeadNodeSpec(compute_template="template", ray_start_params=DEFAULT_HEAD_START_PARAMS,
