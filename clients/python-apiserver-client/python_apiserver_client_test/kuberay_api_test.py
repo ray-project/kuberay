@@ -53,7 +53,7 @@ def test_cluster():
     head = HeadNodeSpec(compute_template="default-template",
                         ray_start_params={"metrics-export-port": "8080", "num-cpus": "0"},
                         image="rayproject/ray:2.7.0-py310", service_type=ServiceType.ClusterIP,
-                        volumes=[volume], environment=environment, enable_ingress=True)
+                        volumes=[volume], environment=environment)
     worker = WorkerNodeSpec(group_name="small", compute_template="default-template", replicas=1,
                             min_replicas=1, max_replicas=1, ray_start_params=DEFAULT_WORKER_START_PARAMS,
                             image="rayproject/ray:2.7.0-py310", volumes=[volume], environment=environment)
