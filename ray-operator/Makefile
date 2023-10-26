@@ -63,10 +63,15 @@ fumpt: gofumpt
 	$(GOFUMPT) -l -w ../
 
 ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
+test: WHAT ?= $(shell go list ./... | grep -v /test/)
 test: manifests generate fmt vet ## Run tests.
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-	export ENVTEST_K8S_VERSION=1.24.2; source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -v -coverprofile cover.out
+	export ENVTEST_K8S_VERSION=1.24.2; source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test $(WHAT) -v -coverprofile cover.out
+
+test-e2e: WHAT ?= ./test/e2e
+test-e2e: manifests generate fmt vet ## Run e2e tests.
+	go test -timeout 30m -v $(WHAT)
 
 sync: helm
 	./hack/update-codegen.sh
@@ -90,7 +95,7 @@ build: generate fmt vet ## Build manager binary.
 docker-image: ## Build image only
 	${ENGINE} build -t ${IMG} .
 
-docker-build: test docker-image ## Build image with the manager.
+docker-build: build docker-image ## Build image with the manager.
 
 docker-push: ## Push image with the manager.
 	${ENGINE} push ${IMG}
@@ -107,8 +112,8 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
-	($(KUSTOMIZE) build config/default | kubectl create -f -) || ($(KUSTOMIZE) build config/default | kubectl replace -f -)
+	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	$(KUSTOMIZE) build config/default | kubectl apply --server-side=true -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
@@ -120,7 +125,7 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) ||  GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v5@latest
+	test -s $(KUSTOMIZE) || GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v5@latest
 
 GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.
