@@ -26,6 +26,6 @@ pip3 install -e .
 
 ## Testing
 
-Test files [parameters_test](python_apiserver_client_test/api_params_test.py) and [api_test](python_apiserver_client_test/kuberay_api_test.py) exersize the packeage functionality and can also be used as a guide for API usage.
+Test files [parameters_test](python_apiserver_client_test/api_params_test.py) and [api_test](python_apiserver_client_test/kuberay_api_test.py) exercise the package functionality and can also be used as a guide for API usage.
 
 Note that [api_test](python_apiserver_client_test/kuberay_api_test.py) requires installation of the package and creation of the additional [configmap](../../apiserver/test/job/code.yaml) in the default namespace
