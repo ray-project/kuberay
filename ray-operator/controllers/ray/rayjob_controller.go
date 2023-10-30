@@ -248,6 +248,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Check the current status of ray jobs
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 	if err != nil {
+		r.Log.Error(err, "failed to get job info", "jobId", rayJobInstance.Status.JobId)
 		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusFailedToGetJobStatus, err)
 		// Dashboard service in head pod takes time to start, it's possible we get connection refused error.
 		// Requeue after few seconds to avoid continuous connection errors.
@@ -255,10 +256,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
-	if jobInfo != nil && jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
-		r.Log.Info(fmt.Sprintf("Update status from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
-		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	if jobInfo != nil {
+		jobStatusChanged := (rayJobInstance.Status.JobStatus != jobInfo.JobStatus)
+		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
+		if (jobStatusChanged || rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus) {
+			r.Log.Info(fmt.Sprintf("Update jobStatus from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
+			r.Log.Info(fmt.Sprintf("Update jobDeploymentStatus from %s to %s", rayJobInstance.Status.JobDeploymentStatus, rayv1.JobDeploymentStatusRunning), "rayjob", rayJobInstance.Status.JobId)
+			err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 	}
 
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
@@ -305,8 +311,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
+	deployStatus := rayJobInstance.Status.JobDeploymentStatus
+	isDeployStatusRunningOrFailedToGetStatus := deployStatus == rayv1.JobDeploymentStatusRunning || deployStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
+	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && isDeployStatusRunningOrFailedToGetStatus {
 		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
 			// RayCluster down.
