@@ -311,10 +311,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
-	deployStatus := rayJobInstance.Status.JobDeploymentStatus
-	isDeployStatusRunningOrFailedToGetStatus := deployStatus == rayv1.JobDeploymentStatusRunning || deployStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && isDeployStatusRunningOrFailedToGetStatus {
+	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
 		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
 			// RayCluster down.
