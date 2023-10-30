@@ -2,17 +2,17 @@ Getting/Listing jobs
 
 1. For a given ns
 
-curl -X GET 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X GET 'localhost:8888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json'
 
 2. For any namespace
 
-curl -X GET 'localhost:8888/apis/v1alpha2/jobs' \
+curl -X GET 'localhost:8888/apis/v1/jobs' \
 --header 'Content-Type: application/json'
 
 3 By namespace and name
 
-curl -X GET 'localhost:8888/apis/v1alpha2/namespaces/default/jobs/job-test' \
+curl -X GET 'localhost:8888/apis/v1/namespaces/default/jobs/job-test' \
 --header 'Content-Type: application/json'
 
 All of them return the same value (for our case with a single job deployed):
@@ -74,5 +74,5 @@ All of them return the same value (for our case with a single job deployed):
 
 Deleting job
 
-curl -X DELETE 'localhost:8888/apis/v1alpha2/namespaces/default/jobs/job-test' \
+curl -X DELETE 'localhost:8888/apis/v1/namespaces/default/jobs/job-test' \
 --header 'Content-Type: application/json'
