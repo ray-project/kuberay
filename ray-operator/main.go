@@ -170,6 +170,12 @@ func main() {
 	exitOnError(ray.NewRayJobReconciler(mgr).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
+	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
+		if err = (&rayv1.RayCluster{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "RayCluster")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
