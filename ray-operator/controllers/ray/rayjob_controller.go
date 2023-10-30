@@ -259,7 +259,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if jobInfo != nil {
 		jobStatusChanged := (rayJobInstance.Status.JobStatus != jobInfo.JobStatus)
 		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
-		if (jobStatusChanged || rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus) {
+		if jobStatusChanged || rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
 			r.Log.Info(fmt.Sprintf("Update jobStatus from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
 			r.Log.Info(fmt.Sprintf("Update jobDeploymentStatus from %s to %s", rayJobInstance.Status.JobDeploymentStatus, rayv1.JobDeploymentStatusRunning), "rayjob", rayJobInstance.Status.JobId)
 			err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
