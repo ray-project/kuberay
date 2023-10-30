@@ -258,7 +258,10 @@ func initHealthProbe(probe *v1.Probe, rayNodeType rayv1.RayNodeType) {
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableAgentService bool) (aPod v1.Pod) {
+	if enableAgentService {
+		podTemplateSpec.Labels[RayClusterServingServiceLabelKey] = EnableRayClusterServingServiceTrue
+	}
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

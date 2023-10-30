@@ -344,6 +344,15 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
+	// only reconcile serve service is "ray.io/enableAgentService" annotation is set to true
+	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+		if err := r.reconcileServeService(ctx, instance); err != nil {
+			if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
+				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			}
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		}
+	}
 	if err := r.reconcilePods(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
@@ -543,6 +552,34 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	}
 
 	return nil
+}
+
+// Return nil only when the serve service successfully created or already exists.
+func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
+	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
+	svc := &corev1.Service{}
+	err := r.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(instance.Name), Namespace: instance.Namespace}, svc)
+	if err == nil {
+		// service exists, do nothing
+		return nil
+	} else if errors.IsNotFound(err) {
+		// Service does not exist, create it
+		svc, err = common.BuildServeServiceForRayCluster(*instance)
+		if err != nil {
+			return err
+		}
+		// Set the ownwer reference
+		if err := ctrl.SetControllerReference(instance, svc, r.Scheme); err != nil {
+			return err
+		}
+		// create service
+		if err := r.Create(ctx, svc); err != nil {
+			return err
+		}
+		return nil
+	} else {
+		return err
+	}
 }
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -992,11 +1029,16 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Po
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
+	// Check whether serve is enabled and add serve label
+	serveLabel := false
+	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+		serveLabel = true
+	}
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP)
+	pod := common.BuildPod(podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1029,7 +1071,12 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, fqdnRayIP, headPort)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP)
+	// Check whether serve is enabled and add serve label
+	serveLabel := false
+	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+		serveLabel = true
+	}
+	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
