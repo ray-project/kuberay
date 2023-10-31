@@ -238,7 +238,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("Dashboard URL should be set", func() {
 			Eventually(
 				getDashboardURLForRayJob(ctx, myRayJob),
-				time.Second*3, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
+				time.Second*1, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
 		})
 
 		It("test cluster selector", func() {

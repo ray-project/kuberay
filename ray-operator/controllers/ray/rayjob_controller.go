@@ -537,12 +537,13 @@ func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, o
 
 // make sure the priority is correct
 func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *utils.RayJobInfo, jobStatus rayv1.JobStatus, jobDeploymentStatus rayv1.JobDeploymentStatus, err error) error {
+	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
+
 	// Let's skip update the APIServer if it's synced.
 	if rayJob.Status.JobStatus == jobStatus && rayJob.Status.JobDeploymentStatus == jobDeploymentStatus {
 		return nil
 	}
 
-	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
 	rayJob.Status.JobStatus = jobStatus
 	rayJob.Status.JobDeploymentStatus = jobDeploymentStatus
 	if jobInfo != nil {
