@@ -18,7 +18,7 @@ class KubeRayAPIs:
                  wait_interval: int = 2) -> None:
         self.base = base
         self.wait_interval = wait_interval
-        self.api_base = "/apis/v1alpha2/"
+        self.api_base = "/apis/v1/"
 
     """
         List compute templates across all namespaces of the k8 cluster 
