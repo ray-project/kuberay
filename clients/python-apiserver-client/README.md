@@ -2,9 +2,9 @@
 
 This Python client is currently only supporting Ray cluster management through usage of the `API server` Ray API. It implements all of the current functionality of the API server (and the operator) and provide pythonic APIs to the capabilities.
 
-The package supports well documented in the code Python objects that can be used to build and receive payloads for creation, listing and deleting of [template](https://ray-project.github.io/kuberay/components/apiserver/#compute-template) and Ray clusters.
+The package supports Python objects (documented in the code ) that can be used to build and receive payloads for creation, listing and deleting of [template](https://ray-project.github.io/kuberay/components/apiserver/#compute-template) and Ray clusters.
 
-The main class of the package is [KubeRayAPIs](python_apiserver_client/kuberay_apis.py) that implements all of the functionality. It leverages [templates](python_apiserver_client/params/templates.py) and [cluster](python_apiserver_client/params/cluster.py) definitions, allowing to specify all required parameters as straight Python classes. Additional (intermediate) definitons are provided (see [environment variables](python_apiserver_client/params/environmentvariables.py), [volumes](python_apiserver_client/params/volumes.py), [head group](python_apiserver_client/params/headnode.py) and [worker group](python_apiserver_client/params/workernode.py))
+The main class of the package is [KubeRayAPIs](python_apiserver_client/kuberay_apis.py) that implements all of the functionality. It leverages [templates](python_apiserver_client/params/templates.py) and [cluster](python_apiserver_client/params/cluster.py) definitions, allowing to specify all required parameters as straight Python classes. Additional (intermediate) definitions are provided (see [environment variables](python_apiserver_client/params/environmentvariables.py), [volumes](python_apiserver_client/params/volumes.py), [head group](python_apiserver_client/params/headnode.py) and [worker group](python_apiserver_client/params/workernode.py))
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ It is also expected that the `kuberay operator` ([Installation instructions are 
 
 ## Development
 
-Start from installing `setup-tools`
+Start by installing `setup-tools`
 
 ```shell
 pip3 install -U setuptools
