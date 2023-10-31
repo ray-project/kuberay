@@ -205,7 +205,7 @@ func TestShouldUpdateJobStatus(t *testing.T) {
 			expectedShouldUpdate: true,
 		},
 		{
-			name:                   "job status same but JobDeploymentStatus failed",
+			name:                   "job status same but JobDeploymentStatus failed to get status",
 			oldJobStatus:           rayv1.JobStatusRunning,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusFailedToGetJobStatus,
 			jobInfo: &utils.RayJobInfo{
@@ -214,7 +214,7 @@ func TestShouldUpdateJobStatus(t *testing.T) {
 			expectedShouldUpdate: true,
 		},
 		{
-			name:                   "job status same and JobDeploymentStatus not failed",
+			name:                   "job status same and JobDeploymentStatus not failed to get status",
 			oldJobStatus:           rayv1.JobStatusRunning,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
 			jobInfo: &utils.RayJobInfo{
