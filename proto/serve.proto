@@ -29,7 +29,7 @@ service RayServeService {
   // Create a new ray serve.
   rpc CreateRayService(CreateRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/namespaces/{namespace}/services"
+      post: "/apis/v1/namespaces/{namespace}/services"
       body: "service"
     };
   }
@@ -38,7 +38,7 @@ service RayServeService {
   // We may
   rpc UpdateRayService(UpdateRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
-      put: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      put: "/apis/v1/namespaces/{namespace}/services/{name}"
       body: "service"
     };
   }
@@ -48,7 +48,7 @@ service RayServeService {
   // only support update the service configs and worker.
   rpc UpdateRayServiceConfigs(UpdateRayServiceConfigsRequest) returns (RayService) {
     option (google.api.http) = {
-      patch: "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs"
+      patch: "/apis/v1/namespaces/{namespace}/services/{name}/configs"
       body: "update_service"
     };
   }
@@ -56,27 +56,27 @@ service RayServeService {
   // Find a specific ray serve by name and namespace.
   rpc GetRayService(GetRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      get: "/apis/v1/namespaces/{namespace}/services/{name}"
     };
   }
   // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListRayServices(ListRayServicesRequest) returns (ListRayServicesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/services"
+      get: "/apis/v1/namespaces/{namespace}/services"
     };
   }
 
   // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListAllRayServices(ListAllRayServicesRequest) returns (ListAllRayServicesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/services"
+      get: "/apis/v1/services"
     };
   }
 
   // Deletes a ray service by its name and namespace 
   rpc DeleteRayService(DeleteRayServiceRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/services/{name}"
+      delete: "/apis/v1/namespaces/{namespace}/services/{name}"
     };
   }
 }

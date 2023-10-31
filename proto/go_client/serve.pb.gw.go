@@ -537,7 +537,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/CreateRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/CreateRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -560,7 +560,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/UpdateRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/UpdateRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -583,7 +583,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/UpdateRayServiceConfigs", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/UpdateRayServiceConfigs", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}/configs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -606,7 +606,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/GetRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/GetRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -629,7 +629,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/ListRayServices", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/ListRayServices", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -652,7 +652,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/ListAllRayServices", runtime.WithHTTPPathPattern("/apis/v1alpha2/services"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/ListAllRayServices", runtime.WithHTTPPathPattern("/apis/v1/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -675,7 +675,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/DeleteRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayServeService/DeleteRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -737,7 +737,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/CreateRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/CreateRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -757,7 +757,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/UpdateRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/UpdateRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -777,7 +777,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/UpdateRayServiceConfigs", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/UpdateRayServiceConfigs", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}/configs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -797,7 +797,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/GetRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/GetRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -817,7 +817,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/ListRayServices", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/ListRayServices", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -837,7 +837,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/ListAllRayServices", runtime.WithHTTPPathPattern("/apis/v1alpha2/services"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/ListAllRayServices", runtime.WithHTTPPathPattern("/apis/v1/services"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -857,7 +857,7 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/DeleteRayService", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/services/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayServeService/DeleteRayService", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/services/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -877,19 +877,19 @@ func RegisterRayServeServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_RayServeService_CreateRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services"}, ""))
+	pattern_RayServeService_CreateRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "services"}, ""))
 
-	pattern_RayServeService_UpdateRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services", "name"}, ""))
+	pattern_RayServeService_UpdateRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "services", "name"}, ""))
 
-	pattern_RayServeService_UpdateRayServiceConfigs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services", "name", "configs"}, ""))
+	pattern_RayServeService_UpdateRayServiceConfigs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"apis", "v1", "namespaces", "namespace", "services", "name", "configs"}, ""))
 
-	pattern_RayServeService_GetRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services", "name"}, ""))
+	pattern_RayServeService_GetRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "services", "name"}, ""))
 
-	pattern_RayServeService_ListRayServices_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services"}, ""))
+	pattern_RayServeService_ListRayServices_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "services"}, ""))
 
-	pattern_RayServeService_ListAllRayServices_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "services"}, ""))
+	pattern_RayServeService_ListAllRayServices_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1", "services"}, ""))
 
-	pattern_RayServeService_DeleteRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "services", "name"}, ""))
+	pattern_RayServeService_DeleteRayService_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "services", "name"}, ""))
 )
 
 var (

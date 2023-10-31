@@ -1,4 +1,4 @@
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
+curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "test-cluster",

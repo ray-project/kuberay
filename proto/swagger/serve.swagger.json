@@ -19,7 +19,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha2/namespaces/{namespace}/services": {
+    "/apis/v1/namespaces/{namespace}/services": {
       "get": {
         "summary": "Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayServeService_ListRayServices",
@@ -105,7 +105,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/services/{name}": {
+    "/apis/v1/namespaces/{namespace}/services/{name}": {
       "get": {
         "summary": "Find a specific ray serve by name and namespace.",
         "operationId": "RayServeService_GetRayService",
@@ -227,7 +227,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs": {
+    "/apis/v1/namespaces/{namespace}/services/{name}/configs": {
       "patch": {
         "summary": "Update a ray serve configs.\nPatch mode update without possible deletion the existing raycluster under the hood. \nonly support update the service configs and worker.",
         "operationId": "RayServeService_UpdateRayServiceConfigs",
@@ -275,7 +275,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/services": {
+    "/apis/v1/services": {
       "get": {
         "summary": "Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayServeService_ListAllRayServices",

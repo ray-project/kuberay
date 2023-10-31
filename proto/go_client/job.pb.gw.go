@@ -325,7 +325,7 @@ func RegisterRayJobServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/CreateRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/CreateRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -348,7 +348,7 @@ func RegisterRayJobServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/GetRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/GetRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -371,7 +371,7 @@ func RegisterRayJobServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/ListRayJobs", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/ListRayJobs", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -394,7 +394,7 @@ func RegisterRayJobServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/ListAllRayJobs", runtime.WithHTTPPathPattern("/apis/v1alpha2/jobs"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/ListAllRayJobs", runtime.WithHTTPPathPattern("/apis/v1/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -417,7 +417,7 @@ func RegisterRayJobServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/DeleteRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.RayJobService/DeleteRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -479,7 +479,7 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/CreateRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/CreateRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -499,7 +499,7 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/GetRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/GetRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -519,7 +519,7 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/ListRayJobs", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/ListRayJobs", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -539,7 +539,7 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/ListAllRayJobs", runtime.WithHTTPPathPattern("/apis/v1alpha2/jobs"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/ListAllRayJobs", runtime.WithHTTPPathPattern("/apis/v1/jobs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -559,7 +559,7 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/DeleteRayJob", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.RayJobService/DeleteRayJob", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/jobs/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -579,15 +579,15 @@ func RegisterRayJobServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_RayJobService_CreateRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "jobs"}, ""))
+	pattern_RayJobService_CreateRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "jobs"}, ""))
 
-	pattern_RayJobService_GetRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "jobs", "name"}, ""))
+	pattern_RayJobService_GetRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "jobs", "name"}, ""))
 
-	pattern_RayJobService_ListRayJobs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "jobs"}, ""))
+	pattern_RayJobService_ListRayJobs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "jobs"}, ""))
 
-	pattern_RayJobService_ListAllRayJobs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "jobs"}, ""))
+	pattern_RayJobService_ListAllRayJobs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1", "jobs"}, ""))
 
-	pattern_RayJobService_DeleteRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "jobs", "name"}, ""))
+	pattern_RayJobService_DeleteRayJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "jobs", "name"}, ""))
 )
 
 var (

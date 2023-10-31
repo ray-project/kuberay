@@ -52,7 +52,7 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/code_configmap.y
 To create a Ray cluster we can use the following curl command:
 
 ```sh
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/clusters' \
+curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "ha-cluster",
@@ -151,8 +151,7 @@ password.
 "num-cpu": "0"
 ```
 
-Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus: 0` ensures 
-that that no application code runs on a head node.
+Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus: 0` ensures that no application code runs on a head node.
 
 The following environment variable have to be added here:
 

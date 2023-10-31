@@ -27,7 +27,7 @@ service ComputeTemplateService {
   // Creates a new compute template.
   rpc CreateComputeTemplate(CreateComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/namespaces/{namespace}/compute_templates"
+      post: "/apis/v1/namespaces/{namespace}/compute_templates"
       body: "compute_template"
     };
   }
@@ -35,28 +35,28 @@ service ComputeTemplateService {
   // Finds a specific compute template by its name and namespace.
   rpc GetComputeTemplate(GetComputeTemplateRequest) returns (ComputeTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
+      get: "/apis/v1/namespaces/{namespace}/compute_templates/{name}"
     };
   }
 
   // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/compute_templates"
+      get: "/apis/v1/namespaces/{namespace}/compute_templates"
     };
   }
 
   // Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
   rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/compute_templates"
+      get: "/apis/v1/compute_templates"
     };
   }
 
   // Deletes a compute template by its name and namespace 
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"
+      delete: "/apis/v1/namespaces/{namespace}/compute_templates/{name}"
     };
   }
 }
@@ -135,7 +135,7 @@ service ImageTemplateService {
   // Not implemented. Creates a new ImageTemplate.
   rpc CreateImageTemplate(CreateImageTemplateRequest) returns (ImageTemplate) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/image_templates"
+      post: "/apis/v1/image_templates"
       body: "image_template"
     };
   }
@@ -143,21 +143,21 @@ service ImageTemplateService {
   // Not implemented. Finds a specific ImageTemplate by ID.
   rpc GetImageTemplate(GetImageTemplateRequest) returns (ImageTemplate) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
+      get: "/apis/v1/namespaces/{namespace}/image_templates/{name}"
     };
   }
 
   // Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
   rpc ListImageTemplates(ListImageTemplatesRequest) returns (ListImageTemplatesResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/image_templates"
+      get: "/apis/v1/namespaces/{namespace}/image_templates"
     };
   }
 
   // Not implemented. Deletes an ImageTemplate.
   rpc DeleteImageTemplate(DeleteImageTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"
+      delete: "/apis/v1/namespaces/{namespace}/image_templates/{name}"
     };
   }
 }
