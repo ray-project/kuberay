@@ -182,22 +182,22 @@ func TestShouldUpdateJobStatus(t *testing.T) {
 	r := &RayJobReconciler{}
 
 	tests := []struct {
-		name                     string
-		oldJobStatus             rayv1.JobStatus
-		oldJobDeploymentStatus   rayv1.JobDeploymentStatus
-		jobInfo                  *utils.RayJobInfo
-		expectedShouldUpdate     bool
+		name                   string
+		oldJobStatus           rayv1.JobStatus
+		oldJobDeploymentStatus rayv1.JobDeploymentStatus
+		jobInfo                *utils.RayJobInfo
+		expectedShouldUpdate   bool
 	}{
 		{
-			name: "jobInfo is nil",
-			oldJobStatus: rayv1.JobStatusPending,
+			name:                   "jobInfo is nil",
+			oldJobStatus:           rayv1.JobStatusPending,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
-			jobInfo: nil,
-			expectedShouldUpdate: false,
+			jobInfo:                nil,
+			expectedShouldUpdate:   false,
 		},
 		{
-			name: "job status changed",
-			oldJobStatus: rayv1.JobStatusRunning,
+			name:                   "job status changed",
+			oldJobStatus:           rayv1.JobStatusRunning,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
 			jobInfo: &utils.RayJobInfo{
 				JobStatus: rayv1.JobStatusStopped,
@@ -205,8 +205,8 @@ func TestShouldUpdateJobStatus(t *testing.T) {
 			expectedShouldUpdate: true,
 		},
 		{
-			name: "job status same but JobDeploymentStatus failed",
-			oldJobStatus: rayv1.JobStatusRunning,
+			name:                   "job status same but JobDeploymentStatus failed",
+			oldJobStatus:           rayv1.JobStatusRunning,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusFailedToGetJobStatus,
 			jobInfo: &utils.RayJobInfo{
 				JobStatus: rayv1.JobStatusRunning,
@@ -214,8 +214,8 @@ func TestShouldUpdateJobStatus(t *testing.T) {
 			expectedShouldUpdate: true,
 		},
 		{
-			name: "job status same and JobDeploymentStatus not failed",
-			oldJobStatus: rayv1.JobStatusRunning,
+			name:                   "job status same and JobDeploymentStatus not failed",
+			oldJobStatus:           rayv1.JobStatusRunning,
 			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
 			jobInfo: &utils.RayJobInfo{
 				JobStatus: rayv1.JobStatusRunning,

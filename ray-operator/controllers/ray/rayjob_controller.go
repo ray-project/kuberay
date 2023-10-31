@@ -526,7 +526,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 
 func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, oldJobDeploymentStatus rayv1.JobDeploymentStatus, jobInfo *utils.RayJobInfo) bool {
 	if jobInfo != nil {
-		jobStatusChanged := (oldJobStatus != jobInfo.JobStatus)	
+		jobStatusChanged := (oldJobStatus != jobInfo.JobStatus)
 		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
 		if jobStatusChanged || oldJobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
 			return true
