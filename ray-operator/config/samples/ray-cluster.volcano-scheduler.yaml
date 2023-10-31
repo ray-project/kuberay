@@ -8,7 +8,6 @@ spec:
   rayVersion: '2.7.0'
   headGroupSpec:
     rayStartParams: {}
-    replicas: 1
     template:
       spec:
         containers:

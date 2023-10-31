@@ -19,9 +19,6 @@ spec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
     # Refer to https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types.
     serviceType: ClusterIP
-    # for the head group, replicas should always be 1.
-    # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
-    replicas: 1
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
