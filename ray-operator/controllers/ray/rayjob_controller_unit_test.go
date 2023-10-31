@@ -6,6 +6,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -175,4 +176,58 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		}
 	}
 	assert.True(t, found)
+}
+
+func TestShouldUpdateJobStatus(t *testing.T) {
+	r := &RayJobReconciler{}
+
+	tests := []struct {
+		name                     string
+		oldJobStatus             rayv1.JobStatus
+		oldJobDeploymentStatus   rayv1.JobDeploymentStatus
+		jobInfo                  *utils.RayJobInfo
+		expectedShouldUpdate     bool
+	}{
+		{
+			name: "jobInfo is nil",
+			oldJobStatus: rayv1.JobStatusPending,
+			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			jobInfo: nil,
+			expectedShouldUpdate: false,
+		},
+		{
+			name: "job status changed",
+			oldJobStatus: rayv1.JobStatusRunning,
+			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			jobInfo: &utils.RayJobInfo{
+				JobStatus: rayv1.JobStatusStopped,
+			},
+			expectedShouldUpdate: true,
+		},
+		{
+			name: "job status same but JobDeploymentStatus failed",
+			oldJobStatus: rayv1.JobStatusRunning,
+			oldJobDeploymentStatus: rayv1.JobDeploymentStatusFailedToGetJobStatus,
+			jobInfo: &utils.RayJobInfo{
+				JobStatus: rayv1.JobStatusRunning,
+			},
+			expectedShouldUpdate: true,
+		},
+		{
+			name: "job status same and JobDeploymentStatus not failed",
+			oldJobStatus: rayv1.JobStatusRunning,
+			oldJobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			jobInfo: &utils.RayJobInfo{
+				JobStatus: rayv1.JobStatusRunning,
+			},
+			expectedShouldUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.shouldUpdateJobStatus(tt.oldJobStatus, tt.oldJobDeploymentStatus, tt.jobInfo)
+			assert.Equal(t, tt.expectedShouldUpdate, result)
+		})
+	}
 }

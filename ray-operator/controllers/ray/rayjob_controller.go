@@ -256,15 +256,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
-	if jobInfo != nil {
-		jobStatusChanged := (rayJobInstance.Status.JobStatus != jobInfo.JobStatus)
-		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
-		if jobStatusChanged || rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
-			r.Log.Info(fmt.Sprintf("Update jobStatus from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
-			r.Log.Info(fmt.Sprintf("Update jobDeploymentStatus from %s to %s", rayJobInstance.Status.JobDeploymentStatus, rayv1.JobDeploymentStatusRunning), "rayjob", rayJobInstance.Status.JobId)
-			err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
+	if r.shouldUpdateJobStatus(rayJobInstance.Status.JobStatus, rayJobInstance.Status.JobDeploymentStatus, jobInfo) {
+		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
@@ -528,6 +522,17 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 		return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing, nil)
 	}
 	return nil
+}
+
+func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, oldJobDeploymentStatus rayv1.JobDeploymentStatus, jobInfo *utils.RayJobInfo) bool {
+	if jobInfo != nil {
+		jobStatusChanged := (oldJobStatus != jobInfo.JobStatus)	
+		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
+		if jobStatusChanged || oldJobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
+			return true
+		}
+	}
+	return false
 }
 
 // make sure the priority is correct
