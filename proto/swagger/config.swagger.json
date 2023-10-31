@@ -22,7 +22,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha2/compute_templates": {
+    "/apis/v1/compute_templates": {
       "get": {
         "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
@@ -45,7 +45,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/image_templates": {
+    "/apis/v1/image_templates": {
       "post": {
         "summary": "Not implemented. Creates a new ImageTemplate.",
         "operationId": "ImageTemplateService_CreateImageTemplate",
@@ -86,7 +86,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/compute_templates": {
+    "/apis/v1/namespaces/{namespace}/compute_templates": {
       "get": {
         "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListComputeTemplates",
@@ -157,7 +157,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}": {
+    "/apis/v1/namespaces/{namespace}/compute_templates/{name}": {
       "get": {
         "summary": "Finds a specific compute template by its name and namespace.",
         "operationId": "ComputeTemplateService_GetComputeTemplate",
@@ -233,7 +233,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/image_templates": {
+    "/apis/v1/namespaces/{namespace}/image_templates": {
       "get": {
         "summary": "Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
         "operationId": "ImageTemplateService_ListImageTemplates",
@@ -265,7 +265,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}": {
+    "/apis/v1/namespaces/{namespace}/image_templates/{name}": {
       "get": {
         "summary": "Not implemented. Finds a specific ImageTemplate by ID.",
         "operationId": "ImageTemplateService_GetImageTemplate",

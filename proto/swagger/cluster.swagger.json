@@ -19,7 +19,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha2/clusters": {
+    "/apis/v1/clusters": {
       "get": {
         "summary": "Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListAllClusters",
@@ -42,7 +42,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/clusters": {
+    "/apis/v1/namespaces/{namespace}/clusters": {
       "get": {
         "summary": "Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListCluster",
@@ -113,7 +113,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}": {
+    "/apis/v1/namespaces/{namespace}/clusters/{name}": {
       "get": {
         "summary": "Finds a specific Cluster by ID.",
         "operationId": "ClusterService_GetCluster",

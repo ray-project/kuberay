@@ -24,7 +24,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha2/clusters": {
+    "/apis/v1/clusters": {
       "get": {
         "summary": "Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListAllClusters",
@@ -47,7 +47,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/clusters": {
+    "/apis/v1/namespaces/{namespace}/clusters": {
       "get": {
         "summary": "Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ClusterService_ListCluster",
@@ -118,7 +118,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/clusters/{name}": {
+    "/apis/v1/namespaces/{namespace}/clusters/{name}": {
       "get": {
         "summary": "Finds a specific Cluster by ID.",
         "operationId": "ClusterService_GetCluster",
@@ -194,7 +194,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/compute_templates": {
+    "/apis/v1/compute_templates": {
       "get": {
         "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
@@ -217,7 +217,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/image_templates": {
+    "/apis/v1/image_templates": {
       "post": {
         "summary": "Not implemented. Creates a new ImageTemplate.",
         "operationId": "ImageTemplateService_CreateImageTemplate",
@@ -258,7 +258,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/compute_templates": {
+    "/apis/v1/namespaces/{namespace}/compute_templates": {
       "get": {
         "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "ComputeTemplateService_ListComputeTemplates",
@@ -329,7 +329,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}": {
+    "/apis/v1/namespaces/{namespace}/compute_templates/{name}": {
       "get": {
         "summary": "Finds a specific compute template by its name and namespace.",
         "operationId": "ComputeTemplateService_GetComputeTemplate",
@@ -405,7 +405,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/image_templates": {
+    "/apis/v1/namespaces/{namespace}/image_templates": {
       "get": {
         "summary": "Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
         "operationId": "ImageTemplateService_ListImageTemplates",
@@ -437,7 +437,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}": {
+    "/apis/v1/namespaces/{namespace}/image_templates/{name}": {
       "get": {
         "summary": "Not implemented. Finds a specific ImageTemplate by ID.",
         "operationId": "ImageTemplateService_GetImageTemplate",
@@ -513,7 +513,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/jobs": {
+    "/apis/v1/jobs": {
       "get": {
         "summary": "Finds all job in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListAllRayJobs",
@@ -536,7 +536,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/jobs": {
+    "/apis/v1/namespaces/{namespace}/jobs": {
       "get": {
         "summary": "Finds all job in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListRayJobs",
@@ -607,7 +607,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}": {
+    "/apis/v1/namespaces/{namespace}/jobs/{name}": {
       "get": {
         "summary": "Finds a specific job by its name and namespace.",
         "operationId": "RayJobService_GetRayJob",
@@ -683,7 +683,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/services": {
+    "/apis/v1/namespaces/{namespace}/services": {
       "get": {
         "summary": "Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayServeService_ListRayServices",
@@ -769,7 +769,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/services/{name}": {
+    "/apis/v1/namespaces/{namespace}/services/{name}": {
       "get": {
         "summary": "Find a specific ray serve by name and namespace.",
         "operationId": "RayServeService_GetRayService",
@@ -891,7 +891,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/services/{name}/configs": {
+    "/apis/v1/namespaces/{namespace}/services/{name}/configs": {
       "patch": {
         "summary": "Update a ray serve configs.\nPatch mode update without possible deletion the existing raycluster under the hood. \nonly support update the service configs and worker.",
         "operationId": "RayServeService_UpdateRayServiceConfigs",
@@ -939,7 +939,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/services": {
+    "/apis/v1/services": {
       "get": {
         "summary": "Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayServeService_ListAllRayServices",

@@ -9,10 +9,10 @@ API server allows to specify multiple types of volumes mounted to the Ray pods (
 and [empty dir](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir).
 Multiple volumes of different type can be mounted to both head and worker nodes, by defining a volume array for them
 
+
 ## HostPath volumes
 
-A hostPath volume mounts a file or directory from the host node's filesystem into your Pod. This is not something that
-most Pods will need, but it offers a powerful escape hatch for some applications.
+A hostPath volume mounts a file or directory from the host node's filesystem into your Pod. This is not something that most Pods will need, but it offers a powerful escape hatch for some applications.
 
 For example, some uses for a hostPath are:
 
@@ -35,8 +35,10 @@ The code below gives an example of hostPath volume definition:
 
 ## PVC volumes
 
+
 A Persistent Volume Claim (PVC) is a request for storage by a user. It is similar to a Pod. Pods consume node resources and PVCs consume PV resources. Pods can request specific levels of resources (CPU and Memory). Claims can request
 specific size and access modes (e.g., they can be mounted `ReadWriteOnce`, `ReadOnlyMany` or `ReadWriteMany`).
+
 
 The caveat of using PVC volumes is that the same PVC is mounted to all nodes. As a result only PVCs with access
 mode `ReadOnlyMany` can be used in this case.
@@ -60,6 +62,7 @@ Some application need additional storage but don't care whether that data is sto
 
 Because volumes follow the Pod's lifetime and get created and deleted along with the Pod, Pods can be stopped and restarted without being limited to where some persistent volume is available.
 
+
 Although there are several option of ephemeral volumes, here we are using generic ephemeral volumes, which can be provided by all storage drivers that also support persistent volumes. Generic ephemeral volumes are similar to emptyDir volumes in the sense that they provide a per-pod directory for scratch data that is usually empty after provisioning. But they may also have additional features:
 
 * Storage can be local or network-attached.
@@ -68,6 +71,7 @@ Although there are several option of ephemeral volumes, here we are using generi
 The code below gives an example of ephemeral volume definition:
 
 ```json
+
 {
     "name": "ephemeral",            # unique name
     "mountPath": "/tmp/ephemeral"   # mounting path,
@@ -105,6 +109,7 @@ A secret volume is used to pass sensitive information, such as passwords, to Pod
 
 The code below gives an example of secret volume definition:
 
+
 ```json
 {
     "name":"important-secret",          # Unique name
@@ -123,11 +128,12 @@ An emptyDir volume is first created when a Pod is assigned to a node, and exists
 
 The code below gives an example of empydir volume definition:
 
+
 ```json
 {
     "name": "emptyDir",            # unique name
     "mountPath": "/tmp/emptydir"   # mounting path,
-    "volumeType": 5,                # vlume type - ephemeral
-    "storage": "5Gi",               # max storage size - optional
+    "volumeType": 5,               # vlume type - ephemeral
+    "storage": "5Gi",              # max storage size - optional
 }
-````
+```

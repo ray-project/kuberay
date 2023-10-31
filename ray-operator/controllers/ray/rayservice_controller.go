@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ const (
 	ServiceRestartRequeueDuration      = 10 * time.Second
 	RayClusterDeletionDelayDuration    = 60 * time.Second
 	DeploymentUnhealthySecondThreshold = 300.0 // Dashboard agent related health check.
+	ENABLE_ZERO_DOWNTIME               = "ENABLE_ZERO_DOWNTIME"
 )
 
 // RayServiceReconciler reconciles a RayService object
@@ -367,7 +369,17 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	if r.shouldPrepareNewRayCluster(rayServiceInstance, activeRayCluster) {
-		r.markRestart(rayServiceInstance)
+		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
+		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+		enableZeroDowntime := true
+		if s := os.Getenv(ENABLE_ZERO_DOWNTIME); strings.ToLower(s) == "false" {
+			enableZeroDowntime = false
+		}
+		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
+			r.markRestart(rayServiceInstance)
+		} else {
+			r.Log.Info("Zero-downtime upgrade is disabled (ENABLE_ZERO_DOWNTIME: false). Skip preparing a new RayCluster.")
+		}
 		return activeRayCluster, nil, nil
 	}
 
@@ -877,11 +889,12 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 }
 
 // Return true if healthy, otherwise false.
-func (r *RayServiceReconciler) updateAndCheckDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool, unhealthyThreshold *int32) bool {
+func updateAndCheckDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool, unhealthyThreshold *int32) bool {
 	timeNow := metav1.Now()
+	oldIsHealthy := rayServiceClusterStatus.DashboardStatus.IsHealthy
 	rayServiceClusterStatus.DashboardStatus.LastUpdateTime = &timeNow
 	rayServiceClusterStatus.DashboardStatus.IsHealthy = isHealthy
-	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || isHealthy {
+	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || oldIsHealthy {
 		rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime = &timeNow
 	}
 
@@ -1033,7 +1046,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
-		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+		updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
 
@@ -1042,11 +1055,11 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 
 	var isHealthy, isReady bool
 	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
-		r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+		updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 		return err
 	}
 
-	r.updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+	updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady)
 
@@ -1072,19 +1085,24 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	// Check if head pod is running and ready. If not, requeue the resource event to avoid
-	// redundant custom resource status updates.
-	//
-	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
-	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
-	// This is not an issue since `UpdateDeployments` is an idempotent operation.
-	if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
-		if err != nil {
-			logger.Error(err, "Failed to check if head pod is running and ready!")
-		} else {
-			logger.Info("Skipping the update of Serve deployments because the Ray head pod is not ready.")
+	// TODO (kevin85421): This `if` block is a hotfix for the case that active RayCluster's dashboard agent process crashes.
+	// I will refactor the health checking logic in the future.
+	if !isActive {
+		// Check if head pod is running and ready. If not, requeue the resource event to avoid
+		// redundant custom resource status updates.
+		//
+		// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
+		// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
+		// This is not an issue since `UpdateDeployments` is an idempotent operation.
+		logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
+		if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
+			if err != nil {
+				logger.Error(err, "Failed to check if head Pod is running and ready!")
+			} else {
+				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
+			}
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
@@ -1094,10 +1112,9 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	rayDashboardClient.InitClient(clientURL)
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayServiceStatus)
-
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
-			if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
+			if !updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 				logger.Info("Dashboard is unhealthy, restart the cluster.")
 				r.markRestart(rayServiceInstance)
 			}
@@ -1111,7 +1128,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	var isHealthy, isReady bool
 	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
-		if !r.updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
+		if !updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
 			logger.Info("Dashboard is unhealthy, restart the cluster.")
 			r.markRestart(rayServiceInstance)
 		}
@@ -1119,7 +1136,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
-	r.updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+	updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady, "isActive", isActive)
 

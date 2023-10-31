@@ -1040,10 +1040,13 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 	pod.Spec.Containers[common.RayContainerIndex].Args = []string{
 		"python -c " +
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
+			"from urllib.parse import urlparse; " +
 			"import os; " +
 			"import sys; " +
-			"host, port = os.getenv('RAY_REDIS_ADDRESS').rsplit(':'); " +
-			"sys.exit(1) if not cleanup_redis_storage(host=host, port=int(port), password=os.getenv('REDIS_PASSWORD'), use_ssl=False, storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
+			"redis_address = os.getenv('RAY_REDIS_ADDRESS', '').split(',')[0]; " +
+			"redis_address = redis_address if '://' in redis_address else 'redis://' + redis_address; " +
+			"parsed = urlparse(redis_address); " +
+			"sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, password=os.getenv('REDIS_PASSWORD', parsed.password), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
 	}
 	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
 	pod.Spec.Containers[common.RayContainerIndex].LivenessProbe = nil

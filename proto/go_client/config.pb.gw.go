@@ -573,7 +573,7 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/CreateComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/CreateComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -596,7 +596,7 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/GetComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/GetComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -619,7 +619,7 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/ListComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/ListComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -642,7 +642,7 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/ListAllComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/compute_templates"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/ListAllComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -665,7 +665,7 @@ func RegisterComputeTemplateServiceHandlerServer(ctx context.Context, mux *runti
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/DeleteComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ComputeTemplateService/DeleteComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -697,7 +697,7 @@ func RegisterImageTemplateServiceHandlerServer(ctx context.Context, mux *runtime
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/CreateImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/image_templates"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/CreateImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/image_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -720,7 +720,7 @@ func RegisterImageTemplateServiceHandlerServer(ctx context.Context, mux *runtime
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/GetImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/GetImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -743,7 +743,7 @@ func RegisterImageTemplateServiceHandlerServer(ctx context.Context, mux *runtime
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/ListImageTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/ListImageTemplates", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -766,7 +766,7 @@ func RegisterImageTemplateServiceHandlerServer(ctx context.Context, mux *runtime
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/DeleteImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ImageTemplateService/DeleteImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -828,7 +828,7 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/CreateComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/CreateComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -848,7 +848,7 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/GetComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/GetComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -868,7 +868,7 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/ListComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/ListComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -888,7 +888,7 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/ListAllComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/compute_templates"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/ListAllComputeTemplates", runtime.WithHTTPPathPattern("/apis/v1/compute_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -908,7 +908,7 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/DeleteComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/compute_templates/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ComputeTemplateService/DeleteComputeTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/compute_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -928,15 +928,15 @@ func RegisterComputeTemplateServiceHandlerClient(ctx context.Context, mux *runti
 }
 
 var (
-	pattern_ComputeTemplateService_CreateComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates"}, ""))
+	pattern_ComputeTemplateService_CreateComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "compute_templates"}, ""))
 
-	pattern_ComputeTemplateService_GetComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates", "name"}, ""))
+	pattern_ComputeTemplateService_GetComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "compute_templates", "name"}, ""))
 
-	pattern_ComputeTemplateService_ListComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates"}, ""))
+	pattern_ComputeTemplateService_ListComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "compute_templates"}, ""))
 
-	pattern_ComputeTemplateService_ListAllComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "compute_templates"}, ""))
+	pattern_ComputeTemplateService_ListAllComputeTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1", "compute_templates"}, ""))
 
-	pattern_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "compute_templates", "name"}, ""))
+	pattern_ComputeTemplateService_DeleteComputeTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "compute_templates", "name"}, ""))
 )
 
 var (
@@ -993,7 +993,7 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/CreateImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/image_templates"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/CreateImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/image_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1013,7 +1013,7 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/GetImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/GetImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1033,7 +1033,7 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/ListImageTemplates", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/ListImageTemplates", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1053,7 +1053,7 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/DeleteImageTemplate", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/image_templates/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ImageTemplateService/DeleteImageTemplate", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/image_templates/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1073,13 +1073,13 @@ func RegisterImageTemplateServiceHandlerClient(ctx context.Context, mux *runtime
 }
 
 var (
-	pattern_ImageTemplateService_CreateImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "image_templates"}, ""))
+	pattern_ImageTemplateService_CreateImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1", "image_templates"}, ""))
 
-	pattern_ImageTemplateService_GetImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "image_templates", "name"}, ""))
+	pattern_ImageTemplateService_GetImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "image_templates", "name"}, ""))
 
-	pattern_ImageTemplateService_ListImageTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "image_templates"}, ""))
+	pattern_ImageTemplateService_ListImageTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "image_templates"}, ""))
 
-	pattern_ImageTemplateService_DeleteImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "image_templates", "name"}, ""))
+	pattern_ImageTemplateService_DeleteImageTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "image_templates", "name"}, ""))
 )
 
 var (
