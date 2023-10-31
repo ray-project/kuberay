@@ -24,7 +24,7 @@ class KubeRayAPIs:
         List compute templates across all namespaces of the k8 cluster 
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             list of compute templates
     """
     def list_compute_templates(self) -> tuple[int, str, list[Template]]:
@@ -42,7 +42,7 @@ class KubeRayAPIs:
             namespace to query
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             list of compute templates
     """
     def list_compute_templates_namespace(self, ns: str) -> tuple[int, str, list[Template]]:
@@ -61,7 +61,7 @@ class KubeRayAPIs:
             template name
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             compute templates
     """
     def get_compute_template(self, ns: str, name: str) -> tuple[int, str, Template]:
@@ -79,7 +79,7 @@ class KubeRayAPIs:
             template - definition of a template
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
     """
     def create_compute_template(self, template: Template) -> tuple[int, str]:
         # Execute HTTP request
@@ -96,7 +96,7 @@ class KubeRayAPIs:
             template name
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
     """
     def delete_compute_template(self, ns: str, name: str) -> tuple[int, str]:
         # Execute HTTP request
@@ -110,7 +110,7 @@ class KubeRayAPIs:
         List clusters across all namespaces of the k8 cluster 
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             list of clusters
     """
     def list_clusters(self) -> tuple[int, str, list[Cluster]]:
@@ -128,7 +128,7 @@ class KubeRayAPIs:
             namespace to query
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             list of clusters
     """
     def list_clusters_namespace(self, ns: str) -> tuple[int, str, list[Cluster]]:
@@ -147,7 +147,7 @@ class KubeRayAPIs:
             name of the cluster
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             list of clusters
     """
     def get_cluster(self, ns: str, name: str) -> tuple[int, str, Cluster]:
@@ -165,7 +165,7 @@ class KubeRayAPIs:
             cluster definition
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
     """
     def create_cluster(self, cluster: Cluster) -> tuple[int, str]:
         # Execute HTTP request
@@ -182,7 +182,7 @@ class KubeRayAPIs:
             name of the cluster
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             cluster status
     """
     def get_cluster_status(self, ns: str, name: str) -> tuple[int, str, str]:
@@ -204,7 +204,7 @@ class KubeRayAPIs:
             wait time (-1 waits forever)
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             cluster status
     """
     def wait_cluster_ready(self, ns: str, name: str, wait: int = -1) -> tuple[int, str]:
@@ -229,7 +229,7 @@ class KubeRayAPIs:
             wait time (-1 waits forever) for cluster to be ready
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
             endpoint (service for dashboard endpoint)
     """
     def get_cluster_endpoints(self, ns: str, name: str, wait: int = -1) -> tuple[int, str, str]:
@@ -250,7 +250,7 @@ class KubeRayAPIs:
             name of the cluster
         Returns:
             http return code
-            message - only returned if http return code is not 200
+            message - only returned if http return code is not equal to 200
     """
     def delete_cluster(self, ns: str, name: str) -> tuple[int, str]:
         # Execute HTTP request
