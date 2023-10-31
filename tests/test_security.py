@@ -69,7 +69,7 @@ class PodSecurityTestCase(unittest.TestCase):
                 'seccompProfile': {'type': 'RuntimeDefault'}
             }
         }])
-        operator_manager = OperatorManager(image_dict, PodSecurityTestCase.namespace, patch)
+        operator_manager = OperatorManager.instance(PodSecurityTestCase.namespace, patch)
         operator_manager.prepare_operator()
 
     def test_ray_cluster_with_security_context(self):

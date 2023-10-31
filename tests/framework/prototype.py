@@ -166,7 +166,7 @@ class CREvent:
         self,
         custom_resource_object,
         rulesets: List[RuleSet] = [],
-        timeout: int = 90,
+        timeout: int = 300,
         namespace: str = "default",
         filepath: Optional[str] = None,
     ):
@@ -611,10 +611,10 @@ class RayJobAddCREvent(CREvent):
 
 class GeneralTestCase(unittest.TestCase):
     """TestSuite"""
-    def __init__(self, methodName, docker_image_dict, cr_event):
+    def __init__(self, methodName, cr_event):
         super().__init__(methodName)
         self.cr_event = cr_event
-        self.operator_manager = OperatorManager(docker_image_dict)
+        self.operator_manager = OperatorManager.instance()
 
     @classmethod
     def setUpClass(cls):

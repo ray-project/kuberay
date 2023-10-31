@@ -55,11 +55,7 @@ if __name__ == '__main__':
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
-    image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
-        CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-    }
-    logger.info(image_dict)
+    
     # Build a test plan
     logger.info("Build a test plan ...")
     test_cases = unittest.TestSuite()
@@ -69,7 +65,7 @@ if __name__ == '__main__':
             continue
         logger.info('[TEST %d]: %s', index, new_cr['name'])
         addEvent = RayClusterAddCREvent(new_cr['cr'], [rs], 90, NAMESPACE, new_cr['path'])
-        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
+        test_cases.addTest(GeneralTestCase('runtest', addEvent))
 
     # Execute all tests
     runner = unittest.TextTestRunner()

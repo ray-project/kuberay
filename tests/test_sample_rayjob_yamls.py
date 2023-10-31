@@ -37,11 +37,6 @@ if __name__ == '__main__':
     # (The event is not considered "converged" until the job has succeeded.) The EasyJobRule
     # is only used to additionally check that the Ray Cluster remains alive and functional.
     rs = RuleSet([EasyJobRule(), ShutdownJobRule()])
-    image_dict = {
-        CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
-        CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-    }
-    logger.info(image_dict)
 
     # Build a test plan
     logger.info("Building a test plan ...")
@@ -49,7 +44,7 @@ if __name__ == '__main__':
     for index, new_cr in enumerate(sample_yaml_files):
         logger.info('[TEST %d]: %s', index, new_cr['name'])
         addEvent = RayJobAddCREvent(new_cr['cr'], [rs], 300, NAMESPACE, new_cr['path'])
-        test_cases.addTest(GeneralTestCase('runtest', image_dict, addEvent))
+        test_cases.addTest(GeneralTestCase('runtest', addEvent))
 
     # Execute all testsCRs
     runner = unittest.TextTestRunner()
