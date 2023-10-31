@@ -176,6 +176,7 @@ class CREvent:
         self.custom_resource_object = custom_resource_object
         # A file may consists of multiple Kubernetes resources (ex: ray-cluster.external-redis.yaml)
         self.filepath = filepath
+        self.num_pods = 0
 
     def trigger(self):
         """
@@ -193,6 +194,13 @@ class CREvent:
         Execute a command to trigger the CREvent. For example, create a CR by a
         `kubectl apply` command.
         """
+        k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+        pods = k8s_v1_api.list_namespaced_pod(namespace=self.namespace).items
+        self.num_pods = len(pods)
+        logger.info("Number of Pods before CREvent: %d", self.num_pods)
+        for pod in pods:
+            logger.info("[%s] Pod name: %s", self.namespace, pod.metadata.name)
+
         if not self.filepath:
             create_custom_object(self.namespace, self.custom_resource_object)
         else:
@@ -424,7 +432,24 @@ class RayClusterAddCREvent(CREvent):
 
         """Delete other resources in the yaml"""
         if self.filepath:
+            logger.info("Delete other resources in the YAML")
             shell_subprocess_run(f"kubectl delete -n {self.namespace} -f {self.filepath} --ignore-not-found=true")
+
+        start_time = time.time()
+        converge = False
+        for _ in range(self.timeout):
+            k8s_v1_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+            pods = k8s_v1_api.list_namespaced_pod(namespace=self.namespace).items
+            if len(pods) == self.num_pods:
+                converge = True
+                logger.info("--- Cleanup other resources %s seconds ---", time.time() - start_time)
+                break
+            logger.info("#Pods: (1) before CREvent: %d (2) now: %d", self.num_pods, len(pods))
+            time.sleep(10)
+
+        if not converge:
+            show_cluster_info(self.namespace)
+            raise Exception("RayClusterAddCREvent clean_up() timeout")
 
 class RayServiceFullCREvent(CREvent):
     """CREvent for RayService addition"""
