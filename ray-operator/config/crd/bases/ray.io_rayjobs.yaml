@@ -443,9 +443,6 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      replicas:
-                        format: int32
-                        type: integer
                       serviceType:
                         type: string
                       template:
@@ -10232,9 +10229,6 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      replicas:
-                        format: int32
-                        type: integer
                       serviceType:
                         type: string
                       template:

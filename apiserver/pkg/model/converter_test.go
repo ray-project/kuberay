@@ -17,7 +17,6 @@ import (
 var (
 	enableIngress                    = true
 	deploymentReplicas       int32   = 1
-	headNodeReplicas         int32   = 1
 	workerReplicas           int32   = 5
 	unhealthySecondThreshold int32   = 900
 	floatNumber              float64 = 1
@@ -27,7 +26,6 @@ var (
 var headSpecTest = rayv1api.HeadGroupSpec{
 	ServiceType:   "ClusterIP",
 	EnableIngress: &enableIngress,
-	Replicas:      &headNodeReplicas,
 	RayStartParams: map[string]string{
 		"dashboard-host":      "0.0.0.0",
 		"metrics-export-port": "8080",

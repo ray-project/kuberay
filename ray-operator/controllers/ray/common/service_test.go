@@ -12,7 +12,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 var (
@@ -44,7 +43,6 @@ var (
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",

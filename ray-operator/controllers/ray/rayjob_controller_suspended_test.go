@@ -58,7 +58,6 @@ var _ = Context("Inside the default namespace", func() {
 				RayVersion: "2.7.0",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					ServiceType: corev1.ServiceTypeClusterIP,
-					Replicas:    pointer.Int32(1),
 					RayStartParams: map[string]string{
 						"port":                        "6379",
 						"object-store-memory":         "100000000",
