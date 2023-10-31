@@ -88,42 +88,41 @@ class ClusterManager(ABC):
             return KindClusterManager()
 
 class ExternalClusterManager(ClusterManager):
+    CLUSTER_CLEANUP_SCRIPT = "CLUSTER_CLEANUP_SCRIPT"
+
     def __init__(self) -> None:
-        config.load_kube_config()
         self.k8s_client_dict = {}
-        self.k8s_client_dict.update(
-            {
-                CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
-                CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi(),
-            }
-        )
         self.cleanup_timeout = 120
     
     def cleanup(self, namespace = "default") -> None:
-        self.__delete_all_crs("ray.io", "v1", namespace, "rayservices")
-        self.__delete_all_crs("ray.io", "v1", namespace, "rayjobs")
-        self.__delete_all_crs("ray.io", "v1", namespace, "rayclusters")
+        if self.CLUSTER_CLEANUP_SCRIPT in os.environ:
+            cleanup_script = os.environ[self.CLUSTER_CLEANUP_SCRIPT]
+            shell_subprocess_run(cleanup_script)
+        else:
+            self.__delete_all_crs("ray.io", "v1", namespace, "rayservices")
+            self.__delete_all_crs("ray.io", "v1", namespace, "rayjobs")
+            self.__delete_all_crs("ray.io", "v1", namespace, "rayclusters")
 
-        k8s_v1_api = self.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
-        start_time = time.time()
-        while time.time() - start_time < self.cleanup_timeout:
-            pods = k8s_v1_api.list_pod_for_all_namespaces(label_selector = 'app.kubernetes.io/created-by=kuberay-operator')
-            if len(pods.items) == 0:
-                logger.info("--- Cleanup rayservices, rayjobs, rayclusters %s seconds ---", time.time() - start_time)
-                break
+            k8s_v1_api = self.k8s_client_dict[CONST.K8S_V1_CLIENT_KEY]
+            start_time = time.time()
+            while time.time() - start_time < self.cleanup_timeout:
+                pods = k8s_v1_api.list_pod_for_all_namespaces(label_selector = 'app.kubernetes.io/created-by=kuberay-operator')
+                if len(pods.items) == 0:
+                    logger.info("--- Cleanup rayservices, rayjobs, rayclusters %s seconds ---", time.time() - start_time)
+                    break
 
-            time.sleep(1)
+                time.sleep(1)
 
-        shell_subprocess_run("helm uninstall kuberay-operator", check=False)
-        start_time = time.time()
-        while time.time() - start_time < self.cleanup_timeout:
-            pods = k8s_v1_api.list_pod_for_all_namespaces(label_selector = 'app.kubernetes.io/component=kuberay-operator')
-            if len(pods.items) == 0:
-                logger.info("--- Cleanup kuberay-operator %s seconds ---", time.time() - start_time)
-                break
+            shell_subprocess_run("helm uninstall kuberay-operator", check=False)
+            start_time = time.time()
+            while time.time() - start_time < self.cleanup_timeout:
+                pods = k8s_v1_api.list_pod_for_all_namespaces(label_selector = 'app.kubernetes.io/component=kuberay-operator')
+                if len(pods.items) == 0:
+                    logger.info("--- Cleanup kuberay-operator %s seconds ---", time.time() - start_time)
+                    break
 
-            time.sleep(1)
-            
+                time.sleep(1)
+                
         for _, k8s_client in self.k8s_client_dict.items():
             k8s_client.api_client.rest_client.pool_manager.clear()
             k8s_client.api_client.close()
@@ -131,7 +130,13 @@ class ExternalClusterManager(ClusterManager):
         self.k8s_client_dict = {}
 
     def initialize_cluster(self, kind_config=None) -> None:
-        pass
+        config.load_kube_config()
+        self.k8s_client_dict.update(
+            {
+                CONST.K8S_V1_CLIENT_KEY: client.CoreV1Api(),
+                CONST.K8S_CR_CLIENT_KEY: client.CustomObjectsApi(),
+            }
+        )
 
     def upload_image(self, image):
         pass
@@ -209,7 +214,31 @@ class KindClusterManager(ClusterManager):
 K8S_CLUSTER_MANAGER = ClusterManager.instance()
 
 
-class OperatorManager:
+class OperatorManager(ABC):
+    KUBERAY_OPERATOR_INSTALLATION_SCRIPT = "KUBERAY_OPERATOR_INSTALLATION_SCRIPT"
+
+    @abstractmethod
+    def prepare_operator(self):
+        pass
+
+    @classmethod
+    def instance(cls, namespace=None, patch=jsonpatch.JsonPatch([]),
+        cluster_manager = K8S_CLUSTER_MANAGER):
+        if cls.KUBERAY_OPERATOR_INSTALLATION_SCRIPT in os.environ:
+            if (namespace != None) or (patch != jsonpatch.JsonPatch([])):
+                raise Exception("Parameters namespace or patch are not supported in ScriptBasedOperatorManager")
+            return ScriptBasedOperatorManager()
+        else:
+            if namespace == None:
+                namespace = "default"
+            DEFAULT_IMAGE_DICT = {
+               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
+                CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
+            }
+            default_operator_manager = DefaultOperatorManager(DEFAULT_IMAGE_DICT, namespace, patch, cluster_manager)
+            return default_operator_manager
+
+class DefaultOperatorManager(OperatorManager):
     """
     OperatorManager controlls the lifecycle of KubeRay operator. It will download Docker images,
     load images into an existing KinD cluster, and install CRD and KubeRay operator.
@@ -306,6 +335,15 @@ class OperatorManager:
                     f"--set image.repository={repo},image.tag={tag}"
                 )
 
+class ScriptBasedOperatorManager(OperatorManager):
+    def __init__(self):
+        self.installation_script = os.getenv(self.KUBERAY_OPERATOR_INSTALLATION_SCRIPT)
+
+    def prepare_operator(self):
+        return_code = shell_subprocess_run(self.installation_script)
+        if return_code != 0:
+            raise Exception("Operator installation failed with exit code " + str(return_code))
+        
 
 def shell_subprocess_run(command, check=True, hide_output=False) -> int:
     """Command will be executed through the shell.
