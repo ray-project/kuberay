@@ -195,7 +195,7 @@ The following steps allow you to validate that the KubeRay API Server components
 
     ```sh
     # Create a template
-    curl --silent -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates' \
+    curl --silent -X POST 'localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
     --header 'Content-Type: application/json' \
     --data '{
       "name": "default-template",
@@ -205,7 +205,7 @@ The following steps allow you to validate that the KubeRay API Server components
     }'
 
     # Create the "Fruit Stand" Ray Serve example (V1 Config spec)
-    curl --silent -X POST 'localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+    curl --silent -X POST 'localhost:31888/apis/v1/namespaces/ray-system/services' \
     --header 'Content-Type: application/json' \
     --data '{
       "name": "test-v1",
@@ -286,7 +286,7 @@ The following steps allow you to validate that the KubeRay API Server components
 
     # Delete the RayService in the namespace
     curl --silent -X 'DELETE' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services/test-v1' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
     -H 'accept: application/json'
     ```
 
@@ -309,16 +309,16 @@ The full definition of the compute template resource can be found in [config.pro
 #### Create compute templates in a given namespace
 
 ```text
-POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
+POST {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates
 ```
 
-Examples:
+Examples (please make sure that `ray-system` namespace exists before running this command):
 
 * Request
 
   ```sh
   curl --silent -X 'POST' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
@@ -343,7 +343,7 @@ Examples:
 #### List all compute templates in a given namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates
 ```
 
 Examples:
@@ -352,7 +352,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
     -H 'accept: application/json'
   ```
 
@@ -374,7 +374,7 @@ Examples:
 #### List all compute templates in all namespaces
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/compute_templates
+GET {{baseUrl}}/apis/v1/compute_templates
 ```
 
 Examples:
@@ -383,7 +383,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/compute_templates' \
+  'http://localhost:31888/apis/v1/compute_templates' \
   -H 'accept: application/json'
   ```
 
@@ -405,7 +405,7 @@ Examples:
 #### Get compute template by name
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates/<compute_template_name>
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates/<compute_template_name>
 ```
 
 Examples:
@@ -414,7 +414,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates/default-template' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates/default-template' \
   -H 'accept: application/json'
   ```
 
@@ -432,7 +432,7 @@ Examples:
 #### Delete compute template by name
 
 ```text
-DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/compute_templates/<compute_template_name>
+DELETE {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates/<compute_template_name>
 ```
 
 Examples:
@@ -441,7 +441,7 @@ Examples:
 
   ```sh
   curl --silent -X 'DELETE' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/compute_templates/default-template' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates/default-template' \
   -H 'accept: application/json'
   ```
 
@@ -456,16 +456,16 @@ Examples:
 #### Create cluster in a given namespace
 
 ```text
-POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
+POST {{baseUrl}}/apis/v1/namespaces/<namespace>/clusters
 ```
 
-Examples:
+Examples: (please make sure that template `default-template` is created before running this request)
 
 * Request
 
   ```sh
   curl --silent -X 'POST' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/clusters' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/clusters' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
@@ -579,7 +579,7 @@ Examples:
 #### List all clusters in a given namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/clusters
 ```
 
 Examples:
@@ -588,7 +588,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/clusters' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/clusters' \
     -H 'accept: application/json'
   ```
 
@@ -713,7 +713,7 @@ Examples:
 #### List all clusters in all namespaces
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/clusters
+GET {{baseUrl}}/apis/v1/clusters
 ```
 
 Examples:
@@ -722,7 +722,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1alpha2/clusters' \
+    'http://localhost:31888/apis/v1/clusters' \
     -H 'accept: application/json'
   ```
 
@@ -847,7 +847,7 @@ Examples:
 #### Get cluster by its name and namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/clusters/<cluster_name>
 ```
 
 Examples:
@@ -856,7 +856,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/clusters' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/clusters' \
     -H 'accept: application/json'
   ```
 
@@ -981,7 +981,7 @@ Examples:
 #### Delete cluster by its name and namespace
 
 ```text
-DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/clusters/<cluster_name>
+DELETE {{baseUrl}}/apis/v1/namespaces/<namespace>/clusters/<cluster_name>
 ```
 
 Examples:
@@ -990,7 +990,7 @@ Examples:
 
   ```sh
   curl --silent -X 'DELETE' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/clusters/test-cluster' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/clusters/test-cluster' \
   -H 'accept: application/json'
   ```
 
@@ -1005,7 +1005,7 @@ Examples:
 #### Create ray job in a given namespace
 
 ```text
-POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs
+POST {{baseUrl}}/apis/v1/namespaces/<namespace>/jobs
 ```
 
 Examples:
@@ -1014,7 +1014,7 @@ Examples:
   
   ```sh
   curl --silent -X 'POST' \
-      'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/jobs' \
+      'http://localhost:31888/apis/v1/namespaces/ray-system/jobs' \
       -H 'accept: application/json' \
       -H 'Content-Type: application/json' \
       -d '{
@@ -1045,8 +1045,7 @@ Examples:
           }
         ]
       }
-    }
-    '
+    }'
   ```
 
 * Response
@@ -1093,7 +1092,7 @@ Start from creating Ray cluster (We assume here that the [template](test/cluster
 * Request
   
 ```sh
-curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/clusters' \
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
@@ -1218,7 +1217,7 @@ Once the cluster is created, we can create a job to run on it.
 * Request
   
 ```sh
-curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
@@ -1299,7 +1298,7 @@ kubectl delete rayjob job-test
 * Request
   
 ```sh
-curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",
@@ -1340,7 +1339,7 @@ You should beble to see job execution results similar to above
 #### List all jobs in a given namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/jobs
 ```
 
 Examples:
@@ -1349,7 +1348,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/jobs' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/jobs' \
   -H 'accept: application/json'
   ```
 
@@ -1399,7 +1398,7 @@ Examples:
 #### List all jobs in all namespaces
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/jobs
+GET {{baseUrl}}/apis/v1/jobs
 ```
 
 Examples:
@@ -1408,7 +1407,7 @@ Examples:
   
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/jobs' \
+  'http://localhost:31888/apis/v1/jobs' \
   -H 'accept: application/json' 
   ```
 
@@ -1458,7 +1457,7 @@ Examples:
 #### Get job by its name and namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs/<job_name>
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/jobs/<job_name>
 ```
 
 Examples:
@@ -1467,7 +1466,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/jobs/rayjob-test' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/jobs/rayjob-test' \
   -H 'accept: application/json'
   ```
 
@@ -1513,7 +1512,7 @@ Examples:
 #### Delete job by its name and namespace
 
 ```text
-DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/jobs/<job_name>
+DELETE {{baseUrl}}/apis/v1/namespaces/<namespace>/jobs/<job_name>
 ```
 
 Examples:
@@ -1522,7 +1521,7 @@ Examples:
 
   ```sh
   curl --silent -X 'DELETE' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/jobs/rayjob-test' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/jobs/rayjob-test' \
   -H 'accept: application/json'
   ```
 
@@ -1537,7 +1536,7 @@ Examples:
 #### Create ray service in a given namespace
 
 ```text
-POST {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services
+POST {{baseUrl}}/apis/v1/namespaces/<namespace>/services
 ```
 
 Examples:
@@ -1546,7 +1545,7 @@ Examples:
   
   ```sh
   curl --silent -X 'POST' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -1700,7 +1699,7 @@ Examples:
 
   ```sh
   curl --silent -X 'POST' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '
@@ -1782,7 +1781,7 @@ Examples:
 #### List all services in a given namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/services
 ```
 
 Examples
@@ -1791,7 +1790,7 @@ Examples
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
   -H 'accept: application/json'
   ```
 
@@ -1901,7 +1900,7 @@ Examples
 #### List all services in all namespaces
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/services
+GET {{baseUrl}}/apis/v1/services
 ```
 
 Examples:
@@ -1910,7 +1909,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1alpha2/services' \
+  'http://localhost:31888/apis/v1/services' \
   -H 'accept: application/json'
   ```
 
@@ -2020,7 +2019,7 @@ Examples:
 #### Get service by its name and namespace
 
 ```text
-GET {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services/<service_name>
+GET {{baseUrl}}/apis/v1/namespaces/<namespace>/services/<service_name>
 ```
 
 Examples:
@@ -2029,7 +2028,7 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services/test-v1' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
     -H 'accept: application/json'  
   ```
 
@@ -2232,7 +2231,7 @@ Examples:
 #### Delete service by its name and namespace
 
 ```text
-DELETE {{baseUrl}}/apis/v1alpha2/namespaces/<namespace>/services/<service_name>
+DELETE {{baseUrl}}/apis/v1/namespaces/<namespace>/services/<service_name>
 ```
 
 Examples:
@@ -2241,7 +2240,7 @@ Examples:
 
   ```sh
   curl --silent -X 'DELETE' \
-  'http://localhost:31888/apis/v1alpha2/namespaces/ray-system/services/test-v1' \
+  'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
   -H 'accept: application/json'  
   ```
 

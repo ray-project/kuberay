@@ -29,7 +29,7 @@ service RayJobService {
   // Creates a new job.
   rpc CreateRayJob(CreateRayJobRequest) returns (RayJob) {
     option (google.api.http) = {
-      post: "/apis/v1alpha2/namespaces/{namespace}/jobs"
+      post: "/apis/v1/namespaces/{namespace}/jobs"
       body: "job"
     };
   }
@@ -37,28 +37,28 @@ service RayJobService {
   // Finds a specific job by its name and namespace.
   rpc GetRayJob(GetRayJobRequest) returns (RayJob) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
+      get: "/apis/v1/namespaces/{namespace}/jobs/{name}"
     };
   }
 
   // Finds all job in a given namespace. Supports pagination, and sorting on certain fields.
   rpc ListRayJobs(ListRayJobsRequest) returns (ListRayJobsResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/namespaces/{namespace}/jobs"
+      get: "/apis/v1/namespaces/{namespace}/jobs"
     };
   }
 
   // Finds all job in all namespaces. Supports pagination, and sorting on certain fields.
   rpc ListAllRayJobs(ListAllRayJobsRequest) returns (ListAllRayJobsResponse) {
     option (google.api.http) = {
-      get: "/apis/v1alpha2/jobs"
+      get: "/apis/v1/jobs"
     };
   }
 
   // Deletes a job by its name and namespace.
   rpc DeleteRayJob(DeleteRayJobRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      delete: "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}"
+      delete: "/apis/v1/namespaces/{namespace}/jobs/{name}"
     };
   }
 }

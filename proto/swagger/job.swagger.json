@@ -19,7 +19,7 @@
     "application/json"
   ],
   "paths": {
-    "/apis/v1alpha2/jobs": {
+    "/apis/v1/jobs": {
       "get": {
         "summary": "Finds all job in all namespaces. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListAllRayJobs",
@@ -42,7 +42,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/jobs": {
+    "/apis/v1/namespaces/{namespace}/jobs": {
       "get": {
         "summary": "Finds all job in a given namespace. Supports pagination, and sorting on certain fields.",
         "operationId": "RayJobService_ListRayJobs",
@@ -113,7 +113,7 @@
         ]
       }
     },
-    "/apis/v1alpha2/namespaces/{namespace}/jobs/{name}": {
+    "/apis/v1/namespaces/{namespace}/jobs/{name}": {
       "get": {
         "summary": "Finds a specific job by its name and namespace.",
         "operationId": "RayJobService_GetRayJob",

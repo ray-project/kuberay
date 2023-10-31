@@ -325,7 +325,7 @@ func RegisterClusterServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/CreateCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/CreateCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -348,7 +348,7 @@ func RegisterClusterServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/GetCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/GetCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -371,7 +371,7 @@ func RegisterClusterServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/ListCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/ListCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -394,7 +394,7 @@ func RegisterClusterServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/ListAllClusters", runtime.WithHTTPPathPattern("/apis/v1alpha2/clusters"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/ListAllClusters", runtime.WithHTTPPathPattern("/apis/v1/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -417,7 +417,7 @@ func RegisterClusterServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/DeleteCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/proto.ClusterService/DeleteCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -479,7 +479,7 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/CreateCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/CreateCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -499,7 +499,7 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/GetCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/GetCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -519,7 +519,7 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/ListCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/ListCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -539,7 +539,7 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/ListAllClusters", runtime.WithHTTPPathPattern("/apis/v1alpha2/clusters"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/ListAllClusters", runtime.WithHTTPPathPattern("/apis/v1/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -559,7 +559,7 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/DeleteCluster", runtime.WithHTTPPathPattern("/apis/v1alpha2/namespaces/{namespace}/clusters/{name}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/proto.ClusterService/DeleteCluster", runtime.WithHTTPPathPattern("/apis/v1/namespaces/{namespace}/clusters/{name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -579,15 +579,15 @@ func RegisterClusterServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 }
 
 var (
-	pattern_ClusterService_CreateCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "clusters"}, ""))
+	pattern_ClusterService_CreateCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "clusters"}, ""))
 
-	pattern_ClusterService_GetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "clusters", "name"}, ""))
+	pattern_ClusterService_GetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "clusters", "name"}, ""))
 
-	pattern_ClusterService_ListCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1alpha2", "namespaces", "namespace", "clusters"}, ""))
+	pattern_ClusterService_ListCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apis", "v1", "namespaces", "namespace", "clusters"}, ""))
 
-	pattern_ClusterService_ListAllClusters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha2", "clusters"}, ""))
+	pattern_ClusterService_ListAllClusters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1", "clusters"}, ""))
 
-	pattern_ClusterService_DeleteCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1alpha2", "namespaces", "namespace", "clusters", "name"}, ""))
+	pattern_ClusterService_DeleteCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"apis", "v1", "namespaces", "namespace", "clusters", "name"}, ""))
 )
 
 var (
