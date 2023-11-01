@@ -10,7 +10,7 @@ _headers = {"Content-Type": "application/json", "accept": "application/json"}
 class KubeRayAPIs:
     """
         This class implements KubeRay APIs based on the API server.
-        To create a classe, the following parameters are required:
+        To create a class, the following parameters are required:
             base - the URL of the API server (default is set to the standalone API server)
             wait interval - the amount of sec to wait between checking for cluster ready
     """
