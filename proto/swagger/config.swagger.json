@@ -514,11 +514,17 @@
       "properties": {
         "key": {
           "type": "string",
-          "title": "key created by the node's taint"
+          "title": "Required. Key created by the node's taint",
+          "required": [
+            "key"
+          ]
         },
         "operator": {
           "type": "string",
-          "title": "operator to apply"
+          "title": "Required. Operator to apply",
+          "required": [
+            "operator"
+          ]
         },
         "value": {
           "type": "string",
@@ -526,10 +532,18 @@
         },
         "effect": {
           "type": "string",
-          "title": "Effect"
+          "title": "Required. Effect",
+          "required": [
+            "effect"
+          ]
         }
       },
-      "title": "Toleration for the compute template"
+      "title": "Toleration for the compute template",
+      "required": [
+        "key",
+        "operator",
+        "effect"
+      ]
     },
     "protobufAny": {
       "type": "object",
