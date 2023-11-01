@@ -102,14 +102,14 @@ message DeleteComputeTemplateRequest {
 
 // Toleration for the compute template
 message PodToleration{
-  // key created by the node's taint
-  string key = 1;
-  // operator to apply
-  string operator = 2;
+  // Required. Key created by the node's taint
+  string key = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. Operator to apply
+  string operator = 2 [(google.api.field_behavior) = REQUIRED];
   // optional string
   string value = 3;
-  // Effect
-  string effect = 4;
+  // Required. Effect
+  string effect = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc
