@@ -1041,6 +1041,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) batchv1.Job {
 	pod := r.buildHeadPod(instance)
 	pod.Labels[common.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
+
 	// Only keep the Ray container in the Redis cleanup Job.
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[common.RayContainerIndex]}
 	pod.Spec.Containers[common.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
@@ -1055,12 +1056,24 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 			"parsed = urlparse(redis_address); " +
 			"sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, password=os.getenv('REDIS_PASSWORD', parsed.password), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
 	}
+
 	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
 	pod.Spec.Containers[common.RayContainerIndex].LivenessProbe = nil
 	pod.Spec.Containers[common.RayContainerIndex].ReadinessProbe = nil
+
+	// Set the environment variables to ensure that the cleanup Job has at least 60s.
+	pod.Spec.Containers[common.RayContainerIndex].Env = append(pod.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  "RAY_redis_db_connect_retries",
+		Value: "120",
+	})
+	pod.Spec.Containers[common.RayContainerIndex].Env = append(pod.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  "RAY_redis_db_connect_wait_milliseconds",
+		Value: "500",
+	})
+
+	// The container's resource consumption remains constant. so hard-coding the resources is acceptable.
+	// In addition, avoid using the GPU for the Redis cleanup Job.
 	pod.Spec.Containers[common.RayContainerIndex].Resources = v1.ResourceRequirements{
-		// The container's resource consumption remains constant. so hard-coding the resources is acceptable.
-		// In addition, avoid using the GPU for the Redis cleanup Job.
 		Limits: v1.ResourceList{
 			v1.ResourceCPU:    resource.MustParse("200m"),
 			v1.ResourceMemory: resource.MustParse("256Mi"),
@@ -1070,6 +1083,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 			v1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	}
+
 	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
