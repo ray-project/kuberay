@@ -1232,37 +1232,6 @@ curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
 }'  
 ```
 
-This request fails with the message:
-
-```json
-{
-   "code":3,
-   "message":"Failed to create a Ray Job: Create Job failed.: InvalidInputError: Failed to create a Ray Job: external Ray cluster requires Job submitter definition"
-}
-```
-
-The reason for this failure is that in the case of the existing cluster the oprator can not figure out Python/Ray version of the cluster's nodes. To make it work, we need to add `jobSubmitter` component to the request to ensure that job submitter's Python/Ray version are the same as the ones of the cluster.
-
-* Request
-  
-```sh
-curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
---header 'Content-Type: application/json' \
---data '{
-  "name": "job-test",
-  "namespace": "default",
-  "user": "boris",
-  "entrypoint": "python /home/ray/samples/sample_code.py",
-   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
-  "clusterSelector": {
-    "ray.io/cluster": "job-test"
-  },
-  "jobSubmitter": {
-    "image": "rayproject/ray:2.7.0-py310"
-  }
-}'  
-```
-
 * Response
 
 ```json
@@ -1275,10 +1244,7 @@ curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
    "clusterSelector":{
       "ray.io/cluster":"job-test"
    },
-   "jobSubmitter":{
-      "image":"rayproject/ray:2.7.0-py310"
-   },
-   "createdAt":"2023-10-18T10:19:49Z"
+   "createdAt":"2023-10-24T11:37:29Z"
 }
 ```
 
@@ -1321,6 +1287,55 @@ test_counter got 5
 2023-10-18 03:20:03,304	SUCC cli.py:61 -- Job 'job-test-bbfqs' succeeded
 2023-10-18 03:20:03,304	SUCC cli.py:62 -- ------------------------------
 ```
+
+Additionally here, we can specify configuration for the job submitter, allowing to specify image, memory and cpu limits for it.
+
+Make sure that you delete previous job before running this one:
+
+```sh
+kubectl delete rayjob job-test
+```
+
+* Request
+  
+```sh
+curl -X POST 'localhost:31888/apis/v1alpha2/namespaces/default/jobs' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "job-test",
+  "namespace": "default",
+  "user": "boris",
+  "entrypoint": "python /home/ray/samples/sample_code.py",
+   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "clusterSelector": {
+    "ray.io/cluster": "job-test"
+  },
+  "jobSubmitter": {
+    "image": "rayproject/ray:2.7.0-py310"
+  }
+}'  
+```
+
+* Response
+
+```json
+{
+   "name":"job-test",
+   "namespace":"default",
+   "user":"boris",
+   "entrypoint":"python /home/ray/samples/sample_code.py",
+   "runtimeEnv":"pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+   "clusterSelector":{
+      "ray.io/cluster":"job-test"
+   },
+   "jobSubmitter":{
+      "image":"rayproject/ray:2.7.0-py310"
+   },
+   "createdAt":"2023-10-24T11:48:19Z"
+}
+```
+
+You should beble to see job execution results similar to above
 
 #### List all jobs in a given namespace
 
