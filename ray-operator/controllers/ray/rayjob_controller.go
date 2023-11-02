@@ -336,7 +336,7 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 	job := &batchv1.Job{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: jobNamespace, Name: jobName}, job); err != nil {
 		if errors.IsNotFound(err) {
-			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance)
+			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance, rayClusterInstance)
 			if err != nil {
 				r.Log.Error(err, "failed to get submitter template")
 				return "", false, err
@@ -354,12 +354,12 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob) (v1.PodTemplateSpec, error) {
+func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (v1.PodTemplateSpec, error) {
 	var submitterTemplate v1.PodTemplateSpec
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitterTemplate = common.GetDefaultSubmitterTemplate(rayJobInstance)
+		submitterTemplate = common.GetDefaultSubmitterTemplate(rayClusterInstance)
 		r.Log.Info("default submitter template is used")
 	} else {
 		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
