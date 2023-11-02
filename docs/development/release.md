@@ -66,7 +66,7 @@ Manual testing can be time-consuming, and to relieve the workload, we plan to ad
 * Merge a PR into the release branch updating Helm chart versions, Helm chart image tags, and kustomize manifest image tags. For `v0.5.0-rc0`, we did this in [PR #1001](https://github.com/ray-project/kuberay/pull/1001)
 
 * Release `rc0` images using the [release-image-build](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml) workflow on GitHub actions.
-You will prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
+You will be prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
 
 * Tag the tip of release branch with `vX.Y.Z-rc.0`.
     ```
@@ -74,10 +74,7 @@ You will prompted for a commit reference and an image tag. The commit reference 
     git push upstream v0.5.0-rc.0
     ```
 
-* Tag the tip of the release branch as `ray-operator/vX.Y.Z-rc.0`. Without this tag, users won't be able to use `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` to install the Go module. KubeRay starts supporting Go modules from v0.6.0.
-    ```sh
-    git tag ray-operator/v0.5.0-rc.0
-    git push upstream ray-operator/v0.5.0-rc.0
+* Publish the `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` Go module. KubeRay starts supporting Go modules from v0.6.0.
 
     # Install the module. This step is highly possible to fail because the module is not available in the proxy server.
     go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
@@ -103,7 +100,7 @@ You will prompted for a commit reference and an image tag. The commit reference 
 
 #### Step 4. Create more release candidates (`rc1`, `rc2`, ...) if necessary
 
-* Resolve issues with the release branch by cherry picking master commits into the release branch.
+* Resolve issues with the release branch by cherry-picking master commits into the release branch.
 * When cherry-picking changes, it is best to open a PR against the release branch -- don't push directly to the release branch.
 * Follow step 3 to create new Docker images and Helm charts for the new release candidate.
 
