@@ -1,4 +1,4 @@
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/jobs' \
+curl -X POST 'localhost:8888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "job-test",

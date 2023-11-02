@@ -1,4 +1,4 @@
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/services' \
+curl -X POST 'localhost:8888/apis/v1/namespaces/default/services' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "test-v2",

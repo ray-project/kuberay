@@ -1,5 +1,5 @@
 # Create
-curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/compute_templates' \
+curl -X POST 'localhost:8888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "default-template",
@@ -9,18 +9,18 @@ curl -X POST 'localhost:8888/apis/v1alpha2/namespaces/default/compute_templates'
 }'
 
 # List for given namespace
-curl 'localhost:8888/apis/v1alpha2/namespaces/default/compute_templates' \
+curl 'localhost:8888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json'
 
 # List for all namespaces
-curl 'localhost:8888/apis/v1alpha2/compute_templates' \
+curl 'localhost:8888/apis/v1/compute_templates' \
 --header 'Content-Type: application/json'
 
 # Get by name
-curl 'localhost:8888/apis/v1alpha2/namespaces/default/compute_templates/default-template' \
+curl 'localhost:8888/apis/v1/namespaces/default/compute_templates/default-template' \
 --header 'Content-Type: application/json'
 
 # Delete by name
-curl -X DELETE 'localhost:8888/apis/v1alpha2/namespaces/default/compute_templates/default-template' \
+curl -X DELETE 'localhost:8888/apis/v1/namespaces/default/compute_templates/default-template' \
 --header 'Content-Type: application/json'
 
