@@ -190,7 +190,7 @@ func cacheSelectors() (cache.SelectorsByObject, error) {
 
 func exitOnError(err error, msg string, keysAndValues ...interface{}) {
 	if err != nil {
-		setupLog.Error(err, msg, keysAndValues)
+		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
 	}
 }
