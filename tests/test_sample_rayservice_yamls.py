@@ -34,10 +34,6 @@ from framework.utils import (
 logger = logging.getLogger(__name__)
 
 NAMESPACE = 'default'
-DEFAULT_IMAGE_DICT = {
-    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
-    CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-}
 
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
@@ -199,10 +195,9 @@ class TestRayService:
 
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
-        operator_manager = OperatorManager(DEFAULT_IMAGE_DICT)
+        operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         start_curl_pod("curl", "default")
-        logger.info(DEFAULT_IMAGE_DICT)
 
         yield
 
