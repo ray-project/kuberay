@@ -34,6 +34,25 @@ var apiJobExistingCluster = &api.RayJob{
 	},
 }
 
+var apiJobExistingClusterSubmitter = &api.RayJob{
+	Name:       "test",
+	Namespace:  "test",
+	User:       "test",
+	Entrypoint: "python /home/ray/samples/sample_code.py",
+	Metadata: map[string]string{
+		"job_submission_id": "123",
+	},
+	RuntimeEnv: "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: \"test_counter\"\n",
+	ClusterSelector: map[string]string{
+		RayClusterUserLabelKey: "test",
+	},
+	JobSubmitter: &api.RayJobSubmitter{
+		Image: "image",
+		Cpu:   "2",
+	},
+	EntrypointNumCpus: 2,
+}
+
 func TestBuildRayJob(t *testing.T) {
 	// Test request with cluster creation
 	job, err := NewRayJob(apiJobNewCluster, map[string]*api.ComputeTemplate{"foo": &template})
@@ -49,8 +68,12 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Nil(t, job.Spec.ClusterSelector)
 	assert.NotNil(t, job.Spec.RayClusterSpec)
 
-	// Test request with cluster creation
-	job, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	// Test request without cluster creation
+	_, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
+	assert.NotNil(t, err)
+
+	// Test request with cluster creation with submitter
+	job, err = NewRayJob(apiJobExistingClusterSubmitter, map[string]*api.ComputeTemplate{"foo": &template})
 	assert.Nil(t, err)
 	assert.Equal(t, "test", job.ObjectMeta.Name)
 	assert.Equal(t, "test", job.ObjectMeta.Namespace)
@@ -60,4 +83,9 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Equal(t, len(job.Spec.RuntimeEnv), 0)
 	assert.NotNil(t, job.Spec.ClusterSelector)
 	assert.Nil(t, job.Spec.RayClusterSpec)
+	assert.Equal(t, float32(2), job.Spec.EntrypointNumCpus)
+	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
+	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
+	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
+	assert.Equal(t, "2", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String())
 }
