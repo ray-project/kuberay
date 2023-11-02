@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -680,6 +681,114 @@ applications:
   import_path: fruit.deployment_graph`
 	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
 	assert.True(t, shouldCreate)
+}
+
+func TestReconcileRayCluster(t *testing.T) {
+	defer os.Unsetenv(ENABLE_ZERO_DOWNTIME)
+	// Create a new scheme with CRDs schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	ctx := context.TODO()
+	namespace := "ray"
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: namespace,
+		},
+		Status: rayv1.RayServiceStatuses{},
+	}
+
+	hash, err := generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
+	assert.Nil(t, err)
+	activeCluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "active-cluster",
+			Namespace: namespace,
+			Annotations: map[string]string{
+				common.RayServiceClusterHashKey: hash,
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		activeCluster           *rayv1.RayCluster
+		updateRayClusterSpec    bool
+		enableZeroDowntime      bool
+		shouldPrepareNewCluster bool
+	}{
+		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
+		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
+			activeCluster:           nil,
+			updateRayClusterSpec:    false,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: true,
+		},
+		// Test 2: The active cluster exists, but the pending cluster does not exist.
+		"Zero-downtime upgrade is enabled. The active cluster exists, but the pending cluster does not exist.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    false,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: false,
+		},
+		// Test 3: The active cluster exists. Trigger the zero-downtime upgrade.
+		"Zero-downtime upgrade is enabled. The active cluster exists. Trigger the zero-downtime upgrade.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: true,
+		},
+		// Test 4: The active cluster exists. Trigger the zero-downtime upgrade.
+		"Zero-downtime upgrade is disabled. The active cluster exists. Trigger the zero-downtime upgrade.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      false,
+			shouldPrepareNewCluster: false,
+		},
+		// Test 5: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
+		"Zero-downtime upgrade is disabled. Neither active nor pending clusters exist.": {
+			activeCluster:           nil,
+			updateRayClusterSpec:    false,
+			enableZeroDowntime:      false,
+			shouldPrepareNewCluster: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Enable or disable zero-downtime upgrade.
+			defer os.Unsetenv(ENABLE_ZERO_DOWNTIME)
+			if !tc.enableZeroDowntime {
+				os.Setenv(ENABLE_ZERO_DOWNTIME, "false")
+			}
+			runtimeObjects := []runtime.Object{}
+			if tc.activeCluster != nil {
+				runtimeObjects = append(runtimeObjects, tc.activeCluster.DeepCopy())
+			}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			r := RayServiceReconciler{
+				Client: fakeClient,
+				Log:    ctrl.Log.WithName("controllers").WithName("RayService"),
+			}
+			service := rayService.DeepCopy()
+			if tc.updateRayClusterSpec {
+				service.Spec.RayClusterSpec.RayVersion = "new-version"
+			}
+			if tc.activeCluster != nil {
+				service.Status.ActiveServiceStatus.RayClusterName = tc.activeCluster.Name
+			}
+			assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
+			_, _, err = r.reconcileRayCluster(ctx, service)
+			assert.Nil(t, err)
+
+			// If KubeRay operator is preparing a new cluster, the `PendingServiceStatus.RayClusterName` should be set by calling the function `markRestart`.
+			if tc.shouldPrepareNewCluster {
+				assert.NotEqual(t, "", service.Status.PendingServiceStatus.RayClusterName)
+			} else {
+				assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
+			}
+		})
+	}
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
