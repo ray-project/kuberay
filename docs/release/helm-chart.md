@@ -35,7 +35,7 @@ You can validate the charts as follows:
     # Install charts
     helm install kuberay-operator kuberay/kuberay-operator
     helm install kuberay-apiserver kuberay/kuberay-apiserver
-    helm install ray-cluster kuberay/ray-cluster
+    helm install raycluster kuberay/ray-cluster
     ```
 
 ## Delete the existing releases
