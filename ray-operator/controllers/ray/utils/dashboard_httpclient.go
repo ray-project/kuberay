@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	goerrors "errors"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
@@ -31,6 +32,10 @@ var (
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
+)
+
+var (
+	ErrJobInfoNotFound = goerrors.New("JobInfo not found")
 )
 
 type RayDashboardClientInterface interface {
@@ -360,6 +365,14 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 		return nil, err
 	}
 
+	if resp.StatusCode == 404 {
+		return nil, ErrJobInfoNotFound
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("GetJobInfo fail: %s %s", resp.Status, string(body))
+	}
+
 	var jobInfo RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
@@ -394,6 +407,10 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 
 	body, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
+	}
+
 	var jobResp RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
@@ -419,6 +436,10 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("StopJob fail: %s %s", resp.Status, string(body))
+	}
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
