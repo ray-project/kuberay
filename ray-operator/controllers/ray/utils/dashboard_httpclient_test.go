@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/jarcoal/httpmock"
@@ -24,6 +25,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		rayJob             *rayv1.RayJob
 		expectJobId        string
 		errorJobId         string
+		notfoundJobId      string
 		rayDashboardClient *RayDashboardClient
 	)
 
@@ -57,6 +59,10 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	It("Test submitting/getting rayJob", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
+
+		errorJobId = "raysubmit_test002"
+		notfoundJobId = "raysubmit_test003"
+
 		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath,
 			func(req *http.Request) (*http.Response, error) {
 				body := &RayJobResponse{
@@ -80,6 +86,11 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				// return a string in the body
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
 			})
+		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+notfoundJobId,
+			func(req *http.Request) (*http.Response, error) {
+				// return a string in the body
+				return httpmock.NewStringResponse(404, "Ray job not found"), nil
+			})
 
 		jobId, err := rayDashboardClient.SubmitJob(context.TODO(), rayJob, &ctrl.Log)
 		Expect(err).To(BeNil())
@@ -94,6 +105,11 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(err).NotTo(BeNil())
 		Expect(err.Error()).To(ContainSubstring("GetJobInfo fail"))
 		Expect(err.Error()).To(ContainSubstring("Ray misbehaved"))
+
+		_, err = rayDashboardClient.GetJobInfo(context.TODO(), notfoundJobId)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+		Expect(errors.Is(err, ErrJobInfoNotFound)).To(Equal(true))
 	})
 
 	It("Test stop job", func() {

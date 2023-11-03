@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	goerrors "errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
-	goerrors "errors"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
@@ -357,16 +357,12 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return nil, ErrJobInfoNotFound
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
-	}
-
-	if resp.StatusCode == 404 {
-		return nil, ErrJobInfoNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
