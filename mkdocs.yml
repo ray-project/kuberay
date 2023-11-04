@@ -61,6 +61,8 @@ nav:
       - Overview: development/release.md
       - Generating the Changelog: release/changelog.md
       - Releasing the Helm Chart: release/helm-chart.md
+  - Reference:
+    - API Reference: reference/api.md
 
 # Customization
 extra:

@@ -118,6 +118,13 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
+.PHONY: api-docs
+api-docs: crd-ref-docs ## Generate CRD documentation.
+	$(CRD_REF_DOCS) \
+    --config=./hack/config.yaml \
+    --source-path=./apis/ray \
+    --renderer=markdown \
+    --output-path=../docs/reference/api.md
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
@@ -131,3 +138,7 @@ GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.
 	test -s $(GOFUMPT) || GOBIN=$(GOFUMPT)/.. go install mvdan.cc/gofumpt@latest
 
+CRD_REF_DOCS = $(shell pwd)/bin/crd-ref-docs
+.PHONY: crd-ref-docs
+crd-ref-docs: ## Download crd-ref-docs locally if necessary.
+	test -s $(CRD_REF_DOCS) || GOBIN=$(CRD_REF_DOCS)/.. go install github.com/elastic/crd-ref-docs@latest
