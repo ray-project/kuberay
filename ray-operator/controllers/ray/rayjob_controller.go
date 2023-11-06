@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	goerrors "errors"
 	"fmt"
 	"time"
 
@@ -200,7 +201,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Note that rayDashboardClient.GetJobInfo returns no error in the case of http.StatusNotFound.
 		// This check is a workaround for https://github.com/ray-project/kuberay/issues/1381.
 		rayDashboardClient.InitClient(clientURL)
-		if _, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); err != nil {
+		if _, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); err != nil && !goerrors.Is(err, utils.ErrJobInfoNotFound) {
 			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusWaitForDashboardReady, err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
