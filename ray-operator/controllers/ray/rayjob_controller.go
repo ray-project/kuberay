@@ -198,7 +198,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		// Check the dashboard readiness by checking the err return from rayDashboardClient.GetJobInfo.
-		// Note that rayDashboardClient.GetJobInfo returns no error in the case of http.StatusNotFound.
+		// Note that rayDashboardClient.GetJobInfo returns ErrJobInfoNotFound in the case of http.StatusNotFound.
 		// This check is a workaround for https://github.com/ray-project/kuberay/issues/1381.
 		rayDashboardClient.InitClient(clientURL)
 		if _, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); err != nil && !goerrors.Is(err, utils.ErrJobInfoNotFound) {
