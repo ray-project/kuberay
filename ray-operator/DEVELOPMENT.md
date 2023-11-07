@@ -32,6 +32,7 @@ export PATH="$GOROOT/bin:$PATH"
 ## Development
 
 ### IDE Setup (VS Code)
+
 * Step 1: Install the [VS Code Go extension](https://marketplace.visualstudio.com/items?itemName=golang.go).
 * Step 2: Import the KubeRay workspace configuration by using the file `kuberay.code-workspace` in the root of the KubeRay git repo:
   * "File" -> "Open Workspace from File" -> "kuberay.code-workspace"
@@ -59,7 +60,6 @@ IMG=kuberay/operator:nightly make docker-build
 # Command: kind load docker-image {IMG_REPO}:{IMG_TAG}
 kind load docker-image kuberay/operator:nightly
 
-
 # Step 5: Keep consistency
 # If you update RBAC or CRD, you need to synchronize them.
 # See the section "Consistency check" for more information.
@@ -81,11 +81,14 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 
 ### Running the tests
 
+The unit tests can be run by executing the following command:
+
 ```
 make test
 ```
 
-example results:
+Example output:
+
 ```
 ✗ make test
 ...
@@ -99,6 +102,49 @@ ok  	github.com/ray-project/kuberay/ray-operator/controllers	9.587s	coverage: 66
 ok  	github.com/ray-project/kuberay/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
 ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
 ```
+
+The e2e tests can be run by executing the following command:
+
+```
+make test-e2e
+```
+
+Example output:
+
+```asciidoc
+go test -timeout 30m -v ./test/e2e
+=== RUN   TestRayJobWithClusterSelector
+    rayjob_cluster_selector_test.go:41: Created ConfigMap test-ns-jtlbd/jobs successfully
+    rayjob_cluster_selector_test.go:159: Created RayCluster test-ns-jtlbd/raycluster successfully
+    rayjob_cluster_selector_test.go:161: Waiting for RayCluster test-ns-jtlbd/raycluster to become ready
+=== RUN   TestRayJobWithClusterSelector/Successful_RayJob
+=== PAUSE TestRayJobWithClusterSelector/Successful_RayJob
+=== RUN   TestRayJobWithClusterSelector/Failing_RayJob
+=== PAUSE TestRayJobWithClusterSelector/Failing_RayJob
+=== CONT  TestRayJobWithClusterSelector/Successful_RayJob
+=== CONT  TestRayJobWithClusterSelector/Failing_RayJob
+=== NAME  TestRayJobWithClusterSelector
+    rayjob_cluster_selector_test.go:213: Created RayJob test-ns-jtlbd/counter successfully
+    rayjob_cluster_selector_test.go:215: Waiting for RayJob test-ns-jtlbd/counter to complete
+    rayjob_cluster_selector_test.go:268: Created RayJob test-ns-jtlbd/fail successfully
+    rayjob_cluster_selector_test.go:270: Waiting for RayJob test-ns-jtlbd/fail to complete
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/counter-zs9s8/ray-job-submitter logs
+    test.go:106: Creating ephemeral output directory as KUBERAY_TEST_OUTPUT_DIR env variable is unset
+    test.go:109: Output directory has been created at: /var/folders/mx/kpgdgdqd5j56ynylglgn0nvh0000gn/T/TestRayJobWithClusterSelector2055000419/001
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/fail-gdws6/ray-job-submitter logs
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/raycluster-head-gnhlw/ray-head logs
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/raycluster-worker-small-group-9dffx/ray-worker logs
+--- PASS: TestRayJobWithClusterSelector (12.19s)
+    --- PASS: TestRayJobWithClusterSelector/Failing_RayJob (16.11s)
+    --- PASS: TestRayJobWithClusterSelector/Successful_RayJob (19.14s)
+PASS
+ok      github.com/ray-project/kuberay/ray-operator/test/e2e    32.066s
+```
+
+Note you can set the `KUBERAY_TEST_OUTPUT_DIR` environment to specify the test output directory.
+If not set, it defaults to a temporary directory that's removed once the tests execution completes.
+
+Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 
 ### Manually test new image in running cluster
 
