@@ -1,16 +1,16 @@
 # Job Submission using API server
 
-Ray provides very convenient and powerful [Job Submission APIs](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html). The issue is that it needs to access cluster's dashboard Ingress, which currently does not have any security implementations. Alternatively you can use Ray cluster head service for this, but in this case your Ray job management code has to run in the same kubernetes cluster as Ray. Job submission implementation in the API server leverages already exposed URL of the API server to locate cluster and use its head service to implement Job management functionality. Because you can access API server running on the remote kubernetes cluster you can use these APIs for managing remote Ray clusters without exposing them via Ingress.
+Ray provides very convinient and powerful [Job Submission APIs](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html). The issue is that it needs to access cluster's dashboard Ingress, which currently does not have any security implementations. Alternatively you can use Ray cluster head service for this, but in this case your Ray job management code has to run in the same kubernetes cluster as Ray. Job submission implementation in the API server leverages already exposed URL of the API server to locate cluster and use its head service to implement Job management functionality. Because you can access API server running on the remote kubernetes cluster you can use these APIs for managing remote Ray clusters without exposing them via Ingress.
 
 ## Using Job Submission APIs
 
-Note that job submission APIs will only work if you are running API server within kubernetes cluster. Local Development option of the API server will not work because the API Server makes HTTP calls to job service running in the local kubernetes cluster.
+Note that job submission APIs will only work if you are running API server within kubernetes cluster. Local Development option of the API server will not work.
 
 The first step is to deploy KubeRay operator and API server.
 
 ### Deploy KubeRay operator and API server
 
-Refer to [readme](README.md) for setting up KubeRay operator and API server. For development, we can build the API server from source code and deploy to the local KinD cluster.
+Reffer to [readme](README.md) for setting up KubRay operator and API server.
 
 ```shell
 make docker-image cluster load-image deploy
@@ -82,7 +82,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 }'
 ```
 
-Note that this cluster is mounting a volume from a configmap. This configmap should be created prior to cluster creation using this [yaml](/test/job/code.yaml).
+Note that this cluster is mounting a volume from a configmap. This config map should be created prior to cluster creation using this [yaml](/test/job/code.yaml).
 
 ### Submit Ray Job
 
@@ -106,7 +106,7 @@ This should return the following:
 }
 ```
 
-Note that `submissionId` value that you will get is different.
+Note that `submissionId` value that you will get is different
 
 ### Get job details
 
@@ -117,7 +117,7 @@ curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-clus
 --header 'Content-Type: application/json' 
 ```
 
-This should return JSON similar to the one below:
+This should return JSON similar to the one below
 
 ```json
 {
@@ -144,7 +144,7 @@ curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-clus
 --header 'Content-Type: application/json' 
 ```
 
-This will return execution log, that will look something like the following:
+This will return execution log, that will look something like the following
 
 ```text
 2023-11-08 03:24:31,904\tINFO worker.py:1329 -- Using address 10.244.2.2:6379 set in the environment variable RAY_ADDRESS
@@ -157,7 +157,7 @@ test_counter got 4
 test_counter got 5
 ```
 
-Note that this command always returns execution log from the beginning (no streaming support) till the current moment.
+Note that this command always returns execution log from the begining (no streaming support) till the current moment
 
 ### List jobs
 
@@ -192,7 +192,7 @@ This should return the list of the submissions, that looks as follows:
 
 ### Stop Job
 
-Execution of the job can be stopped using the following command (Note that submission id returned during job creation should be used here):
+Execution of the job can be stoped using the following command (Note that submission id returned during job creation should be used here):
 
 ```shell
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
@@ -208,4 +208,4 @@ curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-c
 --header 'Content-Type: application/json' 
 ```
 
-You can validate job deletion by looking at the Ray dashboard (jobs pane) and ensuring that it was removed.
+You can validate job deletion by looking at the Ray dashboard (jobs pane) and ensuring that it was removed
