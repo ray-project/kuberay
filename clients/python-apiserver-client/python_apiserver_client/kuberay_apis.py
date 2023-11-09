@@ -259,3 +259,112 @@ class KubeRayAPIs:
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"]
         return response.status_code, None
+
+    """
+        submit Ray job
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            job submission
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+            submission id
+    """
+    def submit_job(self, ns: str, name: str, jobrequest: RayJobRequest) -> tuple[int, str, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}"
+        response = requests.post(url, json=jobrequest.to_dict(), headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"], None
+        return response.status_code, None, response.json()["submissionId"]
+
+    """
+        get Ray job details
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            job submission id
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+            RayJobInfo object
+    """
+    def get_job_info(self, ns: str, name: str, sid: str) -> tuple[int, str, RayJobInfo]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}/{sid}"
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"], None
+        return response.status_code, None, RayJobInfo(response.json())
+
+    """
+        list Ray job details
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+            list of RayJobInfo object
+    """
+    def list_job_info(self, ns: str, name: str) -> tuple[int, str, list[RayJobInfo]]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}"
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"], None
+        infos = response.json().get("submissions", None)
+        if infos is None:
+            return response.status_code, None, []
+        return response.status_code, None, [RayJobInfo(i) for i in infos]
+
+    """
+        get Ray job log
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            job submission id
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+            log
+    """
+    def get_job_log(self, ns: str, name: str, sid: str) -> tuple[int, str, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}/log/{sid}"
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"], None
+        return response.status_code, None, response.json().get("log", "")
+
+    """
+        stop Ray job
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            job submission id
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+    """
+    def stop_ray_job(self, ns: str, name: str, sid: str) -> tuple[int, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}/{sid}"
+        response = requests.post(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"]
+        return response.status_code, None
+
+    """
+        delete Ray job
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            job submission id
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+    """
+    def delete_ray_job(self, ns: str, name: str, sid: str) -> tuple[int, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/jobsubmissions/{name}/{sid}"
+        response = requests.delete(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"]
+        return response.status_code, None
+
