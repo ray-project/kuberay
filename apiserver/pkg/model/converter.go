@@ -192,8 +192,8 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 	for _, spec := range specs {
 		workerNodeSpec := &api.WorkerGroupSpec{
 			RayStartParams:  spec.RayStartParams,
-			MaxReplicas:     *spec.MinReplicas,
-			MinReplicas:     *spec.MaxReplicas,
+			MaxReplicas:     *spec.MaxReplicas,
+			MinReplicas:     *spec.MinReplicas,
 			Replicas:        *spec.Replicas,
 			GroupName:       spec.GroupName,
 			Image:           spec.Template.Annotations[util.RayClusterImageAnnotationKey],
