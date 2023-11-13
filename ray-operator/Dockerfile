@@ -16,9 +16,9 @@ COPY controllers/ controllers/
 
 # Build
 USER root
-RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -a -o manager main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
 
-FROM scratch
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.8
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
