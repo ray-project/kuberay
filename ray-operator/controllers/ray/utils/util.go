@@ -284,9 +284,7 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
-	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
-		desiredResourcesList = append(desiredResourcesList, headPodResource)
-	}
+	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := calculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
@@ -299,9 +297,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
-	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
-		minResourcesList = append(minResourcesList, headPodResource)
-	}
+	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := calculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {

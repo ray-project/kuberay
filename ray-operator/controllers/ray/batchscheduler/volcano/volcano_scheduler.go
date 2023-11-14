@@ -52,10 +52,10 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1.RayClus
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if app.Spec.EnableInTreeAutoscaling == nil || !*app.Spec.EnableInTreeAutoscaling {
-		minMember = utils.CalculateDesiredReplicas(app) + *app.Spec.HeadGroupSpec.Replicas
+		minMember = utils.CalculateDesiredReplicas(app) + 1
 		totalResource = utils.CalculateDesiredResources(app)
 	} else {
-		minMember = utils.CalculateMinReplicas(app) + *app.Spec.HeadGroupSpec.Replicas
+		minMember = utils.CalculateMinReplicas(app) + 1
 		totalResource = utils.CalculateMinResources(app)
 	}
 

@@ -16,7 +16,6 @@ var myRayCluster = &RayCluster{
 	},
 	Spec: RayClusterSpec{
 		HeadGroupSpec: HeadGroupSpec{
-			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
 				"port":                        "6379",
 				"object-manager-port":         "12345",

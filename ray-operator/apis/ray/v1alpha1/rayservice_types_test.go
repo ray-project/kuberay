@@ -71,7 +71,6 @@ var myRayService = &RayService{
 		},
 		RayClusterSpec: RayClusterSpec{
 			HeadGroupSpec: HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                        "6379",
 					"object-store-memory":         "100000000",
@@ -236,7 +235,6 @@ var expected = `{
       },
       "rayClusterConfig":{
          "headGroupSpec":{
-            "replicas":1,
             "rayStartParams":{
                "dashboard-agent-listen-port":"52365",
                "dashboard-host":"0.0.0.0",
