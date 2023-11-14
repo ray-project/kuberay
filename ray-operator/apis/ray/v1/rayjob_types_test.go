@@ -25,7 +25,6 @@ var expectedRayJob = RayJob{
 		RayClusterSpec: &RayClusterSpec{
 			RayVersion: "1.12.1",
 			HeadGroupSpec: HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-store-memory": "100000000",

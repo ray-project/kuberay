@@ -123,7 +123,6 @@ applications:
 			RayClusterSpec: rayv1.RayClusterSpec{
 				RayVersion: "1.12.1",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Replicas: pointer.Int32(1),
 					RayStartParams: map[string]string{
 						"port":                        "6379",
 						"object-store-memory":         "100000000",

@@ -62,7 +62,6 @@ func TestCreatePodGroup(t *testing.T) {
 				Template: corev1.PodTemplateSpec{
 					Spec: headSpec,
 				},
-				Replicas: pointer.Int32Ptr(1),
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
@@ -77,7 +76,7 @@ func TestCreatePodGroup(t *testing.T) {
 		},
 	}
 
-	minMember := utils.CalculateDesiredReplicas(&cluster) + *cluster.Spec.HeadGroupSpec.Replicas
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
