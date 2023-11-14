@@ -24,6 +24,10 @@ func RayJobStatus(job *rayv1.RayJob) rayv1.JobStatus {
 	return job.Status.JobStatus
 }
 
+func RayJobDeploymentStatus(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
+	return job.Status.JobDeploymentStatus
+}
+
 func GetRayJobId(t Test, namespace, name string) string {
 	t.T().Helper()
 	job := RayJob(t, namespace, name)(t)
@@ -35,6 +39,12 @@ func RayCluster(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.Ray
 		cluster, err := t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		return cluster
+	}
+}
+
+func RayClusterOrError(t Test, namespace, name string) func(g gomega.Gomega) (*rayv1.RayCluster, error) {
+	return func(g gomega.Gomega) (*rayv1.RayCluster, error) {
+		return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 	}
 }
 
