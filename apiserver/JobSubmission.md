@@ -10,7 +10,7 @@ The first step is to deploy KubeRay operator and API server.
 
 ### Deploy KubeRay operator and API server
 
-Refer to [readme](README.md) for setting up KubRay operator and API server. For development, we can build the API server from source code and deploy to the local KinD cluster.
+Refer to [readme](README.md) for setting up KubeRay operator and API server. For development, we can build the API server from source code and deploy to the local KinD cluster.
 
 ```shell
 make docker-image cluster load-image deploy
@@ -117,7 +117,7 @@ curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-clus
 --header 'Content-Type: application/json' 
 ```
 
-This should return JSON similar to the one below
+This should return JSON similar to the one below:
 
 ```json
 {
@@ -144,7 +144,7 @@ curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-clus
 --header 'Content-Type: application/json' 
 ```
 
-This will return execution log, that will look something like the following
+This will return execution log, that will look something like the following:
 
 ```text
 2023-11-08 03:24:31,904\tINFO worker.py:1329 -- Using address 10.244.2.2:6379 set in the environment variable RAY_ADDRESS
@@ -157,7 +157,7 @@ test_counter got 4
 test_counter got 5
 ```
 
-Note that this command always returns execution log from the beginning (no streaming support) till the current moment
+Note that this command always returns execution log from the beginning (no streaming support) till the current moment.
 
 ### List jobs
 
