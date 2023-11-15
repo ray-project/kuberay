@@ -338,7 +338,7 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 		Name:      clusterName,
 		Namespace: e2etc.namespaceName,
 	})
-	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s, err %v", clusterName, err)
+	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s', err %v", clusterName, err)
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
@@ -359,7 +359,7 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 		Namespace: e2etc.namespaceName,
 	})
 
-	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s, err %v", serviceName, err)
+	require.NoErrorf(t, err, "No error expected when deleting ray service: '%s', err %v", serviceName, err)
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
@@ -368,7 +368,7 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
 			return true, nil
 		}
-		t.Logf("Found job state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
+		t.Logf("Found service state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
 		return false, nil
 	})
 	require.NoErrorf(t, err, "No error expected when waiting to delete ray service: '%s', err %v", serviceName, err)
@@ -380,7 +380,7 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 		Namespace: e2etc.namespaceName,
 	})
 
-	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s, err %v", rayJobName, err)
+	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s', err %v", rayJobName, err)
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error

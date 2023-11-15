@@ -66,14 +66,14 @@ make test
 There are two `make` targets provide execute the end to end test (integration between Kuberay API server and Kuberay Operator):
 
 * `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads.
-* `make local-e2e-test` creates a local kind cluster, deploys the nightly operator image and a freshly build Kuberay API server into the kind cluster and shuts down the kind cluster upon successful execution of the end to end test.
+* `make local-e2e-test` creates a local kind cluster, builds the Kuberay operator and API server images from the current branch and deploys the operator and API server into the kind cluster. It shuts down the kind cluster upon successful execution of the end to end test. If the tests fail the cluster will be left running and will have to manually be shutdown by executing the `make clean-cluster`
 
 The `e2e` test targets use two variables to control what version of Ray images to use in the end to end tests:
 
-* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.7.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added.
+* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.7.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added to the image.
 * `E2E_API_SERVER_URL` -- for the base URL of the deployed KubeRayAPI server. The default value is: `http://localhost:31888`
 
-The end to end test targets share the usage of the `GO_TEST_FLAGS`. Overriding the make file variable with a `-v` option allows for both unit and end to end tests to print any output / debug messages. By default, only if there's a test failure those messages are show.
+The end to end test targets share the usage of the `GO_TEST_FLAGS`. Overriding the make file variable with a `-v` option allows for both unit and end to end tests to print any output / debug messages. By default, only if there's a test failure those messages are shown.
 
 The default values of the variables can be overridden using the `-e` make command line arguments.
 
@@ -189,10 +189,11 @@ As a convenience for local development the following `make` targets are provided
 * `make cluster` -- creates a local kind cluster, using the configuration from `hack/kind-cluster-config.yaml`. It creates a port mapping allowing for the service running in the kind cluster to be accessed on  `localhost:31888` for HTTP and `localhost:31887` for RPC.
 * `make clean-cluster` -- deletes the local kind cluster created with `make cluster`
 * `load-image` -- loads the docker image defined by the `IMG` make variable into the kind cluster. The default value for variable is: `kuberay/apiserver:latest`. The name of the image can be changed by using `make load-image -e IMG=<your image name and tag>`
-* `operator-image` -- Build the operator image to be loaded in your kind cluster. You must specify a value for the operator image tag. Since the default value is set to `nightly`, the local image with this value will be overridden if `make deploy` operator is used later. This step is optional. Example: `make operator-image -e OPERATOR_IMAGE_TAG=latest`
-* `load-operator-image` -- Load the operator image to the kind cluster created with `make cluster`. The tag for the operator image is `kuberay/operator:nightly`, and the tag can be overridden using `make load-operator-image -E OPERATOR_IMAGE_TAG=<operator tag>`.
-* `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:nightly`.
+* `operator-image` -- Build the operator image to be loaded in your kind cluster. The operator image build is `kuberay/operator:latest`. The image tag can be overridden from the command line: ( example: `make operator-image -e OPERATOR_IMAGE_TAG=foo`)
+* `load-operator-image` -- Load the operator image to the kind cluster created with `make cluster`.  It should be used in conjunction with the `deploy-operator targe`
+* `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:latest`.
 * `undeploy-operator` -- Undeploy operator from your cluster
+* `load-ray-test-image` -- Load the ray test images into the cluster.
 
 When developing and testing with kind you might want to execute these targets together:
 
@@ -201,10 +202,13 @@ When developing and testing with kind you might want to execute these targets to
 make docker-image cluster load-image deploy
 
 #To create a new API server image, operator image and deploy them on a new cluster
-make docker-image operator-image cluster load-image load-operator-image deploy deploy-operator -e OPERATOR_IMAGE_TAG=latest
+make docker-image operator-image cluster load-image load-operator-image deploy deploy-operator
 
 #To execute end 2 end tests with a local build operator and verbose output
-make operator-image local-e2e-test -e OPERATOR_IMAGE_TAG=latest -e GO_TEST_FLAGS="-v"
+make local-e2e-test -e GO_TEST_FLAGS="-v"
+
+#To execute end 2 end test with the nightly build operator
+make local-e2e-test -e OPERATOR_IMAGE_TAG=nightly
 ```
 
 #### Access API Server in the Cluster

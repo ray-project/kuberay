@@ -642,7 +642,6 @@ func TestServiceServerV1Update(t *testing.T) {
 				require.Nil(t, actualRpcStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
 				waitForRunningService(t, tCtx, actualService.Name)
-				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
@@ -743,9 +742,8 @@ func TestServiceServerV1Patch(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRpcStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
-				waitForRunningServiceWithWorkGroupSpec(t, tCtx, actualService.Name, tc.Input.UpdateService.WorkerGroupUpdateSpec[0].Replicas,
-					tc.Input.UpdateService.WorkerGroupUpdateSpec[0].MinReplicas, tc.Input.UpdateService.WorkerGroupUpdateSpec[0].MaxReplicas)
-				tCtx.DeleteRayService(t, actualService.Name)
+				waitForRunningServiceWithWorkGroupSpec(t, tCtx, actualService.Name, tc.Input.UpdateService.WorkerGroupUpdateSpec[0].MinReplicas,
+					tc.Input.UpdateService.WorkerGroupUpdateSpec[0].MaxReplicas, tc.Input.UpdateService.WorkerGroupUpdateSpec[0].Replicas)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")

@@ -60,7 +60,7 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 
 // CreateComputeTemplate creates a new compute template.
 func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
-	createURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/compute_templates"
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
 
 	bytez, err := krc.marshaler.Marshal(request.ComputeTemplate)
 	if err != nil {
@@ -89,13 +89,13 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 
 // DeleteComputeTemplate deletes a compute template.
 func (krc *KuberayAPIServerClient) DeleteComputeTemplate(request *api.DeleteComputeTemplateRequest) (*rpcStatus.Status, error) {
-	deleteURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
 	return krc.doDelete(deleteURL)
 }
 
 // Finds a specific compute template by its name and namespace.
 func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -116,7 +116,7 @@ func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTem
 
 // GetAllComputeTemplates finds all compute templates in all namespaces.
 func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllComputeTemplatesResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/compute_templates"
+	getURL := krc.baseURL + "/apis/v1/compute_templates"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -137,7 +137,7 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllCompute
 
 // GetAllComputeTemplatesInNamespace Finds all compute templates in a given namespace.
 func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *api.ListComputeTemplatesRequest) (*api.ListComputeTemplatesResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/compute_templates"
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -158,7 +158,7 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *ap
 
 // CreateCluster creates a new cluster.
 func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterRequest) (*api.Cluster, *rpcStatus.Status, error) {
-	createURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/clusters"
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters"
 
 	bytez, err := krc.marshaler.Marshal(request.Cluster)
 	if err != nil {
@@ -186,13 +186,13 @@ func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterReque
 
 // DeleteCluster deletes a cluster
 func (krc *KuberayAPIServerClient) DeleteCluster(request *api.DeleteClusterRequest) (*rpcStatus.Status, error) {
-	deleteURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/clusters/" + request.Name
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters/" + request.Name
 	return krc.doDelete(deleteURL)
 }
 
 // GetCluster finds a specific Cluster by ID.
 func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*api.Cluster, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/clusters/" + request.Name
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters/" + request.Name
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -213,7 +213,7 @@ func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*
 
 // ListCluster finds all clusters in a given namespace.
 func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest) (*api.ListClustersResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/clusters"
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -234,7 +234,7 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 
 // ListAllClusters finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListAllClusters() (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/clusters"
+	getURL := krc.baseURL + "/apis/v1/clusters"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -255,7 +255,7 @@ func (krc *KuberayAPIServerClient) ListAllClusters() (*api.ListAllClustersRespon
 
 // CreateRayJob creates a new job.
 func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest) (*api.RayJob, *rpcStatus.Status, error) {
-	createURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/jobs"
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs"
 	bytez, err := krc.marshaler.Marshal(request.Job)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
@@ -282,7 +282,7 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 
 // GetRayJob finds a specific job by its name and namespace.
 func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*api.RayJob, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/jobs/" + request.Name
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs/" + request.Name
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -303,7 +303,7 @@ func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*ap
 
 // Finds all job in a given namespace.
 func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) (*api.ListRayJobsResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/jobs"
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -324,7 +324,7 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 
 // ListAllRayJobs Finds all job in all namespaces.
 func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/jobs"
+	getURL := krc.baseURL + "/apis/v1/jobs"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -345,13 +345,13 @@ func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse
 
 // Deletes a job by its name and namespace.
 func (krc *KuberayAPIServerClient) DeleteRayJob(request *api.DeleteRayJobRequest) (*rpcStatus.Status, error) {
-	deleteURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/jobs/" + request.Name
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs/" + request.Name
 	return krc.doDelete(deleteURL)
 }
 
 // CreateRayService create a new ray serve.
 func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
-	createURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services"
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services"
 	bytez, err := krc.marshaler.Marshal(request.Service)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
@@ -378,7 +378,7 @@ func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServic
 
 // UpdateRayService updates a ray serve service.
 func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
-	updateURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services/" + request.Name
+	updateURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
 	bytez, err := krc.marshaler.Marshal(request.Service)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
@@ -407,7 +407,7 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 // Patch mode update without possible deletion the existing raycluster under the hood.
 // only support update the service configs and worker.
 func (krc *KuberayAPIServerClient) UpdateRayServiceConfigs(request *api.UpdateRayServiceConfigsRequest) (*api.RayService, *rpcStatus.Status, error) {
-	updateURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services/" + request.Name + "/configs"
+	updateURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name + "/configs"
 	bytez, err := krc.marshaler.Marshal(request.UpdateService)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
@@ -434,7 +434,7 @@ func (krc *KuberayAPIServerClient) UpdateRayServiceConfigs(request *api.UpdateRa
 
 // Find a specific ray serve by name and namespace.
 func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services/" + request.Name
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -455,7 +455,7 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 
 // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services"
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -476,7 +476,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 
 // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1alpha2/services"
+	getURL := krc.baseURL + "/apis/v1/services"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
@@ -497,7 +497,7 @@ func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServices
 
 // DeleteRayService deletes a ray service by its name and namespace
 func (krc *KuberayAPIServerClient) DeleteRayService(request *api.DeleteRayServiceRequest) (*rpcStatus.Status, error) {
-	deleteURL := krc.baseURL + "/apis/v1alpha2/namespaces/" + request.Namespace + "/services/" + request.Name
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
 	return krc.doDelete(deleteURL)
 }
 
