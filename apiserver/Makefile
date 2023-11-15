@@ -7,6 +7,18 @@ REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 IMG_TAG ?=latest
 IMG ?= kuberay/apiserver:$(IMG_TAG)
 
+# Allow for additional test flags (-v, etc)
+GO_TEST_FLAGS ?= 
+# Ray docker images to use for end to end tests based upon the architecture
+# for arm64 environments (Apple silicon included) pull the architecture specific image
+ifeq (arm64,$(shell go env GOARCH))
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310-aarch64
+else 
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310
+endif 
+# Kuberay API Server base URL to use in end to end tests
+E2E_API_SERVER_URL ?=http://localhost:31888
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -43,25 +55,25 @@ help: ## Display this help.
 
 ##@ Development
 
+.PHONY:
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
+.PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: fumpt
 fumpt: gofumpt ## Run gofmtumpt against code.
 	$(GOFUMPT) -l -w .
 
+.PHONY: imports
 imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .	
 
-test: fmt vet fumpt imports lint  ## Run unit tests.
-	go test ./... -race -coverprofile ray-kube-api-server-coverage.out
-
+.PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	$(GOLANGCI_LINT) run  --timeout=3m	
-
-##@ Build
 
 build: fmt vet fumpt imports lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -69,15 +81,75 @@ build: fmt vet fumpt imports lint ## Build api server binary.
 run: fmt vet fumpt imports lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
 
-docker-image: test ## Build image with the api server.
-	${ENGINE} build -t ${IMG} -f Dockerfile ..
-
-docker-push: ## Push image with the api server.
-	${ENGINE} push ${IMG}
-
 .PHONY: build-swagger
 build-swagger: go-bindata
 	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
+
+##@ Testing
+
+.PHONY: test
+test: fmt vet fumpt imports lint  ## Run all unit tests.
+	go test ./pkg/... ./cmd/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
+
+.PHONY: e2e-test
+e2e-test: ## Run end to end tests using a pre-exiting cluster.
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
+	
+.PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
+local-e2e-test: docker-image operator-image cluster load-image load-operator-image deploy-operator deploy load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+
+##@ Testing Setup
+KIND_CONFIG ?= hack/kind-cluster-config.yaml
+KIND_CLUSTER_NAME ?= ray-api-server-cluster
+OPERATOR_IMAGE_TAG ?= latest
+.PHONY: cluster
+cluster: kind ## Start kind development cluster.
+	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
+
+.PHONY: clean-cluster
+clean-cluster: kind ## Delete kind development cluster.
+	$(KIND) delete cluster -n $(KIND_CLUSTER_NAME)
+
+.PHONY: load-image
+load-image: ## Load the api server image to the kind cluster created with create-kind-cluster.
+	$(KIND) load docker-image $(IMG) -n $(KIND_CLUSTER_NAME)
+
+.PHONY: operator-image
+operator-image: ## Build the operator image to be loaded in your kind cluster.
+	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
+
+.PHONY: deploy-operator
+deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
+# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
+# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
+	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
+	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
+
+.PHONY: undeploy-operator
+undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified in ~/.kube/config.
+	helm uninstall raycluster --wait
+
+.PHONY: load-operator-image
+load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
+ifneq (${OPERATOR_IMAGE_TAG}, latest)
+	$(ENGINE) pull kuberay/operator:$(OPERATOR_IMAGE_TAG)
+endif	
+	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+
+.PHONY: load-ray-test-image
+load-ray-test-image: ## Load the ray test images
+	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
+	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
+	$(ENGINE) pull rayproject/ray:latest
+	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
+
+##@ Docker Build
+
+docker-image: test ## Build image with the api server.
+	$(ENGINE) build -t ${IMG} -f Dockerfile ..
+
+docker-push: ## Push image with the api server.
+	$(ENGINE) push ${IMG}
 
 ##@ Deployment
 .PHONY: install
@@ -100,7 +172,7 @@ deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified i
 undeploy: ## Undeploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
 	helm uninstall kuberay-apiserver --wait
 
-##@ Development Tools
+##@ Development Tools Setup
 
 ## Location to install dependencies to
 $(REPO_ROOT_BIN):
@@ -118,7 +190,7 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v3.8.7
 GOFUMPT_VERSION ?= v0.3.1
-GOIMPORTS_VERSION ?= latest
+GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.54.1
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
@@ -165,39 +237,3 @@ clean-dev-tools: ## Remove all development tools
 	rm -f $(REPO_ROOT_BIN)/goimports
 	rm -f $(REPO_ROOT_BIN)/kind
 	rm -f $(REPO_ROOT_BIN)/go-bindata
-
-
-##@ Testing Setup and Tools
-KIND_CONFIG ?= hack/kind-cluster-config.yaml
-KIND_CLUSTER_NAME ?= ray-api-server-cluster
-OPERATOR_IMAGE_TAG ?= latest
-.PHONY: cluster
-cluster: kind ## Start kind development cluster.
-	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
-
-.PHONY: clean-cluster
-clean-cluster: kind ## Delete kind development cluster.
-	$(KIND) delete cluster -n $(KIND_CLUSTER_NAME)
-
-.PHONY: load-image
-load-image: ## Load the api server image to the kind cluster created with create-kind-cluster.
-	$(KIND) load docker-image $(IMG) -n $(KIND_CLUSTER_NAME)
-
-.PHONY: operator-image
-operator-image: ## Build the operator image to be loaded in your kind cluster.
-	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
-
-.PHONY: deploy-operator
-deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
-# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
-# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
-	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
-	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
-
-.PHONY: undeploy-operator
-undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified in ~/.kube/config.
-	helm uninstall raycluster --wait
-
-.PHONY: load-operator-image
-load-operator-image: ## Load the operator image to the kind cluster created with create-kind-cluster.
-	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
