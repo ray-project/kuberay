@@ -38,8 +38,7 @@ The code below gives an example of hostPath volume definition:
 A Persistent Volume Claim (PVC) is a request for storage by a user. It is similar to a Pod. Pods consume node resources and PVCs consume PV resources. Pods can request specific levels of resources (CPU and Memory). Claims can request
 specific size and access modes (e.g., they can be mounted `ReadWriteOnce`, `ReadOnlyMany` or `ReadWriteMany`).
 
-The caveat of using PVC volumes is that the same PVC is mounted to all nodes. As a result only PVCs with access
-mode `ReadOnlyMany` can be used in this case.
+The caveat of using PVC volumes is that the same PVC is mounted to all nodes. As a result only PVCs with access mode `ReadOnlyMany` can be used in this case.
 
 The code below gives an example of PVC volume definition:
 
@@ -121,7 +120,7 @@ The code below gives an example of secret volume definition:
 
 An emptyDir volume is first created when a Pod is assigned to a node, and exists as long as that Pod is running on that node. As the name says, the emptyDir volume is initially empty. All containers in the Pod can read and write the same files in the emptyDir volume, though that volume can be mounted at the same or different paths in each container. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted permanently.
 
-The code below gives an example of empydir volume definition:
+The code below gives an example of empty directory volume definition:
 
 ```json
 {
