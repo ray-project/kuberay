@@ -5,10 +5,9 @@ package fake
 import (
 	"context"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -20,25 +19,25 @@ type FakeRayClusters struct {
 	ns   string
 }
 
-var rayclustersResource = schema.GroupVersionResource{Group: "ray", Version: "v1", Resource: "rayclusters"}
+var rayclustersResource = v1.SchemeGroupVersion.WithResource("rayclusters")
 
-var rayclustersKind = schema.GroupVersionKind{Group: "ray", Version: "v1", Kind: "RayCluster"}
+var rayclustersKind = v1.SchemeGroupVersion.WithKind("RayCluster")
 
 // Get takes name of the rayCluster, and returns the corresponding rayCluster object, and an error if there is any.
-func (c *FakeRayClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *rayv1.RayCluster, err error) {
+func (c *FakeRayClusters) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.RayCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(rayclustersResource, c.ns, name), &rayv1.RayCluster{})
+		Invokes(testing.NewGetAction(rayclustersResource, c.ns, name), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rayv1.RayCluster), err
+	return obj.(*v1.RayCluster), err
 }
 
 // List takes label and field selectors, and returns the list of RayClusters that match those selectors.
-func (c *FakeRayClusters) List(ctx context.Context, opts v1.ListOptions) (result *rayv1.RayClusterList, err error) {
+func (c *FakeRayClusters) List(ctx context.Context, opts metav1.ListOptions) (result *v1.RayClusterList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(rayclustersResource, rayclustersKind, c.ns, opts), &rayv1.RayClusterList{})
+		Invokes(testing.NewListAction(rayclustersResource, rayclustersKind, c.ns, opts), &v1.RayClusterList{})
 
 	if obj == nil {
 		return nil, err
@@ -48,8 +47,8 @@ func (c *FakeRayClusters) List(ctx context.Context, opts v1.ListOptions) (result
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &rayv1.RayClusterList{ListMeta: obj.(*rayv1.RayClusterList).ListMeta}
-	for _, item := range obj.(*rayv1.RayClusterList).Items {
+	list := &v1.RayClusterList{ListMeta: obj.(*v1.RayClusterList).ListMeta}
+	for _, item := range obj.(*v1.RayClusterList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -58,69 +57,69 @@ func (c *FakeRayClusters) List(ctx context.Context, opts v1.ListOptions) (result
 }
 
 // Watch returns a watch.Interface that watches the requested rayClusters.
-func (c *FakeRayClusters) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeRayClusters) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(rayclustersResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a rayCluster and creates it.  Returns the server's representation of the rayCluster, and an error, if there is any.
-func (c *FakeRayClusters) Create(ctx context.Context, rayCluster *rayv1.RayCluster, opts v1.CreateOptions) (result *rayv1.RayCluster, err error) {
+func (c *FakeRayClusters) Create(ctx context.Context, rayCluster *v1.RayCluster, opts metav1.CreateOptions) (result *v1.RayCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(rayclustersResource, c.ns, rayCluster), &rayv1.RayCluster{})
+		Invokes(testing.NewCreateAction(rayclustersResource, c.ns, rayCluster), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rayv1.RayCluster), err
+	return obj.(*v1.RayCluster), err
 }
 
 // Update takes the representation of a rayCluster and updates it. Returns the server's representation of the rayCluster, and an error, if there is any.
-func (c *FakeRayClusters) Update(ctx context.Context, rayCluster *rayv1.RayCluster, opts v1.UpdateOptions) (result *rayv1.RayCluster, err error) {
+func (c *FakeRayClusters) Update(ctx context.Context, rayCluster *v1.RayCluster, opts metav1.UpdateOptions) (result *v1.RayCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(rayclustersResource, c.ns, rayCluster), &rayv1.RayCluster{})
+		Invokes(testing.NewUpdateAction(rayclustersResource, c.ns, rayCluster), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rayv1.RayCluster), err
+	return obj.(*v1.RayCluster), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeRayClusters) UpdateStatus(ctx context.Context, rayCluster *rayv1.RayCluster, opts v1.UpdateOptions) (*rayv1.RayCluster, error) {
+func (c *FakeRayClusters) UpdateStatus(ctx context.Context, rayCluster *v1.RayCluster, opts metav1.UpdateOptions) (*v1.RayCluster, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(rayclustersResource, "status", c.ns, rayCluster), &rayv1.RayCluster{})
+		Invokes(testing.NewUpdateSubresourceAction(rayclustersResource, "status", c.ns, rayCluster), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rayv1.RayCluster), err
+	return obj.(*v1.RayCluster), err
 }
 
 // Delete takes name of the rayCluster and deletes it. Returns an error if one occurs.
-func (c *FakeRayClusters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *FakeRayClusters) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(rayclustersResource, c.ns, name, opts), &rayv1.RayCluster{})
+		Invokes(testing.NewDeleteActionWithOptions(rayclustersResource, c.ns, name, opts), &v1.RayCluster{})
 
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeRayClusters) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+func (c *FakeRayClusters) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(rayclustersResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &rayv1.RayClusterList{})
+	_, err := c.Fake.Invokes(action, &v1.RayClusterList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched rayCluster.
-func (c *FakeRayClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *rayv1.RayCluster, err error) {
+func (c *FakeRayClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(rayclustersResource, c.ns, name, pt, data, subresources...), &rayv1.RayCluster{})
+		Invokes(testing.NewPatchSubresourceAction(rayclustersResource, c.ns, name, pt, data, subresources...), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rayv1.RayCluster), err
+	return obj.(*v1.RayCluster), err
 }

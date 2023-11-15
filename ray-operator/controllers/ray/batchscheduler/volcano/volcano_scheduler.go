@@ -14,8 +14,6 @@ import (
 	"github.com/go-logr/logr"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
@@ -184,9 +182,5 @@ func (vf *VolcanoBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
 }
 
 func (vf *VolcanoBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
-	return b.
-		Watches(&source.Kind{Type: &v1beta1.PodGroup{}}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &rayv1.RayCluster{},
-		})
+	return b.Owns(&v1beta1.PodGroup{})
 }

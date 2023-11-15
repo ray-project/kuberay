@@ -83,9 +83,9 @@ var instance = rayv1.RayCluster{
 		},
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32Ptr(3),
-				MinReplicas: pointer.Int32Ptr(0),
-				MaxReplicas: pointer.Int32Ptr(10000),
+				Replicas:    pointer.Int32(3),
+				MinReplicas: pointer.Int32(0),
+				MaxReplicas: pointer.Int32(10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
 					"port":     "6379",

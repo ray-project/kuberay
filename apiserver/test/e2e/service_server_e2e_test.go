@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -554,7 +555,7 @@ func TestServiceServerV1Update(t *testing.T) {
 				HTTPStatusCode: http.StatusBadRequest,
 			},
 		},
-		//TODO @z103cb this test is failing, needs to be investigated to determine if is a valid test,
+		// TODO @z103cb this test is failing, needs to be investigated to determine if is a valid test,
 		// the cluster fails to come up.
 		/*
 			{
@@ -857,7 +858,7 @@ func createTestServiceV1(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
 	// wait for the service to be in a running state for 3 minutes
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
 		if err00 != nil {
 			return true, err00
@@ -871,7 +872,7 @@ func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
 	// wait for the service to be deleted
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
 		if err00 != nil &&
 			assert.EqualError(t, err00, "rayservices.ray.io \""+serviceName+"\" not found") {
@@ -886,7 +887,7 @@ func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 func waitForRunningServiceWithWorkGroupSpec(t *testing.T, tCtx *End2EndTestingContext, serviceName string, minWorkerReplicas, maxWorkerReplicas, availableWorkerReplicas int32) {
 	// wait for the service to be in a running state for 3 minutes
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
 		if err00 != nil {
 			return true, err00
