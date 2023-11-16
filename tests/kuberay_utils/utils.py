@@ -25,7 +25,7 @@ logging.basicConfig(
 
 def is_feature_supported(ray_version, feature):
     """Return True if `feature` is supported in `ray_version`"""
-    if ray_version == "nightly":
+    if ray_version == "nightly" or "." not in ray_version:
         return True
     major, minor, _ = [int(s) for s in ray_version.split('.')]
     if feature in [CONST.RAY_FT, CONST.RAY_SERVICE]:
