@@ -1,0 +1,86 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-sample
+spec:
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
+  serveConfigV2: |
+    applications:
+      - name: app1
+        import_path: run_in_container:app
+        route_prefix: /app1
+        runtime_env:
+          container:
+            image: zcin/runtime-env-prototype:nested
+            worker_path: "/home/ray/anaconda3/lib/python3.9/site-packages/ray/_private/workers/default_worker.py"
+        deployments:
+          - name: MyModel
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.1
+      - name: app2
+        import_path: run_in_container:app
+        route_prefix: /app2
+        runtime_env:
+          container:
+            image: zcin/runtime-env-prototype:nested2
+            worker_path: "/home/ray/anaconda3/lib/python3.9/site-packages/ray/_private/workers/default_worker.py"
+        deployments:
+          - name: MyModel
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.1
+  rayClusterConfig:
+    rayVersion: '3.0.0.dev0' # should match the Ray version in the image of the containers
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: zcin/runtime-env-prototype:latest
+              resources:
+                limits:
+                  cpu: 2
+                  memory: 2Gi
+                requests:
+                  cpu: 2
+                  memory: 2Gi
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265 # Ray dashboard
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+              securityContext:
+                privileged: True
+    workerGroupSpecs:
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 5
+        groupName: small-group
+        rayStartParams: {}
+        #pod template
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: zcin/runtime-env-prototype:latest
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh","-c","ray stop"]
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: "2Gi"
+                  requests:
+                    cpu: "500m"
+                    memory: "2Gi"
+                securityContext:
+                  privileged: True

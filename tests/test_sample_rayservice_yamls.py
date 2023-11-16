@@ -341,6 +341,31 @@ class TestRayService:
         for cr_event in cr_events:
             cr_event.trigger()
 
+    def test_nested_container(self, set_up_cluster):
+        """Test running two applications in two different containers with different images.
+        
+        Both applications have the same code, the code reads 
+        """
+
+        filename = "ray-service.separate-containers.yaml"
+        path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath(filename)
+        print("path", path)
+        with open(path, encoding="utf-8") as cr_yaml:
+            cr = yaml.safe_load(cr_yaml)
+
+        rs = RuleSet([EasyJobRule(), CurlServiceRule(queries=[
+            {"path": "/app1", "json_args": {}, "expected_output": "Hi I'm Cindy, this is version 1\n"},
+            {"path": "/app2", "json_args": {}, "expected_output": "Hi I'm Cindy, this is version 2\n"},
+        ])])
+        
+        cr_events: List[CREvent] = [
+            RayServiceAddCREvent(cr, [rs], 900, NAMESPACE, filepath=path),
+            RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, filepath=path)
+        ]
+
+        for cr_event in cr_events:
+            cr_event.trigger()
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", "-s", __file__]))
