@@ -210,6 +210,18 @@ Run tests on your local environment
 * Step1: Install `ct` (chart-testing) and related dependencies. See https://github.com/helm/chart-testing for more details.
 * Step2: `./helm-chart/script/chart-test.sh local`
 
+### Generating API Reference
+
+We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documenation for more details.
+
+Generate API refernece:
+
+```bash
+make api-docs
+```
+
+The file will be generated at `docs/reference/api.md` as configured.
+
 ### Consistency check
 
 We have several [consistency checks](https://github.com/ray-project/kuberay/blob/master/.github/workflows/consistency-check.yaml) on GitHub Actions. There are several files which need synchronization.
