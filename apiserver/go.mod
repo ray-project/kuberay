@@ -30,6 +30,7 @@ require (
 	github.com/rs/zerolog v1.31.0
 	google.golang.org/genproto v0.0.0-20210909211513-a8c4777a87af
 	sigs.k8s.io/yaml v1.3.0
+	google.golang.org/genproto v0.0.0-20210909211513-a8c4777a87af
 )
 
 require github.com/pmezard/go-difflib v1.0.0 // indirect
