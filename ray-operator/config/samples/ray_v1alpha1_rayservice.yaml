@@ -17,7 +17,7 @@ spec:
         import_path: fruit.deployment_graph
         route_prefix: /fruit
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
         deployments:
           - name: MangoStand
             num_replicas: 1
@@ -41,15 +41,11 @@ spec:
             num_replicas: 1
             ray_actor_options:
               num_cpus: 0.1
-          - name: DAGDriver
-            num_replicas: 1
-            ray_actor_options:
-              num_cpus: 0.1
       - name: math_app
         import_path: conditional_dag.serve_dag
         route_prefix: /calc
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
         deployments:
           - name: Adder
             num_replicas: 1
@@ -64,10 +60,6 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
           - name: Router
-            num_replicas: 1
-          - name: create_order
-            num_replicas: 1
-          - name: DAGDriver
             num_replicas: 1
   rayClusterConfig:
     rayVersion: '2.7.0' # should match the Ray version in the image of the containers

@@ -190,7 +190,7 @@ class TestRayService:
         self.rayservice_name = self.cr["metadata"]["name"]
         self.default_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "6"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"15 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "15 pizzas please!"},
         ]
 
         K8S_CLUSTER_MANAGER.cleanup()
@@ -223,7 +223,7 @@ class TestRayService:
 
         updated_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "9 pizzas please!"},
         ]
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
@@ -266,11 +266,11 @@ class TestRayService:
 
         updated_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "9 pizzas please!"},
         ]
         allowed_queries_during_update = deepcopy(self.default_queries)
         allowed_queries_during_update[0]["expected_output"] = {"6", "8"}
-        allowed_queries_during_update[1]["expected_output"] = {'"15 pizzas please!"', '"9 pizzas please!"'}
+        allowed_queries_during_update[1]["expected_output"] = {"15 pizzas please!", "9 pizzas please!"}
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
             logger.info(f"Writing modified RayService yaml to {yaml_copy.name}.")
