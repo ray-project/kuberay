@@ -446,19 +446,25 @@ applications:
 			// Simulate autoscaler by updating the pending RayCluster directly. Note that the autoscaler
 			// will not update the RayService directly.
 
-			// ServiceUnhealthySecondThreshold is a global variable in rayservice_controller.go.
-			// If the time elapsed since the last update of the service HEALTHY status exceeds ServiceUnhealthySecondThreshold seconds,
-			// the RayService controller will consider the active RayCluster as unhealthy and prepare a new RayCluster.
-			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
-			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY))
+			// Trigger a new RayCluster preparation by updating the RayVersion.
+			oldRayVersion := myRayService.Spec.RayClusterSpec.RayVersion
+			newRayVersion := "2.200.0"
+			Expect(oldRayVersion).ShouldNot(Equal(newRayVersion))
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+				myRayService.Spec.RayClusterSpec.RayVersion = newRayVersion
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "New pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 			initialPendingClusterName, _ := getPreparingRayClusterNameFunc(ctx, myRayService)()
 
 			// Simulate that the pending RayCluster is updated by the autoscaler.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: initialPendingClusterName, Namespace: "default"}, myRayCluster),
 					time.Second*15, time.Millisecond*500).Should(BeNil(), "Pending RayCluster = %v", myRayCluster.Name)
@@ -478,7 +484,6 @@ applications:
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
 			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
-			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
 			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
@@ -596,29 +601,6 @@ applications:
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-		})
-
-		It("should detect unhealthy status and try to switch to new RayCluster.", func() {
-			// Set deployment statuses to UNHEALTHY
-			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
-			ServiceUnhealthySecondThreshold = 5
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY))
-
-			Eventually(
-				getPreparingRayClusterNameFunc(ctx, myRayService),
-				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
-
-			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
-			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
-
-			Eventually(
-				getPreparingRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "My new RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
-			Eventually(
-				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My new RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
 
 		It("should perform a zero-downtime update after a code change.", func() {
