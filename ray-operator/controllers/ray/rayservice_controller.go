@@ -1114,10 +1114,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayServiceStatus)
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
-			if !updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
-				logger.Info("Dashboard is unhealthy, restart the cluster.")
-				r.markRestart(rayServiceInstance)
-			}
 			err = r.updateState(ctx, rayServiceInstance, rayv1.WaitForServeDeploymentReady, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 		}
@@ -1128,10 +1124,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	var isHealthy, isReady bool
 	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
-		if !updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold) {
-			logger.Info("Dashboard is unhealthy, restart the cluster.")
-			r.markRestart(rayServiceInstance)
-		}
 		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
@@ -1152,7 +1144,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		logger.Info("Mark cluster as waiting for Serve deployments", "rayCluster", rayClusterInstance)
 	} else if !isHealthy {
 		// NOTE: When isHealthy is false, isReady is guaranteed to be false.
-		r.markRestart(rayServiceInstance)
 		rayServiceInstance.Status.ServiceStatus = rayv1.Restarting
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
