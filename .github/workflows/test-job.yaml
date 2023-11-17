@@ -328,10 +328,10 @@ jobs:
           ray_version: 390738
 
   test-compatibility-2_5_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
     name: Compatibility Test - 11/7 https://github.com/ray-project/ray/pull/40982
     steps:
@@ -348,10 +348,10 @@ jobs:
           ray_version: eae2c2
 
   test-compatibility-2_6_3:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
     name: Compatibility Test - 11/9 https://github.com/ray-project/ray/pull/40988
     steps:
@@ -368,10 +368,10 @@ jobs:
           ray_version: 219034
 
   test-compatibility-2_7_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
     name: Compatibility Test - 11/8 https://github.com/ray-project/ray/pull/41012
     steps:
@@ -388,10 +388,10 @@ jobs:
           ray_version: d58b87
 
   test-compatibility-nightly:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
     name: Compatibility Test - Nightly
     steps:
