@@ -73,8 +73,9 @@ test-e2e: WHAT ?= ./test/e2e
 test-e2e: manifests generate fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
-sync: helm
+sync: helm api-docs
 	./hack/update-codegen.sh
+
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.

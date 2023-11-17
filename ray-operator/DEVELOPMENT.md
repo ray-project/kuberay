@@ -228,22 +228,26 @@ We have several [consistency checks](https://github.com/ray-project/kuberay/blob
 
 1. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with the CRD YAML files (`ray-operator/config/crd/bases/`)
 2. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with generated API (`ray-operator/pkg/client`)
-3. CRD YAML files in `ray-operator/config/crd/bases/` and `helm-chart/kuberay-operator/crds/` should be the same.
-4. Kubebuilder markers in `ray-operator/controllers/ray/*_controller.go` should be synchronized with RBAC YAML files in `ray-operator/config/rbac`.
-5. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized. **Currently, we need to synchronize this manually.** See [#631](https://github.com/ray-project/kuberay/pull/631) as an example.
-6. `multiple_namespaces_role.yaml` and `multiple_namespaces_rolebinding.yaml` should be synchronized with `role.yaml` and `rolebinding.yaml` in the `helm-chart/kuberay-operator/templates` directory. The only difference is that the former creates namespaced RBAC resources, while the latter creates cluster-scoped RBAC resources.
+3. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with generated API reference (`docs/reference/api.md`)
+4. CRD YAML files in `ray-operator/config/crd/bases/` and `helm-chart/kuberay-operator/crds/` should be the same.
+5. Kubebuilder markers in `ray-operator/controllers/ray/*_controller.go` should be synchronized with RBAC YAML files in `ray-operator/config/rbac`.
+6. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized. **Currently, we need to synchronize this manually.** See [#631](https://github.com/ray-project/kuberay/pull/631) as an example.
+7. `multiple_namespaces_role.yaml` and `multiple_namespaces_rolebinding.yaml` should be synchronized with `role.yaml` and `rolebinding.yaml` in the `helm-chart/kuberay-operator/templates` directory. The only difference is that the former creates namespaced RBAC resources, while the latter creates cluster-scoped RBAC resources.
 
 ```bash
-# Synchronize consistency 1 and 4:
+# Synchronize consistency 1 and 5:
 make manifests
 
 # Synchronize consistency 2:
 ./hack/update-codegen.sh
 
 # Synchronize consistency 3:
+make api-docs
+
+# Synchronize consistency 4:
 make helm
 
-# Synchronize 1, 2, 3, and 4 in one command
+# Synchronize 1, 2, 3, 4 and 5 in one command
 # [Note]: Currently, we need to synchronize consistency 5 and 6 manually.
 make sync
 
