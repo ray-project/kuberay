@@ -288,10 +288,10 @@ jobs:
       if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
   test-compatibility-1_13_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
     name: Compatibility Test - 1.13.0
     steps:
@@ -308,12 +308,12 @@ jobs:
           ray_version: 1.13.0
 
   test-compatibility-2_4_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
+    # needs:
+    #   - build_operator
+    #   - build_apiserver
+    #   - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/13 https://github.com/ray-project/ray/pull/40677
+    name: Compatibility Test - 11/6 https://github.com/ray-project/ray/pull/40918
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -325,7 +325,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: dc945e
+          ray_version: 390738
 
   test-compatibility-2_5_0:
     needs:
@@ -333,7 +333,7 @@ jobs:
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/14 https://github.com/ray-project/ray/pull/41122
+    name: Compatibility Test - 11/7 https://github.com/ray-project/ray/pull/40982
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -345,7 +345,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: e51a22
+          ray_version: eae2c2
 
   test-compatibility-2_6_3:
     needs:
@@ -353,7 +353,7 @@ jobs:
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/14 https://github.com/ray-project/ray/pull/41113
+    name: Compatibility Test - 11/9 https://github.com/ray-project/ray/pull/40988
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -365,7 +365,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: c39bd4
+          ray_version: 219034
 
   test-compatibility-2_7_0:
     needs:
@@ -373,7 +373,7 @@ jobs:
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/10 https://github.com/ray-project/ray/pull/40985
+    name: Compatibility Test - 11/8 https://github.com/ray-project/ray/pull/41012
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -385,7 +385,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: cc4524
+          ray_version: d58b87
 
   test-compatibility-nightly:
     needs:
