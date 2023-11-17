@@ -888,7 +888,7 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 	return rayServiceInstance.Namespace + "/" + rayServiceInstance.Name + "/"
 }
 
-func updateAndCheckDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool) {
+func updateDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool) {
 	timeNow := metav1.Now()
 	rayServiceClusterStatus.DashboardStatus.LastUpdateTime = &timeNow
 	rayServiceClusterStatus.DashboardStatus.IsHealthy = isHealthy
@@ -1038,7 +1038,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
-		updateAndCheckDashboardStatus(rayServiceStatus, false)
+		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
@@ -1047,11 +1047,11 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 
 	var isHealthy, isReady bool
 	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
-		updateAndCheckDashboardStatus(rayServiceStatus, false)
+		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
-	updateAndCheckDashboardStatus(rayServiceStatus, true)
+	updateDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady)
 
@@ -1116,7 +1116,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
-	updateAndCheckDashboardStatus(rayServiceStatus, true)
+	updateDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady, "isActive", isActive)
 

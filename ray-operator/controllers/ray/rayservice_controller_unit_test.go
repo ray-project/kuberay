@@ -803,25 +803,25 @@ func TestUpdateAndCheckDashboardStatus(t *testing.T) {
 
 	// Test 1: The dashboard agent was healthy, and the dashboard agent is still healthy.
 	svcStatusCopy := rayServiceStatus.DeepCopy()
-	updateAndCheckDashboardStatus(svcStatusCopy, true)
+	updateDashboardStatus(svcStatusCopy, true)
 	assert.NotEqual(t, svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
 	// Test 2: The dashboard agent was healthy, and the dashboard agent becomes unhealthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
-	updateAndCheckDashboardStatus(svcStatusCopy, false)
+	updateDashboardStatus(svcStatusCopy, false)
 	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
 	// Test 3: The dashboard agent was unhealthy, and the dashboard agent is still unhealthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
 	svcStatusCopy.DashboardStatus.IsHealthy = false
-	updateAndCheckDashboardStatus(svcStatusCopy, false)
+	updateDashboardStatus(svcStatusCopy, false)
 	// The `HealthLastUpdateTime` should not be updated.
 	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
 	// Test 4: The dashboard agent was unhealthy, and the dashboard agent becomes healthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
 	svcStatusCopy.DashboardStatus.IsHealthy = false
-	updateAndCheckDashboardStatus(svcStatusCopy, true)
+	updateDashboardStatus(svcStatusCopy, true)
 	assert.NotEqual(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 }
 
