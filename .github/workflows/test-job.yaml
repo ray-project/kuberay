@@ -313,7 +313,7 @@ jobs:
     #   - build_apiserver
     #   - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/6 https://github.com/ray-project/ray/pull/40918
+    name: Compatibility Test - 10/20 https://github.com/ray-project/ray/pull/40453
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -325,7 +325,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 390738
+          ray_version: e615ea
 
   test-compatibility-2_5_0:
     # needs:
@@ -353,7 +353,7 @@ jobs:
     #   - build_apiserver
     #   - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/2 https://github.com/ray-project/ray/pull/39584
+    name: Compatibility Test - 10/25 https://github.com/ray-project/ray/pull/39732
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -365,7 +365,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 0588b1
+          ray_version: 41714d
 
   test-compatibility-2_6_9:
     # needs:
@@ -373,7 +373,7 @@ jobs:
     #   - build_apiserver
     #   - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/3 https://github.com/ray-project/ray/pull/40903
+    name: Compatibility Test - 10/27 https://github.com/ray-project/ray/pull/40431
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -385,7 +385,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 82f366
+          ray_version: 5ac06e
 
   test-compatibility-2_7_0:
     # needs:
@@ -393,7 +393,7 @@ jobs:
     #   - build_apiserver
     #   - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 11/3 https://github.com/ray-project/ray/pull/40434
+    name: Compatibility Test - 10/23 https://github.com/ray-project/ray/pull/40105
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -405,7 +405,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 941abb
+          ray_version: e3b4dc
 
   test-compatibility-nightly:
     # needs:
