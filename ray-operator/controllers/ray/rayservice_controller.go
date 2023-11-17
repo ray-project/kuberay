@@ -1085,24 +1085,20 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		rayServiceStatus = &rayServiceInstance.Status.PendingServiceStatus
 	}
 
-	// TODO (kevin85421): This `if` block is a hotfix for the case that active RayCluster's dashboard agent process crashes.
-	// I will refactor the health checking logic in the future.
-	if !isActive {
-		// Check if head pod is running and ready. If not, requeue the resource event to avoid
-		// redundant custom resource status updates.
-		//
-		// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
-		// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
-		// This is not an issue since `UpdateDeployments` is an idempotent operation.
-		logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
-		if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
-			if err != nil {
-				logger.Error(err, "Failed to check if head Pod is running and ready!")
-			} else {
-				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
-			}
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
+	// Check if head pod is running and ready. If not, requeue the resource event to avoid
+	// redundant custom resource status updates.
+	//
+	// TODO (kevin85421): Note that the Dashboard and GCS may take a few seconds to start up
+	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
+	// This is not an issue since `UpdateDeployments` is an idempotent operation.
+	logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
+	if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
+		if err != nil {
+			logger.Error(err, "Failed to check if head Pod is running and ready!")
+		} else {
+			logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
 		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
