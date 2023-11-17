@@ -503,7 +503,7 @@ applications:
 			// ServiceUnhealthySecondThreshold is a global variable in rayservice_controller.go.
 			// If the time elapsed since the last update of the service HEALTHY status exceeds ServiceUnhealthySecondThreshold seconds,
 			// the RayService controller will consider the active RayCluster as unhealthy and prepare a new RayCluster.
-			orignalServeDeploymentUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
+			originalServiceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
 			ServiceUnhealthySecondThreshold = 500
 
 			// Change serve status to be unhealthy
@@ -550,7 +550,7 @@ applications:
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-			ServiceUnhealthySecondThreshold = orignalServeDeploymentUnhealthySecondThreshold
+			ServiceUnhealthySecondThreshold = originalServiceUnhealthySecondThreshold
 		})
 
 		It("Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.", func() {

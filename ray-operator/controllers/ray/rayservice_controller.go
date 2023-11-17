@@ -888,21 +888,13 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 	return rayServiceInstance.Namespace + "/" + rayServiceInstance.Name + "/"
 }
 
-// Return true if healthy, otherwise false.
-func updateAndCheckDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool, unhealthyThreshold *int32) bool {
+func updateAndCheckDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool) {
 	timeNow := metav1.Now()
-	oldIsHealthy := rayServiceClusterStatus.DashboardStatus.IsHealthy
 	rayServiceClusterStatus.DashboardStatus.LastUpdateTime = &timeNow
 	rayServiceClusterStatus.DashboardStatus.IsHealthy = isHealthy
-	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || oldIsHealthy {
+	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || isHealthy {
 		rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime = &timeNow
 	}
-
-	deploymentUnhealthySecondThreshold := DeploymentUnhealthySecondThreshold
-	if unhealthyThreshold != nil {
-		deploymentUnhealthySecondThreshold = float64(*unhealthyThreshold)
-	}
-	return time.Since(rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.Time).Seconds() <= deploymentUnhealthySecondThreshold
 }
 
 func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1.RayService) {
@@ -1046,7 +1038,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
-		updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+		updateAndCheckDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
@@ -1055,11 +1047,11 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 
 	var isHealthy, isReady bool
 	if isHealthy, isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
-		updateAndCheckDashboardStatus(rayServiceStatus, false, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+		updateAndCheckDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
-	updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+	updateAndCheckDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady)
 
@@ -1124,7 +1116,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, false, err
 	}
 
-	updateAndCheckDashboardStatus(rayServiceStatus, true, rayServiceInstance.Spec.DeploymentUnhealthySecondThreshold)
+	updateAndCheckDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isHealthy", isHealthy, "isReady", isReady, "isActive", isActive)
 

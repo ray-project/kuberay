@@ -792,40 +792,37 @@ func TestReconcileRayCluster(t *testing.T) {
 }
 
 func TestUpdateAndCheckDashboardStatus(t *testing.T) {
-	now := metav1.Now()
+	timestamp := metav1.Now()
 	rayServiceStatus := rayv1.RayServiceStatus{
 		DashboardStatus: rayv1.DashboardStatus{
 			IsHealthy:            true,
-			HealthLastUpdateTime: &now,
-			LastUpdateTime:       &now,
+			HealthLastUpdateTime: &timestamp,
+			LastUpdateTime:       &timestamp,
 		},
 	}
-	deploymentUnhealthySecondThreshold := int32(300)
 
 	// Test 1: The dashboard agent was healthy, and the dashboard agent is still healthy.
 	svcStatusCopy := rayServiceStatus.DeepCopy()
-	assert.True(t, updateAndCheckDashboardStatus(svcStatusCopy, true, &deploymentUnhealthySecondThreshold))
-	assert.NotEqual(t, svcStatusCopy.DashboardStatus.HealthLastUpdateTime, now)
+	updateAndCheckDashboardStatus(svcStatusCopy, true)
+	assert.NotEqual(t, svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
 	// Test 2: The dashboard agent was healthy, and the dashboard agent becomes unhealthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
-	assert.True(t, updateAndCheckDashboardStatus(svcStatusCopy, false, &deploymentUnhealthySecondThreshold))
-	assert.NotEqual(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, now)
+	updateAndCheckDashboardStatus(svcStatusCopy, false)
+	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
 	// Test 3: The dashboard agent was unhealthy, and the dashboard agent is still unhealthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
 	svcStatusCopy.DashboardStatus.IsHealthy = false
-	assert.True(t, updateAndCheckDashboardStatus(svcStatusCopy, false, &deploymentUnhealthySecondThreshold))
+	updateAndCheckDashboardStatus(svcStatusCopy, false)
 	// The `HealthLastUpdateTime` should not be updated.
-	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, now)
+	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 
-	// Test 4: The dashboard agent was unhealthy, and the dashboard agent lasts unhealthy for more than `deploymentUnhealthySecondThreshold` seconds.
+	// Test 4: The dashboard agent was unhealthy, and the dashboard agent becomes healthy.
 	svcStatusCopy = rayServiceStatus.DeepCopy()
 	svcStatusCopy.DashboardStatus.IsHealthy = false
-	minus301Seconds := metav1.NewTime(now.Add(-time.Second * time.Duration(deploymentUnhealthySecondThreshold+1)))
-	svcStatusCopy.DashboardStatus.HealthLastUpdateTime = &minus301Seconds
-	assert.False(t, updateAndCheckDashboardStatus(svcStatusCopy, false, &deploymentUnhealthySecondThreshold))
-	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, minus301Seconds)
+	updateAndCheckDashboardStatus(svcStatusCopy, true)
+	assert.NotEqual(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
