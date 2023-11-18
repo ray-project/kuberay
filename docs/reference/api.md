@@ -38,17 +38,6 @@ _Appears in:_
 | `upscalingMode` _[UpscalingMode](#upscalingmode)_ | UpscalingMode is "Conservative", "Default", or "Aggressive." Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster. Default: Upscaling is not rate-limited. Aggressive: An alias for Default; upscaling is not rate-limited. It is not read by the KubeRay operator but by the Ray autoscaler. |
 
 
-#### ClusterState
-
-_Underlying type:_ _string_
-
-The overall state of the Ray cluster.
-
-_Appears in:_
-- [RayClusterStatus](#rayclusterstatus)
-
-
-
 
 
 #### HeadGroupSpec
@@ -65,24 +54,8 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |
 | `headService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | HeadService is the Kubernetes service of the head pod. |
 | `enableIngress` _boolean_ | EnableIngress indicates whether operator should create ingress object for head service or not. |
-| `replicas` _integer_ | HeadGroupSpec.Replicas is deprecated and ignored; there can only be one head pod per Ray cluster. |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: node-manager-port, object-store-memory, ... |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s depoyments, statefulsets, etc. |
-
-
-#### HeadInfo
-
-
-
-HeadInfo gives info about head
-
-_Appears in:_
-- [RayClusterStatus](#rayclusterstatus)
-
-| Field | Description |
-| --- | --- |
-| `podIP` _string_ |  |
-| `serviceIP` _string_ |  |
 
 
 #### RayActorOptionSpec
@@ -345,17 +318,6 @@ _Appears in:_
 | `upscalingMode` _[UpscalingMode](#upscalingmode)_ | UpscalingMode is "Conservative", "Default", or "Aggressive." Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster. Default: Upscaling is not rate-limited. Aggressive: An alias for Default; upscaling is not rate-limited. It is not read by the KubeRay operator but by the Ray autoscaler. |
 
 
-#### ClusterState
-
-_Underlying type:_ _string_
-
-The overall state of the Ray cluster.
-
-_Appears in:_
-- [RayClusterStatus](#rayclusterstatus)
-
-
-
 
 
 #### HeadGroupSpec
@@ -372,24 +334,8 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |
 | `headService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | HeadService is the Kubernetes service of the head pod. |
 | `enableIngress` _boolean_ | EnableIngress indicates whether operator should create ingress object for head service or not. |
-| `replicas` _integer_ | HeadGroupSpec.Replicas is deprecated and ignored; there can only be one head pod per Ray cluster. |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: node-manager-port, object-store-memory, ... |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s depoyments, statefulsets, etc. |
-
-
-#### HeadInfo
-
-
-
-HeadInfo gives info about head
-
-_Appears in:_
-- [RayClusterStatus](#rayclusterstatus)
-
-| Field | Description |
-| --- | --- |
-| `podIP` _string_ |  |
-| `serviceIP` _string_ |  |
 
 
 #### RayActorOptionSpec
