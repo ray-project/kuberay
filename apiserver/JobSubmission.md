@@ -86,7 +86,7 @@ Note that this cluster is mounting a volume from a configmap. This config map sh
 
 ### Submit Ray Job
 
-Once the cluster is up an running, you can submit a job to the cluster using the following command:
+Once the cluster is up and running, you can submit a job to the cluster using the following command:
 
 ```shell
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster' \
@@ -106,7 +106,7 @@ This should return the following:
 }
 ```
 
-Note that `submissionId` value that you will get is different
+Note that the `submissionId` value that you will get is different
 
 ### Get job details
 

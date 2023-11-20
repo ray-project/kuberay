@@ -203,6 +203,7 @@ def test_cluster():
     cluster_dict["events"] = [event]
     print(f"cluster with output: {cluster_decoder(cluster_dict).to_string()}")
 
+
 def test_submission():
     yaml = """
     pip:

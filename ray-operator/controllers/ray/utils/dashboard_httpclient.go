@@ -323,8 +323,8 @@ type RayJobInfo struct {
 	SubmissionId string                 `json:"submission_id,omitempty"`
 	Message      string                 `json:"message,omitempty"`
 	ErrorType    *string                `json:"error_type,omitempty"`
-	StartTime    int64                  `json:"start_time,omitempty"`
-	EndTime      int64                  `json:"end_time,omitempty"`
+	StartTime    uint64                 `json:"start_time,omitempty"`
+	EndTime      uint64                 `json:"end_time,omitempty"`
 	Metadata     map[string]string      `json:"metadata,omitempty"`
 	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
 }
@@ -367,7 +367,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -469,7 +469,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string, log 
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return nil, errors.NewBadRequest("Job " + jobName + " does not exist on the")
 	}
 
 	body, err := io.ReadAll(resp.Body)
