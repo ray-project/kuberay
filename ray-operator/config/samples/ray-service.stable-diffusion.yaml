@@ -4,7 +4,6 @@ metadata:
   name: stable-diffusion
 spec:
   serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
   serveConfigV2: |
     applications:
       - name: stable_diffusion
