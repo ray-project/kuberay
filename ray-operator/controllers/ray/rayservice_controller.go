@@ -42,11 +42,10 @@ var (
 )
 
 const (
-	ServiceDefaultRequeueDuration      = 2 * time.Second
-	ServiceRestartRequeueDuration      = 10 * time.Second
-	RayClusterDeletionDelayDuration    = 60 * time.Second
-	DeploymentUnhealthySecondThreshold = 300.0 // Dashboard agent related health check.
-	ENABLE_ZERO_DOWNTIME               = "ENABLE_ZERO_DOWNTIME"
+	ServiceDefaultRequeueDuration   = 2 * time.Second
+	ServiceRestartRequeueDuration   = 10 * time.Second
+	RayClusterDeletionDelayDuration = 60 * time.Second
+	ENABLE_ZERO_DOWNTIME            = "ENABLE_ZERO_DOWNTIME"
 )
 
 // RayServiceReconciler reconciles a RayService object
