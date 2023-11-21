@@ -7,7 +7,6 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
   serveService:
     metadata:
       name: custom-ray-serve-service-name

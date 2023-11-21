@@ -79,7 +79,6 @@ metadata:
   annotations:
     ray.io/ft-enabled: "true"
 spec:
-  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
   serveConfigV2: |
     applications:
       - name: fruit_app
