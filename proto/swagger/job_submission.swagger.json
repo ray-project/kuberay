@@ -342,12 +342,12 @@
         },
         "startTime": {
           "type": "string",
-          "format": "uint64",
+          "format": "int64",
           "title": "Job Start time"
         },
         "endTime": {
           "type": "string",
-          "format": "uint64",
+          "format": "int64",
           "title": "Job end time"
         },
         "metadata": {
