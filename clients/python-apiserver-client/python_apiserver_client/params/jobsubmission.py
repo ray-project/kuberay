@@ -95,10 +95,12 @@ class RayJobInfo:
                f" status = {self.status}")
         if self.message is not None:
             val += f" message = {self.message}"
-        if self.start_teme > 0:
-            val += f" start time = {datetime.datetime.fromtimestamp(self.start_teme /1.e3).strftime('%Y-%m-%d %H:%M:%S')}"
-        if self.end_teme > 0:
-            val += f" end time = {datetime.datetime.fromtimestamp(self.end_teme/ 1e3).strftime('%Y-%m-%d %H:%M:%S')}"
+        if self.start_time > 0:
+            val += (f" start time = "
+                    f"{datetime.datetime.fromtimestamp(self.start_time /1.e3).strftime('%Y-%m-%d %H:%M:%S')}")
+        if self.end_time > 0:
+            val += (f" end time = "
+                    f"{datetime.datetime.fromtimestamp(self.end_time / 1e3).strftime('%Y-%m-%d %H:%M:%S')}")
         if self.error_type is not None:
             val += f" error type = {self.error_type}"
         if self.runtime_env is not None:
