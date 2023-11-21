@@ -120,8 +120,8 @@ message RayJob {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required field. This field indicates the user who owns the job.
   string user = 3 [(google.api.field_behavior) = REQUIRED];
-  // The entrypoint of the RayJob
-  string entrypoint = 4;
+  // Required field. The entrypoint of the RayJob
+  string entrypoint = 4 [(google.api.field_behavior) = REQUIRED];
   // Optional. Metadata is data to store along with this job.
   map<string, string> metadata = 5;
   // Optional. RuntimeEnv is a Yaml string which maps to the RuntimeEnvYAML field of the RayJobSpec

@@ -45,7 +45,7 @@ class ClusterEvent:
     It provides APIs to create and stringify. Its output only data, so we do not need to implement to_dict
 
     Methods:
-    - Create templates: gets the following parameters:
+    - Create event: gets the dictionary with the following parameters:
         id - unique Event Id
         name - human readable event name
         created_at - event creation time
