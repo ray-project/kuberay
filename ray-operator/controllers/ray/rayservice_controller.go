@@ -212,6 +212,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// Final status update for any CR modification.
 	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
+		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			logger.Error(errStatus, "Failed to update RayService status", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
@@ -222,7 +223,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 }
 
 // Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// If the only differences between the old and new status are the LastUpdateTime and HealthLastUpdateTime fields,
+// If the only difference between the old and new status is the HealthLastUpdateTime field,
 // the status update will not be triggered.
 // The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
 func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
@@ -747,8 +748,6 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
 
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus, serveConfigType utils.RayServeConfigType) (bool, error) {
-	// TODO (kevin85421): Separate the logic for retrieving Serve application statuses and checking Serve application statuses into two separate functions.
-	// Currently, the handling logic for `isHealthy` and `isReady` between these two behaviors is inconsistent. This can cause potential issues in the future.
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
 	if serveConfigType == utils.SINGLE_APP {
@@ -789,7 +788,6 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		applicationStatus := rayv1.AppStatus{
 			Message:              app.Message,
 			Status:               app.Status,
-			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 			Deployments:          make(map[string]rayv1.ServeDeploymentStatus),
 		}
@@ -817,7 +815,6 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			deploymentStatus := rayv1.ServeDeploymentStatus{
 				Status:               deployment.Status,
 				Message:              deployment.Message,
-				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			}
 
@@ -853,7 +850,6 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 
 func updateDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool) {
 	timeNow := metav1.Now()
-	rayServiceClusterStatus.DashboardStatus.LastUpdateTime = &timeNow
 	rayServiceClusterStatus.DashboardStatus.IsHealthy = isHealthy
 	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || isHealthy {
 		rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime = &timeNow
