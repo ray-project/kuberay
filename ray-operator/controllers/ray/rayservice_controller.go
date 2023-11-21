@@ -792,6 +792,18 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			Deployments:          make(map[string]rayv1.ServeDeploymentStatus),
 		}
 
+		if isServeAppUnhealthyOrDeployedFailed(app.Status) {
+			if isServeAppUnhealthyOrDeployedFailed(prevApplicationStatus.Status) {
+				if prevApplicationStatus.HealthLastUpdateTime != nil {
+					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
+					r.Log.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
+						fmt.Sprintf(
+							"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED since %v. ",
+							appName, prevApplicationStatus.HealthLastUpdateTime))
+				}
+			}
+		}
+
 		// `isReady` is used to determine whether the Serve application is ready or not. The cluster switchover only happens when all Serve
 		// applications in this RayCluster are ready so that the incoming traffic will not be dropped.
 		if app.Status != rayv1.ApplicationStatusEnum.RUNNING {
