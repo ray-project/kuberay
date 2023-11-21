@@ -800,7 +800,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
 					r.Log.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
 						fmt.Sprintf(
-							"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED sine %v. ",
+							"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED since %v. ",
 							appName, prevApplicationStatus.HealthLastUpdateTime))
 				}
 			}
