@@ -3,7 +3,6 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 900
   serveConfig:
     importPath: fruit.deployment_graph
     runtimeEnv: |

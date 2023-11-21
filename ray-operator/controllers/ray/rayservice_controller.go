@@ -36,14 +36,8 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// This variable is mutable for unit testing purpose.
-var (
-	ServiceUnhealthySecondThreshold = 900.0 // Serve deployment related health check.
-)
-
 const (
 	ServiceDefaultRequeueDuration   = 2 * time.Second
-	ServiceRestartRequeueDuration   = 10 * time.Second
 	RayClusterDeletionDelayDuration = 60 * time.Second
 	ENABLE_ZERO_DOWNTIME            = "ENABLE_ZERO_DOWNTIME"
 )
@@ -752,14 +746,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // (1) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
 // (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
 
-func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus, serveConfigType utils.RayServeConfigType, unhealthySecondThreshold *int32) (bool, error) {
-	// If the `unhealthySecondThreshold` value is non-nil, then we will use that value. Otherwise, we will use the value ServiceUnhealthySecondThreshold
-	// which can be set in a test. This is used for testing purposes.
-	serviceUnhealthySecondThreshold := ServiceUnhealthySecondThreshold
-	if unhealthySecondThreshold != nil {
-		serviceUnhealthySecondThreshold = float64(*unhealthySecondThreshold)
-	}
-
+func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus, serveConfigType utils.RayServeConfigType) (bool, error) {
 	// TODO (kevin85421): Separate the logic for retrieving Serve application statuses and checking Serve application statuses into two separate functions.
 	// Currently, the handling logic for `isHealthy` and `isReady` between these two behaviors is inconsistent. This can cause potential issues in the future.
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
@@ -807,19 +794,14 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 			Deployments:          make(map[string]rayv1.ServeDeploymentStatus),
 		}
 
-		// `isHealthy` is used to determine whether restart the RayCluster or not. If the serve application is `UNHEALTHY` or `DEPLOY_FAILED`
-		// for more than `serviceUnhealthySecondThreshold` seconds, then KubeRay will consider the RayCluster unhealthy and prepare a new RayCluster.
 		if isServeAppUnhealthyOrDeployedFailed(app.Status) {
 			if isServeAppUnhealthyOrDeployedFailed(prevApplicationStatus.Status) {
 				if prevApplicationStatus.HealthLastUpdateTime != nil {
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
-					if time.Since(prevApplicationStatus.HealthLastUpdateTime.Time).Seconds() > serviceUnhealthySecondThreshold {
-						r.Log.Info("Restart RayCluster", "appName", appName, "appStatus", app.Status, "restart reason",
-							fmt.Sprintf(
-								"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED for more than %f seconds. "+
-									"Hence, KubeRay operator labels the RayCluster unhealthy and will prepare a new RayCluster. ",
-								appName, serviceUnhealthySecondThreshold))
-					}
+					r.Log.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
+						fmt.Sprintf(
+							"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED sine %v. ",
+							appName, prevApplicationStatus.HealthLastUpdateTime))
 				}
 			}
 		}
@@ -1027,7 +1009,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient.InitClient(clientURL)
 
 	var isReady bool
-	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance)); err != nil {
 		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
@@ -1088,7 +1070,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isReady bool
-	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance), rayServiceInstance.Spec.ServiceUnhealthySecondThreshold); err != nil {
+	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance)); err != nil {
 		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
