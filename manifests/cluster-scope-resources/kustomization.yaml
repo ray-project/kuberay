@@ -4,7 +4,6 @@ kind: Kustomization
 namespace: ray-system
 
 resources:
-- namespace.yaml
 - ../../ray-operator/config/crd
 
 configurations:
