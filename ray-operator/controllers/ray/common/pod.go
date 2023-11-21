@@ -554,6 +554,41 @@ func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1.RayNodeType, rayStartPar
 	}
 	container.Env = append(container.Env, clusterNameEnv)
 
+	if !envVarExists(RAY_NUM_CPUS, container.Env) {
+		cpu := container.Resources.Limits[v1.ResourceCPU]
+		var numCpus string
+		if !cpu.IsZero() {
+			numCpus = strconv.FormatInt(cpu.Value(), 10)
+		}
+
+		numCpusEnv := v1.EnvVar{Name: RAY_NUM_CPUS, Value: numCpus}
+		container.Env = append(container.Env, numCpusEnv)
+	}
+
+	if !envVarExists(RAY_MEMORY, container.Env) {
+		memory := container.Resources.Limits[v1.ResourceMemory]
+		var numMemory string
+		if !memory.IsZero() {
+			numMemory = strconv.FormatInt(memory.Value(), 10)
+		}
+		numMemoryEnv := v1.EnvVar{Name: RAY_MEMORY, Value: numMemory}
+		container.Env = append(container.Env, numMemoryEnv)
+	}
+
+	if !envVarExists(RAY_NUM_GPUS, container.Env) {
+		var numGpus string
+		for resourceKey, resource := range container.Resources.Limits {
+			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
+				numGpus = strconv.FormatInt(resource.Value(), 10)
+				// For now, only support one GPU type. Break on first match.
+				break
+			}
+		}
+
+		numGpusEnv := v1.EnvVar{Name: RAY_NUM_GPUS, Value: numGpus}
+		container.Env = append(container.Env, numGpusEnv)
+	}
+
 	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
@@ -668,6 +703,21 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 		rayStartParams["block"] = "true"
 	}
 
+	// Add --num-cpus option, if the num-cpus not exist, it will get the value from RAY_NUM_CPUS environment variable
+	if _, ok := rayStartParams["num-cpus"]; !ok {
+		rayStartParams["num-cpus"] = fmt.Sprintf("$%s", RAY_NUM_CPUS)
+	}
+
+	// Add --memory option, if the memory not exist, it will get the value from RAY_MEMORY environment variable
+	if _, ok := rayStartParams["memory"]; !ok {
+		rayStartParams["memory"] = fmt.Sprintf("$%s", RAY_MEMORY)
+	}
+
+	// Add --num-gpus option, if the num-cpus not exist, it will get the value from RAY_NUM_GPUS environment variable
+	if _, ok := rayStartParams["num-gpus"]; !ok {
+		rayStartParams["num-gpus"] = fmt.Sprintf("$%s", RAY_NUM_GPUS)
+	}
+
 	// Add dashboard listen port for RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
 		if value, ok := annotations[EnableServeServiceKey]; ok && value == EnableServeServiceTrue {
@@ -680,31 +730,6 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 
 // concatenateContainerCommand with ray start
 func concatenateContainerCommand(nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
-	if _, ok := rayStartParams["num-cpus"]; !ok {
-		cpu := resource.Limits[v1.ResourceCPU]
-		if !cpu.IsZero() {
-			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
-		}
-	}
-
-	if _, ok := rayStartParams["memory"]; !ok {
-		memory := resource.Limits[v1.ResourceMemory]
-		if !memory.IsZero() {
-			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
-		}
-	}
-
-	if _, ok := rayStartParams["num-gpus"]; !ok {
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
-		for resourceKey, resource := range resource.Limits {
-			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
-				// For now, only support one GPU type. Break on first match.
-				break
-			}
-		}
-	}
-
 	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
 
 	switch nodeType {

@@ -390,8 +390,10 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
+	checkContainerEnv(t, rayContainer, RAY_MEMORY, "1073741824")
+	checkContainerEnv(t, rayContainer, RAY_NUM_GPUS, "3")
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=$RAY_MEMORY --num-cpus=1 --num-gpus=$RAY_NUM_GPUS --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
