@@ -223,7 +223,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 }
 
 // Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// If the only differences between the old and new status are the HealthLastUpdateTime fields,
+// If the only difference between the old and new status is the HealthLastUpdateTime field,
 // the status update will not be triggered.
 // The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
 func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
