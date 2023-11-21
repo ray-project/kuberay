@@ -151,20 +151,40 @@ func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1
 	return service, nil
 }
 
-// BuildServeServiceForRayService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
+// BuildServeServiceForRayService builds the serve service for Ray service.
 func BuildServeServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	return BuildServeService(rayService, rayCluster, true)
+}
+
+// BuildServeServiceForRayCluster builds the serve service for Ray cluster.
+func BuildServeServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	return BuildServeService(rayv1.RayService{}, rayCluster, false)
+}
+
+// BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
+func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster, service bool) (*corev1.Service, error) {
+	name := rayCluster.Name
+	namespace := rayCluster.Namespace
+	if service {
+		name = rayService.Name
+		namespace = rayService.Namespace
+	}
+
 	labels := map[string]string{
-		RayServiceLabelKey:               rayService.Name,
-		RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(rayService.Name),
+		RayServiceLabelKey:               name,
+		RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(name),
 	}
 	selectorLabels := map[string]string{
 		RayClusterLabelKey:               rayCluster.Name,
 		RayClusterServingServiceLabelKey: EnableRayClusterServingServiceTrue,
 	}
 
-	default_name := utils.GenerateServeServiceName(rayService.Name)
-	default_namespace := rayService.Namespace
-	default_type := rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
+	default_name := utils.GenerateServeServiceName(name)
+	default_namespace := namespace
+	default_type := rayCluster.Spec.HeadGroupSpec.ServiceType
+	if service {
+		default_type = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
+	}
 
 	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
 	ports_int := getServicePorts(rayCluster)
@@ -177,46 +197,55 @@ func BuildServeServiceForRayService(rayService rayv1.RayService, rayCluster rayv
 		}
 	}
 
-	if len(ports) == 0 && rayService.Spec.ServeService == nil {
-		return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
-			"otherwise, the Kubernetes service for Ray Serve will not be created.")
+	if service {
+		// We are invoked from Ray service
+		if len(ports) == 0 && rayService.Spec.ServeService == nil {
+			return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
+				"otherwise, the Kubernetes service for Ray Serve will not be created.")
+		}
+
+		if rayService.Spec.ServeService != nil {
+			// Use the provided "custom" ServeService.
+			// Deep copy the ServeService to avoid modifying the original object
+			serveService := rayService.Spec.ServeService.DeepCopy()
+
+			// For the selector, ignore any custom ServeService selectors or labels.
+			serveService.Spec.Selector = selectorLabels
+
+			if serveService.ObjectMeta.Annotations == nil {
+				serveService.ObjectMeta.Annotations = make(map[string]string)
+			}
+
+			// Add port with name "serve" if it is already not added and ignore any custom ports
+			// Keeping this consistentent with adding only serve port in serve service
+			if len(ports) != 0 {
+				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
+				serveService.Spec.Ports = ports
+			} else {
+				ports := []corev1.ServicePort{}
+				for _, port := range serveService.Spec.Ports {
+					if port.Name == ServingPortName {
+						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
+						ports = append(ports, svcPort)
+						break
+					}
+				}
+				serveService.Spec.Ports = ports
+			}
+
+			setLabelsforUserProvidedService(serveService, labels)
+			setNameforUserProvidedService(serveService, default_name)
+			setNamespaceforUserProvidedService(serveService, default_namespace)
+			setServiceTypeForUserProvidedService(serveService, default_type)
+
+			return serveService, nil
+		}
 	}
 
-	if rayService.Spec.ServeService != nil {
-		// Use the provided "custom" ServeService.
-		// Deep copy the ServeService to avoid modifying the original object
-		serveService := rayService.Spec.ServeService.DeepCopy()
-
-		// For the selector, ignore any custom ServeService selectors or labels.
-		serveService.Spec.Selector = selectorLabels
-
-		if serveService.ObjectMeta.Annotations == nil {
-			serveService.ObjectMeta.Annotations = make(map[string]string)
-		}
-
-		// Add port with name "serve" if it is already not added and ignore any custom ports
-		// Keeping this consistentent with adding only serve port in serve service
-		if len(ports) != 0 {
-			log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
-			serveService.Spec.Ports = ports
-		} else {
-			ports := []corev1.ServicePort{}
-			for _, port := range serveService.Spec.Ports {
-				if port.Name == ServingPortName {
-					svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
-					ports = append(ports, svcPort)
-					break
-				}
-			}
-			serveService.Spec.Ports = ports
-		}
-
-		setLabelsforUserProvidedService(serveService, labels)
-		setNameforUserProvidedService(serveService, default_name)
-		setNamespaceforUserProvidedService(serveService, default_namespace)
-		setServiceTypeForUserProvidedService(serveService, default_type)
-
-		return serveService, nil
+	// We are invoked from cluster
+	if len(ports) == 0 {
+		return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
+			"otherwise, the Kubernetes service for Ray Serve will not be created.")
 	}
 
 	serveService := &corev1.Service{
@@ -317,12 +346,15 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 	svcPorts := map[string]int32{}
 
-	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
-	for _, port := range cPorts {
-		if port.Name == "" {
-			port.Name = fmt.Sprint(port.ContainerPort) + "-port"
+	if cluster.Spec.HeadGroupSpec.Template.Spec.Containers != nil &&
+		cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports != nil {
+		cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
+		for _, port := range cPorts {
+			if port.Name == "" {
+				port.Name = fmt.Sprint(port.ContainerPort) + "-port"
+			}
+			svcPorts[port.Name] = port.ContainerPort
 		}
-		svcPorts[port.Name] = port.ContainerPort
 	}
 
 	return svcPorts, nil

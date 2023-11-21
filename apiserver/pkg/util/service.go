@@ -71,7 +71,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		return nil, errors.New("two serve configuration are defined, only one is allowed")
 	}
 	// generate Ray cluster spec and buid cluster
-	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap)
+	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap, true)
 	if err != nil {
 		return nil, err
 	}
