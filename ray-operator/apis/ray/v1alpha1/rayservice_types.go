@@ -110,6 +110,8 @@ type RayServiceStatuses struct {
 	// RayService's generation, which is updated on mutation by the API Server.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// LastUpdateTime represents the timestamp when the RayService status was last updated.
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 type RayServiceStatus struct {
@@ -122,17 +124,15 @@ type RayServiceStatus struct {
 
 // DashboardStatus defines the current states of Ray Dashboard
 type DashboardStatus struct {
-	IsHealthy      bool         `json:"isHealthy,omitempty"`
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	IsHealthy bool `json:"isHealthy,omitempty"`
 	// Keep track of how long the dashboard is healthy.
 	// Update when Dashboard is responsive or first time convert to non-responsive from responsive.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 type AppStatus struct {
-	Status         string       `json:"status,omitempty"`
-	Message        string       `json:"message,omitempty"`
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
 	HealthLastUpdateTime *metav1.Time                     `json:"healthLastUpdateTime,omitempty"`
@@ -143,9 +143,8 @@ type AppStatus struct {
 type ServeDeploymentStatus struct {
 	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
 	// TODO: change status type to enum
-	Status         string       `json:"status,omitempty"`
-	Message        string       `json:"message,omitempty"`
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message,omitempty"`
 	// Keep track of how long the service is healthy.
 	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
 	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
