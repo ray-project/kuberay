@@ -75,8 +75,8 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 								v1.ResourceMemory: resource.MustParse(memorys),
 							},
 							Requests: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("500m"),
-								v1.ResourceMemory: resource.MustParse("200Mi"),
+								v1.ResourceCPU:    resource.MustParse(cpus),
+								v1.ResourceMemory: resource.MustParse(memorys),
 							},
 						},
 					},

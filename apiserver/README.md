@@ -1224,11 +1224,16 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "namespace": "default",
   "user": "boris",
   "entrypoint": "python /home/ray/samples/sample_code.py",
-   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "jobSubmitter": {
+    "image": "rayproject/ray:2.7.0-py310",
+    "cpu": "400m",
+    "memory": "150Mi" 
+  },
   "clusterSelector": {
     "ray.io/cluster": "job-test"
   }
-}'  
+}'
 ```
 
 * Response
