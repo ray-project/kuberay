@@ -102,9 +102,12 @@ def show_cluster_info(cr_namespace):
     )
     for worker_pod in worker_pods.items:
         logger.info(f"Worker pod name: {worker_pod.metadata.name}")
+        shell_subprocess_run(f'kubectl exec -it {worker_pod.metadata.name} -n={cr_namespace} -- ps aux')
         shell_subprocess_run(f'kubectl exec -it {worker_pod.metadata.name} -n={cr_namespace} -- cat /tmp/ray/session_latest/logs/dashboard_agent.log')
         shell_subprocess_run(f'kubectl exec -it {worker_pod.metadata.name} -n={cr_namespace} -- cat /tmp/ray/session_latest/logs/runtime_env_agent.log')
-        
+        shell_subprocess_run(f'kubectl exec -it {worker_pod.metadata.name} -n={cr_namespace} -- cat /tmp/ray/session_latest/logs/runtime_env_agent.out')
+        shell_subprocess_run(f'kubectl exec -it {worker_pod.metadata.name} -n={cr_namespace} -- cat /tmp/ray/session_latest/logs/runtime_env_agent.err')
+
     shell_subprocess_run(f'kubectl get all -n={cr_namespace}')
     shell_subprocess_run(f'kubectl describe pods -n={cr_namespace}')
     # With "--tail=-1", every line in the log will be printed. The default value of "tail" is not
