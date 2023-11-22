@@ -1725,7 +1725,10 @@
         },
         "entrypoint": {
           "type": "string",
-          "title": "The entrypoint of the RayJob"
+          "title": "Required field. The entrypoint of the RayJob",
+          "required": [
+            "entrypoint"
+          ]
         },
         "metadata": {
           "type": "object",
@@ -1812,7 +1815,8 @@
       "required": [
         "name",
         "namespace",
-        "user"
+        "user",
+        "entrypoint"
       ]
     },
     "protoRayJobSubmitter": {

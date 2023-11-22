@@ -87,20 +87,17 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			RayClusterName: "new-cluster",
 			DashboardStatus: rayv1.DashboardStatus{
 				IsHealthy:            true,
-				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
 			Applications: map[string]rayv1.AppStatus{
 				common.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.RUNNING,
 					Message:              "OK",
-					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
 							Status:               rayv1.DeploymentStatusEnum.UNHEALTHY,
 							Message:              "error",
-							LastUpdateTime:       &timeNow,
 							HealthLastUpdateTime: &timeNow,
 						},
 					},
@@ -111,20 +108,17 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			RayClusterName: "old-cluster",
 			DashboardStatus: rayv1.DashboardStatus{
 				IsHealthy:            true,
-				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 			},
 			Applications: map[string]rayv1.AppStatus{
 				common.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.NOT_STARTED,
 					Message:              "application not started yet",
-					LastUpdateTime:       &timeNow,
 					HealthLastUpdateTime: &timeNow,
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
 							Status:               rayv1.DeploymentStatusEnum.HEALTHY,
 							Message:              "Serve is healthy",
-							LastUpdateTime:       &timeNow,
 							HealthLastUpdateTime: &timeNow,
 						},
 					},
@@ -141,7 +135,6 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 
 	// Test 2: Test RayServiceStatus
 	newStatus = oldStatus.DeepCopy()
-	newStatus.ActiveServiceStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 	assert.False(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
 
 	newStatus.ActiveServiceStatus.DashboardStatus.IsHealthy = !oldStatus.ActiveServiceStatus.DashboardStatus.IsHealthy
@@ -154,20 +147,17 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		RayClusterName: "cluster-1",
 		DashboardStatus: rayv1.DashboardStatus{
 			IsHealthy:            true,
-			LastUpdateTime:       &timeNow,
 			HealthLastUpdateTime: &timeNow,
 		},
 		Applications: map[string]rayv1.AppStatus{
 			"app1": {
 				Status:               rayv1.ApplicationStatusEnum.RUNNING,
 				Message:              "Application is running",
-				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 				Deployments: map[string]rayv1.ServeDeploymentStatus{
 					"serve-1": {
 						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
 						Message:              "Serve is healthy",
-						LastUpdateTime:       &timeNow,
 						HealthLastUpdateTime: &timeNow,
 					},
 				},
@@ -175,13 +165,11 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 			"app2": {
 				Status:               rayv1.ApplicationStatusEnum.RUNNING,
 				Message:              "Application is running",
-				LastUpdateTime:       &timeNow,
 				HealthLastUpdateTime: &timeNow,
 				Deployments: map[string]rayv1.ServeDeploymentStatus{
 					"serve-1": {
 						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
 						Message:              "Serve is healthy",
-						LastUpdateTime:       &timeNow,
 						HealthLastUpdateTime: &timeNow,
 					},
 				},
@@ -193,19 +181,16 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		Log: ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
-	// Test 1: Only LastUpdateTime and HealthLastUpdateTime are updated.
+	// Test 1: Only HealthLastUpdateTime is updated.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 	for appName, application := range newStatus.Applications {
 		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
-		application.LastUpdateTime = &metav1.Time{Time: timeNow.Add(2)}
 		newStatus.Applications[appName] = application
 	}
 	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 
-	// Test 2: Not only LastUpdateTime and HealthLastUpdateTime are updated.
+	// Test 2: Not only HealthLastUpdateTime is updated.
 	newStatus = oldStatus.DeepCopy()
-	newStatus.DashboardStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 	newStatus.DashboardStatus.IsHealthy = !oldStatus.DashboardStatus.IsHealthy
 	assert.True(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 }
@@ -783,7 +768,6 @@ func TestUpdateAndCheckDashboardStatus(t *testing.T) {
 		DashboardStatus: rayv1.DashboardStatus{
 			IsHealthy:            true,
 			HealthLastUpdateTime: &timestamp,
-			LastUpdateTime:       &timestamp,
 		},
 	}
 
