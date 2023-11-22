@@ -58,7 +58,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
   "name": "ha-cluster",
   "namespace": "default",
   "user": "boris",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "environment": "DEV",
   "annotations" : {
     "ray.io/ft-enabled": "true"
@@ -66,7 +66,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.7.0-py310",
+      "image": "rayproject/ray:2.8.0-py310",
       "serviceType": "NodePort",
       "rayStartParams": {
          "dashboard-host": "0.0.0.0",
@@ -103,7 +103,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,
