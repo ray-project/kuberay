@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -648,7 +649,7 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	// wait for the cluster to be in a running state for 3 minutes
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
 		if err00 != nil {
 			return true, err00
@@ -662,7 +663,7 @@ func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	// wait for the cluster to be deleted
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
 		if err00 != nil &&
 			assert.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {

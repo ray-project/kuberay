@@ -39,10 +39,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set Go
+      - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.19
+          go-version: v1.20
 
       - name: Set up gotestfmt
         uses: gotesttools/gotestfmt-action@v2

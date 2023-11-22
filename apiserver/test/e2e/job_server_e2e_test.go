@@ -1,17 +1,18 @@
 package e2e
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
 
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestCreateJobWithDisposableClusters(t *testing.T) {
@@ -554,7 +555,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, rayJobStatus rayv1api.JobStatus) {
 	// wait for the job to be in a JobStatusSucceeded state for 3 minutes
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
 		if err00 != nil {
 			return true, err00
@@ -568,7 +569,7 @@ func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string,
 func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
 	// wait for the job to be deleted
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayJob, err00 := tCtx.GetRayJobByName(jobName)
 		if err00 != nil &&
 			assert.EqualError(t, err00, "rayjobs.ray.io \""+jobName+"\" not found") {
