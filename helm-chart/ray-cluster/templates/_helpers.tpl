@@ -54,3 +54,13 @@ Create the name of the service account to use
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
+
+{{ define "ray-cluster.log-volumes" }}
+- name: log-volume
+  emptyDir: {}
+{{ end }}
+
+{{ define "ray-cluster.log-volumeMounts" }}
+- mountPath: /tmp/ray
+  name: log-volume
+{{ end }}

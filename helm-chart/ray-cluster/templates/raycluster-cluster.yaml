@@ -1,3 +1,5 @@
+{{ $defaultLogVolumeMounts := fromYamlArray (include "ray-cluster.log-volumeMounts" .) }}
+{{ $defaultLogVolume := fromYamlArray (include "ray-cluster.log-volumes" .) }}
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -47,7 +49,11 @@ spec:
         {{- end }}
         containers:
           - name: ray-head
-            {{ if .Values.head.volumeMounts }}
+            {{ if and .Values.head.defaultLogLocation .Values.head.volumeMounts }}
+            volumeMounts: {{- toYaml (uniq (concat .Values.head.volumeMounts $defaultLogVolumeMounts)) | nindent 12 }}
+            {{ else if .Values.head.defaultLogLocation }}
+            volumeMounts: {{- toYaml $defaultLogVolumeMounts | nindent 12 }}
+            {{ else if .Values.head.volumeMounts }}
             volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
             {{ end }}
             {{- if .Values.head.image }}
@@ -81,7 +87,11 @@ spec:
           {{- if .Values.head.sidecarContainers }}
           {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if .Values.head.volumes }}
+        {{ if and .Values.head.volumes .Values.head.defaultLogLocation }}
+        volumes: {{- toYaml (uniq (concat .Values.head.volumes $defaultLogVolume)) | nindent 10 }}
+        {{ else if .Values.head.defaultLogLocation }}
+        volumes: {{- toYaml $defaultLogVolume | nindent 10 }}
+        {{ else if .Values.head.volumes }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         {{ end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
@@ -128,10 +138,12 @@ spec:
         {{- end }}
         containers:
           - name: ray-worker
-            {{ if $values.volumeMounts }}
+            {{ if and $values.volumeMounts $values.defaultLogLocation }}
+            volumeMounts: {{ toYaml (uniq (concat $values.volumeMounts $defaultLogVolumeMounts)) | nindent 12 }}
+            {{ else if $values.defaultLogLocation }}
+            volumeMounts: {{ toYaml $defaultLogVolumeMounts | nindent 12 }}
+            {{ else if $values.volumeMounts }}
             volumeMounts: {{ toYaml $values.volumeMounts | nindent 12 }}
-            {{ else }}
-            volumeMounts: {{ toYaml $.Values.worker.volumeMounts | nindent 12 }}
             {{ end }}
             {{- if $values.image }}
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
@@ -162,10 +174,12 @@ spec:
           {{- if $values.sidecarContainers }}
           {{- toYaml $values.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if $values.volumes }}
+        {{ if and $values.volumes $values.defaultLogLocation }}
+        volumes: {{- toYaml (uniq (concat $values.volumes $defaultLogVolume)) | nindent 10 }}
+        {{ else if $values.defaultLogLocation }}
+        volumes: {{- toYaml $defaultLogVolume | nindent 10 }}
+        {{ else if $values.volumes }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
-        {{ else }}
-        volumes: {{- toYaml $.Values.worker.volumes | nindent 10 }}
         {{ end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
@@ -211,7 +225,11 @@ spec:
         {{- end }}
         containers:
           - name: ray-worker
-            {{ if .Values.worker.volumeMounts }}
+            {{ if and .Values.worker.volumeMounts .Values.worker.defaultLogLocation }}
+            volumeMounts: {{- toYaml (uniq (concat .Values.worker.volumeMounts $defaultLogVolumeMounts)) | nindent 12 }}
+            {{ else if .Values.worker.defaultLogLocation }}
+            volumeMounts: {{- toYaml $defaultLogVolumeMounts | nindent 12 }}
+            {{ else if .Values.worker.volumeMounts }}
             volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
             {{ end }}
             {{- if .Values.worker.image }}
@@ -243,7 +261,11 @@ spec:
           {{- if .Values.worker.sidecarContainers }}
           {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if .Values.worker.volumes }}
+        {{ if and .Values.worker.volumes .Values.worker.defaultLogLocation }}
+        volumes: {{- toYaml (uniq (concat .Values.worker.volumes $defaultLogVolume)) | nindent 10 }}
+        {{ else if .Values.worker.defaultLogLocation }}
+        volumes: {{- toYaml $defaultLogVolume | nindent 10 }}
+        {{ else if .Values.worker.volumes }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         {{ end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}

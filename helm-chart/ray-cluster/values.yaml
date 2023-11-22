@@ -84,14 +84,18 @@ head:
   affinity: {}
   # Ray container security context.
   securityContext: {}
+  # If defaultLogLocation is set to true, then the Helm Chart will add the optional definitions below.
+  # If it's set to true AND you want to provide your own then they will be merged.
+  # If it's set to false, then nothing will be added either on its own or on top of your own
+  defaultLogLocation: true
   # Optional log and log volumeMounts
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+  # volumes:
+  #   - name: log-volume
+  #     emptyDir: {}
+  # # Ray writes logs to /tmp/ray/session_latests/logs
+  # volumeMounts:
+  #   - mountPath: /tmp/ray
+  #     name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -142,14 +146,18 @@ worker:
   affinity: {}
   # Ray container security context.
   securityContext: {}
-  # Optional log volume and volumeMounts
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+  # If defaultLogLocation is set to true, then the Helm Chart will add the optional definitions below.
+  # If it's set to true AND you want to provide your own then they will be merged.
+  # If it's set to false, then nothing will be added either on its own or on top of your own
+  defaultLogLocation: true
+  # # Optional log volume and volumeMounts
+  # volumes:
+  #   - name: log-volume
+  #     emptyDir: {}
+  # # Ray writes logs to /tmp/ray/session_latests/logs
+  # volumeMounts:
+  #   - mountPath: /tmp/ray
+  #     name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -203,14 +211,18 @@ additionalWorkerGroups:
     affinity: {}
     # Ray container security context.
     securityContext: {}
-    # Optional log volumes and volumeMounts
-    volumes:
-      - name: log-volume
-        emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
-    volumeMounts:
-      - mountPath: /tmp/ray
-        name: log-volume
+    # If defaultLogLocation is set to true, then the Helm Chart will add the optional definitions below.
+    # If it's set to true AND you want to provide your own then they will be merged.
+    # If it's set to false, then nothing will be added either on its own or on top of your own
+    defaultLogLocation: true
+    # # Optional log volumes and volumeMounts
+    # volumes:
+    #   - name: log-volume
+    #     emptyDir: {}
+    # # Ray writes logs to /tmp/ray/session_latests/logs
+    # volumeMounts:
+    #   - mountPath: /tmp/ray
+    #     name: log-volume
     sidecarContainers: []
     # See docs/guidance/pod-command.md for more details about how to specify
     # container command for worker Pod.
