@@ -28,7 +28,7 @@ logging.basicConfig(
 )
 
 # Default Ray version
-ray_version = '2.7.0'
+ray_version = '2.8.0'
 
 class BasicRayTestCase(unittest.TestCase):
     """Test the basic functionalities of RayCluster by executing simple jobs."""

@@ -191,7 +191,7 @@ The following steps allow you to validate that the KubeRay API Server components
 
     * The following examples use the `ray-system` namespace. If not already created by using the helm install steps above, you can create it prior to executing the curl examples by running `kubectl create namespace ray-system`
     * The examples assume that the cluster has at least 2 CPUs available and 4 GB of free memory. You can either increase the CPUs available to your cluster (docker settings) or reduce the CPU request in the `compute_templates` request.
-    * If you are running the service and the kuberay operator on Apple Silicon Machine, you might want to use the `rayproject/ray:2.7.0-aarch64`image.
+    * If you are running the service and the kuberay operator on Apple Silicon Machine, you might want to use the `rayproject/ray:2.8.0-aarch64`image.
 
     ```sh
     # Create a template
@@ -253,7 +253,7 @@ The following steps allow you to validate that the KubeRay API Server components
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0",
@@ -265,7 +265,7 @@ The following steps allow you to validate that the KubeRay API Server components
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 5,
@@ -472,12 +472,12 @@ Examples: (please make sure that template `default-template` is created before r
     "name": "test-cluster",
     "namespace": "ray-system",
     "user": "3cpo",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "environment": "DEV",
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -489,7 +489,7 @@ Examples: (please make sure that template `default-template` is created before r
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -509,11 +509,11 @@ Examples: (please make sure that template `default-template` is created before r
     "name": "test-cluster",
     "namespace": "ray-system",
     "user": "3cpo",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -524,7 +524,7 @@ Examples: (please make sure that template `default-template` is created before r
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -601,11 +601,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -616,7 +616,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -735,11 +735,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -750,7 +750,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -869,11 +869,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -884,7 +884,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1025,7 +1025,7 @@ Examples:
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0"
@@ -1035,7 +1035,7 @@ Examples:
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 1,
@@ -1059,7 +1059,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0"
@@ -1069,7 +1069,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -1098,12 +1098,12 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   "name": "job-test",
   "namespace": "default",
   "user": "boris",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "environment": "DEV",
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.7.0-py310",
+      "image": "rayproject/ray:2.8.0-py310",
       "serviceType": "NodePort",
       "rayStartParams": {
          "dashboard-host": "0.0.0.0",
@@ -1123,7 +1123,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,
@@ -1152,11 +1152,11 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
    "name":"job-test",
    "namespace":"default",
    "user":"boris",
-   "version":"2.7.0",
+   "version":"2.8.0",
    "clusterSpec":{
       "headGroupSpec":{
          "computeTemplate":"default-template",
-         "image":"rayproject/ray:2.7.0-py310",
+         "image":"rayproject/ray:2.8.0-py310",
          "serviceType":"NodePort",
          "rayStartParams":{
             "dashboard-host":"0.0.0.0",
@@ -1181,7 +1181,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
          {
             "groupName":"small-wg",
             "computeTemplate":"default-template",
-            "image":"rayproject/ray:2.7.0-py310",
+            "image":"rayproject/ray:2.8.0-py310",
             "replicas":1,
             "minReplicas":5,
             "maxReplicas":1,
@@ -1226,7 +1226,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "entrypoint": "python /home/ray/samples/sample_code.py",
   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
   "jobSubmitter": {
-    "image": "rayproject/ray:2.7.0-py310",
+    "image": "rayproject/ray:2.8.0-py310",
     "cpu": "400m",
     "memory": "150Mi" 
   },
@@ -1315,7 +1315,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
     "ray.io/cluster": "job-test"
   },
   "jobSubmitter": {
-    "image": "rayproject/ray:2.7.0-py310"
+    "image": "rayproject/ray:2.8.0-py310"
   }
 }'  
 ```
@@ -1333,7 +1333,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
       "ray.io/cluster":"job-test"
    },
    "jobSubmitter":{
-      "image":"rayproject/ray:2.7.0-py310"
+      "image":"rayproject/ray:2.8.0-py310"
    },
    "createdAt":"2023-10-24T11:48:19Z"
 }
@@ -1371,7 +1371,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0"
@@ -1381,7 +1381,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1430,7 +1430,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0"
@@ -1440,7 +1440,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1487,7 +1487,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0"
@@ -1497,7 +1497,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -1599,7 +1599,7 @@ Examples:
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0",
@@ -1611,7 +1611,7 @@ Examples:
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 5,
@@ -1673,7 +1673,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1684,7 +1684,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,
@@ -1718,7 +1718,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1730,7 +1730,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 0,
           "maxReplicas": 5,
@@ -1756,7 +1756,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1767,7 +1767,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,
@@ -1814,7 +1814,7 @@ Examples
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -1825,7 +1825,7 @@ Examples
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0-py310",
+              "image": "rayproject/ray:2.8.0-py310",
               "replicas": 1,
               "minReplicas": 5,
               "maxReplicas": 1,
@@ -1933,7 +1933,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -1944,7 +1944,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0-py310",
+              "image": "rayproject/ray:2.8.0-py310",
               "replicas": 1,
               "minReplicas": 5,
               "maxReplicas": 1,
@@ -2086,7 +2086,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -2097,7 +2097,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,
