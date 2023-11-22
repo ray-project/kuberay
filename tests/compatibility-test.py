@@ -13,6 +13,7 @@ from framework.prototype import (
 
 from framework.utils import (
     get_head_pod,
+    get_pod,
     pod_exec_command,
     shell_subprocess_run,
     CONST,
@@ -200,6 +201,10 @@ class RayFTTestCase(unittest.TestCase):
             check = False
         )
 
+        worker_pod = get_pod(RayFTTestCase.ray_cluster_ns, "ray.io/node-type=worker")
+        worker_pod_name = worker_pod.metadata.name
+        pod_exec_command(worker_pod_name, RayFTTestCase.ray_cluster_ns, "cat /tmp/ray/session_latest/logs/dashboard_agent.log")
+        pod_exec_command(worker_pod_name, RayFTTestCase.ray_cluster_ns, "cat /tmp/ray/session_latest/logs/runtime_env_agent.log")
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
