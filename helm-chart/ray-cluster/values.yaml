@@ -85,13 +85,13 @@ head:
   # Ray container security context.
   securityContext: {}
   # Optional log and log volumeMounts
-  # volumes:
-  #   - name: log-volume
-  #     emptyDir: {}
-  # # Ray writes logs to /tmp/ray/session_latests/logs
-  # volumeMounts:
-  #   - mountPath: /tmp/ray
-  #     name: log-volume
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+  # Ray writes logs to /tmp/ray/session_latests/logs
+  volumeMounts:
+    - mountPath: /tmp/ray
+      name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -143,13 +143,13 @@ worker:
   # Ray container security context.
   securityContext: {}
   # Optional log volume and volumeMounts
-  # volumes:
-  #   - name: log-volume
-  #     emptyDir: {}
+  volumes:
+    - name: log-volume
+      emptyDir: {}
   # Ray writes logs to /tmp/ray/session_latests/logs
-  # volumeMounts:
-  #   - mountPath: /tmp/ray
-  #     name: log-volume
+  volumeMounts:
+    - mountPath: /tmp/ray
+      name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -203,6 +203,7 @@ additionalWorkerGroups:
     affinity: {}
     # Ray container security context.
     securityContext: {}
+    # Optional log volumes and volumeMounts
     volumes:
       - name: log-volume
         emptyDir: {}

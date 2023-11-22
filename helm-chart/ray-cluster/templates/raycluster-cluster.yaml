@@ -130,6 +130,8 @@ spec:
           - name: ray-worker
             {{ if $values.volumeMounts }}
             volumeMounts: {{ toYaml $values.volumeMounts | nindent 12 }}
+            {{ else }}
+            volumeMounts: {{ toYaml $.Values.worker.volumeMounts | nindent 12 }}
             {{ end }}
             {{- if $values.image }}
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
@@ -162,6 +164,8 @@ spec:
           {{- end }}
         {{ if $values.volumes }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
+        {{ else }}
+        volumes: {{- toYaml $.Values.worker.volumes | nindent 10 }}
         {{ end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
