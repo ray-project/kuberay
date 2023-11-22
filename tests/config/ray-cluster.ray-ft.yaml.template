@@ -133,8 +133,10 @@ spec:
               resources:
                 limits:
                   cpu: "1"
+                  memory: "2G"
                 requests:
                   cpu: "200m"
+                  memory: "2G"
 ---
 apiVersion: v1
 kind: ConfigMap
