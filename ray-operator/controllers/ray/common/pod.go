@@ -258,8 +258,11 @@ func initHealthProbe(probe *v1.Probe, rayNodeType rayv1.RayNodeType) {
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableAgentService bool) (aPod v1.Pod) {
-	if enableAgentService {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableServeService bool) (aPod v1.Pod) {
+	if enableServeService {
+		// TODO (kevin85421): In the current RayService implementation, we only add this label to a Pod after
+		// it passes the health check. The other option is to use the readiness probe to control it. This
+		// logic always add the label to the Pod no matter whether it is ready or not.
 		podTemplateSpec.Labels[RayClusterServingServiceLabelKey] = EnableRayClusterServingServiceTrue
 	}
 	pod := v1.Pod{
@@ -667,7 +670,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 
 	// Add dashboard listen port for RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		if value, ok := annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
+		if value, ok := annotations[EnableServeServiceKey]; ok && value == EnableServeServiceTrue {
 			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}

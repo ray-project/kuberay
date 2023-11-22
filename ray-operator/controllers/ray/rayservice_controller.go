@@ -584,7 +584,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	rayClusterAnnotations[common.EnableAgentServiceKey] = common.EnableAgentServiceTrue
+	rayClusterAnnotations[common.EnableServeServiceKey] = common.EnableServeServiceTrue
 	rayClusterAnnotations[common.RayServiceClusterHashKey], err = generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		errContext := "Failed to serialize RayCluster config. " +

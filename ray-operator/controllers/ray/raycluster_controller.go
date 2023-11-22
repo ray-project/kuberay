@@ -344,8 +344,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
-	// only reconcile serve service is "ray.io/enableAgentService" annotation is set to true
-	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
+	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
 		if err := r.reconcileServeService(ctx, instance); err != nil {
 			if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
 				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
@@ -1031,7 +1031,7 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Po
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	// Check whether serve is enabled and add serve label
 	serveLabel := false
-	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
 		serveLabel = true
 	}
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
@@ -1073,7 +1073,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	creatorName := getCreator(instance)
 	// Check whether serve is enabled and add serve label
 	serveLabel := false
-	if enableAgentServiceValue, exist := instance.Annotations[common.EnableAgentServiceKey]; exist && enableAgentServiceValue == common.EnableAgentServiceTrue {
+	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
 		serveLabel = true
 	}
 	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)

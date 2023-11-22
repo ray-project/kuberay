@@ -4,7 +4,7 @@ Up until rescently the only way to create a Ray cluster supporting RayServe was 
 
 ```json
 "annotations" : {
-    "ray.io/enableAgentService": "true"
+    "ray.io/enable-serve-service": "true"
   },
 ```
 
@@ -18,7 +18,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   "namespace": "default",
   "user": "boris",
   "annotations" : {
-    "ray.io/enableAgentService": "true"
+    "ray.io/enable-serve-service": "true"
   },
   "clusterSpec": {
     "headGroupSpec": {

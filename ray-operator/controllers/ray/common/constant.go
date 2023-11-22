@@ -29,8 +29,8 @@ const (
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
-	EnableAgentServiceKey  = "ray.io/enableAgentService"
-	EnableAgentServiceTrue = "true"
+	EnableServeServiceKey  = "ray.io/enable-serve-service"
+	EnableServeServiceTrue = "true"
 
 	EnableRayClusterServingServiceTrue  = "true"
 	EnableRayClusterServingServiceFalse = "false"

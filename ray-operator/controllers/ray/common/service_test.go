@@ -105,14 +105,19 @@ var (
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{
-					"port":                "6379",
-					"object-manager-port": "12345",
-					"node-manager-port":   "12346",
-					"object-store-memory": "100000000",
-					"num-cpus":            "1",
-				},
 				ServiceType: corev1.ServiceTypeClusterIP,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 8000, Name: "serve"},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}

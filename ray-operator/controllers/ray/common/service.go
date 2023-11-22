@@ -151,7 +151,7 @@ func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1
 	return service, nil
 }
 
-// BuildServeServiceForRayService builds the serve service for Ray service.
+// BuildServeServiceForRayService builds the serve service for RayService.
 func BuildServeServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
 	return BuildServeService(rayService, rayCluster, true)
 }
@@ -162,10 +162,10 @@ func BuildServeServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Servic
 }
 
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
-func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster, service bool) (*corev1.Service, error) {
+func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
 	name := rayCluster.Name
 	namespace := rayCluster.Namespace
-	if service {
+	if isRayService {
 		name = rayService.Name
 		namespace = rayService.Namespace
 	}
@@ -182,7 +182,7 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 	default_name := utils.GenerateServeServiceName(name)
 	default_namespace := namespace
 	default_type := rayCluster.Spec.HeadGroupSpec.ServiceType
-	if service {
+	if isRayService {
 		default_type = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
@@ -197,8 +197,8 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 		}
 	}
 
-	if service {
-		// We are invoked from Ray service
+	if isRayService {
+		// We are invoked from RayService
 		if len(ports) == 0 && rayService.Spec.ServeService == nil {
 			return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
 				"otherwise, the Kubernetes service for Ray Serve will not be created.")
@@ -325,8 +325,8 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 
 	// Check if agent port is defined. If not, check if enable agent service.
 	if _, agentDefined := ports[DashboardAgentListenPortName]; !agentDefined {
-		enableAgentServiceValue, exist := cluster.Annotations[EnableAgentServiceKey]
-		if exist && enableAgentServiceValue == EnableAgentServiceTrue {
+		enableServeServiceValue, exist := cluster.Annotations[EnableServeServiceKey]
+		if exist && enableServeServiceValue == EnableServeServiceTrue {
 			// If agent port is not in the config, add default value for it.
 			ports[DashboardAgentListenPortName] = DefaultDashboardAgentListenPort
 		}
@@ -346,15 +346,12 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 	svcPorts := map[string]int32{}
 
-	if cluster.Spec.HeadGroupSpec.Template.Spec.Containers != nil &&
-		cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports != nil {
-		cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
-		for _, port := range cPorts {
-			if port.Name == "" {
-				port.Name = fmt.Sprint(port.ContainerPort) + "-port"
-			}
-			svcPorts[port.Name] = port.ContainerPort
+	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
+	for _, port := range cPorts {
+		if port.Name == "" {
+			port.Name = fmt.Sprint(port.ContainerPort) + "-port"
 		}
+		svcPorts[port.Name] = port.ContainerPort
 	}
 
 	return svcPorts, nil
