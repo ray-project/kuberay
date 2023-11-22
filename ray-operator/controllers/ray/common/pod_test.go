@@ -330,7 +330,7 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[RayContainerIndex]
@@ -381,7 +381,7 @@ func TestBuildPod(t *testing.T) {
 	podName = cluster.Name + DashSymbol + string(rayv1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -400,6 +400,16 @@ func TestBuildPod(t *testing.T) {
 	// Check Envs
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
 	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
+
+	// Try to build pod for serve
+	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
+	val, ok := pod.Labels[RayClusterServingServiceLabelKey]
+	if !ok {
+		t.Error("Expected serve label is not present")
+	}
+	if val != EnableRayClusterServingServiceTrue {
+		t.Error("Wrong serve label value")
+	}
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -407,7 +417,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -462,7 +472,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, RayServiceCreatorLabelValue, "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, RayServiceCreatorLabelValue, "", false)
 
 	hasCorrectDeathEnv := false
 	for _, container := range pod.Spec.Containers {
@@ -493,7 +503,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	// Build a head Pod.
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer := pod.Spec.Containers[RayContainerIndex]
@@ -511,7 +521,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env,
 		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
 	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
@@ -528,7 +538,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	podName = cluster.Name + DashSymbol + string(rayv1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -545,7 +555,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
 	worker = cluster.Spec.WorkerGroupSpecs[0]
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -614,7 +624,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
@@ -783,7 +793,7 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, []v1.VolumeMount{
 		{
