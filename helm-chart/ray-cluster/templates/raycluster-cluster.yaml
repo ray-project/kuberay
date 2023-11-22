@@ -46,8 +46,10 @@ spec:
         initContainers: {{- toYaml .Values.head.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
-            name: ray-head
+          - name: ray-head
+            {{ if .Values.head.volumeMounts }}
+            volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
+            {{ end }}
             {{- if .Values.head.image }}
             image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
             imagePullPolicy: {{ .Values.head.image.pullPolicy }}
@@ -79,7 +81,9 @@ spec:
           {{- if .Values.head.sidecarContainers }}
           {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
           {{- end }}
+        {{ if .Values.head.volumes }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
+        {{ end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
@@ -202,8 +206,10 @@ spec:
         initContainers: {{- toYaml .Values.worker.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
-            name: ray-worker
+          - name: ray-worker
+            {{ if .Values.worker.volumeMounts }}
+            volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+            {{ end }}
             {{- if .Values.worker.image }}
             image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
             imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
@@ -233,7 +239,9 @@ spec:
           {{- if .Values.worker.sidecarContainers }}
           {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
           {{- end }}
+        {{ if .Values.worker.volumes }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
+        {{ end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
