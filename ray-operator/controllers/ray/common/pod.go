@@ -323,37 +323,32 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType,
 
 	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, creator)
 
-	// health check only if FT enabled
-	if podTemplateSpec.Annotations != nil {
-		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
-			if strings.ToLower(enabledString) == "true" {
-				// If users do not specify probes, we will set the default probes.
-				if pod.Spec.Containers[RayContainerIndex].ReadinessProbe == nil {
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[RayContainerIndex].ReadinessProbe = probe
-				}
-				initHealthProbe(pod.Spec.Containers[RayContainerIndex].ReadinessProbe, rayNodeType)
-
-				if pod.Spec.Containers[RayContainerIndex].LivenessProbe == nil {
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[RayContainerIndex].LivenessProbe = probe
-				}
-				initHealthProbe(pod.Spec.Containers[RayContainerIndex].LivenessProbe, rayNodeType)
-			}
+	// Configure the readiness and liveness probes for the Ray container. These probes
+	// play a crucial role in KubeRay health checks. Without them, certain failures,
+	// such as the Raylet process crashing, may go undetected.
+	if pod.Spec.Containers[RayContainerIndex].ReadinessProbe == nil {
+		probe := &v1.Probe{
+			InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+			TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+			PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+			SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+			FailureThreshold:    DefaultReadinessProbeFailureThreshold,
 		}
+		pod.Spec.Containers[RayContainerIndex].ReadinessProbe = probe
 	}
+	initHealthProbe(pod.Spec.Containers[RayContainerIndex].ReadinessProbe, rayNodeType)
+
+	if pod.Spec.Containers[RayContainerIndex].LivenessProbe == nil {
+		probe := &v1.Probe{
+			InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+			TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+			PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+			SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+			FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+		}
+		pod.Spec.Containers[RayContainerIndex].LivenessProbe = probe
+	}
+	initHealthProbe(pod.Spec.Containers[RayContainerIndex].LivenessProbe, rayNodeType)
 
 	return pod
 }
