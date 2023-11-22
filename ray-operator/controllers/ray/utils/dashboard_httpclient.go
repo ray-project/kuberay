@@ -323,8 +323,8 @@ type RayJobInfo struct {
 	SubmissionId string                 `json:"submission_id,omitempty"`
 	Message      string                 `json:"message,omitempty"`
 	ErrorType    *string                `json:"error_type,omitempty"`
-	StartTime    int64                  `json:"start_time,omitempty"`
-	EndTime      int64                  `json:"end_time,omitempty"`
+	StartTime    uint64                 `json:"start_time,omitempty"`
+	EndTime      uint64                 `json:"end_time,omitempty"`
 	Metadata     map[string]string      `json:"metadata,omitempty"`
 	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
 }

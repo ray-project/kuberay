@@ -169,9 +169,9 @@ message JobSubmissionInfo{
   // Error type
   string error_type = 6;
   // Job Start time
-  int64 start_time = 7;
+  uint64 start_time = 7;
   // Job end time
-  int64 end_time = 8;
+  uint64 end_time = 8;
   // Arbitrary user-provided metadata for the job.
   map<string, string> metadata = 9;
   // The runtime environment for the job
