@@ -467,10 +467,10 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	return reflect.DeepEqual(v1, v2)
 }
 
-func ConvertUnixTimeToMetav1Time(unixTime int64) *metav1.Time {
+func ConvertUnixTimeToMetav1Time(unixTime uint64) *metav1.Time {
 	// The Ray jobInfo returns the start_time, which is a unix timestamp in milliseconds.
 	// https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo
-	t := time.Unix(unixTime/1000, unixTime%1000*1000000)
+	t := time.Unix(int64(unixTime)/1000, int64(unixTime)%1000*1000000)
 	kt := metav1.NewTime(t)
 	return &kt
 }

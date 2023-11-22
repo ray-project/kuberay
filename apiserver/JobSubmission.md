@@ -13,7 +13,7 @@ The first step is to deploy KubeRay operator and API server.
 Reffer to [readme](README.md) for setting up KubRay operator and API server.
 
 ```shell
-make docker-image cluster load-image deploy
+make operator-image cluster load-operator-image deploy-operator
 ```
 
 Once they are set up, you first need to create a Ray cluster using the following commands:
