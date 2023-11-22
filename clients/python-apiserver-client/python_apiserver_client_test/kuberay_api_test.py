@@ -1,7 +1,7 @@
 from python_apiserver_client import *
 
 def test_templates():
-    apis = KubeRayAPIs()
+    apis = KubeRayAPIs(token="12345")
     # create
     toleration = Toleration(key="blah1", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute)
     template = Template(name="test-template", namespace="default", cpu=2, memory=8, tolerations=[toleration])
@@ -40,7 +40,7 @@ def test_templates():
 
 
 def test_cluster():
-    apis = KubeRayAPIs()
+    apis = KubeRayAPIs(token="12345")
     # Create template first
     template = Template(name="default-template", namespace="default", cpu=2, memory=4)
     status, error = apis.create_compute_template(template)

@@ -14,9 +14,11 @@ class KubeRayAPIs:
             base - the URL of the API server (default is set to the standalone API server)
             wait interval - the amount of sec to wait between checking for cluster ready
     """
-    def __init__(self, base: str = "http://localhost:8888",
+    def __init__(self, base: str = "http://localhost:31888", token: str = None,
                  wait_interval: int = 2) -> None:
         self.base = base
+        if token is not None:
+            _headers["Authorization"] = token
         self.wait_interval = wait_interval
         self.api_base = "/apis/v1/"
 

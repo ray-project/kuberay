@@ -127,7 +127,7 @@ to [swagger-initializer.js.backup](../third_party/swagger-ui/swagger-initializer
     };
     ```
 
-* Execute `make build-swagger` target to update the contents of the [datafile.go](pkg/swagger/datafile.go) file. This will package the content of the [swagger-ui](../third_party/swagger-ui/) directory for serving by the api server (see [func serveSwaggerUI(mux *http.ServeMux)](https://github.com/ray-project/kuberay/blob/f1067378bc99987f3eba1e5b12b4cc797465336d/apiserver/cmd/main.go#L149) in [main.go](cmd/main.go))
+* Execute `make build-swagger` target to update the contents of the [datafile.go](pkg/swagger/datafile.go) file. This will package the content of the [swagger-ui](../third_party/swagger-ui/) directory for serving by the api server (see [func serveSwaggerUI(mux *http.ServeMux)](https://github.com/ray-project/kuberay/blob/f1067378bc99987f3eba1e5b12b4cc797465336d/apiserver/cmd/main.go#L149) in [main.go](cmd/apiserver/main.go))
 
 The swagger ui is available at the following URLs:
 

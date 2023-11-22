@@ -6,6 +6,7 @@ REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 # Image URL to use all building/pushing image targets
 IMG_TAG ?=latest
 IMG ?= kuberay/apiserver:$(IMG_TAG)
+PROXY_IMG ?= kuberay/security-proxy:$(IMG_TAG)
 
 # Allow for additional test flags (-v, etc)
 GO_TEST_FLAGS ?= 
@@ -77,7 +78,8 @@ lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019'
 
 build: fmt vet fumpt imports lint ## Build api server binary.
-	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
+	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/apiserver/main.go
+	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/proxy/proxy.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
@@ -146,11 +148,18 @@ load-ray-test-image: ## Load the ray test images
 
 ##@ Docker Build
 
-docker-image: test ## Build image with the api server.
+docker-image: test ## Build image for the api server.
 	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
-docker-push: ## Push image with the api server.
+docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
+
+docker-proxy-image: ## Build image for the security proxy.
+	$(ENGINE) build -f Dockerfile_proxy -t ${PROXY_IMG} .
+
+
+docker-proxy-push: ## Push image for the security proxy.
+	$(ENGINE) push ${PROXY_IMG}
 
 ##@ Deployment
 .PHONY: install
