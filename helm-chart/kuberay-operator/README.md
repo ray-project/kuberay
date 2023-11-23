@@ -44,7 +44,7 @@ helm version
 
   # Step 2: Install KubeRay operator only. (for developer)
   helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0 --skip-crds
-  ``` 
+  ```
 
 ## List the chart
 
@@ -92,6 +92,7 @@ spec:
     - Replace=true
 ...
 ```
+
 
 * The second app that installs the Helm chart with `skipCrds=true` (new feature in Argo CD 2.3.0), snippet:
 
