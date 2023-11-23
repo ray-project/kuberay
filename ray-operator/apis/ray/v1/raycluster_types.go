@@ -156,6 +156,7 @@ const (
 
 // RayCluster is the Schema for the RayClusters API
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
