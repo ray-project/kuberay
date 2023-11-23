@@ -8,6 +8,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
@@ -36,21 +37,21 @@ func (r *RayCluster) Default() {
 var _ webhook.Validator = &RayCluster{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *RayCluster) ValidateCreate() error {
+func (r *RayCluster) ValidateCreate() (admission.Warnings, error) {
 	rayclusterlog.Info("validate create", "name", r.Name)
-	return r.validateRayCluster()
+	return nil, r.validateRayCluster()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *RayCluster) ValidateUpdate(old runtime.Object) error {
+func (r *RayCluster) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	rayclusterlog.Info("validate update", "name", r.Name)
-	return r.validateRayCluster()
+	return nil, r.validateRayCluster()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *RayCluster) ValidateDelete() error {
+func (r *RayCluster) ValidateDelete() (admission.Warnings, error) {
 	rayclusterlog.Info("validate delete", "name", r.Name)
-	return nil
+	return nil, nil
 }
 
 func (r *RayCluster) validateRayCluster() error {
