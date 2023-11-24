@@ -1,17 +1,17 @@
 # Securing API server
 
-Currently the KubeRay API server is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.
+Currently the KubeRay API server deployed on a publicly accessable cluster is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.
 The solution is based on the architecture below:
 
 ![Overall security implementation](img/authorization.png)
 
 It basically adds Authorization sidecar to the KubeRay API server pod. This architecture is extremely flexible and allows users to plug sidecar implementations that adhere to their security requirements, that can differ significantly across multiple organizations.
 
-Here we will use a very simple [sidecar implementation](cmd/proxy/proxy.go) a reverse proxy using token based authorization. This is a very simple authorisation based on the string token, shared between proxy and client. This implementation is not meant for production, but rather is here as a demonstration for the overall implementation. Additional examples of reverse proxy implementation can be found [here](https://github.com/blublinsky/auth-reverse-proxy). There is also a wealth of open source implementations, for example, [oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) and many commersial offerings.
+Here we will use a very simple [sidecar implementation](cmd/proxy/proxy.go) a reverse proxy using token based authorization. This is a very simple authorization based on the string token, shared between proxy and client. This implementation is not meant for production, but rather is here as a demonstration for the overall implementation. Additional examples of reverse proxy implementation can be found [here](https://github.com/blublinsky/auth-reverse-proxy). There is also a wealth of open source implementations, for example, [oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) and many commercial offerings.
 
 ## Basic token-based authentication reverse proxy
 
-A simple token-based authentication reverse proxy [implementation](cmd/proxy/proxy.go) is provided in the project along with make targets to build a docker image for it and push this image to the image repository. There is also a prebuild image `quay.io/ibmdpdev/api-server-proxy:secure` that you can use for experimenting with security.
+A simple token-based authentication reverse proxy [implementation](cmd/proxy/proxy.go) is provided in the project along with make targets to build a docker image for it and push this image to the image repository. There is also a pre-build image `quay.io/ibmdpdev/api-server-proxy:secure` that you can use for experimenting with security.
 
 ## Installation
 
@@ -30,6 +30,7 @@ security:
     SECURITY_PREFIX: "/"
     ENABLE_GRPC: "true"
 ```
+
 removing security configuration there will run API server without security
 
 with security configuration in place you can install API server using the following helm command (assuming that you are in the `helm-chart` directory of the project):

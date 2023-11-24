@@ -149,13 +149,13 @@ load-ray-test-image: ## Load the ray test images
 ##@ Docker Build
 
 docker-image: test ## Build image for the api server.
-	$(ENGINE) build -t ${IMG} -f Dockerfile ..
+	$(ENGINE) build -f api-server.dockerfile -t ${IMG} -f Dockerfile ..
 
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
 docker-proxy-image: ## Build image for the security proxy.
-	$(ENGINE) build -f Dockerfile_proxy -t ${PROXY_IMG} .
+	$(ENGINE) build -f proxy.dockerfile -t ${PROXY_IMG} .
 
 
 docker-proxy-push: ## Push image for the security proxy.
