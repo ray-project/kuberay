@@ -7,9 +7,6 @@ REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 IMG_TAG ?=latest
 IMG ?= kuberay/security-proxy:$(IMG_TAG)
 
-# Allow for additional test flags (-v, etc)
-GO_TEST_FLAGS ?= 
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -71,8 +68,8 @@ build: fmt vet fumpt imports lint ## Build api server binary.
 
 ##@ Docker Build
 
-docker-image: test ## Build image for the api server.
-	$(ENGINE) build -t ${IMG}
+docker-image: ## Build image for the security proxy.
+	$(ENGINE) build -t ${IMG} .
 
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
@@ -87,7 +84,6 @@ $(REPO_ROOT_BIN):
 GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
 GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
-KIND ?= $(REPO_ROOT_BIN)/kind
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 
 
@@ -101,35 +97,29 @@ GOBINDATA_VERSION ?= v4.0.2
 .PHONY: goimports
 goimports: $(GOIMPORTS) ## Download goimports locally if necessary
 $(GOIMPORTS): $(REPO_ROOT_BIN)
-	test -s $(GOIMPORTS) || GOBIN=$(REPO_ROOT_BIN) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
+ 	-s $(GOIMPORTS) || GOBIN=$(REPO_ROOT_BIN) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
 	
 .PHONY: gofumpt
 gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
 $(GOFUMPT): $(REPO_ROOT_BIN)	
-	test -s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
+	-s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci_lint locally if necessary.
 $(GOLANGCI_LINT): $(REPO_ROOT_BIN)
-	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
-
-.PHONY: kind
-kind: $(KIND) ## Download kind locally if necessary.
-$(KIND): $(REPO_ROOT_BIN)	
-	test -s $(KIND) || GOBIN=$(REPO_ROOT_BIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
+	-s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
 
 .PHONY: go-bindata
 go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
 $(GOBINDATA): $(REPO_ROOT_BIN)
-	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
+	-s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
+dev-tools: golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
 	rm -f $(REPO_ROOT_BIN)/golangci-lint
 	rm -f $(REPO_ROOT_BIN)/gofumpt
 	rm -f $(REPO_ROOT_BIN)/goimports
-	rm -f $(REPO_ROOT_BIN)/kind
 	rm -f $(REPO_ROOT_BIN)/go-bindata
