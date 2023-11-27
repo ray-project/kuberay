@@ -3,15 +3,15 @@ FROM registry.access.redhat.com/ubi8/go-toolset:1.19.13 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
-COPY go.mod go.sum ./
+COPY ../apiserver/go.mod go.sum ./
 # Copy the go source
-COPY cmd/ cmd/
-COPY pkg/ pkg/
+COPY ../apiserver/cmd cmd/
+COPY ../apiserver/pkg pkg/
 
 # We are only using a subset of the libraries in go.mod, so do not load it upfront
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o security_proxy cmd/proxy/proxy.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o security_proxy cmd/proxy/main.go
 
 FROM scratch
 WORKDIR /workspace

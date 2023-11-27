@@ -15,8 +15,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/security/grpcproxy"
-	"github.com/ray-project/kuberay/apiserver/pkg/security/httpproxy"
+	"github.com/ray-project/kuberay/security/pkg/grpcproxy"
+	"github.com/ray-project/kuberay/security/pkg/httpproxy"
 )
 
 func main() {
@@ -25,6 +25,7 @@ func main() {
 	http_local_port := os.Getenv("HTTP_LOCAL_PORT")
 	grpc_remote_port := os.Getenv("GRPC_REMOTE_PORT")
 	grpc_local_port := os.Getenv("GRPC_LOCAL_PORT")
+	// Uncomment below for local testing
 	/*	http_remote_port := "9091"
 		http_local_port := "9090"
 		grpc_remote_port := "9091"
@@ -33,11 +34,13 @@ func main() {
 	// Security info
 	secure_prefix := os.Getenv("SECURITY_PREFIX")
 	security_token := os.Getenv("SECURITY_TOKEN")
+	// Uncomment below for local testing
 	/*	secure_prefix := "/" // Only used for HTTP to define secure prefix
 		security_token := "12345"*/
 
 	// Enabling GRPC
 	enable_grpc := strings.ToLower(os.Getenv("ENABLE_GRPC")) == "true"
+	// Uncomment below for local testing
 	//	enable_grpc := true
 
 	if http_remote_port == "" || http_local_port == "" || secure_prefix == "" || security_token == "" {
@@ -66,7 +69,7 @@ func main() {
 			// set up listener
 			lis, err := net.Listen("tcp", "localhost:"+grpc_local_port)
 			if err != nil {
-				klog.Fatalf("failed to listen: ", err)
+				klog.Fatal("failed to listen: ", err)
 			}
 			klog.Info("GRPC listening on ", lis.Addr())
 
