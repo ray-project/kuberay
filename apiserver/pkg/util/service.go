@@ -7,7 +7,6 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -75,10 +74,6 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 	if err != nil {
 		return nil, err
 	}
-	newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(newRayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports, v1.ContainerPort{
-		Name:          defaultServePortName,
-		ContainerPort: defaultServePort,
-	})
 	var serviceUnhealthySecondThreshold *int32
 	if apiService.ServiceUnhealthySecondThreshold > 0 {
 		serviceUnhealthySecondThreshold = &apiService.ServiceUnhealthySecondThreshold
