@@ -55,15 +55,11 @@ vet: ## Run go vet against code.
 fumpt: gofumpt ## Run gofmtumpt against code.
 	$(GOFUMPT) -l -w .
 
-.PHONY: imports
-imports: goimports ## Run goimports against code.
-	$(GOIMPORTS) -l -w .	
-
 .PHONY: lint
-lint: golangci-lint fmt vet fumpt imports ## Run the linter.
+lint: golangci-lint fmt vet fumpt ## Run the linter.
 	$(GOLANGCI_LINT) run  --timeout=3m	
 
-build: fmt vet fumpt imports lint ## Build api server binary.
+build: fmt vet fumpt lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver-proxy cmd/main.go
 
 ##@ Docker Build
@@ -81,7 +77,6 @@ $(REPO_ROOT_BIN):
 	mkdir -p $(REPO_ROOT_BIN)
 
 ## Tool Binaries
-GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
 GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
@@ -94,11 +89,6 @@ GOLANGCI_LINT_VERSION ?= v1.54.1
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 
-.PHONY: goimports
-goimports: $(GOIMPORTS) ## Download goimports locally if necessary
-$(GOIMPORTS): $(REPO_ROOT_BIN)
- 	-s $(GOIMPORTS) || GOBIN=$(REPO_ROOT_BIN) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
-	
 .PHONY: gofumpt
 gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
 $(GOFUMPT): $(REPO_ROOT_BIN)	
@@ -115,11 +105,10 @@ $(GOBINDATA): $(REPO_ROOT_BIN)
 	-s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
 .PHONY: dev-tools
-dev-tools: golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
+dev-tools: golangci-lint gofumpt go-bindata ## Install all development tools
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
 	rm -f $(REPO_ROOT_BIN)/golangci-lint
 	rm -f $(REPO_ROOT_BIN)/gofumpt
-	rm -f $(REPO_ROOT_BIN)/goimports
 	rm -f $(REPO_ROOT_BIN)/go-bindata
