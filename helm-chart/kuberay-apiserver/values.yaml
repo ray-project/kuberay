@@ -6,8 +6,8 @@ replicaCount: 1
 
 name: "kuberay-apiserver"
 image:
-  repository: quay.io/ibmdpdev/api-server
-  tag: secure
+  repository: kuberay/apiserver
+  tag: nightly
   pullPolicy: Always
 
 ## Install Default RBAC roles and bindings
@@ -78,8 +78,8 @@ singleNamespaceInstall: false
 # security definition. Comment it out if security is not required
 security:
   proxy:
-    repository: quay.io/ibmdpdev/api-server-proxy
-    tag: secure
+    repository: kuberay/security-proxy
+    tag: nightly
     pullPolicy: Always
   env:
     HTTP_LOCAL_PORT: 8988

@@ -11,17 +11,23 @@ Here we will use a very simple [sidecar implementation](../security/cmd/main.go)
 
 ## Basic token-based authentication reverse proxy
 
-A simple token-based authentication reverse proxy [implementation](../security/cmd/main.go) is provided in the project along with make targets to build a docker image for it and push this image to the image repository. There is also a pre-build image `quay.io/ibmdpdev/api-server-proxy:secure` that you can use for experimenting with security.
+A simple token-based authentication reverse proxy [implementation](../security/cmd/main.go) is provided in the project along with make targets to build a docker image for it and push this image to the image repository. There is also a pre-build image `kuberay/security-proxy:nightly` that you can use for experimenting with security.
 
 ## Installation
+
+Setting up kind cluster with all required things can be done using the following command:
+
+```shell
+make operator-image docker-image security-proxy-image cluster load-operator-image load-image load-security-proxy-image deploy-operator deploy
+```
 
 The API server helm chart is updated to support both insecure and secure installations. To achieve this [valumes.yaml file](../helm-chart/kuberay-apiserver/values.yaml) is extended to include security configuration:
 
 ```yaml
 security:
   proxy:
-    repository: quay.io/ibmdpdev/api-server-proxy
-    tag: secure
+    repository: kuberay/security-proxy
+    tag: nightly
     pullPolicy: IfNotPresent
   env:
     HTTP_LOCAL_PORT: 8988
