@@ -53,15 +53,14 @@ The KubeRay repository only contains documentation related to the development an
 
 ## External Blog Posts
 
-1. [Evolving Niantic AR Mapping Infrastructures with Ray](https://nianticlabs.com/news/ray) (September 6, 2023)
-2. [Building a Modern Machine Learning Platform with Ray at Samsara](https://www.samsara.com/blog/building-a-modern-machine-learning-platform-with-ray) (August 29, 2023)
-3. [KubeRay vs Ray Clusters on Cloud VMs](https://vishnudeva.medium.com/kuberay-vs-ray-clusters-on-cloud-vms-ray-chronicles-9d58882cbe1b) (August 22, 2023)
-4. [Using Ray on Kubernetes with KubeRay at Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay) (August 15, 2023)
-5. [How DoorDash Built an Ensemble Learning Model for Time Series Forecasting with KubeRay](https://doordash.engineering/2023/06/20/how-doordash-built-an-ensemble-learning-model-for-time-series-forecasting/) (June 20, 2023)
-6. [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023)
-7. [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023)
-8. [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) (March 17, 2023)
-9. [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) (February 1, 2023)
+1. [Evolving Niantic AR Mapping Infrastructures with Ray](https://nianticlabs.com/news/ray) Niantic (September 6, 2023)
+2. [Building a Modern Machine Learning Platform with Ray at Samsara](https://www.samsara.com/blog/building-a-modern-machine-learning-platform-with-ray) Samsara (August 29, 2023)
+3. [Using Ray on Kubernetes with KubeRay at Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay) Google (August 15, 2023)
+4. [How DoorDash Built an Ensemble Learning Model for Time Series Forecasting with KubeRay](https://doordash.engineering/2023/06/20/how-doordash-built-an-ensemble-learning-model-for-time-series-forecasting/) Doordash (June 20, 2023)
+5. [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023)
+6. [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023)
+7. [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) Instacart (March 17, 2023)
+8. [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) Spotify (February 1, 2023)
 
 ## Talks
 
