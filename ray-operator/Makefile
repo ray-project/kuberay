@@ -111,6 +111,12 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
+install-with-webhooks: manifests kustomize ## Install CRDs with webhooks into the K8s cluster specified in ~/.kube/config.
+	($(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl create -f -) || ($(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl replace -f -)
+
+uninstall-with-webhooks: manifests kustomize ## Uninstall CRDs with webhooks from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl delete -f -
+
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply --server-side=true -f -
@@ -125,6 +131,17 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --source-path=./apis/ray \
     --renderer=markdown \
     --output-path=../docs/reference/api.md
+
+certmanager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+
+deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
+	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	($(KUSTOMIZE) build config/default-with-webhooks | kubectl create -f -) || ($(KUSTOMIZE) build config/default-with-webhooks | kubectl replace -f -)
+
+undeploy-with-webhooks: ## Undeploy controller with webhooks from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/default-with-webhooks | kubectl delete -f -
+
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
