@@ -84,7 +84,6 @@ $(REPO_ROOT_BIN):
 	mkdir -p $(REPO_ROOT_BIN)
 
 ## Tool Binaries
-KUSTOMIZE ?= $(REPO_ROOT_BIN)/kustomize
 GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
 GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
@@ -93,7 +92,6 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.54.1
@@ -132,7 +130,6 @@ dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install 
 clean-dev-tools: ## Remove all development tools
 	rm -f $(REPO_ROOT_BIN)/golangci-lint
 	rm -f $(REPO_ROOT_BIN)/gofumpt
-	rm -f $(REPO_ROOT_BIN)/kustomize
 	rm -f $(REPO_ROOT_BIN)/goimports
 	rm -f $(REPO_ROOT_BIN)/kind
 	rm -f $(REPO_ROOT_BIN)/go-bindata
