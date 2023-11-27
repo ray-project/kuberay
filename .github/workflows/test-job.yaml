@@ -255,7 +255,7 @@ jobs:
 
       - name: Build Docker Image - security proxy
         run: |
-          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} -f security/Dockerfile .
+          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} .
           docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
 
       - name: Upload Artifact security proxy
