@@ -207,9 +207,10 @@ jobs:
   build_security_proxy:
     env:
       working-directory: ./security
-    name: Build Security proxy and Docker Images
+    name: Build security proxy Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
+
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
@@ -243,25 +244,22 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Build
-        run: go build ./...
-        working-directory: ${{env.working-directory}}
-
-      - name: Test
-        run: go test ./pkg/... ./cmd/... -race -parallel 4
+        run: make build
         working-directory: ${{env.working-directory}}
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
-      - name: Build Docker Image - security proxy
+      - name: Build Docker Image - Operator
         run: |
-          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} .
+          IMG=kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} make docker-image
           docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
+        working-directory: ${{env.working-directory}}
 
-      - name: Upload Artifact security proxy
+      - name: Upload Artifact Operator
         uses: actions/upload-artifact@v2
         with:
-          name: security_proxy_img
+          name: security-proxy_img
           path: /tmp/security-proxy.tar
 
       - name: Log in to Docker Hub
@@ -271,7 +269,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push security proxy to DockerHub
+      - name: Push Operator to DockerHub
         run: |
           docker push kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
           docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} kuberay/security-proxy:nightly;
@@ -286,17 +284,13 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push security proxy to Quay.io
+      - name: Push Operator to Quay.io
         run: |
           docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
           docker push quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
           docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:nightly;
           docker push quay.io/kuberay/security-proxy:nightly
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
-
-      - name: Build CLI
-        run: go build -o kuberay -a main.go
-        working-directory: ${{env.cli-working-directory}}
 
   build_operator:
     env:
