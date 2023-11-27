@@ -51,10 +51,28 @@ The KubeRay repository only contains documentation related to the development an
 * [Kubeflow: an interactive development solution](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html#kuberay-kubeflow-integration)
 * [MCAD: A Kubernetes Solution for Queuing and Gang Dispatching jobs on Single or Multi-Cluster environment](https://github.com/ray-project/kuberay/blob/master/docs/guidance/kuberay-with-MCAD.md)
 
-## Blogs
+## External Blog Posts
 
-* [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023).
-* [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023).
+1. [Evolving Niantic AR Mapping Infrastructures with Ray](https://nianticlabs.com/news/ray) Niantic (September 6, 2023)
+2. [Building a Modern Machine Learning Platform with Ray at Samsara](https://www.samsara.com/blog/building-a-modern-machine-learning-platform-with-ray) Samsara (August 29, 2023)
+3. [Using Ray on Kubernetes with KubeRay at Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay) Google (August 15, 2023)
+4. [How DoorDash Built an Ensemble Learning Model for Time Series Forecasting with KubeRay](https://doordash.engineering/2023/06/20/how-doordash-built-an-ensemble-learning-model-for-time-series-forecasting/) Doordash (June 20, 2023)
+5. [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023)
+6. [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023)
+7. [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) Instacart (March 17, 2023)
+8. [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) Spotify (February 1, 2023)
+
+## Talks
+
+1. [Supercharge Your AI Platform with KubeRay](https://youtu.be/DgfJR6wR4BQ?si=QuK3j7VEkteSwglA) Anyscale + Google (November 8, 2023)
+2. [Sailing Ray Workloads with KubeRay and Kueue in Kubernetes](https://www.youtube.com/watch?v=Q-sQLDMeJ8M) Volcano + DaoCloud (October 17, 2023)
+3. [Serving Large Language Models with KubeRay on TPUs](https://raysummit.anyscale.com/agenda/sessions/135) Google (September 19, 2023)
+4. [KubeRay: A Ray Cluster Management Solution on Kubernetes](https://raysummit.anyscale.com/agenda/sessions/184) Anyscale (September 18, 2023)
+5. [The Different Shades of using KubeRay with Kubernetes](https://raysummit.anyscale.com/agenda/sessions/140) Microsoft (September 18, 2023)
+6. [On-Demand Ray Clusters in ML Workflows via KubeRay & Sematic](https://raysummit.anyscale.com/agenda/sessions/164) Sematic (September 18, 2023)
+7. [KubeRay - A Kubernetes Ray Clustering Solution](https://www.youtube.com/watch?v=tMEwSAeC1jo) Microsoft (February 8, 2023)
+8. [KubeRay x Flyte Integration](https://www.youtube.com/watch?v=RmGynLp5u4Q) Flyte (August 24, 2022)
+9. [Operationalizing Ray Serve on Kubernetes](https://youtu.be/NekkpRrcAWg?si=bpX7z64AuZiM_iUv) Anyscale (August 24, 2022)
 
 ## Helm Charts
 
