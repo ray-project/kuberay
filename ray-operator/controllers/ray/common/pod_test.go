@@ -1137,6 +1137,32 @@ func TestGetCustomWorkerInitImage(t *testing.T) {
 	assert.False(t, b)
 }
 
+func TestGetEnableProbesInjection(t *testing.T) {
+	// cleanup
+	defer os.Unsetenv(ENABLE_PROBES_INJECTION)
+
+	// not set the env
+	os.Unsetenv(ENABLE_PROBES_INJECTION)
+	b := getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "true"
+	os.Setenv(ENABLE_PROBES_INJECTION, "true")
+	b = getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "True"
+	os.Setenv(ENABLE_PROBES_INJECTION, "True")
+	b = getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "false"
+	os.Setenv(ENABLE_PROBES_INJECTION, "false")
+	b = getEnableProbesInjection()
+	assert.False(t, b)
+	// set the env with "False"
+	os.Setenv(ENABLE_PROBES_INJECTION, "False")
+	b = getEnableProbesInjection()
+	assert.False(t, b)
+}
+
 func TestInitHealthProbe(t *testing.T) {
 	// Test 1: User defines a custom HTTPGet probe.
 	httpGetProbe := v1.Probe{
