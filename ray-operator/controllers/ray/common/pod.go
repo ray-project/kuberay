@@ -333,6 +333,7 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType,
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
 	enableProbesInjection := getEnableProbesInjection()
+	log.Info("Probes injection feature flag", "enabled", enableProbesInjection)
 	if enableProbesInjection {
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
