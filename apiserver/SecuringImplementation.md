@@ -1,6 +1,6 @@
 # Securing API server
 
-Currently the KubeRay API server deployed on a publicly accessable cluster is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.
+Currently the KubeRay API server deployed on a publicly accessible cluster is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.
 The solution is based on the architecture below:
 
 ![Overall security implementation](img/authorization.png)
@@ -20,6 +20,8 @@ Setting up kind cluster with all required things can be done using the following
 ```shell
 make operator-image docker-image security-proxy-image cluster load-operator-image load-image load-security-proxy-image deploy-operator deploy
 ```
+
+Note. To use this command, please modify [values.yaml](../helm-chart/kuberay-apiserver/values.yaml) to set the parameter `security.proxy.tag` to `latest`.
 
 The API server helm chart is updated to support both insecure and secure installations. To achieve this [valumes.yaml file](../helm-chart/kuberay-apiserver/values.yaml) is extended to include security configuration:
 

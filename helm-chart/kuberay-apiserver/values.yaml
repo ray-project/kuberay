@@ -8,7 +8,7 @@ name: "kuberay-apiserver"
 image:
   repository: kuberay/apiserver
   tag: nightly
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 ## Install Default RBAC roles and bindings
 rbac:
@@ -80,7 +80,7 @@ security:
   proxy:
     repository: kuberay/security-proxy
     tag: nightly
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   env:
     HTTP_LOCAL_PORT: 8988
     GRPC_LOCAL_PORT: 8987
