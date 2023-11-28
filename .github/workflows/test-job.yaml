@@ -67,7 +67,7 @@ jobs:
       with:
         version: v1.54.1
         working-directory: ./apiserver
-        args: --timeout=3m
+        args: --timeout=3m --exclude='SA1019'
         skip-go-installation: true
         skip-pkg-cache: true
 

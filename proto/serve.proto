@@ -181,9 +181,9 @@ message RayService {
   // Config for serve deployment V2. Note that only one config V1 or V2 can be specified
   string serve_config_V2 = 9;
   // Serve deployment related health check
-  int32 service_unhealthy_second_threshold = 10;
+  int32 service_unhealthy_second_threshold = 10 [deprecated=true];
   // Dashboard agent related health check
-	int32 deployment_unhealthy_second_threshold = 11;         
+	int32 deployment_unhealthy_second_threshold = 11 [deprecated=true];
   // Required. The cluster template.
   ClusterSpec cluster_spec = 5 [(google.api.field_behavior) = REQUIRED];
   // Output. The status for the ray service.

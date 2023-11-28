@@ -56,10 +56,12 @@ type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
-	ServeConfigV2                      string         `json:"serveConfigV2,omitempty"`
-	RayClusterSpec                     RayClusterSpec `json:"rayClusterConfig,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32         `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32         `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
+	RayClusterSpec RayClusterSpec `json:"rayClusterConfig,omitempty"`
+	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
+	ServiceUnhealthySecondThreshold *int32 `json:"serviceUnhealthySecondThreshold,omitempty"`
+	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
+	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *v1.Service `json:"serveService,omitempty"`
 }
