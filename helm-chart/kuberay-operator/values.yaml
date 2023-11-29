@@ -105,3 +105,8 @@ env:
 # Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
 # - name: ENABLE_ZERO_DOWNTIME
 #   value: "true"
+# This environment variable for the KubeRay operator is used to determine whether to enable
+# the injection of readiness and liveness probes into Ray head and worker containers.
+# Enabling this feature contributes to the robustness of Ray clusters.
+# - name: ENABLE_PROBES_INJECTION
+#   value: "true"

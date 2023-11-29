@@ -1,9 +1,6 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-    # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
   rayVersion: '$ray_version' # should match the Ray version in the image of the containers
@@ -12,7 +9,6 @@ spec:
   headGroupSpec:
     # the following params are used to complete the ray start: ray start --head --block ...
     rayStartParams:
-      dashboard-host: '0.0.0.0'
       num-cpus: '1'
     #pod template
     template:

@@ -99,6 +99,12 @@ const (
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
+	// This environment variable for the KubeRay operator is used to determine whether to enable
+	// the injection of readiness and liveness probes into Ray head and worker containers.
+	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature
+	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
+	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 

@@ -13,6 +13,7 @@ from framework.prototype import (
 
 from framework.utils import (
     get_head_pod,
+    get_pod,
     pod_exec_command,
     shell_subprocess_run,
     CONST,
@@ -58,6 +59,24 @@ class BasicRayTestCase(unittest.TestCase):
         """Execute "print(ray.cluster_resources())" in the head Pod."""
         EasyJobRule().assert_rule()
 
+    def test_probe_injection(self):
+        """
+        Check whether the readiness and liveness probes are injected into the Ray container.
+        """
+        def is_probe_injected(pod):
+            probes = [
+                pod.spec.containers[0].readiness_probe,
+                pod.spec.containers[0].liveness_probe
+            ]
+            for probe in probes:
+                if probe is None:
+                    return False
+            return True
+        headpod = get_head_pod(BasicRayTestCase.ray_cluster_ns)
+        assert is_probe_injected(headpod)
+        # TODO (kevin85421): We only check 1 worker Pod here.
+        worker_pod = get_pod(BasicRayTestCase.ray_cluster_ns, "ray.io/node-type=worker")
+        assert is_probe_injected(worker_pod)
 
 class RayFTTestCase(unittest.TestCase):
     """Test Ray GCS Fault Tolerance"""
