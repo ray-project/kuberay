@@ -1,3 +1,5 @@
+import time
+
 from python_apiserver_client import *
 
 def test_templates():
@@ -121,14 +123,14 @@ def test_job_submission():
     worker = WorkerNodeSpec(group_name="small", compute_template="default-template", replicas=1,
                             min_replicas=1, max_replicas=1, ray_start_params=DEFAULT_WORKER_START_PARAMS,
                             image="rayproject/ray:2.8.0-py310", volumes=[volume], environment=environment)
-    cluster = Cluster(name="test", namespace="default", user="boris", version="2.8.0",
+    cluster = Cluster(name="test-job", namespace="default", user="boris", version="2.8.0",
                       cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker]))
     # create
     status, error = apis.create_cluster(cluster)
     assert status == 200
     assert error is None
     # Wait for the cluster to get ready
-    status, error = apis.wait_cluster_ready(ns="default", name="test")
+    status, error = apis.wait_cluster_ready(ns="default", name="test-job")
     assert status == 200
     assert error is None
     # submit Ray job
@@ -141,36 +143,37 @@ def test_job_submission():
     """
     jobRequest = RayJobRequest(entrypoint="python /home/ray/samples/sample_code.py",
                                runtime_env=resource_yaml, num_cpu=.5)
-    status, error, sid = apis.submit_job(ns="default", name="test", jobrequest=jobRequest)
+    status, error, sid = apis.submit_job(ns="default", name="test-job", jobrequest=jobRequest)
     assert status == 200
     assert error is None
     # get Ray job info
-    status, error, jinfo = apis.get_job_info(ns="default", name="test", sid=sid)
+    status, error, jinfo = apis.get_job_info(ns="default", name="test-job", sid=sid)
     assert status == 200
     assert error is None
     print(f"\njobs info {jinfo.to_string()}")
     # get Ray jobs info
-    status, error, jinfos = apis.list_job_info(ns="default", name="test")
+    status, error, jinfos = apis.list_job_info(ns="default", name="test-job")
     assert status == 200
     assert error is None
     print("jobs info")
     for inf in jinfos:
         print(f"    {inf.to_string()}")
     # get Ray job log
-    status, error, jlog = apis.get_job_log(ns="default", name="test", sid=sid)
+    time.sleep(5)  # wait till log is available
+    status, error, jlog = apis.get_job_log(ns="default", name="test-job", sid=sid)
     assert status == 200
     assert error is None
     print(f"job log {jlog}")
     # stop Ray job
-    status, error = apis.stop_ray_job(ns="default", name="test", sid=sid)
+    status, error = apis.stop_ray_job(ns="default", name="test-job", sid=sid)
     assert status == 200
     assert error is None
     # delete Ray job
-    status, error = apis.delete_ray_job(ns="default", name="test", sid=sid)
+    status, error = apis.delete_ray_job(ns="default", name="test-job", sid=sid)
     assert status == 200
     assert error is None
     # delete cluster
-    status, error = apis.delete_cluster(ns="default", name="test")
+    status, error = apis.delete_cluster(ns="default", name="test-job")
     assert status == 200
     assert error is None
     # delete template

@@ -30,7 +30,7 @@ class KubeRayAPIs:
     def list_compute_templates(self) -> tuple[int, str, list[Template]]:
         # Execute HTTP request
         url = self.base + self.api_base + "compute_templates"
-        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        response = requests.get(url, headers=_headers, timeout=None)
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -116,7 +116,7 @@ class KubeRayAPIs:
     def list_clusters(self) -> tuple[int, str, list[Cluster]]:
         # Execute HTTP request
         url = self.base + self.api_base + "clusters"
-        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        response = requests.get(url, headers=_headers, timeout=None)
         # Check execution status
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"], None
@@ -148,7 +148,7 @@ class KubeRayAPIs:
         Returns:
             http return code
             message - only returned if http return code is not equal to 200
-            list of clusters
+            clusters definition
     """
     def get_cluster(self, ns: str, name: str) -> tuple[int, str, Cluster]:
         # Execute HTTP request
