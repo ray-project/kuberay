@@ -25,7 +25,7 @@ Currently, KubeRay uses go v1.20 for development.
 ```bash
 go install golang.org/dl/go1.20.11@latest
 go1.20.11 download
-export GOROOT=$(go1.20. env GOROOT)
+export GOROOT=$(go1.20.11 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
