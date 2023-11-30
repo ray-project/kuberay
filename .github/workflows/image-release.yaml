@@ -85,7 +85,7 @@ jobs:
 
   release_security_proxy_image:
     env:
-      working-directory: ./security
+      working-directory: ./experimental
     name: Release security proxy Docker Image
     runs-on: ubuntu-latest
     steps:
@@ -126,7 +126,7 @@ jobs:
 
       - name: Build Docker Image - security proxy
         run: |
-          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} -f security/Dockerfile .
+          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} -f experimental/Dockerfile .
           docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
 
       - name: Log in to Docker Hub

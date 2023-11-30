@@ -121,7 +121,7 @@ operator-image: ## Build the operator image to be loaded in your kind cluster.
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../security && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 

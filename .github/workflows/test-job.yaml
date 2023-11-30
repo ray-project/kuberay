@@ -75,7 +75,7 @@ jobs:
       uses: golangci/golangci-lint-action@v2
       with:
         version: v1.54.1
-        working-directory: ./security
+        working-directory: ./experimental
         args: --timeout=3m
         skip-go-installation: true
         skip-pkg-cache: true
@@ -206,7 +206,7 @@ jobs:
 
   build_security_proxy:
     env:
-      working-directory: ./security
+      working-directory: ./experimental
     name: Build security proxy Binaries and Docker Images
     runs-on: ubuntu-latest
     steps:
