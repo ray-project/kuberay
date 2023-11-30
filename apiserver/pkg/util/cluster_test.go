@@ -74,6 +74,53 @@ var testEmptyDirVolume = &api.Volume{
 	Storage:    "100Gi",
 }
 
+var testAutoscalerOptions = api.AutoscalerOptions{
+	IdleTimeoutSeconds: 25,
+	UpscalingMode:      "Default",
+	ImagePullPolicy:    "Always",
+	Envs: &api.EnvironmentVariables{
+		Values: map[string]string{
+			"AWS_KEY": "123",
+		},
+		ValuesFrom: map[string]*api.EnvValueFrom{
+			"REDIS_PASSWORD": {
+				Source: api.EnvValueFrom_SECRET,
+				Name:   "redis-password-secret",
+				Key:    "password",
+			},
+			"CONFIGMAP": {
+				Source: api.EnvValueFrom_CONFIGMAP,
+				Name:   "special-config",
+				Key:    "special.how",
+			},
+			"ResourceFieldRef": {
+				Source: api.EnvValueFrom_RESOURCEFIELD,
+				Name:   "my-container",
+				Key:    "resource",
+			},
+		},
+	},
+	Volumes: []*api.Volume{
+		{
+			Name:       "configMap",
+			MountPath:  "/tmp/configmap",
+			VolumeType: api.Volume_CONFIGMAP,
+			Source:     "my-config-map",
+			Items: map[string]string{
+				"key1": "path1",
+				"key2": "path2",
+			},
+		},
+		{
+			Name:       "secret",
+			MountPath:  "/tmp/secret",
+			VolumeType: api.Volume_SECRET,
+			Source:     "my-secret",
+		},
+	},
+	Cpu: "300m",
+}
+
 // Spec for testing
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
@@ -156,6 +203,26 @@ var rayCluster = api.Cluster{
 		HeadGroupSpec: &headGroup,
 		WorkerGroupSpec: []*api.WorkerGroupSpec{
 			&workerGroup,
+		},
+	},
+}
+
+var rayClusterAutoScaler = api.Cluster{
+	Name:      "test_cluster",
+	Namespace: "foo",
+	Annotations: map[string]string{
+		"kubernetes.io/ingress.class": "nginx",
+	},
+	ClusterSpec: &api.ClusterSpec{
+		HeadGroupSpec: &headGroup,
+		WorkerGroupSpec: []*api.WorkerGroupSpec{
+			&workerGroup,
+		},
+		EnableInTreeAutoscaling: true,
+		AutoscalerOptions: &api.AutoscalerOptions{
+			UpscalingMode:      "Default",
+			IdleTimeoutSeconds: 120,
+			ImagePullPolicy:    "IfNotPresent",
 		},
 	},
 }
@@ -489,6 +556,18 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 }
 
+func TestConvertAutoscalerOptions(t *testing.T) {
+	options, err := buildAutoscalerOptions(&testAutoscalerOptions)
+	assert.Nil(t, err)
+	assert.Equal(t, *options.IdleTimeoutSeconds, int32(25))
+	assert.Equal(t, (string)(*options.UpscalingMode), "Default")
+	assert.Equal(t, len(options.Env), 1)
+	assert.Equal(t, len(options.EnvFrom), 2)
+	assert.Equal(t, len(options.VolumeMounts), 2)
+	assert.Equal(t, options.Resources.Requests.Cpu().String(), "300m")
+	assert.Equal(t, options.Resources.Requests.Memory().String(), "512Mi")
+}
+
 func TestBuildRayCluster(t *testing.T) {
 	cluster, err := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
 	assert.Nil(t, err)
@@ -498,6 +577,11 @@ func TestBuildRayCluster(t *testing.T) {
 	if !(*cluster.Spec.HeadGroupSpec.EnableIngress) {
 		t.Errorf("failed to propagate create Ingress")
 	}
+	assert.Equal(t, cluster.Spec.EnableInTreeAutoscaling, (*bool)(nil))
+	cluster, err = NewRayCluster(&rayClusterAutoScaler, map[string]*api.ComputeTemplate{"foo": &template})
+	assert.Nil(t, err)
+	assert.Equal(t, *cluster.Spec.EnableInTreeAutoscaling, true)
+	assert.NotEqual(t, cluster.Spec.AutoscalerOptions, nil)
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {

@@ -144,6 +144,30 @@ message EnvironmentVariables {
   map<string, EnvValueFrom> valuesFrom = 2;
 }
 
+message AutoscalerOptions {
+  // IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+	// Defaults to 60 (one minute).
+	int32 idleTimeoutSeconds = 1;
+	// UpscalingMode is "Conservative", "Default", or "Aggressive."
+	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+	// Default: Upscaling is not rate-limited.
+	// Aggressive: An alias for Default; upscaling is not rate-limited.
+	// It is not read by the KubeRay operator but by the Ray autoscaler.
+	string upscalingMode = 2;
+  // Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
+	string image = 3;
+	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
+	string imagePullPolicy = 4;
+  // Optional CPUs requirements for autoscaler - default "500m"
+  string cpu = 5;
+  // Optional memory requirements for autoscaler - default "512Mi"
+  string memory = 6;
+  // Optional list of environment variables to set in the autoscaler container.
+  EnvironmentVariables envs = 7;
+  // Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
+  repeated Volume volumes = 8;
+}
+
 message Cluster {
   // Required input field. Unique cluster name provided by user.
   string name = 1 [(google.api.field_behavior) = REQUIRED];
@@ -197,6 +221,11 @@ message ClusterSpec {
   HeadGroupSpec head_group_spec = 1 [(google.api.field_behavior) = REQUIRED];
   // Optional. The worker group configurations
   repeated WorkerGroupSpec worker_group_spec = 2;
+  // EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	bool enableInTreeAutoscaling = 3;
+	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+	AutoscalerOptions autoscalerOptions = 4;
+
 }
 
 message Volume {
