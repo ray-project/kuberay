@@ -250,31 +250,17 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
-      - name: Build Docker Image - Operator
+      - name: Build Docker Image - security proxy
         run: |
           IMG=kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} make docker-image
           docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
         working-directory: ${{env.working-directory}}
 
-      - name: Upload Artifact Operator
+      - name: Upload security proxy artifact
         uses: actions/upload-artifact@v2
         with:
           name: security-proxy_img
           path: /tmp/security-proxy.tar
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-        if: contains(fromJson('["refs/heads/master"]'), github.ref)
-
-      - name: Push Operator to DockerHub
-        run: |
-          docker push kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} kuberay/security-proxy:nightly;
-          docker push kuberay/security-proxy:nightly
-        if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
       - name: Log in to Quay.io
         uses: docker/login-action@v2
@@ -284,7 +270,7 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push Operator to Quay.io
+      - name: Push security proxy to Quay.io
         run: |
           docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
           docker push quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
