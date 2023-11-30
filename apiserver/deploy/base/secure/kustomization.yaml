@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ray-system
+
+resources:
+- apiserver.yaml
+
+commonLabels:
+  app.kubernetes.io/name: kuberay
+  app.kubernetes.io/component: kuberay-apiserver
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: nightly
