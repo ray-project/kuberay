@@ -34,10 +34,6 @@ from framework.utils import (
 logger = logging.getLogger(__name__)
 
 NAMESPACE = 'default'
-DEFAULT_IMAGE_DICT = {
-    CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
-    CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
-}
 
 class RayServiceAddCREvent(CREvent):
     """CREvent for RayService addition"""
@@ -194,15 +190,14 @@ class TestRayService:
         self.rayservice_name = self.cr["metadata"]["name"]
         self.default_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "6"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"15 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "15 pizzas please!"},
         ]
 
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
-        operator_manager = OperatorManager(DEFAULT_IMAGE_DICT)
+        operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         start_curl_pod("curl", "default")
-        logger.info(DEFAULT_IMAGE_DICT)
 
         yield
 
@@ -228,7 +223,7 @@ class TestRayService:
 
         updated_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "9 pizzas please!"},
         ]
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
@@ -271,11 +266,11 @@ class TestRayService:
 
         updated_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "8"},
-            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": '"9 pizzas please!"'},
+            {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "9 pizzas please!"},
         ]
         allowed_queries_during_update = deepcopy(self.default_queries)
         allowed_queries_during_update[0]["expected_output"] = {"6", "8"}
-        allowed_queries_during_update[1]["expected_output"] = {'"15 pizzas please!"', '"9 pizzas please!"'}
+        allowed_queries_during_update[1]["expected_output"] = {"15 pizzas please!", "9 pizzas please!"}
 
         with NamedTemporaryFile(mode="w+", suffix=".yaml") as yaml_copy:
             logger.info(f"Writing modified RayService yaml to {yaml_copy.name}.")

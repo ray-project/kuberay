@@ -47,8 +47,9 @@ var apiJobExistingClusterSubmitter = &api.RayJob{
 		RayClusterUserLabelKey: "test",
 	},
 	JobSubmitter: &api.RayJobSubmitter{
-		Image: "image",
-		Cpu:   "2",
+		Image:  "image",
+		Cpu:    "400m",
+		Memory: "150Mi",
 	},
 	EntrypointNumCpus: 2,
 }
@@ -115,7 +116,10 @@ func TestBuildRayJob(t *testing.T) {
 	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
 	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
-	assert.Equal(t, "2", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String())
+	assert.Equal(t, "400m", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Cpu().String())
+	assert.Equal(t, "150Mi", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Limits.Memory().String())
+	assert.Equal(t, "400m", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Requests.Cpu().String())
+	assert.Equal(t, "150Mi", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Resources.Requests.Memory().String())
 
 	// Test request without cluster creation with submitter bad parameters
 	_, err = NewRayJob(apiJobExistingClusterSubmitterBadParams, map[string]*api.ComputeTemplate{"foo": &template})

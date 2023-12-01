@@ -71,7 +71,6 @@ var myRayService = &RayService{
 		},
 		RayClusterSpec: RayClusterSpec{
 			HeadGroupSpec: HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                        "6379",
 					"object-store-memory":         "100000000",
@@ -93,7 +92,7 @@ var myRayService = &RayService{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.7.0",
+								Image: "rayproject/ray:2.8.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -139,9 +138,9 @@ var myRayService = &RayService{
 			},
 			WorkerGroupSpecs: []WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32Ptr(3),
-					MinReplicas: pointer.Int32Ptr(0),
-					MaxReplicas: pointer.Int32Ptr(10000),
+					Replicas:    pointer.Int32(3),
+					MinReplicas: pointer.Int32(0),
+					MaxReplicas: pointer.Int32(10000),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":                        "6379",
@@ -159,7 +158,7 @@ var myRayService = &RayService{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.7.0",
+									Image:   "rayproject/ray:2.8.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -236,7 +235,6 @@ var expected = `{
       },
       "rayClusterConfig":{
          "headGroupSpec":{
-            "replicas":1,
             "rayStartParams":{
                "dashboard-agent-listen-port":"52365",
                "dashboard-host":"0.0.0.0",
@@ -259,7 +257,7 @@ var expected = `{
                   "containers":[
                      {
                         "name":"ray-head",
-                        "image":"rayproject/ray:2.7.0",
+                        "image":"rayproject/ray:2.8.0",
                         "ports":[
                            {
                               "name":"gcs-server",
@@ -326,7 +324,7 @@ var expected = `{
                      "containers":[
                         {
                            "name":"ray-worker",
-                           "image":"rayproject/ray:2.7.0",
+                           "image":"rayproject/ray:2.8.0",
                            "command":[
                               "echo"
                            ],

@@ -77,24 +77,24 @@ You will be prompted for a commit reference and an image tag. The commit referen
 * The [image release CI pipeline](https://github.com/ray-project/kuberay/blob/master/.github/workflows/image-release.yaml) also publishes the `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` Go module. KubeRay has supported Go modules since v0.6.0. Follow these instructions to verify the Go module installation.
     ```sh
     # Install the module. This step is highly possible to fail because the module is not available in the proxy server.
-    go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
+    go install github.com/ray-project/kuberay/ray-operator@v1.0.0-rc.0
 
     # Make the module available by running the go list command to prompt Go to update its index of modules with information about the module you’re publishing.
     # See https://go.dev/doc/modules/publishing for more details.
-    GOPROXY=proxy.golang.org go list -m github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
-    # [Expected output]: github.com/ray-project/kuberay/ray-operator v0.5.0-rc.0
+    GOPROXY=proxy.golang.org go list -m github.com/ray-project/kuberay/ray-operator@v1.0.0-rc.0
+    # [Expected output]: github.com/ray-project/kuberay/ray-operator v1.0.0-rc.0
 
     # Wait for a while until the URL https://sum.golang.org/lookup/github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0 no longer displays "not found". This may take 15 mins based on my experience.
-    go install github.com/ray-project/kuberay/ray-operator@v0.5.0-rc.0
+    go install github.com/ray-project/kuberay/ray-operator@v1.0.0-rc.0
 
     # Check the module is installed successfully.
     ls $GOPATH/pkg/mod/github.com/ray-project/kuberay/
-    # [Expected output]: ray-operator@v0.5.0-rc.0
+    # [Expected output]: ray-operator@v1.0.0-rc.0
     ```
 
 * Release rc0 Helm charts following the [instructions](../release/helm-chart.md).
 
-* Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass ([example](https://github.com/ray-project/ray/pull/33987)). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/17146#01873a69-5ccf-4c71-b06c-ae3a4dd9aecb) passes before merging.
+* Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass ([example](https://github.com/ray-project/ray/pull/40918)). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/17146#01873a69-5ccf-4c71-b06c-ae3a4dd9aecb) passes before merging.
 
 * Announce the `rc0` release on the KubeRay slack, with deployment instructions ([example](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1680555251566609)).
 

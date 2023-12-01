@@ -4,11 +4,11 @@ This section walks through how to build and test the operator in a running Kuber
 
 ## Requirements
 
-software  | version | link
-:-------------  | :---------------:| -------------:
-kubectl |  v1.21.0+    | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-go  | v1.19|[download](https://golang.org/dl/)
-docker   | 19.03+|[download](https://docs.docker.com/install/)
+| software | version  |                                                                link |
+|:---------|:--------:|--------------------------------------------------------------------:|
+| kubectl  | v1.21.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
+| go       |  v1.20   |                                  [download](https://golang.org/dl/) |
+| docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
 
@@ -18,20 +18,21 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.19
+### Use go v1.20
 
-Currently, KubeRay uses go v1.19 for development.
+Currently, KubeRay uses go v1.20 for development.
 
 ```bash
-go install golang.org/dl/go1.19.12@latest
-go1.19.12 download
-export GOROOT=$(go1.19. env GOROOT)
+go install golang.org/dl/go1.20.11@latest
+go1.20.11 download
+export GOROOT=$(go1.20. env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
 ## Development
 
 ### IDE Setup (VS Code)
+
 * Step 1: Install the [VS Code Go extension](https://marketplace.visualstudio.com/items?itemName=golang.go).
 * Step 2: Import the KubeRay workspace configuration by using the file `kuberay.code-workspace` in the root of the KubeRay git repo:
   * "File" -> "Open Workspace from File" -> "kuberay.code-workspace"
@@ -59,7 +60,6 @@ IMG=kuberay/operator:nightly make docker-build
 # Command: kind load docker-image {IMG_REPO}:{IMG_TAG}
 kind load docker-image kuberay/operator:nightly
 
-
 # Step 5: Keep consistency
 # If you update RBAC or CRD, you need to synchronize them.
 # See the section "Consistency check" for more information.
@@ -81,11 +81,14 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 
 ### Running the tests
 
+The unit tests can be run by executing the following command:
+
 ```
 make test
 ```
 
-example results:
+Example output:
+
 ```
 ✗ make test
 ...
@@ -99,6 +102,49 @@ ok  	github.com/ray-project/kuberay/ray-operator/controllers	9.587s	coverage: 66
 ok  	github.com/ray-project/kuberay/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
 ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
 ```
+
+The e2e tests can be run by executing the following command:
+
+```
+make test-e2e
+```
+
+Example output:
+
+```asciidoc
+go test -timeout 30m -v ./test/e2e
+=== RUN   TestRayJobWithClusterSelector
+    rayjob_cluster_selector_test.go:41: Created ConfigMap test-ns-jtlbd/jobs successfully
+    rayjob_cluster_selector_test.go:159: Created RayCluster test-ns-jtlbd/raycluster successfully
+    rayjob_cluster_selector_test.go:161: Waiting for RayCluster test-ns-jtlbd/raycluster to become ready
+=== RUN   TestRayJobWithClusterSelector/Successful_RayJob
+=== PAUSE TestRayJobWithClusterSelector/Successful_RayJob
+=== RUN   TestRayJobWithClusterSelector/Failing_RayJob
+=== PAUSE TestRayJobWithClusterSelector/Failing_RayJob
+=== CONT  TestRayJobWithClusterSelector/Successful_RayJob
+=== CONT  TestRayJobWithClusterSelector/Failing_RayJob
+=== NAME  TestRayJobWithClusterSelector
+    rayjob_cluster_selector_test.go:213: Created RayJob test-ns-jtlbd/counter successfully
+    rayjob_cluster_selector_test.go:215: Waiting for RayJob test-ns-jtlbd/counter to complete
+    rayjob_cluster_selector_test.go:268: Created RayJob test-ns-jtlbd/fail successfully
+    rayjob_cluster_selector_test.go:270: Waiting for RayJob test-ns-jtlbd/fail to complete
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/counter-zs9s8/ray-job-submitter logs
+    test.go:106: Creating ephemeral output directory as KUBERAY_TEST_OUTPUT_DIR env variable is unset
+    test.go:109: Output directory has been created at: /var/folders/mx/kpgdgdqd5j56ynylglgn0nvh0000gn/T/TestRayJobWithClusterSelector2055000419/001
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/fail-gdws6/ray-job-submitter logs
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/raycluster-head-gnhlw/ray-head logs
+    test.go:118: Retrieving Pod Container test-ns-jtlbd/raycluster-worker-small-group-9dffx/ray-worker logs
+--- PASS: TestRayJobWithClusterSelector (12.19s)
+    --- PASS: TestRayJobWithClusterSelector/Failing_RayJob (16.11s)
+    --- PASS: TestRayJobWithClusterSelector/Successful_RayJob (19.14s)
+PASS
+ok      github.com/ray-project/kuberay/ray-operator/test/e2e    32.066s
+```
+
+Note you can set the `KUBERAY_TEST_OUTPUT_DIR` environment to specify the test output directory.
+If not set, it defaults to a temporary directory that's removed once the tests execution completes.
+
+Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 
 ### Manually test new image in running cluster
 
@@ -120,7 +166,7 @@ IMG=kuberay/operator:nightly make deploy
 
 KubeRay uses the gofumpt linter.
 
-Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.19. Run this command to download it:
+Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.20. Run this command to download it:
 
 ```bash
 go install mvdan.cc/gofumpt@v0.5.0
@@ -135,14 +181,14 @@ gofumpt --version
 # v0.5.0 (go1.19)
 ```
 
-Make sure your `go` version is still 1.19:
+Make sure your `go` version is still 1.20:
 
 ```bash
 go version
-# go version go1.19 darwin/amd64
+# go version go1.20 darwin/amd64
 ```
 
-If your `go` version isn’t 1.19 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.19`. It should be back to 1.19.x.
+If your `go` version isn’t 1.20 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.20`. It should be back to 1.20.x.
 
 Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
 
@@ -164,28 +210,44 @@ Run tests on your local environment
 * Step1: Install `ct` (chart-testing) and related dependencies. See https://github.com/helm/chart-testing for more details.
 * Step2: `./helm-chart/script/chart-test.sh local`
 
+### Generating API Reference
+
+We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documenation for more details.
+
+Generate API refernece:
+
+```bash
+make api-docs
+```
+
+The file will be generated at `docs/reference/api.md` as configured.
+
 ### Consistency check
 
 We have several [consistency checks](https://github.com/ray-project/kuberay/blob/master/.github/workflows/consistency-check.yaml) on GitHub Actions. There are several files which need synchronization.
 
 1. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with the CRD YAML files (`ray-operator/config/crd/bases/`)
 2. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with generated API (`ray-operator/pkg/client`)
-3. CRD YAML files in `ray-operator/config/crd/bases/` and `helm-chart/kuberay-operator/crds/` should be the same.
-4. Kubebuilder markers in `ray-operator/controllers/ray/*_controller.go` should be synchronized with RBAC YAML files in `ray-operator/config/rbac`.
-5. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized. **Currently, we need to synchronize this manually.** See [#631](https://github.com/ray-project/kuberay/pull/631) as an example.
-6. `multiple_namespaces_role.yaml` and `multiple_namespaces_rolebinding.yaml` should be synchronized with `role.yaml` and `rolebinding.yaml` in the `helm-chart/kuberay-operator/templates` directory. The only difference is that the former creates namespaced RBAC resources, while the latter creates cluster-scoped RBAC resources.
+3. `ray-operator/apis/ray/v1alpha1/*_types.go` should be synchronized with generated API reference (`docs/reference/api.md`)
+4. CRD YAML files in `ray-operator/config/crd/bases/` and `helm-chart/kuberay-operator/crds/` should be the same.
+5. Kubebuilder markers in `ray-operator/controllers/ray/*_controller.go` should be synchronized with RBAC YAML files in `ray-operator/config/rbac`.
+6. RBAC YAML files in `helm-chart/kuberay-operator/templates` and `ray-operator/config/rbac` should be synchronized. **Currently, we need to synchronize this manually.** See [#631](https://github.com/ray-project/kuberay/pull/631) as an example.
+7. `multiple_namespaces_role.yaml` and `multiple_namespaces_rolebinding.yaml` should be synchronized with `role.yaml` and `rolebinding.yaml` in the `helm-chart/kuberay-operator/templates` directory. The only difference is that the former creates namespaced RBAC resources, while the latter creates cluster-scoped RBAC resources.
 
 ```bash
-# Synchronize consistency 1 and 4:
+# Synchronize consistency 1 and 5:
 make manifests
 
 # Synchronize consistency 2:
 ./hack/update-codegen.sh
 
 # Synchronize consistency 3:
+make api-docs
+
+# Synchronize consistency 4:
 make helm
 
-# Synchronize 1, 2, 3, and 4 in one command
+# Synchronize 1, 2, 3, 4 and 5 in one command
 # [Note]: Currently, we need to synchronize consistency 5 and 6 manually.
 make sync
 
@@ -205,7 +267,7 @@ These tests operate small Ray clusters running within a [kind](https://kind.sigs
   # [Usage]: RAY_IMAGE=$RAY_IMAGE OPERATOR_IMAGE=$OPERATOR_IMAGE python3 tests/compatibility-test.py
   #          These 3 environment variables are optional.
   # [Example]:
-  RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
+  RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/compatibility-test.py
   ```
 ### Running configuration tests locally.
 
@@ -215,9 +277,9 @@ and `tests/test_sample_rayservice_yamls.py`. Currently, only a few of these samp
 
 ```bash
 # Test RayCluster doc examples.
-RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 # Test RayService doc examples.
-RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 ```
 
 See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.

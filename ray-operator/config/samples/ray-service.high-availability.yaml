@@ -79,8 +79,6 @@ metadata:
   annotations:
     ray.io/ft-enabled: "true"
 spec:
-  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
   serveConfigV2: |
     applications:
       - name: fruit_app
@@ -121,7 +119,7 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.7.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.8.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -133,7 +131,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.7.0
+              image: rayproject/ray:2.8.0
               env:
                 - name: RAY_REDIS_ADDRESS
                   value: redis:6379
@@ -175,7 +173,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.7.0
+                image: rayproject/ray:2.8.0
                 lifecycle:
                   preStop:
                     exec:
@@ -219,7 +217,7 @@ metadata:
 spec:
   containers:
   - name: ray-container
-    image: rayproject/ray:2.7.0
+    image: rayproject/ray:2.8.0
     command: ["/bin/bash", "-c", "--"]
     args: ["while true; do sleep 30; done;"]
     volumeMounts:

@@ -1151,52 +1151,43 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Output. Unique Event Id.",
-          "readOnly": true
+          "description": "Unique Event Id."
         },
         "name": {
           "type": "string",
-          "description": "Output. Human readable name for event.",
-          "readOnly": true
+          "description": "Human readable name for event."
         },
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The creation time of the event.",
-          "readOnly": true
+          "description": "Event creation time."
         },
         "firstTimestamp": {
           "type": "string",
           "format": "date-time",
-          "description": "Output. The last time the event occur.",
-          "readOnly": true
+          "description": "The first time the event occur."
         },
         "lastTimestamp": {
           "type": "string",
           "format": "date-time",
-          "title": "Output. The first time the event occur",
-          "readOnly": true
+          "title": "The last time the event occur"
         },
         "reason": {
           "type": "string",
-          "description": "Output. The reason for the transition into the object's current status.",
-          "readOnly": true
+          "description": "The reason for the transition into the object's current status."
         },
         "message": {
           "type": "string",
-          "description": "Output. A human-readable description of the status of this operation.",
-          "readOnly": true
+          "description": "A human-readable description of the status of this operation."
         },
         "type": {
           "type": "string",
-          "title": "Output. Type of this event (Normal, Warning), new types could be added in the future",
-          "readOnly": true
+          "title": "Type of this event (Normal, Warning), new types could be added in the future"
         },
         "count": {
           "type": "integer",
           "format": "int32",
-          "description": "Output. The number of times this event has occurred.",
-          "readOnly": true
+          "description": "The number of times this event has occurred."
         }
       }
     },
@@ -1653,11 +1644,17 @@
       "properties": {
         "key": {
           "type": "string",
-          "title": "key created by the node's taint"
+          "title": "Required. Key created by the node's taint",
+          "required": [
+            "key"
+          ]
         },
         "operator": {
           "type": "string",
-          "title": "operator to apply"
+          "title": "Required. Operator to apply",
+          "required": [
+            "operator"
+          ]
         },
         "value": {
           "type": "string",
@@ -1665,10 +1662,18 @@
         },
         "effect": {
           "type": "string",
-          "title": "Effect"
+          "title": "Required. Effect",
+          "required": [
+            "effect"
+          ]
         }
       },
-      "title": "Toleration for the compute template"
+      "title": "Toleration for the compute template",
+      "required": [
+        "key",
+        "operator",
+        "effect"
+      ]
     },
     "protoListAllRayJobsResponse": {
       "type": "object",
@@ -1720,7 +1725,10 @@
         },
         "entrypoint": {
           "type": "string",
-          "title": "The entrypoint of the RayJob"
+          "title": "Required field. The entrypoint of the RayJob",
+          "required": [
+            "entrypoint"
+          ]
         },
         "metadata": {
           "type": "object",
@@ -1807,7 +1815,8 @@
       "required": [
         "name",
         "namespace",
-        "user"
+        "user",
+        "entrypoint"
       ]
     },
     "protoRayJobSubmitter": {

@@ -17,8 +17,9 @@ import (
 var (
 	enableIngress                    = true
 	deploymentReplicas       int32   = 1
-	headNodeReplicas         int32   = 1
 	workerReplicas           int32   = 5
+	workerMinReplicas        int32   = 1
+	workerMaxReplicas        int32   = 3
 	unhealthySecondThreshold int32   = 900
 	floatNumber              float64 = 1
 	secondsValue             int32   = 100
@@ -27,7 +28,6 @@ var (
 var headSpecTest = rayv1api.HeadGroupSpec{
 	ServiceType:   "ClusterIP",
 	EnableIngress: &enableIngress,
-	Replicas:      &headNodeReplicas,
 	RayStartParams: map[string]string{
 		"dashboard-host":      "0.0.0.0",
 		"metrics-export-port": "8080",
@@ -148,8 +148,8 @@ var configMapWithTolerations = v1.ConfigMap{
 var workerSpecTest = rayv1api.WorkerGroupSpec{
 	GroupName:   "",
 	Replicas:    &workerReplicas,
-	MinReplicas: &workerReplicas,
-	MaxReplicas: &workerReplicas,
+	MinReplicas: &workerMinReplicas,
+	MaxReplicas: &workerMaxReplicas,
 	RayStartParams: map[string]string{
 		"node-ip-address": "$MY_POD_IP",
 	},

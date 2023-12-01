@@ -12,7 +12,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 var (
@@ -44,7 +43,6 @@ var (
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
@@ -88,6 +86,33 @@ var (
 											},
 										},
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	instanceForServeSvc = &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-svc",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadServiceAnnotations: map[string]string{
+				headServiceAnnotationKey1: headServiceAnnotationValue1,
+				headServiceAnnotationKey2: headServiceAnnotationValue2,
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				ServiceType: corev1.ServiceTypeClusterIP,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 8000, Name: "serve"},
 								},
 							},
 						},
@@ -422,6 +447,32 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 	}
 
 	expectedName := fmt.Sprintf("%s-%s-%s", serviceInstance.Name, "serve", "svc")
+	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
+}
+
+func TestBuildServeServiceForRayCluster(t *testing.T) {
+	svc, err := BuildServeServiceForRayCluster(*instanceForServeSvc)
+	assert.Nil(t, err)
+
+	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	expectedResult := string(instanceForServeSvc.Name)
+	if !reflect.DeepEqual(expectedResult, actualResult) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
+	}
+
+	actualLabel := svc.Labels[RayServiceLabelKey]
+	expectedLabel := string(instanceForServeSvc.Name)
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualType := svc.Spec.Type
+	expectedType := instanceForServeSvc.Spec.HeadGroupSpec.ServiceType
+	if !reflect.DeepEqual(expectedType, actualType) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
+	}
+
+	expectedName := fmt.Sprintf("%s-%s-%s", instanceForServeSvc.Name, "serve", "svc")
 	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
 

@@ -67,7 +67,7 @@ var podTemplateTest = v1.PodTemplateSpec{
 				Name: "pvc",
 				VolumeSource: v1.VolumeSource{
 					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-						ClaimName: "pvc",
+						ClaimName: "pvcclaim",
 						ReadOnly:  false,
 					},
 				},
@@ -145,6 +145,7 @@ var expectedVolumes = []*api.Volume{
 	{
 		Name:                 "pvc",
 		MountPath:            "/tmp/pvc",
+		Source:               "pvcclaim",
 		VolumeType:           api.Volume_PERSISTENT_VOLUME_CLAIM,
 		MountPropagationMode: api.Volume_BIDIRECTIONAL,
 		ReadOnly:             false,

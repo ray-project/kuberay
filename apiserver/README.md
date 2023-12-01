@@ -35,8 +35,8 @@ helm version
     # Install the KubeRay helm repo
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-    # Install KubeRay Operator v1.0.0-rc.1.
-    helm install kuberay-operator kuberay/kuberay-operator --version v1.0.0-rc.1
+    # Install KubeRay Operator v1.0.0.
+    helm install kuberay-operator kuberay/kuberay-operator --version v1.0.0
 
     # Check the KubeRay Operator Pod in `default` namespace
     kubectl get pods
@@ -47,7 +47,7 @@ helm version
 ### Install KubeRay APIServer
 
 ```text
-Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0-rc.1` does not yet contain critical fixes
+Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0` does not yet contain critical fixes
 to the api server that would allow Kuberay Serve endpoints to work properly
 ```
 
@@ -98,8 +98,8 @@ To list the deployments:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0-rc.1               
-# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0-rc.1                
+# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0         
+# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0               
 ```
 
 ### Uninstall the Chart
@@ -191,7 +191,7 @@ The following steps allow you to validate that the KubeRay API Server components
 
     * The following examples use the `ray-system` namespace. If not already created by using the helm install steps above, you can create it prior to executing the curl examples by running `kubectl create namespace ray-system`
     * The examples assume that the cluster has at least 2 CPUs available and 4 GB of free memory. You can either increase the CPUs available to your cluster (docker settings) or reduce the CPU request in the `compute_templates` request.
-    * If you are running the service and the kuberay operator on Apple Silicon Machine, you might want to use the `rayproject/ray:2.7.0-aarch64`image.
+    * If you are running the service and the kuberay operator on Apple Silicon Machine, you might want to use the `rayproject/ray:2.8.0-aarch64`image.
 
     ```sh
     # Create a template
@@ -253,7 +253,7 @@ The following steps allow you to validate that the KubeRay API Server components
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0",
@@ -265,7 +265,7 @@ The following steps allow you to validate that the KubeRay API Server components
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 5,
@@ -472,12 +472,12 @@ Examples: (please make sure that template `default-template` is created before r
     "name": "test-cluster",
     "namespace": "ray-system",
     "user": "3cpo",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "environment": "DEV",
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -489,7 +489,7 @@ Examples: (please make sure that template `default-template` is created before r
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -509,11 +509,11 @@ Examples: (please make sure that template `default-template` is created before r
     "name": "test-cluster",
     "namespace": "ray-system",
     "user": "3cpo",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -524,7 +524,7 @@ Examples: (please make sure that template `default-template` is created before r
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -601,11 +601,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -616,7 +616,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -735,11 +735,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -750,7 +750,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -869,11 +869,11 @@ Examples:
         "name": "test-cluster",
         "namespace": "ray-system",
         "user": "3cpo",
-        "version": "2.7.0",
+        "version": "2.8.0",
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -884,7 +884,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1025,7 +1025,7 @@ Examples:
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0"
@@ -1035,7 +1035,7 @@ Examples:
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 1,
@@ -1059,7 +1059,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0"
@@ -1069,7 +1069,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -1098,12 +1098,12 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   "name": "job-test",
   "namespace": "default",
   "user": "boris",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "environment": "DEV",
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.7.0-py310",
+      "image": "rayproject/ray:2.8.0-py310",
       "serviceType": "NodePort",
       "rayStartParams": {
          "dashboard-host": "0.0.0.0",
@@ -1123,7 +1123,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,
@@ -1152,11 +1152,11 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
    "name":"job-test",
    "namespace":"default",
    "user":"boris",
-   "version":"2.7.0",
+   "version":"2.8.0",
    "clusterSpec":{
       "headGroupSpec":{
          "computeTemplate":"default-template",
-         "image":"rayproject/ray:2.7.0-py310",
+         "image":"rayproject/ray:2.8.0-py310",
          "serviceType":"NodePort",
          "rayStartParams":{
             "dashboard-host":"0.0.0.0",
@@ -1181,7 +1181,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
          {
             "groupName":"small-wg",
             "computeTemplate":"default-template",
-            "image":"rayproject/ray:2.7.0-py310",
+            "image":"rayproject/ray:2.8.0-py310",
             "replicas":1,
             "minReplicas":5,
             "maxReplicas":1,
@@ -1224,11 +1224,16 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "namespace": "default",
   "user": "boris",
   "entrypoint": "python /home/ray/samples/sample_code.py",
-   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+  "jobSubmitter": {
+    "image": "rayproject/ray:2.8.0-py310",
+    "cpu": "400m",
+    "memory": "150Mi" 
+  },
   "clusterSelector": {
     "ray.io/cluster": "job-test"
   }
-}'  
+}'
 ```
 
 * Response
@@ -1262,29 +1267,29 @@ kubectl logs job-test-2hhmf
 And you should get something similar to:
 
 ```text
-2023-10-18 03:19:51,524	INFO cli.py:36 -- Job submission server address: http://job-test-head-svc.default.svc.cluster.local:8265
-2023-10-18 03:19:52,197	SUCC cli.py:60 -- -------------------------------------------
-2023-10-18 03:19:52,197	SUCC cli.py:61 -- Job 'job-test-bbfqs' submitted successfully
-2023-10-18 03:19:52,197	SUCC cli.py:62 -- -------------------------------------------
-2023-10-18 03:19:52,197	INFO cli.py:274 -- Next steps
-2023-10-18 03:19:52,197	INFO cli.py:275 -- Query the logs of the job:
-2023-10-18 03:19:52,198	INFO cli.py:277 -- ray job logs job-test-bbfqs
-2023-10-18 03:19:52,198	INFO cli.py:279 -- Query the status of the job:
-2023-10-18 03:19:52,198	INFO cli.py:281 -- ray job status job-test-bbfqs
-2023-10-18 03:19:52,198	INFO cli.py:283 -- Request the job to be stopped:
-2023-10-18 03:19:52,198	INFO cli.py:285 -- ray job stop job-test-bbfqs
-2023-10-18 03:19:52,203	INFO cli.py:292 -- Tailing logs until the job exits (disable with --no-wait):
-2023-10-18 03:20:00,014	INFO worker.py:1329 -- Using address 10.244.0.10:6379 set in the environment variable RAY_ADDRESS
-2023-10-18 03:20:00,014	INFO worker.py:1458 -- Connecting to existing Ray cluster at address: 10.244.0.10:6379...
-2023-10-18 03:20:00,032	INFO worker.py:1633 -- Connected to Ray cluster. View the dashboard at 10.244.0.10:8265 
+2023-10-18 03:19:51,524 INFO cli.py:36 -- Job submission server address: http://job-test-head-svc.default.svc.cluster.local:8265
+2023-10-18 03:19:52,197 SUCC cli.py:60 -- -------------------------------------------
+2023-10-18 03:19:52,197 SUCC cli.py:61 -- Job 'job-test-bbfqs' submitted successfully
+2023-10-18 03:19:52,197 SUCC cli.py:62 -- -------------------------------------------
+2023-10-18 03:19:52,197 INFO cli.py:274 -- Next steps
+2023-10-18 03:19:52,197 INFO cli.py:275 -- Query the logs of the job:
+2023-10-18 03:19:52,198 INFO cli.py:277 -- ray job logs job-test-bbfqs
+2023-10-18 03:19:52,198 INFO cli.py:279 -- Query the status of the job:
+2023-10-18 03:19:52,198 INFO cli.py:281 -- ray job status job-test-bbfqs
+2023-10-18 03:19:52,198 INFO cli.py:283 -- Request the job to be stopped:
+2023-10-18 03:19:52,198 INFO cli.py:285 -- ray job stop job-test-bbfqs
+2023-10-18 03:19:52,203 INFO cli.py:292 -- Tailing logs until the job exits (disable with --no-wait):
+2023-10-18 03:20:00,014 INFO worker.py:1329 -- Using address 10.244.0.10:6379 set in the environment variable RAY_ADDRESS
+2023-10-18 03:20:00,014 INFO worker.py:1458 -- Connecting to existing Ray cluster at address: 10.244.0.10:6379...
+2023-10-18 03:20:00,032 INFO worker.py:1633 -- Connected to Ray cluster. View the dashboard at 10.244.0.10:8265 
 test_counter got 1
 test_counter got 2
 test_counter got 3
 test_counter got 4
 test_counter got 5
-2023-10-18 03:20:03,304	SUCC cli.py:60 -- ------------------------------
-2023-10-18 03:20:03,304	SUCC cli.py:61 -- Job 'job-test-bbfqs' succeeded
-2023-10-18 03:20:03,304	SUCC cli.py:62 -- ------------------------------
+2023-10-18 03:20:03,304 SUCC cli.py:60 -- ------------------------------
+2023-10-18 03:20:03,304 SUCC cli.py:61 -- Job 'job-test-bbfqs' succeeded
+2023-10-18 03:20:03,304 SUCC cli.py:62 -- ------------------------------
 ```
 
 Additionally here, we can specify configuration for the job submitter, allowing to specify image, memory and cpu limits for it.
@@ -1310,7 +1315,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
     "ray.io/cluster": "job-test"
   },
   "jobSubmitter": {
-    "image": "rayproject/ray:2.7.0-py310"
+    "image": "rayproject/ray:2.8.0-py310"
   }
 }'  
 ```
@@ -1328,7 +1333,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
       "ray.io/cluster":"job-test"
    },
    "jobSubmitter":{
-      "image":"rayproject/ray:2.7.0-py310"
+      "image":"rayproject/ray:2.8.0-py310"
    },
    "createdAt":"2023-10-24T11:48:19Z"
 }
@@ -1366,7 +1371,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0"
@@ -1376,7 +1381,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1425,7 +1430,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0",
+            "image": "rayproject/ray:2.8.0",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0"
@@ -1435,7 +1440,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0",
+              "image": "rayproject/ray:2.8.0",
               "replicas": 1,
               "minReplicas": 1,
               "maxReplicas": 1,
@@ -1482,7 +1487,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0",
+        "image": "rayproject/ray:2.8.0",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0"
@@ -1492,7 +1497,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0",
+          "image": "rayproject/ray:2.8.0",
           "replicas": 1,
           "minReplicas": 1,
           "maxReplicas": 1,
@@ -1594,7 +1599,7 @@ Examples:
       "clusterSpec": {
         "headGroupSpec": {
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "serviceType": "NodePort",
           "rayStartParams": {
             "dashboard-host": "0.0.0.0",
@@ -1606,7 +1611,7 @@ Examples:
           {
             "groupName": "small-wg",
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "replicas": 1,
             "minReplicas": 0,
             "maxReplicas": 5,
@@ -1668,7 +1673,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1679,7 +1684,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,
@@ -1713,7 +1718,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1725,7 +1730,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 0,
           "maxReplicas": 5,
@@ -1751,7 +1756,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -1762,7 +1767,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,
@@ -1809,7 +1814,7 @@ Examples
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -1820,7 +1825,7 @@ Examples
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0-py310",
+              "image": "rayproject/ray:2.8.0-py310",
               "replicas": 1,
               "minReplicas": 5,
               "maxReplicas": 1,
@@ -1928,7 +1933,7 @@ Examples:
         "clusterSpec": {
           "headGroupSpec": {
             "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.7.0-py310",
+            "image": "rayproject/ray:2.8.0-py310",
             "serviceType": "NodePort",
             "rayStartParams": {
               "dashboard-host": "0.0.0.0",
@@ -1939,7 +1944,7 @@ Examples:
             {
               "groupName": "small-wg",
               "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.7.0-py310",
+              "image": "rayproject/ray:2.8.0-py310",
               "replicas": 1,
               "minReplicas": 5,
               "maxReplicas": 1,
@@ -2081,7 +2086,7 @@ Examples:
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.7.0-py310",
+        "image": "rayproject/ray:2.8.0-py310",
         "serviceType": "NodePort",
         "rayStartParams": {
           "dashboard-host": "0.0.0.0",
@@ -2092,7 +2097,7 @@ Examples:
         {
           "groupName": "small-wg",
           "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.7.0-py310",
+          "image": "rayproject/ray:2.8.0-py310",
           "replicas": 1,
           "minReplicas": 5,
           "maxReplicas": 1,

@@ -21,33 +21,33 @@ import (
 	"testing"
 	"time"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
-	. "github.com/onsi/ginkgo"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
+
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
+
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/utils/pointer"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -56,7 +56,6 @@ var (
 	instanceName            string
 	enableInTreeAutoscaling bool
 	headGroupNameStr        string
-	headGroupServiceAccount string
 	groupNameStr            string
 	expectReplicaNum        int32
 	testPods                []runtime.Object
@@ -75,7 +74,6 @@ func setupTest(t *testing.T) {
 	instanceName = "raycluster-sample"
 	enableInTreeAutoscaling = true
 	headGroupNameStr = "head-group"
-	headGroupServiceAccount = "head-service-account"
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
 	workersToDelete = []string{"pod1", "pod2"}
@@ -217,7 +215,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.7.0",
+						Image:   "rayproject/ray:2.8.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -247,7 +245,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.7.0",
+						Image:   "rayproject/ray:2.8.0",
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -290,7 +288,6 @@ func setupTest(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Replicas: pointer.Int32Ptr(1),
 				RayStartParams: map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
@@ -303,7 +300,7 @@ func setupTest(t *testing.T) {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/ray:2.7.0",
+								Image:   "rayproject/ray:2.8.0",
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -323,9 +320,9 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32Ptr(expectReplicaNum),
-					MinReplicas: pointer.Int32Ptr(0),
-					MaxReplicas: pointer.Int32Ptr(10000),
+					Replicas:    pointer.Int32(expectReplicaNum),
+					MinReplicas: pointer.Int32(0),
+					MaxReplicas: pointer.Int32(10000),
 					GroupName:   groupNameStr,
 					RayStartParams: map[string]string{
 						"port":     "6379",
@@ -336,7 +333,7 @@ func setupTest(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.7.0",
+									Image:   "rayproject/ray:2.8.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -925,7 +922,9 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+	fakeClient := clientFake.NewClientBuilder().
+		WithRuntimeObjects(testPods...).
+		Build()
 	ctx := context.Background()
 
 	podList := corev1.PodList{}
@@ -937,7 +936,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	// Simulate head pod get evicted.
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	podList.Items[0].Status.Reason = "Evicted"
-	err = fakeClient.Update(ctx, &podList.Items[0])
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err, "Fail to update head Pod status")
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -1184,7 +1183,11 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(testRayCluster).
+		WithStatusSubresource(testRayCluster).
+		Build()
 	ctx := context.Background()
 
 	namespacedName := types.NamespacedName{
@@ -1432,7 +1435,11 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(testRayCluster).Build()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(testRayCluster).
+		WithStatusSubresource(testRayCluster).
+		Build()
 	ctx := context.Background()
 
 	namespacedName := types.NamespacedName{
@@ -1447,7 +1454,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Scheme:   newScheme,
 		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
@@ -1738,7 +1745,10 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	runtimeObjects := testPods[0:1]
 	cluster := testRayCluster.DeepCopy()
 	cluster.Spec.WorkerGroupSpecs = nil
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(runtimeObjects...).
+		Build()
 	ctx := context.Background()
 
 	// Get the pod list from the fake client.
@@ -1752,8 +1762,10 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	// I have not observed this combination in practice, but no Kubernetes documentation
 	// explicitly forbids it.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
-	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
 	// Initialize a new RayClusterReconciler.
@@ -1773,8 +1785,10 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 
 	// Make sure the head Pod's restart policy is `Never` and status is `Failed`.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
-	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+	podList.Items[0].Status.Phase = corev1.PodFailed
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
 	// The head Pod will be deleted and the controller will return an error
@@ -1785,7 +1799,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 0, len(podList.Items))
 
-	// The new head Pod will be created in the this reconcile loop.
+	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
 	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
@@ -1805,7 +1819,11 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	runtimeObjects := testPods[0:1]
 	cluster := testRayCluster.DeepCopy()
 	cluster.Spec.WorkerGroupSpecs = nil
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(runtimeObjects...).
+		WithStatusSubresource(cluster).
+		Build()
 	ctx := context.Background()
 
 	// Get the pod list from the fake client.
@@ -1819,6 +1837,9 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	// and the Ray container has terminated. The next `reconcilePods` call will delete
 	// the head Pod and will not create a new one in the same reconciliation loop.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err)
+
 	podList.Items[0].Status.Phase = corev1.PodRunning
 	podList.Items[0].Status.ContainerStatuses = []corev1.ContainerStatus{
 		{
@@ -1828,7 +1849,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 			},
 		},
 	}
-	err = fakeClient.Update(ctx, &podList.Items[0])
+	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
 	// Initialize a new RayClusterReconciler.
@@ -1847,7 +1868,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 0, len(podList.Items))
 
-	// The new head Pod will be created in the this reconcile loop.
+	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
 	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
@@ -1961,12 +1982,12 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme)
 
 	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
-	gcsFTEnabledcluster := testRayCluster.DeepCopy()
-	if gcsFTEnabledcluster.Annotations == nil {
-		gcsFTEnabledcluster.Annotations = make(map[string]string)
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
 	}
-	gcsFTEnabledcluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
-	gcsFTEnabledcluster.Spec.EnableInTreeAutoscaling = nil
+	gcsFTEnabledCluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
 	ctx := context.Background()
 
 	// The KubeRay operator environment variable `ENABLE_GCS_FT_REDIS_CLEANUP` is used to enable/disable
@@ -1998,9 +2019,12 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				os.Setenv(common.ENABLE_GCS_FT_REDIS_CLEANUP, tc.enableGCSFTRedisCleanup)
 			}
 
-			cluster := gcsFTEnabledcluster.DeepCopy()
-			runtimeObjects := []runtime.Object{cluster}
-			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			cluster := gcsFTEnabledCluster.DeepCopy()
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithObjects(cluster).
+				WithStatusSubresource(cluster).
+				Build()
 
 			// Initialize the reconciler
 			testRayClusterReconciler := &RayClusterReconciler{
@@ -2071,17 +2095,17 @@ func Test_RedisCleanup(t *testing.T) {
 	_ = batchv1.AddToScheme(newScheme)
 
 	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
-	gcsFTEnabledcluster := testRayCluster.DeepCopy()
-	if gcsFTEnabledcluster.Annotations == nil {
-		gcsFTEnabledcluster.Annotations = make(map[string]string)
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
 	}
-	gcsFTEnabledcluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
-	gcsFTEnabledcluster.Spec.EnableInTreeAutoscaling = nil
+	gcsFTEnabledCluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
 
 	// Add the Redis cleanup finalizer to the RayCluster and modify the RayCluster's DeleteTimestamp to trigger the Redis cleanup.
-	controllerutil.AddFinalizer(gcsFTEnabledcluster, common.GCSFaultToleranceRedisCleanupFinalizer)
+	controllerutil.AddFinalizer(gcsFTEnabledCluster, common.GCSFaultToleranceRedisCleanupFinalizer)
 	now := metav1.Now()
-	gcsFTEnabledcluster.DeletionTimestamp = &now
+	gcsFTEnabledCluster.DeletionTimestamp = &now
 
 	// TODO (kevin85421): Create a constant variable in constant.go for the head group name.
 	const headGroupName = "headgroup"
@@ -2089,9 +2113,9 @@ func Test_RedisCleanup(t *testing.T) {
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "headNode",
-			Namespace: gcsFTEnabledcluster.Namespace,
+			Namespace: gcsFTEnabledCluster.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
+				common.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
 				common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 				common.RayNodeGroupLabelKey: headGroupName,
 			},
@@ -2100,11 +2124,11 @@ func Test_RedisCleanup(t *testing.T) {
 	workerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "workerNode",
-			Namespace: gcsFTEnabledcluster.Namespace,
+			Namespace: gcsFTEnabledCluster.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:   gcsFTEnabledcluster.Name,
+				common.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
 				common.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
-				common.RayNodeGroupLabelKey: gcsFTEnabledcluster.Spec.WorkerGroupSpecs[0].GroupName,
+				common.RayNodeGroupLabelKey: gcsFTEnabledCluster.Spec.WorkerGroupSpecs[0].GroupName,
 			},
 		},
 	}
@@ -2138,7 +2162,7 @@ func Test_RedisCleanup(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			cluster := gcsFTEnabledcluster.DeepCopy()
+			cluster := gcsFTEnabledCluster.DeepCopy()
 			runtimeObjects := []runtime.Object{cluster}
 			if tc.hasHeadPod {
 				runtimeObjects = append(runtimeObjects, headPod.DeepCopy())
@@ -2148,7 +2172,11 @@ func Test_RedisCleanup(t *testing.T) {
 			}
 			ctx := context.Background()
 
-			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(runtimeObjects...).
+				WithStatusSubresource(cluster).
+				Build()
 			if tc.hasHeadPod {
 				headPods := corev1.PodList{}
 				err := fakeClient.List(ctx, &headPods, client.InNamespace(namespaceStr),
@@ -2206,7 +2234,7 @@ func Test_RedisCleanup(t *testing.T) {
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
 				job.Status.Succeeded = 1
-				err = fakeClient.Update(ctx, &job)
+				err = fakeClient.Status().Update(ctx, &job)
 				assert.Nil(t, err, "Fail to update Job status")
 
 				// Reconcile the RayCluster again. The controller should remove the finalizer and the RayCluster will be deleted.
@@ -2229,7 +2257,7 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
-	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.BoolPtr(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 
 	tests := map[string]struct {
@@ -2242,22 +2270,22 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
 			// [Note]: It is not possible for `Replicas` to be nil in practice because it has a default value in the CRD.
 			replicas:        nil,
-			minReplicas:     pointer.Int32Ptr(1),
-			maxReplicas:     pointer.Int32Ptr(10000),
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(10000),
 			desiredReplicas: 1,
 		},
 		"Replicas is smaller than MinReplicas": {
 			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
-			replicas:        pointer.Int32Ptr(0),
-			minReplicas:     pointer.Int32Ptr(1),
-			maxReplicas:     pointer.Int32Ptr(10000),
+			replicas:        pointer.Int32(0),
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(10000),
 			desiredReplicas: 1,
 		},
 		"Replicas is larger than MaxReplicas": {
 			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas` Pods.
-			replicas:        pointer.Int32Ptr(4),
-			minReplicas:     pointer.Int32Ptr(1),
-			maxReplicas:     pointer.Int32Ptr(3),
+			replicas:        pointer.Int32(4),
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(3),
 			desiredReplicas: 3,
 		},
 	}

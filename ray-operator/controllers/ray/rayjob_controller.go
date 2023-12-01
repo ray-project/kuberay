@@ -248,6 +248,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Check the current status of ray jobs
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 	if err != nil {
+		r.Log.Error(err, "failed to get job info", "jobId", rayJobInstance.Status.JobId)
 		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusFailedToGetJobStatus, err)
 		// Dashboard service in head pod takes time to start, it's possible we get connection refused error.
 		// Requeue after few seconds to avoid continuous connection errors.
@@ -255,8 +256,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
-	if jobInfo != nil && jobInfo.JobStatus != rayJobInstance.Status.JobStatus {
-		r.Log.Info(fmt.Sprintf("Update status from %s to %s", rayJobInstance.Status.JobStatus, jobInfo.JobStatus), "rayjob", rayJobInstance.Status.JobId)
+	if r.shouldUpdateJobStatus(rayJobInstance.Status.JobStatus, rayJobInstance.Status.JobDeploymentStatus, jobInfo) {
 		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
@@ -524,14 +524,26 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	return nil
 }
 
+func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, oldJobDeploymentStatus rayv1.JobDeploymentStatus, jobInfo *utils.RayJobInfo) bool {
+	if jobInfo != nil {
+		jobStatusChanged := (oldJobStatus != jobInfo.JobStatus)
+		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
+		if jobStatusChanged || oldJobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
+			return true
+		}
+	}
+	return false
+}
+
 // make sure the priority is correct
 func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *utils.RayJobInfo, jobStatus rayv1.JobStatus, jobDeploymentStatus rayv1.JobDeploymentStatus, err error) error {
+	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
+
 	// Let's skip update the APIServer if it's synced.
 	if rayJob.Status.JobStatus == jobStatus && rayJob.Status.JobDeploymentStatus == jobDeploymentStatus {
 		return nil
 	}
 
-	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
 	rayJob.Status.JobStatus = jobStatus
 	rayJob.Status.JobDeploymentStatus = jobDeploymentStatus
 	if jobInfo != nil {
