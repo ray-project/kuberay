@@ -55,6 +55,7 @@ func main() {
 	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
+	var leaderElectionNamespace string
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
@@ -64,6 +65,8 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
+		"Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
 	flag.StringVar(
 		&watchNamespace,
@@ -129,9 +132,10 @@ func main() {
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ray-operator-leader",
+		HealthProbeBindAddress:  probeAddr,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "ray-operator-leader",
+		LeaderElectionNamespace: leaderElectionNamespace,
 	}
 
 	// Manager Cache
