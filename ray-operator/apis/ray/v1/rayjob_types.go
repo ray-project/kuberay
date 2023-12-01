@@ -110,6 +110,7 @@ type RayJobStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +genclient

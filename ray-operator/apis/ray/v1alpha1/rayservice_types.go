@@ -153,6 +153,7 @@ type ServeDeploymentStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +genclient
 // RayService is the Schema for the rayservices API
