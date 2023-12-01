@@ -4,3 +4,13 @@ resources:
 
 configurations:
 - kustomizeconfig.yaml
+
+patches:
+- patch: |-
+    - op: replace
+      path: /webhooks/0/clientConfig/service/namespace
+      value: ray-system
+  target:
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    version: v1
