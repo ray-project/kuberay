@@ -74,6 +74,9 @@ const (
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
 	RAY_IP                                  = "RAY_IP"
+	RAY_NUM_CPUS                            = "RAY_NUM_CPUS"
+	RAY_MEMORY                              = "RAY_MEMORY"
+	RAY_NUM_GPUS                            = "RAY_NUM_GPUS"
 	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
