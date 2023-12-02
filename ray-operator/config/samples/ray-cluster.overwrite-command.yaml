@@ -58,4 +58,3 @@ spec:
           # See the comments in headGroupSpec.
           command: ["/bin/bash", "-lc", "--"]
           args: ["echo worker; ulimit -n 65536; $KUBERAY_GEN_RAY_START_CMD"]
-         
