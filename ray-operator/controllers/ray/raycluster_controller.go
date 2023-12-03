@@ -1093,7 +1093,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[common.RayContainerIndex]}
 	pod.Spec.Containers[common.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 	pod.Spec.Containers[common.RayContainerIndex].Args = []string{
-		"echo \"To get more information about manually delete the storage namespace in Redis and remove the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\"" +
+		"echo \"To get more information about manually delete the storage namespace in Redis and remove the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" &&" +
 			"python -c " +
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
 			"from urllib.parse import urlparse; " +
