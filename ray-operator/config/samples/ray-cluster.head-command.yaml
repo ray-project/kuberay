@@ -3,10 +3,7 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-    # An unique identifier for the head node and workers of this cluster.
-  name: raycluster-mini
+  name: raycluster-head-command
 spec:
   rayVersion: '2.8.0' # should match the Ray version in the image of the containers
   # Ray head pod template
@@ -14,8 +11,7 @@ spec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-    rayStartParams:
-      dashboard-host: '0.0.0.0'
+    rayStartParams: {}
     #pod template
     template:
       spec:
