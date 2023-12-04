@@ -1,5 +1,5 @@
 # This example config is used to describe how does the annotation "ray.io/overwrite-container-cmd" work.
-# See kuberay/docs/guidance/pod-command.md for more details.
+# See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/pod-command.html#kuberay-pod-command for more details.
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -36,6 +36,9 @@ spec:
           # `args` in the following. Hence, you need to specify the `ulimit` command
           # by yourself to avoid Ray scalability issues.
           command: ["/bin/bash", "-lc", "--"]
+          # Starting from v1.1.0, KubeRay injects the environment variable `KUBERAY_GEN_RAY_START_CMD`
+          # into the Ray container. This variable can be used to retrieve the generated Ray start command.
+          # Note that this environment variable does not include the `ulimit` command.
           args: ["echo head; ulimit -n 65536; $KUBERAY_GEN_RAY_START_CMD"]
   workerGroupSpecs:
   - replicas: 1
