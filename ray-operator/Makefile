@@ -111,12 +111,6 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
-install-with-webhooks: manifests kustomize ## Install CRDs with webhooks into the K8s cluster specified in ~/.kube/config.
-	($(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl create -f -) || ($(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl replace -f -)
-
-uninstall-with-webhooks: manifests kustomize ## Uninstall CRDs with webhooks from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/crd-with-webhooks | kubectl delete -f -
-
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply --server-side=true -f -
