@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
 
 	networkingv1 "k8s.io/api/networking/v1"
 
@@ -712,18 +711,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 		return nil
 	} else if serveConfigType == utils.MULTI_APP {
 		r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
-
-		serveConfig := make(map[string]interface{})
-		if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
-			return err
-		}
-
-		configJson, err := json.Marshal(serveConfig)
-		if err != nil {
-			return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
-		}
-		r.Log.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
-		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, serveConfigType); err != nil {
+		if err := rayDashboardClient.DeployApplication(ctx, rayServiceInstance.Spec.ServeConfigV2); err != nil {
 			err = fmt.Errorf(
 				"Fail to create / update Serve applications. If you observe this error consistently, "+
 					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+

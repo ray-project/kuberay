@@ -27,14 +27,15 @@ var (
 	DeployPath = "/api/serve/deployments/"
 	StatusPath = "/api/serve/deployments/status"
 	// Multi-application URL paths
-	ServeDetailsPath = "/api/serve/applications/"
-	DeployPathV2     = "/api/serve/applications/"
+	DeployPathV2 = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
 )
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
+	// Serve support
+	DeployApplication(context.Context, string) error
 	GetDeployments(context.Context) (string, error)
 	UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error
 	// V1/single-app Rest API
@@ -43,6 +44,8 @@ type RayDashboardClientInterface interface {
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
 	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
+	DeleteServeApplications(context.Context) error
+	// Job support
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (string, error)
@@ -115,6 +118,32 @@ func (r *RayDashboardClient) InitClient(url string) {
 		Timeout: 120 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
+}
+
+// Deploy
+func (r *RayDashboardClient) DeployApplication(ctx context.Context, yamls string) error {
+	// Convert input to bytes
+	jreq, err := yaml.ToJSON([]byte(yamls))
+	if err != nil {
+		return err
+	}
+	return r.UpdateDeployments(ctx, jreq, MULTI_APP)
+}
+
+// Shuts down Serve and all applications running on the Ray cluster.
+func (r *RayDashboardClient) DeleteServeApplications(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+DeployPathV2, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
 
 // GetDeployments get the current deployments in the Ray cluster.
@@ -223,7 +252,7 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+ServeDetailsPath, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+DeployPathV2, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +263,10 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))

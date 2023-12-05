@@ -27,6 +27,16 @@ func (r *FakeRayDashboardClient) InitClient(url string) {
 	r.dashboardURL = "http://" + url
 }
 
+func (r *FakeRayDashboardClient) DeployApplication(_ context.Context, _ string) error {
+	fmt.Print("Deploying application fake succeeds.")
+	return nil
+}
+
+func (r *FakeRayDashboardClient) DeleteServeApplications(_ context.Context) error {
+	fmt.Print("Deleting application fake succeeds.")
+	return nil
+}
+
 func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, error) {
 	panic("Fake GetDeployments not implemented")
 }
