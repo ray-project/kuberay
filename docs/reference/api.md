@@ -113,6 +113,7 @@ _Appears in:_
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |
+| `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended. A suspended RayCluster will have head pods and worker pods deleted. |
 
 
 #### RayJob

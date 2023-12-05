@@ -23,6 +23,9 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
+	// Suspend indicates whether a RayCluster should be suspended.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -106,6 +109,7 @@ const (
 	Ready     ClusterState = "ready"
 	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
+	Suspended ClusterState = "suspended"
 )
 
 // RayClusterStatus defines the observed state of RayCluster

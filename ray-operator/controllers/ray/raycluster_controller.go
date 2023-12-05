@@ -135,7 +135,7 @@ type RayClusterReconciler struct {
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
@@ -309,6 +309,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
+		return ctrl.Result{}, nil
+	}
+
+	if instance.Spec.Suspend != nil && *instance.Spec.Suspend && instance.Status.State == rayv1.Suspended {
+		r.Log.Info("RayCluster is suspended, skipping reconcile", "cluster name", request.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -582,6 +587,19 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 }
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
+	// if RayCluster is suspended, delete all pods and skip reconcile
+	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+		clusterLabel := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
+		if err := r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(instance.Namespace), clusterLabel); err != nil {
+			return err
+		}
+
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
+			"Deleted Pods for RayCluster %s/%s due to suspension",
+			instance.Namespace, instance.Name)
+		return nil
+	}
+
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
@@ -1208,6 +1226,10 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		if utils.CheckAllPodsRunning(runtimePods) {
 			newInstance.Status.State = rayv1.Ready
 		}
+	}
+
+	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
+		newInstance.Status.State = rayv1.Suspended
 	}
 
 	if err := r.updateEndpoints(ctx, newInstance); err != nil {
