@@ -4,13 +4,19 @@ One of the fundamental features of Ray is autoscaling. This [document](https://d
 
 ## Deploy KubeRay operator and API server
 
-Reffer to [readme](README.md) for setting up KubRay operator and API server.
+Refer to [readme](README.md) for setting up KubRay operator and API server.
 
 ```shell
 make operator-image cluster load-operator-image deploy-operator
 ```
 
-Additionally install this [configmap](test/cluster/cluster/detachedactor.yaml) containing code that we will use for testing
+Alternatively, you could build and deploy the Operator and API server from local repo for development purpose.
+
+```shell
+make operator-image cluster load-operator-image deploy-operator docker-image load-image deploy
+```
+
+Additionally install this [configmap](test/cluster/cluster/detachedactor.yaml) containing code that we will use for testing.
 
 ## Deploy Ray cluster
 
