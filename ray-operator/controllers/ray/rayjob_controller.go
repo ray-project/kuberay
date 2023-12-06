@@ -127,10 +127,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	// If the JobStatus is in one of the terminal states, including STOPPED, SUCCEEDED, and FAILED,
-	// it is impossible for the Ray job to transition to any other status. Additionally, RayJob does
-	// not currently support retries. Hence, we can mark the RayJob as "Complete" to avoid unnecessary reconciliation.
-	if rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
+	// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
+	// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
+	// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
+	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
+	// delete the RayCluster.
+	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
 		// We need to make sure the cluster is deleted or in deletion, then update the status.
 		rayClusterInstance := &rayv1.RayCluster{}
 		rayClusterNamespacedName := types.NamespacedName{
@@ -306,7 +308,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
+	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
 		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
 			// RayCluster down.
@@ -466,8 +468,8 @@ func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *ra
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-// isJobSucceedOrFailed indicates whether the job comes into end status.
-func isJobSucceedOrFailed(status rayv1.JobStatus) bool {
+// isJobSucceedOrFail indicates whether the job comes into end status.
+func isJobSucceedOrFail(status rayv1.JobStatus) bool {
 	return (status == rayv1.JobStatusSucceeded) || (status == rayv1.JobStatusFailed)
 }
 
@@ -649,7 +651,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		}
 
 		// special case: is the job is complete status and cluster has been recycled.
-		if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
 			r.Log.Info("The cluster has been recycled for the job, skip duplicate creation", "rayjob", rayJobInstance.Name)
 			return nil, err
 		}
