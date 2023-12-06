@@ -189,8 +189,7 @@ func (s *RayJobSubmissionServiceServer) getRayClusterURL(ctx context.Context, re
 		return nil, errors.New("cluster is not ready")
 	}
 	// We are hardcoding port to the default value - 8265, as API server does not allow to modify it
-	//	url := request.Name + "-head-svc." + request.Namespace + ".svc.cluster.local:8265"
-	url := "localhost:8265"
+	url := request.Name + "-head-svc." + request.Namespace + ".svc.cluster.local:8265"
 	return &url, nil
 }
 
