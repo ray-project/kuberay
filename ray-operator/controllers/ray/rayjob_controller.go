@@ -127,10 +127,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	// Mark the deployment status as Complete if RayJob is succeed or failed
-	// TODO: (jiaxin.shan) Double check raycluster status to make sure we don't have create duplicate clusters..
-	// But the code here is not elegant. We should spend some time to refactor the flow.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusComplete {
+	// If the JobStatus is in one of the terminal states, including STOPPED, SUCCEEDED, and FAILED,
+	// it is impossible for the Ray job to transition to any other status. Additionally, RayJob does
+	// not currently support retries. Hence, we can mark the RayJob as "Complete" to avoid unnecessary reconciliation.
+	if rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
 		// We need to make sure the cluster is deleted or in deletion, then update the status.
 		rayClusterInstance := &rayv1.RayCluster{}
 		rayClusterNamespacedName := types.NamespacedName{
