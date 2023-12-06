@@ -132,7 +132,7 @@ func convertServeApplicationDetails(detail *utils.ServeApplicationDetails) *api.
 	return &reply
 }
 
-func convertDeploymentApplicationDetails(details *utils.DeploymentApplicationDetails) *api.DeploymentApplicationDetails{
+func convertDeploymentApplicationDetails(details *utils.DeploymentApplicationDetails) *api.DeploymentApplicationDetails {
 	reply := api.DeploymentApplicationDetails{}
 	reply.DeploymentConfig = make(map[string]*api.DeploymentSchema)
 	for name, d := range details.Configuration {
@@ -188,7 +188,7 @@ func convertStringInterfaceToStringString(si map[string]interface{}) map[string]
 	return result
 }
 
-func convertDeploymentSchema(schema *utils.DeploymentSchema) * api.DeploymentSchema {
+func convertDeploymentSchema(schema *utils.DeploymentSchema) *api.DeploymentSchema {
 	reply := api.DeploymentSchema{}
 	reply.AutoscalingConfig = convertStringInterfaceToStringString(schema.AutoScalingConfig)
 	reply.GracefulShutdownTimeoutS = schema.GracefulShutdownTimeout
@@ -202,13 +202,13 @@ func convertDeploymentSchema(schema *utils.DeploymentSchema) * api.DeploymentSch
 	reply.NumReplicas = schema.NumReplicas
 	reply.PlacementGroupStrategy = schema.PLacementStrategy
 	reply.RayActorOptions = &api.RayActorOptionSpec{
-		RuntimeEnv: convertStringInterfaceToStringString(schema.ActorOptions.RuntimeEnv),      
-		NumCpus: float32(*schema.ActorOptions.NumCpus), 
-		NumGpus: float32(*schema.ActorOptions.NumGpus), 
-		Memory: *schema.ActorOptions.Memory, 
-		ObjectStoreMemory: *schema.ActorOptions.ObjectStoreMemory, 
-		Resources: convertStringInterfaceToStringString(schema.ActorOptions.Resources),
-		AcceleratorType: schema.ActorOptions.AcceleratorType, 
+		RuntimeEnv:        convertStringInterfaceToStringString(schema.ActorOptions.RuntimeEnv),
+		NumCpus:           float32(*schema.ActorOptions.NumCpus),
+		NumGpus:           float32(*schema.ActorOptions.NumGpus),
+		Memory:            *schema.ActorOptions.Memory,
+		ObjectStoreMemory: *schema.ActorOptions.ObjectStoreMemory,
+		Resources:         convertStringInterfaceToStringString(schema.ActorOptions.Resources),
+		AcceleratorType:   schema.ActorOptions.AcceleratorType,
 	}
 	reply.RoutePrefix = schema.RoutePrefix
 	reply.UserConfig = convertStringInterfaceToStringString(schema.UserConfig)

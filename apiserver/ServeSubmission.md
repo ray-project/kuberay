@@ -1,4 +1,8 @@
-# Creating a cluster with RayServe support
+# Managing RayServe with the API server
+
+Ray Serve is a scalable model serving library for building online inference APIs. This document describes creation and management of Ray Serve enabled Ray clusters
+
+## Creating a cluster with RayServe support
 
 Up until rescently the only way to create a Ray cluster supporting RayServe was by using `Create ray service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so that you can experiment with serve APIs directly. Now it is possible by adding the following annotation to the cluster:
 
@@ -95,3 +99,5 @@ test-cluster-serve-svc   ClusterIP   10.96.144.162   <none>        8000/TCP
 As you can see, in this case two services are created - one for the head node to be able to see the dashboard and configure the cluster and one for submission of the serve requests.
 
 For the head node service note that the additional port - 52365 is created for serve configuration.
+
+## 
