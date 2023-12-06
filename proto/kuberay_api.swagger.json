@@ -1060,6 +1060,47 @@
         }
       }
     },
+    "protoAutoscalerOptions": {
+      "type": "object",
+      "properties": {
+        "idleTimeoutSeconds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.\nDefaults to 60 (one minute)."
+        },
+        "upscalingMode": {
+          "type": "string",
+          "description": "UpscalingMode is \"Conservative\", \"Default\", or \"Aggressive.\"\nConservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.\nDefault: Upscaling is not rate-limited.\nAggressive: An alias for Default; upscaling is not rate-limited.\nIt is not read by the KubeRay operator but by the Ray autoscaler."
+        },
+        "image": {
+          "type": "string",
+          "description": "Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development."
+        },
+        "imagePullPolicy": {
+          "type": "string",
+          "description": "ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development."
+        },
+        "cpu": {
+          "type": "string",
+          "title": "Optional CPUs requirements for autoscaler - default \"500m\""
+        },
+        "memory": {
+          "type": "string",
+          "title": "Optional memory requirements for autoscaler - default \"512Mi\""
+        },
+        "envs": {
+          "$ref": "#/definitions/protoEnvironmentVariables",
+          "description": "Optional list of environment variables to set in the autoscaler container."
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoVolume"
+          },
+          "description": "Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container."
+        }
+      }
+    },
     "protoCluster": {
       "type": "object",
       "properties": {
@@ -1204,6 +1245,14 @@
             "$ref": "#/definitions/protoWorkerGroupSpec"
           },
           "title": "Optional. The worker group configurations"
+        },
+        "enableInTreeAutoscaling": {
+          "type": "boolean",
+          "title": "EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs"
+        },
+        "autoscalerOptions": {
+          "$ref": "#/definitions/protoAutoscalerOptions",
+          "description": "AutoscalerOptions specifies optional configuration for the Ray autoscaler."
         }
       },
       "description": "Cluster specification."
