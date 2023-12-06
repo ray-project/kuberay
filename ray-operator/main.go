@@ -128,6 +128,9 @@ func main() {
 
 	// Manager options
 	options := ctrl.Options{
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{},
+		},
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
