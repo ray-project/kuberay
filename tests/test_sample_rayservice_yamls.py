@@ -341,7 +341,7 @@ class TestRayService:
         for cr_event in cr_events:
             cr_event.trigger()
 
-    def test_nested_container(self, set_up_cluster):
+    def test_nested_podman_container(self, set_up_cluster):
         """Test running two applications in two different containers with different images.
         
         Both applications have the same code, the code reads 
@@ -354,8 +354,8 @@ class TestRayService:
             cr = yaml.safe_load(cr_yaml)
 
         rs = RuleSet([EasyJobRule(), CurlServiceRule(queries=[
-            {"path": "/app1", "json_args": {}, "expected_output": "Hi I'm Cindy, this is version 1\n"},
-            {"path": "/app2", "json_args": {}, "expected_output": "Hi I'm Cindy, this is version 2\n"},
+            {"path": "/app1", "json_args": {}, "expected_output": "Hello world Alice!\n"},
+            {"path": "/app2", "json_args": {}, "expected_output": "Good morning Bob!\n"},
         ])])
         
         cr_events: List[CREvent] = [

@@ -8,24 +8,24 @@ spec:
   serveConfigV2: |
     applications:
       - name: app1
-        import_path: run_in_container:app
+        import_path: serve_application:app
         route_prefix: /app1
         runtime_env:
           container:
-            image: zcin/runtime-env-prototype:nested
-            worker_path: "/home/ray/anaconda3/lib/python3.9/site-packages/ray/_private/workers/default_worker.py"
+            image: quay.io/kuberay/podman-in-kuberay:test-e2e-1
+            worker_path: "/home/ray/anaconda3/lib/python3.8/site-packages/ray/_private/workers/default_worker.py"
         deployments:
           - name: MyModel
             num_replicas: 1
             ray_actor_options:
               num_cpus: 0.1
       - name: app2
-        import_path: run_in_container:app
+        import_path: serve_application:app
         route_prefix: /app2
         runtime_env:
           container:
-            image: zcin/runtime-env-prototype:nested2
-            worker_path: "/home/ray/anaconda3/lib/python3.9/site-packages/ray/_private/workers/default_worker.py"
+            image: quay.io/kuberay/podman-in-kuberay:test-e2e-2
+            worker_path: "/home/ray/anaconda3/lib/python3.8/site-packages/ray/_private/workers/default_worker.py"
         deployments:
           - name: MyModel
             num_replicas: 1
@@ -40,7 +40,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: zcin/runtime-env-prototype:latest
+              image: quay.io/kuberay/podman-in-kuberay:latest
               resources:
                 limits:
                   cpu: 2
@@ -70,7 +70,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: zcin/runtime-env-prototype:latest
+                image: quay.io/kuberay/podman-in-kuberay:latest
                 lifecycle:
                   preStop:
                     exec:
