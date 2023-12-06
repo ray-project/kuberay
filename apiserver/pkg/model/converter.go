@@ -140,7 +140,80 @@ func PopulateRayClusterSpec(spec rayv1api.RayClusterSpec) *api.ClusterSpec {
 	clusterSpec := &api.ClusterSpec{}
 	clusterSpec.HeadGroupSpec = PopulateHeadNodeSpec(spec.HeadGroupSpec)
 	clusterSpec.WorkerGroupSpec = PopulateWorkerNodeSpec(spec.WorkerGroupSpecs)
+	if spec.EnableInTreeAutoscaling != nil && *spec.EnableInTreeAutoscaling {
+		clusterSpec.EnableInTreeAutoscaling = true
+		clusterSpec.AutoscalerOptions = convertAutoscalingOptions(spec.AutoscalerOptions)
+	}
 	return clusterSpec
+}
+
+func convertAutoscalingOptions(opts *rayv1api.AutoscalerOptions) *api.AutoscalerOptions {
+	if opts == nil {
+		return nil
+	}
+	options := api.AutoscalerOptions{}
+	if opts.IdleTimeoutSeconds != nil {
+		options.IdleTimeoutSeconds = *opts.IdleTimeoutSeconds
+	}
+	if opts.UpscalingMode != nil {
+		options.UpscalingMode = string(*opts.UpscalingMode)
+	}
+	if opts.Image != nil {
+		options.Image = *opts.Image
+	}
+	if opts.ImagePullPolicy != nil {
+		options.ImagePullPolicy = string(*opts.ImagePullPolicy)
+	}
+	if len(opts.Env) > 0 || len(opts.EnvFrom) > 0 {
+		options.Envs = &api.EnvironmentVariables{}
+		if len(opts.Env) > 0 {
+			options.Envs.Values = map[string]string{}
+			for _, elem := range opts.Env {
+				options.Envs.Values[elem.Name] = elem.Value
+			}
+		}
+		if len(opts.EnvFrom) > 0 {
+			options.Envs.ValuesFrom = map[string]*api.EnvValueFrom{}
+			for i, elem := range opts.EnvFrom {
+				if elem.ConfigMapRef != nil {
+					options.Envs.ValuesFrom[strconv.Itoa(i)] = &api.EnvValueFrom{
+						Source: api.EnvValueFrom_CONFIGMAP,
+						Name:   elem.ConfigMapRef.Name,
+					}
+				} else {
+					options.Envs.ValuesFrom[strconv.Itoa(i)] = &api.EnvValueFrom{
+						Source: api.EnvValueFrom_SECRET,
+						Name:   elem.SecretRef.Name,
+					}
+				}
+			}
+		}
+	}
+	if len(opts.VolumeMounts) > 0 {
+		options.Volumes = make([]*api.Volume, len(opts.VolumeMounts))
+		for i, v := range opts.VolumeMounts {
+			options.Volumes[i] = &api.Volume{
+				Name:                 v.Name,
+				MountPath:            v.MountPath,
+				ReadOnly:             v.ReadOnly,
+				MountPropagationMode: GetVolumeMountPropagation(&v),
+			}
+		}
+	}
+	if opts.Resources != nil {
+		rlist := opts.Resources.Limits
+		if len(rlist) == 0 {
+			rlist = opts.Resources.Requests
+		}
+		if cc := rlist.Cpu().String(); cc != "" {
+			options.Cpu = cc
+		}
+		if cm := rlist.Memory().String(); cm != "" {
+			options.Memory = cm
+		}
+	}
+
+	return &options
 }
 
 func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {

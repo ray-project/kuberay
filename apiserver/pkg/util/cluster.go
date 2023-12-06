@@ -120,6 +120,18 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 		rayClusterSpec.WorkerGroupSpecs = append(rayClusterSpec.WorkerGroupSpecs, workerNodeSpec)
 	}
 
+	if clusterSpec.EnableInTreeAutoscaling {
+		// This is a cluster with auto scaler
+		rayClusterSpec.EnableInTreeAutoscaling = &clusterSpec.EnableInTreeAutoscaling
+		options, err := buildAutoscalerOptions(clusterSpec.AutoscalerOptions)
+		if err != nil {
+			return nil, err
+		}
+		if options != nil {
+			rayClusterSpec.AutoscalerOptions = options
+		}
+	}
+
 	return rayClusterSpec, nil
 }
 
@@ -830,4 +842,96 @@ func GetContainerByName(containers []v1.Container, name string) (v1.Container, i
 		}
 	}
 	return v1.Container{}, 0, false
+}
+
+func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api.AutoscalerOptions, error) {
+	if autoscalerOptions == nil {
+		return nil, nil
+	}
+	options := rayv1api.AutoscalerOptions{}
+	if autoscalerOptions.IdleTimeoutSeconds > 0 {
+		options.IdleTimeoutSeconds = &autoscalerOptions.IdleTimeoutSeconds
+	}
+	if len(autoscalerOptions.UpscalingMode) > 0 {
+		options.UpscalingMode = (*rayv1api.UpscalingMode)(&autoscalerOptions.UpscalingMode)
+	}
+	if len(autoscalerOptions.Image) > 0 {
+		options.Image = &autoscalerOptions.Image
+	}
+	if len(autoscalerOptions.ImagePullPolicy) > 0 {
+		options.ImagePullPolicy = (*v1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
+	}
+	if autoscalerOptions.Envs != nil {
+		if len(autoscalerOptions.Envs.Values) > 0 {
+			options.Env = make([]v1.EnvVar, len(autoscalerOptions.Envs.Values))
+			ev_count := 0
+			for key, value := range autoscalerOptions.Envs.Values {
+				options.Env[ev_count] = v1.EnvVar{Name: key, Value: value}
+				ev_count += 1
+			}
+		}
+		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {
+			options.EnvFrom = make([]v1.EnvFromSource, 0)
+			for _, value := range autoscalerOptions.Envs.ValuesFrom {
+				if evfrom := convertEnvFrom(value); evfrom != nil {
+					options.EnvFrom = append(options.EnvFrom, *evfrom)
+				}
+			}
+		}
+	}
+	if autoscalerOptions.Volumes != nil && len(autoscalerOptions.Volumes) > 0 {
+		options.VolumeMounts = buildVolumeMounts(autoscalerOptions.Volumes)
+	}
+	if len(autoscalerOptions.Cpu) > 0 || len(autoscalerOptions.Memory) > 0 {
+		rcpu := "500m"
+		rmemory := "512Mi"
+		if len(autoscalerOptions.Cpu) > 0 {
+			rcpu = autoscalerOptions.Cpu
+		}
+		if len(autoscalerOptions.Memory) > 0 {
+			rmemory = autoscalerOptions.Memory
+		}
+		_, err := resource.ParseQuantity(rcpu)
+		if err != nil {
+			return nil, errors.New("cpu for autoscaler is not specified correctly")
+		}
+		_, err = resource.ParseQuantity(rmemory)
+		if err != nil {
+			return nil, errors.New("memory for autoscaler is not specified correctly")
+		}
+		options.Resources = &v1.ResourceRequirements{
+			Limits: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse(rcpu),
+				v1.ResourceMemory: resource.MustParse(rmemory),
+			},
+			Requests: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse(rcpu),
+				v1.ResourceMemory: resource.MustParse(rmemory),
+			},
+		}
+	}
+	return &options, nil
+}
+
+func convertEnvFrom(from *api.EnvValueFrom) *v1.EnvFromSource {
+	switch from.Source {
+	case api.EnvValueFrom_CONFIGMAP:
+		return &v1.EnvFromSource{
+			ConfigMapRef: &v1.ConfigMapEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: from.Name,
+				},
+			},
+		}
+	case api.EnvValueFrom_SECRET:
+		return &v1.EnvFromSource{
+			SecretRef: &v1.SecretEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: from.Name,
+				},
+			},
+		}
+	default:
+		return nil
+	}
 }
