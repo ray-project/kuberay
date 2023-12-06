@@ -14,6 +14,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 )
 
@@ -96,6 +98,9 @@ func (s *RayJobSubmissionServiceServer) GetJobDetails(ctx context.Context, req *
 	if err != nil {
 		return nil, err
 	}
+	if nodeInfo == nil {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "RayJob", Resource: "JobSubmission"}, req.Submissionid)
+	}
 	return convertNodeInfo(nodeInfo), nil
 }
 
@@ -112,6 +117,9 @@ func (s *RayJobSubmissionServiceServer) GetJobLog(ctx context.Context, req *api.
 	jlog, err := rayDashboardClient.GetJobLog(ctx, req.Submissionid, &s.log)
 	if err != nil {
 		return nil, err
+	}
+	if jlog == nil {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "RayJob", Resource: "JobSubmission"}, req.Submissionid)
 	}
 	return &api.GetJobLogReply{Log: *jlog}, nil
 }
@@ -181,7 +189,8 @@ func (s *RayJobSubmissionServiceServer) getRayClusterURL(ctx context.Context, re
 		return nil, errors.New("cluster is not ready")
 	}
 	// We are hardcoding port to the default value - 8265, as API server does not allow to modify it
-	url := request.Name + "-head-svc." + request.Namespace + ".svc.cluster.local:8265"
+	//	url := request.Name + "-head-svc." + request.Namespace + ".svc.cluster.local:8265"
+	url := "localhost:8265"
 	return &url, nil
 }
 
