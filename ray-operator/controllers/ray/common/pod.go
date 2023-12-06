@@ -339,10 +339,6 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType,
 			args = generatedCmd
 		}
 
-		if !isRayStartWithBlock(rayStartParams) {
-			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
-			args = args + " && sleep infinity"
-		}
 		pod.Spec.Containers[RayContainerIndex].Args = []string{args}
 	}
 
@@ -472,13 +468,6 @@ func mergeAutoscalerOverrides(autoscalerContainer *v1.Container, autoscalerOptio
 			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext.DeepCopy()
 		}
 	}
-}
-
-func isRayStartWithBlock(rayStartParams map[string]string) bool {
-	if blockValue, exist := rayStartParams["block"]; exist {
-		return strings.ToLower(blockValue) == "true"
-	}
-	return false
 }
 
 func convertCmdToString(cmdArr []string) (cmd string) {
@@ -698,9 +687,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 	}
 
 	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
-	if _, ok := rayStartParams["block"]; !ok {
-		rayStartParams["block"] = "true"
-	}
+	rayStartParams["block"] = "true"
 
 	// Add dashboard listen port for RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
