@@ -133,7 +133,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
 	// delete the RayCluster.
 	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
-		// We need to make sure the cluster is deleted or in deletion, then update the status.
+		// If the function `updateState` updates the JobStatus to Complete successfully, we can skip the reconciliation.
 		rayClusterInstance := &rayv1.RayCluster{}
 		rayClusterNamespacedName := types.NamespacedName{
 			Namespace: rayJobInstance.Namespace,
@@ -146,14 +146,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{}, nil
 		}
 
 		if rayClusterInstance.DeletionTimestamp != nil {
 			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{}, nil
 		}
 	}
 
