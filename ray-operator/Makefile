@@ -3,9 +3,8 @@ COMMIT_SHA1     := $(shell git rev-parse HEAD )
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 # Golang forbids converting float from Json to struct. Need allowDangerousTypes=true to unblock build.
-CRD_OPTIONS ?= "crd:maxDescLen=0,trivialVersions=true,preserveUnknownFields=false,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
+CRD_OPTIONS ?= "crd:maxDescLen=0,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -73,8 +72,9 @@ test-e2e: WHAT ?= ./test/e2e
 test-e2e: manifests generate fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
-sync: helm
+sync: helm api-docs
 	./hack/update-codegen.sh
+
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
@@ -118,10 +118,28 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
+.PHONY: api-docs
+api-docs: crd-ref-docs ## Generate CRD documentation.
+	$(CRD_REF_DOCS) \
+    --config=./hack/config.yaml \
+    --source-path=./apis/ray \
+    --renderer=markdown \
+    --output-path=../docs/reference/api.md
+
+certmanager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+
+deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
+	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	($(KUSTOMIZE) build config/default-with-webhooks | kubectl create -f -) || ($(KUSTOMIZE) build config/default-with-webhooks | kubectl replace -f -)
+
+undeploy-with-webhooks: ## Undeploy controller with webhooks from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/default-with-webhooks | kubectl delete -f -
+
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(CONTROLLER_GEN)/.. go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.0
+	test -s $(CONTROLLER_GEN) || GOBIN=$(CONTROLLER_GEN)/.. go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
@@ -131,3 +149,7 @@ GOFUMPT = $(shell pwd)/bin/gofumpt
 gofumpt: ## Download gofumpt locally if necessary.
 	test -s $(GOFUMPT) || GOBIN=$(GOFUMPT)/.. go install mvdan.cc/gofumpt@latest
 
+CRD_REF_DOCS = $(shell pwd)/bin/crd-ref-docs
+.PHONY: crd-ref-docs
+crd-ref-docs: ## Download crd-ref-docs locally if necessary.
+	test -s $(CRD_REF_DOCS) || GOBIN=$(CRD_REF_DOCS)/.. go install github.com/elastic/crd-ref-docs@latest

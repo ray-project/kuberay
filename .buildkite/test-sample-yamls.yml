@@ -2,7 +2,7 @@
 
 - label: 'Test RayCluster Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Build nightly KubeRay operator image
@@ -10,19 +10,19 @@
     - IMG=kuberay/operator:nightly make docker-image
     - popd
     # Use nightly KubeRay operator image
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_raycluster_yamls.py
 
 - label: 'Test RayCluster Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0-rc.1 python3 tests/test_sample_raycluster_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_raycluster_yamls.py
 
 - label: 'Test RayJob Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Build nightly KubeRay operator image
@@ -30,19 +30,19 @@
     - IMG=kuberay/operator:nightly make docker-image
     - popd
     # Use nightly KubeRay operator image
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayjob_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayjob_yamls.py
 
 - label: 'Test RayJob Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0-rc.1 python3 tests/test_sample_rayjob_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_rayjob_yamls.py
 
 - label: 'Test RayService Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Build nightly KubeRay operator image
@@ -50,12 +50,12 @@
     - IMG=kuberay/operator:nightly make docker-image
     - popd
     # Use nightly KubeRay operator image
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 
 - label: 'Test RayService Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.19
+  image: golang:1.20
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.7.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0-rc.1 python3 tests/test_sample_rayservice_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_rayservice_yamls.py

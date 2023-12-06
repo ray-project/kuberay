@@ -12,9 +12,9 @@ GO_TEST_FLAGS ?=
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64,$(shell go env GOARCH))
-E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310-aarch64
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.8.0-py310-aarch64
 else 
-E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.7.0-py310
+E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.8.0-py310
 endif 
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?=http://localhost:31888
@@ -73,7 +73,8 @@ imports: goimports ## Run goimports against code.
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
-	$(GOLANGCI_LINT) run  --timeout=3m	
+	# exclude the SA1019 check which checks the usage of deprecated fields.
+	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019'
 
 build: fmt vet fumpt imports lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -118,6 +119,10 @@ load-image: ## Load the api server image to the kind cluster created with create
 operator-image: ## Build the operator image to be loaded in your kind cluster.
 	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
+.PHONY: security-proxy-image
+security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
+	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
 # Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
@@ -136,6 +141,13 @@ ifneq (${OPERATOR_IMAGE_TAG}, latest)
 endif	
 	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
+.PHONY: load-security-proxy-image
+load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
+ifneq (${OPERATOR_IMAGE_TAG}, latest)
+	$(ENGINE) pull kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+endif	
+	$(KIND) load docker-image kuberay/security-proxy:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
@@ -144,11 +156,10 @@ load-ray-test-image: ## Load the ray test images
 	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
 
 ##@ Docker Build
-
-docker-image: test ## Build image with the api server.
+docker-image: test ## Build image for the api server.
 	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
-docker-push: ## Push image with the api server.
+docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
 ##@ Deployment

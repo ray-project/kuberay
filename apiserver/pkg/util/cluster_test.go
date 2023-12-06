@@ -441,7 +441,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 }
 
 func TestBuildHeadPodTemplate(t *testing.T) {
-	podSpec, err := buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template)
+	podSpec, err := buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, false)
 	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
@@ -452,6 +452,9 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 	if len(podSpec.Spec.Containers[0].Env) != 6 {
 		t.Errorf("failed to propagate environment")
+	}
+	if len(podSpec.Spec.Containers[0].Ports) != 4 {
+		t.Errorf("failed build ports")
 	}
 	// Sort values for comparison
 	sort.SliceStable(podSpec.Spec.Containers[0].Env, func(i, j int) bool {
@@ -477,6 +480,12 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
 		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
+	}
+
+	podSpec, err = buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, true)
+	assert.Nil(t, err)
+	if len(podSpec.Spec.Containers[0].Ports) != 6 {
+		t.Errorf("failed build ports")
 	}
 }
 

@@ -57,6 +57,12 @@ func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
 	return ok && strings.ToLower(v) == "true"
 }
 
+// Check if overwrites the container command.
+func isOverwriteRayContainerCmd(instance rayv1.RayCluster) bool {
+	v, ok := instance.Annotations[RayOverwriteContainerCmdAnnotationKey]
+	return ok && strings.ToLower(v) == "true"
+}
+
 func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *v1.PodTemplateSpec) {
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
@@ -72,6 +78,9 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *v1.PodTempl
 		podTemplate.Annotations[RayFTEnabledAnnotationKey] = "false"
 	}
 
+	if isOverwriteRayContainerCmd(instance) {
+		podTemplate.Annotations[RayOverwriteContainerCmdAnnotationKey] = "true"
+	}
 	// set ray external storage namespace if user specified one.
 	if instance.Annotations != nil {
 		if v, ok := instance.Annotations[RayExternalStorageNSAnnotationKey]; ok {
@@ -132,6 +141,13 @@ func DefaultHeadPodTemplate(instance rayv1.RayCluster, headSpec rayv1.HeadGroupS
 
 func getEnableInitContainerInjection() bool {
 	if s := os.Getenv(EnableInitContainerInjectionEnvKey); strings.ToLower(s) == "false" {
+		return false
+	}
+	return true
+}
+
+func getEnableProbesInjection() bool {
+	if s := os.Getenv(ENABLE_PROBES_INJECTION); strings.ToLower(s) == "false" {
 		return false
 	}
 	return true
@@ -258,7 +274,13 @@ func initHealthProbe(probe *v1.Probe, rayNodeType rayv1.RayNodeType) {
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string) (aPod v1.Pod) {
+func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableServeService bool) (aPod v1.Pod) {
+	if enableServeService {
+		// TODO (kevin85421): In the current RayService implementation, we only add this label to a Pod after
+		// it passes the health check. The other option is to use the readiness probe to control it. This
+		// logic always add the label to the Pod no matter whether it is ready or not.
+		podTemplateSpec.Labels[RayClusterServingServiceLabelKey] = EnableRayClusterServingServiceTrue
+	}
 	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -291,62 +313,75 @@ func BuildPod(podTemplateSpec v1.PodTemplateSpec, rayNodeType rayv1.RayNodeType,
 	if len(pod.Spec.Containers[RayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[RayContainerIndex].Args)
 	}
-	if !strings.Contains(cmd, "ray start") {
-		cont := concatenateContainerCommand(rayNodeType, rayStartParams, pod.Spec.Containers[RayContainerIndex].Resources)
+
+	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
+	ulimitCmd := "ulimit -n 65536"
+	// Generate the `ray start` command.
+	rayStartCmd := generateRayStartCommand(rayNodeType, rayStartParams, pod.Spec.Containers[RayContainerIndex].Resources)
+
+	// Check if overwrites the generated container command or not.
+	isOverwriteRayContainerCmd := false
+	if v, ok := podTemplateSpec.Annotations[RayOverwriteContainerCmdAnnotationKey]; ok {
+		isOverwriteRayContainerCmd = strings.ToLower(v) == "true"
+	}
+
+	// TODO (kevin85421): Consider removing the check for the "ray start" string in the future.
+	if !isOverwriteRayContainerCmd && !strings.Contains(cmd, "ray start") {
+		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
+		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
 		pod.Spec.Containers[RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
-			args = fmt.Sprintf("%s && %s", cmd, cont)
+			args = fmt.Sprintf("%s && %s", cmd, generatedCmd)
 		} else {
-			args = cont
+			args = generatedCmd
 		}
 
 		if !isRayStartWithBlock(rayStartParams) {
 			// sleep infinity is used to keep the pod `running` after the last command exits, and not go into `completed` state
 			args = args + " && sleep infinity"
 		}
-
 		pod.Spec.Containers[RayContainerIndex].Args = []string{args}
 	}
 
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
+	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creator)
 
-	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, creator)
-
-	// health check only if FT enabled
-	if podTemplateSpec.Annotations != nil {
-		if enabledString, ok := podTemplateSpec.Annotations[RayFTEnabledAnnotationKey]; ok {
-			if strings.ToLower(enabledString) == "true" {
-				// If users do not specify probes, we will set the default probes.
-				if pod.Spec.Containers[RayContainerIndex].ReadinessProbe == nil {
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-						SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-						FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[RayContainerIndex].ReadinessProbe = probe
-				}
-				initHealthProbe(pod.Spec.Containers[RayContainerIndex].ReadinessProbe, rayNodeType)
-
-				if pod.Spec.Containers[RayContainerIndex].LivenessProbe == nil {
-					probe := &v1.Probe{
-						InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-						TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-						PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-						SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-						FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-					}
-					pod.Spec.Containers[RayContainerIndex].LivenessProbe = probe
-				}
-				initHealthProbe(pod.Spec.Containers[RayContainerIndex].LivenessProbe, rayNodeType)
+	// Inject probes into the Ray containers if the user has not explicitly disabled them.
+	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
+	enableProbesInjection := getEnableProbesInjection()
+	log.Info("Probes injection feature flag", "enabled", enableProbesInjection)
+	if enableProbesInjection {
+		// Configure the readiness and liveness probes for the Ray container. These probes
+		// play a crucial role in KubeRay health checks. Without them, certain failures,
+		// such as the Raylet process crashing, may go undetected.
+		if pod.Spec.Containers[RayContainerIndex].ReadinessProbe == nil {
+			probe := &v1.Probe{
+				InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+				PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+				SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+				FailureThreshold:    DefaultReadinessProbeFailureThreshold,
 			}
+			pod.Spec.Containers[RayContainerIndex].ReadinessProbe = probe
 		}
+		initHealthProbe(pod.Spec.Containers[RayContainerIndex].ReadinessProbe, rayNodeType)
+
+		if pod.Spec.Containers[RayContainerIndex].LivenessProbe == nil {
+			probe := &v1.Probe{
+				InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+				PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+				SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+				FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+			}
+			pod.Spec.Containers[RayContainerIndex].LivenessProbe = probe
+		}
+		initHealthProbe(pod.Spec.Containers[RayContainerIndex].LivenessProbe, rayNodeType)
 	}
 
 	return pod
@@ -518,7 +553,7 @@ func setInitContainerEnvVars(container *v1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, creator string) {
+func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creator string) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[RayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
@@ -547,6 +582,11 @@ func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1.RayNodeType, rayStartPar
 		},
 	}
 	container.Env = append(container.Env, clusterNameEnv)
+
+	// KUBERAY_GEN_RAY_START_CMD stores the `ray start` command generated by KubeRay.
+	// See https://github.com/ray-project/kuberay/issues/1560 for more details.
+	generatedRayStartCmdEnv := v1.EnvVar{Name: KUBERAY_GEN_RAY_START_CMD, Value: rayStartCmd}
+	container.Env = append(container.Env, generatedRayStartCmdEnv)
 
 	if !envVarExists(RAY_PORT, container.Env) {
 		portEnv := v1.EnvVar{Name: RAY_PORT, Value: headPort}
@@ -585,11 +625,11 @@ func setContainerEnvVars(pod *v1.Pod, rayNodeType rayv1.RayNodeType, rayStartPar
 	}
 	if !envVarExists(REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
-		port := v1.EnvVar{Name: REDIS_PASSWORD}
+		redisPasswordEnv := v1.EnvVar{Name: REDIS_PASSWORD}
 		if value, ok := rayStartParams["redis-password"]; ok {
-			port.Value = value
+			redisPasswordEnv.Value = value
 		}
-		container.Env = append(container.Env, port)
+		container.Env = append(container.Env, redisPasswordEnv)
 	}
 	if !envVarExists(RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
@@ -664,7 +704,7 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 
 	// Add dashboard listen port for RayService.
 	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		if value, ok := annotations[EnableAgentServiceKey]; ok && value == EnableAgentServiceTrue {
+		if value, ok := annotations[EnableServeServiceKey]; ok && value == EnableServeServiceTrue {
 			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(DefaultDashboardAgentListenPort)
 		}
 	}
@@ -672,8 +712,8 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 	return rayStartParams
 }
 
-// concatenateContainerCommand with ray start
-func concatenateContainerCommand(nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) (fullCmd string) {
+func generateRayStartCommand(nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource v1.ResourceRequirements) string {
+	log.Info("generateRayStartCommand", "nodeType", nodeType, "rayStartParams", rayStartParams, "Ray container resource", resource)
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[v1.ResourceCPU]
 		if !cpu.IsZero() {
@@ -699,17 +739,17 @@ func concatenateContainerCommand(nodeType rayv1.RayNodeType, rayStartParams map[
 		}
 	}
 
-	log.V(10).Info("concatenate container command", "ray start params", rayStartParams)
-
+	rayStartCmd := ""
 	switch nodeType {
 	case rayv1.HeadNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start --head %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ray start --head %s", convertParamMap(rayStartParams))
 	case rayv1.WorkerNode:
-		return fmt.Sprintf("ulimit -n 65536; ray start %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ray start %s", convertParamMap(rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}
-	return ""
+	log.Info("generateRayStartCommand", "rayStartCmd", rayStartCmd)
+	return rayStartCmd
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {

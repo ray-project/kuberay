@@ -207,8 +207,14 @@ func TestGetAllComputeTemplates(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.ComputeTemplates, "A list of compute templates is required")
-	require.Equal(t, tCtx.GetComputeTemplateName(), response.ComputeTemplates[0].Name)
-	require.Equal(t, tCtx.GetNamespaceName(), response.ComputeTemplates[0].Namespace)
+	found_name := false
+	for _, template := range response.ComputeTemplates {
+		if tCtx.GetComputeTemplateName() == template.Name && tCtx.GetNamespaceName() == template.Namespace {
+			found_name = true
+			break
+		}
+	}
+	require.Equal(t, found_name, true)
 }
 
 // TestGetTemplatesInNamespace get all compute templates in namespace endpoint

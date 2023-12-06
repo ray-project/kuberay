@@ -26,11 +26,16 @@ const (
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 
+	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
+	// However, the generated `ray start` command will still be stored in the container's environment variable
+	// `KUBERAY_GEN_RAY_START_CMD`.
+	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
+
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
-	EnableAgentServiceKey  = "ray.io/enableAgentService"
-	EnableAgentServiceTrue = "true"
+	EnableServeServiceKey  = "ray.io/enable-serve-service"
+	EnableServeServiceTrue = "true"
 
 	EnableRayClusterServingServiceTrue  = "true"
 	EnableRayClusterServingServiceFalse = "false"
@@ -88,6 +93,7 @@ const (
 	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
+	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
@@ -98,6 +104,12 @@ const (
 	// This KubeRay operator environment variable is used to determine if the Redis
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
+
+	// This environment variable for the KubeRay operator is used to determine whether to enable
+	// the injection of readiness and liveness probes into Ray head and worker containers.
+	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature
+	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
+	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"

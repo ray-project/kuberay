@@ -63,10 +63,34 @@ func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (
 	return nil, nil
 }
 
+func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
+	if mock := r.GetJobInfoMock.Load(); mock != nil {
+		info, err := (*mock)(ctx, "job_id")
+		if err != nil {
+			return nil, err
+		}
+		return &[]RayJobInfo{*info}, nil
+	}
+	return nil, nil
+}
+
 func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
 	return "", nil
 }
 
+func (r *FakeRayDashboardClient) SubmitJobReq(_ context.Context, request *RayJobRequest, name *string, log *logr.Logger) (string, error) {
+	return "", nil
+}
+
+func (r *FakeRayDashboardClient) GetJobLog(_ context.Context, jobName string, log *logr.Logger) (*string, error) {
+	lg := "log"
+	return &lg, nil
+}
+
 func (r *FakeRayDashboardClient) StopJob(_ context.Context, jobName string, log *logr.Logger) (err error) {
+	return nil
+}
+
+func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, jobName string, log *logr.Logger) error {
 	return nil
 }

@@ -29,6 +29,7 @@ spec:
 #        args:
 #        - --enable-leader-election
         image: kuberay/operator
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 8080

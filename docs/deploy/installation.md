@@ -1,6 +1,6 @@
 ## Installation
 
-Make sure your Kubernetes cluster and Kubectl are both at version at least 1.19.
+Make sure your Kubernetes cluster and Kubectl are both at version at least 1.23.
 
 ### Nightly version
 
@@ -26,10 +26,10 @@ helm install kuberay-operator kuberay/kuberay-operator
 #### Method 2: Kustomize
 ```sh
 # Install CRDs
-kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v1.0.0-rc.1&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v1.0.0&timeout=90s"
 
 # Install KubeRay operator
-kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v1.0.0-rc.1"
+kubectl apply -k "github.com/ray-project/kuberay/manifests/base?ref=v1.0.0"
 ```
 
 > Observe that we must use `kubectl create` to install cluster-scoped resources.
@@ -43,8 +43,8 @@ Users can use the following commands to deploy KubeRay operator in a specific na
 export KUBERAY_NAMESPACE=<my-awesome-namespace>
 
 # Install CRDs (Executed by cluster admin)
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources?ref=v1.0.0-rc.1" | envsubst | kubectl create -f -
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace-resources?ref=v1.0.0" | envsubst | kubectl create -f -
 
 # Install KubeRay operator (Executed by user)
-kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace?ref=v1.0.0-rc.1" | envsubst | kubectl apply -f -
+kustomize build "github.com/ray-project/kuberay/manifests/overlays/single-namespace?ref=v1.0.0" | envsubst | kubectl apply -f -
 ```

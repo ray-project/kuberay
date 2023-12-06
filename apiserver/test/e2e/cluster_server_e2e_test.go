@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "3cpo",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -78,7 +79,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -138,7 +139,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -246,7 +247,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "bullwinkle",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: nil,
 				},
@@ -263,7 +264,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "bullwinkle",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{},
 				},
@@ -280,7 +281,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -308,7 +309,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -333,7 +334,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -363,7 +364,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -397,7 +398,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.7.0",
+					Version:     "2.8.0",
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -648,7 +649,7 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	// wait for the cluster to be in a running state for 3 minutes
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
 		if err00 != nil {
 			return true, err00
@@ -662,7 +663,7 @@ func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	// wait for the cluster to be deleted
 	// if is not in that state, return an error
-	err := wait.Poll(500*time.Millisecond, 3*time.Minute, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
 		if err00 != nil &&
 			assert.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {

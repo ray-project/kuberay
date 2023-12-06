@@ -7,8 +7,6 @@ kind: RayService
 metadata:
   name: rayservice-sample
 spec:
-  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
-  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
   # The workload consists of two applications. The first application checks on an event in the second application.
   # If the event isn't set, the first application will block on requests until the event is set. So, to test upscaling
   # we can first send a bunch of requests to the first application, which will trigger Serve autoscaling to bring up
@@ -40,7 +38,7 @@ spec:
         runtime_env:
           working_dir: "https://github.com/ray-project/test_dag/archive/23eac0533522579dff9a8a1ecb88931874d987ea.zip"
   rayClusterConfig:
-    rayVersion: '2.7.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.8.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
     enableInTreeAutoscaling: true
     autoscalerOptions:
@@ -64,7 +62,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.7.0
+              image: rayproject/ray:2.8.0
               resources:
                 limits:
                   cpu: 2
@@ -97,7 +95,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.7.0
+                image: rayproject/ray:2.8.0
                 lifecycle:
                   preStop:
                     exec:

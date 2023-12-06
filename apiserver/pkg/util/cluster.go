@@ -23,8 +23,14 @@ type RayCluster struct {
 // NewRayCluster creates a RayCluster.
 // func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
 func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) (*RayCluster, error) {
+	// Check for "ray.io/enable-serve-service=true"
+	enableServeService := false
+	if enableServeServiceValue, exist := apiCluster.Annotations["ray.io/enable-serve-service"]; exist && enableServeServiceValue == "true" {
+		enableServeService = true
+	}
+
 	// Build cluster spec
-	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap)
+	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap, enableServeService)
 	if err != nil {
 		return nil, err
 	}
@@ -64,9 +70,9 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
 // such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
-func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayClusterSpec, error) {
+func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate, enableServeService bool) (*rayv1api.RayClusterSpec, error) {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
-	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
+	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate, enableServeService)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +132,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 }
 
 // Build head node template
-func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) (*v1.PodTemplateSpec, error) {
+func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*v1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -222,6 +228,12 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		specEnv := convertEnvironmentVariables(spec.Environment)
 		if len(specEnv) > 0 {
 			container.Env = append(container.Env, specEnv...)
+		}
+
+		// If enableServeService add port
+		if enableServeService {
+			container.Ports = append(container.Ports, v1.ContainerPort{Name: "dashboard-agent", ContainerPort: 52365})
+			container.Ports = append(container.Ports, v1.ContainerPort{Name: "serve", ContainerPort: 8000})
 		}
 
 		// Replace container

@@ -17,11 +17,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.19.x
-        uses: actions/setup-go@v2
+      - name: Set up Go
+        uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: '1.19'
+          go-version: '1.20'
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -34,9 +34,9 @@ jobs:
       - name: Verify Generated Files
         working-directory: ./ray-operator
         run: ./hack/verify-generated-files.sh
-  # 1. Check consistency between types.go and CRD YAML files.
-  # 2. Check consistency between kubebuilder markers and RBAC.
-  ray-operator-verify-crd-rbac:
+
+  # Check consistency between types.go and generated API reference.
+  ray-operator-verify-api-docs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,6 +49,30 @@ jobs:
         with:
           # Use the same go version with build job
           go-version: '1.19'
+
+      - name: Check golang version
+        working-directory: ./ray-operator
+        run: go version
+
+      - name: Verify API reference
+        working-directory: ./ray-operator
+        run: ./hack/verify-api-docs.sh
+
+  # 1. Check consistency between types.go and CRD YAML files.
+  # 2. Check consistency between kubebuilder markers and RBAC.
+  ray-operator-verify-crd-rbac:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          # Use the same go version with build job
+          go-version: '1.20'
 
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
