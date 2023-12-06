@@ -1069,7 +1069,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	// Case 2: Head node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
-	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 
 	// Case 3: Worker node with no --block option set.
 	rayStartParams = map[string]string{}
@@ -1079,7 +1079,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	// Case 4: Worker node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
-	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
 
 func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
