@@ -10,17 +10,17 @@ import "protoc-gen-openapiv2/options/annotations.proto";
 
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
-  schemes: HTTP;
-  responses: {
-    key: "default";
-    value: {
-      schema: {
-        json_schema: {
-          ref: ".api.Status";
-        }
-      }
-    }
-  }
+	schemes: HTTP;
+	responses: {
+		key: "default";
+		value: {
+			schema: {
+				json_schema: {
+					ref: ".api.Status";
+				}
+			}
+		}
+	}
 };
 
 // Only 3 methods defined here - https://docs.ray.io/en/latest/serve/api/index.html#serve-rest-api
@@ -30,7 +30,7 @@ service RayServeSubmissionService {
   // Submit a new Ray Serve Application on the specified cluster in a namespace.
   rpc SubmitServeApplications(SubmitRayServeApplicationsRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
-      put: "/apis/v1/namespaces/{namespace}/serveapplication/{clustername}"
+      post: "/apis/v1/namespaces/{namespace}/serveapplication/{clustername}"
       body: "configyaml"
     };
   }

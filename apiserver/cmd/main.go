@@ -83,7 +83,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 	jobServer := server.NewRayJobServer(resourceManager, &server.JobServerOptions{CollectMetrics: *collectMetricsFlag})
 	serveServer := server.NewRayServiceServer(resourceManager, &server.ServiceServerOptions{CollectMetrics: *collectMetricsFlag})
 	jobSubmissionServer := server.NewRayJobSubmissionServiceServer(clusterServer, &server.RayJobSubmissionServiceServerOptions{CollectMetrics: *collectMetricsFlag})
-	ServeSubmissionServer := server.NewRayServeSubmissionServiceServer(clusterServer, &server.RayServeSubmissionServiceServerOptions{CollectMetrics: *collectMetricsFlag})
+	serveSubmissionServer := server.NewRayServeSubmissionServiceServer(clusterServer, &server.RayServeSubmissionServiceServerOptions{CollectMetrics: *collectMetricsFlag})
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
@@ -94,7 +94,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 	api.RegisterRayJobServiceServer(s, jobServer)
 	api.RegisterRayServeServiceServer(s, serveServer)
 	api.RegisterRayJobSubmissionServiceServer(s, jobSubmissionServer)
-	api.RegisterRayServeSubmissionServiceServer(s, ServeSubmissionServer)
+	api.RegisterRayServeSubmissionServiceServer(s, serveSubmissionServer)
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -136,7 +136,7 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", ctx, runtimeMux)
 	registerHttpHandlerFromEndpoint(api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayServeServiceHandlerFromEndpoint, "RayServeSubmissionService", ctx, runtimeMux)
+	registerHttpHandlerFromEndpoint(api.RegisterRayServeSubmissionServiceHandlerFromEndpoint, "RayServeSubmissionService", ctx, runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()

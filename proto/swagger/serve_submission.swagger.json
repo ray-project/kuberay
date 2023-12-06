@@ -94,7 +94,7 @@
           "RayServeSubmissionService"
         ]
       },
-      "put": {
+      "post": {
         "summary": "Submit a new Ray Serve Application on the specified cluster in a namespace.",
         "operationId": "RayServeSubmissionService_SubmitServeApplications",
         "responses": {

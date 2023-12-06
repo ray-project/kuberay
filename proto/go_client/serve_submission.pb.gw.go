@@ -269,7 +269,7 @@ func local_request_RayServeSubmissionService_DeleteRayServeApplications_0(ctx co
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterRayServeSubmissionServiceHandlerFromEndpoint instead.
 func RegisterRayServeSubmissionServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server RayServeSubmissionServiceServer) error {
 
-	mux.Handle("PUT", pattern_RayServeSubmissionService_SubmitServeApplications_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_RayServeSubmissionService_SubmitServeApplications_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -379,7 +379,7 @@ func RegisterRayServeSubmissionServiceHandler(ctx context.Context, mux *runtime.
 // "RayServeSubmissionServiceClient" to call the correct interceptors.
 func RegisterRayServeSubmissionServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client RayServeSubmissionServiceClient) error {
 
-	mux.Handle("PUT", pattern_RayServeSubmissionService_SubmitServeApplications_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_RayServeSubmissionService_SubmitServeApplications_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
