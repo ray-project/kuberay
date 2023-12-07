@@ -74,3 +74,16 @@ rbacEnable: true
 
 # the chart can be installed by users with permissions to a single namespace only
 singleNamespaceInstall: false
+
+# security definition. Comment it out if security is not required
+security:
+  proxy:
+    repository: kuberay/security-proxy
+    tag: nightly
+    pullPolicy: IfNotPresent
+  env:
+    HTTP_LOCAL_PORT: 8988
+    GRPC_LOCAL_PORT: 8987
+    SECURITY_TOKEN: "12345"
+    SECURITY_PREFIX: "/"
+    ENABLE_GRPC: "true"

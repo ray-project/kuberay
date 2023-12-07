@@ -19,6 +19,6 @@ roleRef:
   {{- else }}
   kind: ClusterRole
   {{- end }}
-  name: {{ include "kuberay-apiserver.fullname" . }}
+  name: {{ .Values.name }}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}

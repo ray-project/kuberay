@@ -284,9 +284,7 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
-	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
-		desiredResourcesList = append(desiredResourcesList, headPodResource)
-	}
+	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := calculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
@@ -299,9 +297,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
 	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
-	for i := int32(0); i < *cluster.Spec.HeadGroupSpec.Replicas; i++ {
-		minResourcesList = append(minResourcesList, headPodResource)
-	}
+	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := calculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
@@ -471,10 +467,10 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	return reflect.DeepEqual(v1, v2)
 }
 
-func ConvertUnixTimeToMetav1Time(unixTime int64) *metav1.Time {
+func ConvertUnixTimeToMetav1Time(unixTime uint64) *metav1.Time {
 	// The Ray jobInfo returns the start_time, which is a unix timestamp in milliseconds.
 	// https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo
-	t := time.Unix(unixTime/1000, unixTime%1000*1000000)
+	t := time.Unix(int64(unixTime)/1000, int64(unixTime)%1000*1000000)
 	kt := metav1.NewTime(t)
 	return &kt
 }

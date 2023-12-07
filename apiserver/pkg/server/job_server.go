@@ -128,23 +128,8 @@ func ValidateCreateJobRequest(request *api.CreateRayJobRequest) error {
 		return nil
 	}
 
-	if len(request.Job.ClusterSpec.HeadGroupSpec.ComputeTemplate) == 0 {
-		return util.NewInvalidInputError("HeadGroupSpec compute template is empty. Please specify a valid value.")
-	}
-
-	for index, spec := range request.Job.ClusterSpec.WorkerGroupSpec {
-		if len(spec.GroupName) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d group name is empty. Please specify a valid value.", index)
-		}
-		if len(spec.ComputeTemplate) == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d compute template is empty. Please specify a valid value.", index)
-		}
-		if spec.MaxReplicas == 0 {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MaxReplicas can not be 0. Please specify a valid value.", index)
-		}
-		if spec.MinReplicas > spec.MaxReplicas {
-			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
-		}
+	if err := ValidateClusterSpec(request.Job.ClusterSpec); err != nil {
+		return err
 	}
 
 	return nil

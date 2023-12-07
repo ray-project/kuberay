@@ -190,7 +190,7 @@ def test_cluster():
                                                      min_replicas=2, max_replicas=2,
                                                      ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
                                                      environment=env_s, labels={"key": "value"})])
-    cluster = Cluster(name="test", namespace="default", user="boris", version="2.7.0", cluster_spec=spec,
+    cluster = Cluster(name="test", namespace="default", user="boris", version="2.8.0", cluster_spec=spec,
                       deployment_environment=Environment.DEV, cluster_environment=env_s)
     print(f"cluster: {cluster.to_string()}")
     cluster_json = json.dumps(cluster.to_dict())
@@ -202,3 +202,36 @@ def test_cluster():
     cluster_dict["created_status"] = "status"
     cluster_dict["events"] = [event]
     print(f"cluster with output: {cluster_decoder(cluster_dict).to_string()}")
+
+
+def test_submission():
+    yaml = """
+    pip:
+      - requests==2.26.0
+      - pendulum==2.1.2
+    env_vars:
+      counter_name: test_counter    
+    """
+    request = RayJobRequest(entrypoint="python /home/ray/samples/sample_code.py",
+                            runtime_env=yaml, num_cpu=.5)
+    print(f"job request: {request.to_string()}")
+    request_json = json.dumps(request.to_dict())
+    print(f"request JSON: {request_json}")
+
+    infoJson = """
+    {
+       "entrypoint":"python /home/ray/samples/sample_code.py",
+       "jobId":"02000000",
+       "submissionId":"raysubmit_KWZLwme56esG3Wcr",
+       "status":"SUCCEEDED",
+       "message":"Job finished successfully.",
+       "startTime":"1699442662879",
+       "endTime":"1699442682405",
+       "runtimeEnv":{
+          "env_vars":"map[counter_name:test_counter]",
+          "pip":"[requests==2.26.0 pendulum==2.1.2]"
+       }
+    }    
+    """
+    job_info = RayJobInfo(json.loads(infoJson))
+    print(job_info.to_string())

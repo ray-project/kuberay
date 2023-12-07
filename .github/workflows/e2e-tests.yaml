@@ -1,0 +1,94 @@
+name: e2e
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths-ignore:
+      - 'apiserver/**'
+      - 'cli/**'
+      - 'docs/**'
+      - '**.adoc'
+      - '**.md'
+      - 'LICENSE'
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths-ignore:
+      - 'apiserver/**'
+      - 'cli/**'
+      - 'docs/**'
+      - '**.adoc'
+      - '**.md'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  ray-operator:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: v1.20
+
+      - name: Set up gotestfmt
+        uses: gotesttools/gotestfmt-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup and start KinD cluster
+        uses: ./.github/workflows/actions/kind
+
+      - name: Deploy Kuberay operator
+        id: deploy
+        run: |
+          echo Deploying Kuberay operator
+          cd ray-operator
+
+          IMG="${REGISTRY_ADDRESS}"/kuberay
+          make docker-build -e IMG="${IMG}" -e ENGINE=podman
+          make docker-push -e IMG="${IMG}" -e ENGINE=podman
+
+          make deploy -e IMG="${IMG}"
+          kubectl wait --timeout=90s --for=condition=Available=true deployment -n ray-system kuberay-operator
+
+      - name: Run e2e tests
+        run: |
+          export KUBERAY_TEST_TIMEOUT_SHORT=1m
+          export KUBERAY_TEST_TIMEOUT_MEDIUM=5m
+          export KUBERAY_TEST_TIMEOUT_LONG=10m
+
+          export KUBERAY_TEST_OUTPUT_DIR=${{ env.TEMP_DIR }}
+          echo "KUBERAY_TEST_OUTPUT_DIR=${KUBERAY_TEST_OUTPUT_DIR}" >> $GITHUB_ENV
+
+          set -euo pipefail
+          cd ray-operator
+          go test -timeout 30m -v ./test/e2e -json 2>&1 | tee ${KUBERAY_TEST_OUTPUT_DIR}/gotest.log | gotestfmt
+
+      - name: Print KubeRay operator logs
+        if: always() && steps.deploy.outcome == 'success'
+        run: |
+          echo "Printing KubeRay operator logs"
+          kubectl logs -n ray-system --tail -1 -l app.kubernetes.io/name=kuberay | tee ${KUBERAY_TEST_OUTPUT_DIR}/kuberay-operator.log
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v3
+        if: always() && steps.deploy.outcome == 'success'
+        with:
+          name: logs
+          retention-days: 10
+          path: |
+            ${{ env.KUBERAY_TEST_OUTPUT_DIR }}/**/*.log

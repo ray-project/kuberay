@@ -12,13 +12,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
 	enableIngress                    = true
 	deploymentReplicas       int32   = 1
-	headNodeReplicas         int32   = 1
 	workerReplicas           int32   = 5
+	workerMinReplicas        int32   = 1
+	workerMaxReplicas        int32   = 3
 	unhealthySecondThreshold int32   = 900
 	floatNumber              float64 = 1
 	secondsValue             int32   = 100
@@ -27,7 +29,6 @@ var (
 var headSpecTest = rayv1api.HeadGroupSpec{
 	ServiceType:   "ClusterIP",
 	EnableIngress: &enableIngress,
-	Replicas:      &headNodeReplicas,
 	RayStartParams: map[string]string{
 		"dashboard-host":      "0.0.0.0",
 		"metrics-export-port": "8080",
@@ -148,8 +149,8 @@ var configMapWithTolerations = v1.ConfigMap{
 var workerSpecTest = rayv1api.WorkerGroupSpec{
 	GroupName:   "",
 	Replicas:    &workerReplicas,
-	MinReplicas: &workerReplicas,
-	MaxReplicas: &workerReplicas,
+	MinReplicas: &workerMinReplicas,
+	MaxReplicas: &workerMaxReplicas,
 	RayStartParams: map[string]string{
 		"node-ip-address": "$MY_POD_IP",
 	},
@@ -238,6 +239,34 @@ var ClusterSpecTest = rayv1api.RayCluster{
 		HeadGroupSpec: headSpecTest,
 		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
 			workerSpecTest,
+		},
+	},
+}
+
+var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "raycluster-sample",
+		Namespace: "default",
+		Annotations: map[string]string{
+			"kubernetes.io/ingress.class": "nginx",
+		},
+	},
+	Spec: rayv1api.RayClusterSpec{
+		HeadGroupSpec: headSpecTest,
+		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
+			workerSpecTest,
+		},
+		EnableInTreeAutoscaling: pointer.Bool(true),
+		AutoscalerOptions: &rayv1api.AutoscalerOptions{
+			IdleTimeoutSeconds: pointer.Int32(int32(60)),
+			UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
+			ImagePullPolicy:    (*v1.PullPolicy)(pointer.String("Always")),
+			Resources: &v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("500m"),
+					v1.ResourceMemory: resource.MustParse("512Mi"),
+				},
+			},
 		},
 	},
 }
@@ -373,6 +402,55 @@ var ServiceV2Test = rayv1api.RayService{
 	},
 }
 
+var autoscalerOptions = &rayv1api.AutoscalerOptions{
+	IdleTimeoutSeconds: pointer.Int32(int32(60)),
+	UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
+	Image:              pointer.String("Some Image"),
+	ImagePullPolicy:    (*v1.PullPolicy)(pointer.String("Always")),
+	Env: []v1.EnvVar{
+		{
+			Name:  "n1",
+			Value: "v1",
+		},
+	},
+	EnvFrom: []v1.EnvFromSource{
+		{
+			ConfigMapRef: &v1.ConfigMapEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "ConfigMap",
+				},
+			},
+		},
+		{
+			SecretRef: &v1.SecretEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: "Secret",
+				},
+			},
+		},
+	},
+	VolumeMounts: []v1.VolumeMount{
+		{
+			Name:             "vmount1",
+			MountPath:        "path1",
+			ReadOnly:         false,
+			MountPropagation: (*v1.MountPropagationMode)(pointer.String("None")),
+		},
+		{
+			Name:             "vmount2",
+			MountPath:        "path2",
+			ReadOnly:         true,
+			MountPropagation: (*v1.MountPropagationMode)(pointer.String("HostToContainer")),
+		},
+	},
+	Resources: &v1.ResourceRequirements{
+		Requests: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("500m"),
+			v1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+	},
+}
+
 var expectedAnnotations = map[string]string{
 	"custom": "value",
 }
@@ -465,11 +543,38 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 }
 
+func TestAutoscalerOptions(t *testing.T) {
+	options := convertAutoscalingOptions(autoscalerOptions)
+	assert.Equal(t, options.IdleTimeoutSeconds, int32(60))
+	assert.Equal(t, options.UpscalingMode, "Default")
+	assert.Equal(t, options.Image, "Some Image")
+	assert.Equal(t, options.ImagePullPolicy, "Always")
+	assert.Equal(t, options.Cpu, "500m")
+	assert.Equal(t, options.Memory, "512Mi")
+	assert.Equal(t, len(options.Envs.Values), 1)
+	assert.Equal(t, len(options.Envs.ValuesFrom), 2)
+	assert.Equal(t, len(options.Volumes), 2)
+}
+
 func TestPopulateRayClusterSpec(t *testing.T) {
 	cluster := FromCrdToApiCluster(&ClusterSpecTest, []v1.Event{})
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
+	assert.Equal(t, cluster.ClusterSpec.EnableInTreeAutoscaling, false)
+	if cluster.ClusterSpec.AutoscalerOptions != nil {
+		t.Errorf("unexpected autoscaler annotations")
+	}
+	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []v1.Event{})
+	assert.Equal(t, cluster.ClusterSpec.EnableInTreeAutoscaling, true)
+	if cluster.ClusterSpec.AutoscalerOptions == nil {
+		t.Errorf("autoscaler annotations not found")
+	}
+	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.IdleTimeoutSeconds, int32(60))
+	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.UpscalingMode, "Default")
+	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy, "Always")
+	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Cpu, "500m")
+	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Memory, "512Mi")
 }
 
 func TestPopulateTemplate(t *testing.T) {

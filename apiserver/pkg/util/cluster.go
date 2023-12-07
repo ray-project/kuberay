@@ -23,8 +23,14 @@ type RayCluster struct {
 // NewRayCluster creates a RayCluster.
 // func NewRayCluster(apiCluster *api.Cluster, clusterRuntime *api.ClusterRuntime, computeRuntime *api.ComputeRuntime) *RayCluster {
 func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.ComputeTemplate) (*RayCluster, error) {
+	// Check for "ray.io/enable-serve-service=true"
+	enableServeService := false
+	if enableServeServiceValue, exist := apiCluster.Annotations["ray.io/enable-serve-service"]; exist && enableServeServiceValue == "true" {
+		enableServeService = true
+	}
+
 	// Build cluster spec
-	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap)
+	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap, enableServeService)
 	if err != nil {
 		return nil, err
 	}
@@ -64,19 +70,17 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
 // such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
-func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayClusterSpec, error) {
+func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate, enableServeService bool) (*rayv1api.RayClusterSpec, error) {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
-	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate)
+	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate, enableServeService)
 	if err != nil {
 		return nil, err
 	}
-	headReplicas := int32(1)
 	rayClusterSpec := &rayv1api.RayClusterSpec{
 		RayVersion: imageVersion,
 		HeadGroupSpec: rayv1api.HeadGroupSpec{
 			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
 			Template:       *headPodTemplate,
-			Replicas:       &headReplicas,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
 		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{},
@@ -116,6 +120,18 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 		rayClusterSpec.WorkerGroupSpecs = append(rayClusterSpec.WorkerGroupSpecs, workerNodeSpec)
 	}
 
+	if clusterSpec.EnableInTreeAutoscaling {
+		// This is a cluster with auto scaler
+		rayClusterSpec.EnableInTreeAutoscaling = &clusterSpec.EnableInTreeAutoscaling
+		options, err := buildAutoscalerOptions(clusterSpec.AutoscalerOptions)
+		if err != nil {
+			return nil, err
+		}
+		if options != nil {
+			rayClusterSpec.AutoscalerOptions = options
+		}
+	}
+
 	return rayClusterSpec, nil
 }
 
@@ -128,7 +144,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 }
 
 // Build head node template
-func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate) (*v1.PodTemplateSpec, error) {
+func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*v1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -224,6 +240,12 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		specEnv := convertEnvironmentVariables(spec.Environment)
 		if len(specEnv) > 0 {
 			container.Env = append(container.Env, specEnv...)
+		}
+
+		// If enableServeService add port
+		if enableServeService {
+			container.Ports = append(container.Ports, v1.ContainerPort{Name: "dashboard-agent", ContainerPort: 52365})
+			container.Ports = append(container.Ports, v1.ContainerPort{Name: "serve", ContainerPort: 8000})
 		}
 
 		// Replace container
@@ -820,4 +842,96 @@ func GetContainerByName(containers []v1.Container, name string) (v1.Container, i
 		}
 	}
 	return v1.Container{}, 0, false
+}
+
+func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api.AutoscalerOptions, error) {
+	if autoscalerOptions == nil {
+		return nil, nil
+	}
+	options := rayv1api.AutoscalerOptions{}
+	if autoscalerOptions.IdleTimeoutSeconds > 0 {
+		options.IdleTimeoutSeconds = &autoscalerOptions.IdleTimeoutSeconds
+	}
+	if len(autoscalerOptions.UpscalingMode) > 0 {
+		options.UpscalingMode = (*rayv1api.UpscalingMode)(&autoscalerOptions.UpscalingMode)
+	}
+	if len(autoscalerOptions.Image) > 0 {
+		options.Image = &autoscalerOptions.Image
+	}
+	if len(autoscalerOptions.ImagePullPolicy) > 0 {
+		options.ImagePullPolicy = (*v1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
+	}
+	if autoscalerOptions.Envs != nil {
+		if len(autoscalerOptions.Envs.Values) > 0 {
+			options.Env = make([]v1.EnvVar, len(autoscalerOptions.Envs.Values))
+			ev_count := 0
+			for key, value := range autoscalerOptions.Envs.Values {
+				options.Env[ev_count] = v1.EnvVar{Name: key, Value: value}
+				ev_count += 1
+			}
+		}
+		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {
+			options.EnvFrom = make([]v1.EnvFromSource, 0)
+			for _, value := range autoscalerOptions.Envs.ValuesFrom {
+				if evfrom := convertEnvFrom(value); evfrom != nil {
+					options.EnvFrom = append(options.EnvFrom, *evfrom)
+				}
+			}
+		}
+	}
+	if autoscalerOptions.Volumes != nil && len(autoscalerOptions.Volumes) > 0 {
+		options.VolumeMounts = buildVolumeMounts(autoscalerOptions.Volumes)
+	}
+	if len(autoscalerOptions.Cpu) > 0 || len(autoscalerOptions.Memory) > 0 {
+		rcpu := "500m"
+		rmemory := "512Mi"
+		if len(autoscalerOptions.Cpu) > 0 {
+			rcpu = autoscalerOptions.Cpu
+		}
+		if len(autoscalerOptions.Memory) > 0 {
+			rmemory = autoscalerOptions.Memory
+		}
+		_, err := resource.ParseQuantity(rcpu)
+		if err != nil {
+			return nil, errors.New("cpu for autoscaler is not specified correctly")
+		}
+		_, err = resource.ParseQuantity(rmemory)
+		if err != nil {
+			return nil, errors.New("memory for autoscaler is not specified correctly")
+		}
+		options.Resources = &v1.ResourceRequirements{
+			Limits: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse(rcpu),
+				v1.ResourceMemory: resource.MustParse(rmemory),
+			},
+			Requests: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse(rcpu),
+				v1.ResourceMemory: resource.MustParse(rmemory),
+			},
+		}
+	}
+	return &options, nil
+}
+
+func convertEnvFrom(from *api.EnvValueFrom) *v1.EnvFromSource {
+	switch from.Source {
+	case api.EnvValueFrom_CONFIGMAP:
+		return &v1.EnvFromSource{
+			ConfigMapRef: &v1.ConfigMapEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: from.Name,
+				},
+			},
+		}
+	case api.EnvValueFrom_SECRET:
+		return &v1.EnvFromSource{
+			SecretRef: &v1.SecretEnvSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: from.Name,
+				},
+			},
+		}
+	default:
+		return nil
+	}
 }

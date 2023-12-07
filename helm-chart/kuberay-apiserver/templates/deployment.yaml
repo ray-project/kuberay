@@ -32,7 +32,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
-        {{- toYaml .Values.containerPort | nindent 8 }}
+          {{- toYaml .Values.containerPort | nindent 8 }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         livenessProbe:
@@ -43,6 +43,35 @@ spec:
           httpGet:
             path: /healthz
             port: http
+      {{- if .Values.security }}
+      - name: security-proxy-container
+        image: "{{ .Values.security.proxy.repository }}:{{ .Values.security.proxy.tag }}"
+        imagePullPolicy: {{ .Values.security.proxy.pullPolicy }}
+        ports:
+          - name: http
+            containerPort: {{ .Values.security.env.HTTP_LOCAL_PORT }}
+            protocol: TCP
+          - name: grpc
+            containerPort: {{ .Values.security.env.GRPC_LOCAL_PORT }}
+            protocol: TCP
+        env:
+          {{- range $key, $value := .Values.security.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+          {{- end }}
+          {{- range $port := .Values.containerPort  }}
+            {{- if eq $port.name "http" }}
+          - name: "HTTP_REMOTE_PORT"
+            value: {{ $port.containerPort | quote }}
+            {{- end }}
+            {{- if eq $port.name "grpc" }}
+          - name: "GRPC_REMOTE_PORT"
+            value: {{ $port.containerPort | quote }}
+            {{- end }}
+          {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      {{- end }}
 
       {{- if .Values.sidecarContainers }}
       {{- toYaml .Values.sidecarContainers | nindent 6 }}

@@ -14,4 +14,20 @@ spec:
     app.kubernetes.io/component: {{ include "kuberay-apiserver.name" . }}
     app.kubernetes.io/name: {{ .Release.Name }}
   ports:
-    {{- toYaml .Values.service.ports | nindent 12 }}
+    {{- range $port := .Values.service.ports  }}
+    - name: {{ $port.name }}
+      port: {{ $port.port }}
+      {{- if $.Values.security }}
+        {{- if eq $port.name "http" }}
+      targetPort: {{ $.Values.security.env.HTTP_LOCAL_PORT }}
+        {{ else }}
+      targetPort: {{ $.Values.security.env.GRPC_LOCAL_PORT }}
+        {{ end }}
+      {{ else }}
+      targetPort: {{ $port.targetPort }}
+      {{ end }}
+      {{- if $port.nodePort }}
+      nodePort: {{ $port.nodePort }}
+      {{ end }}
+    {{ end }}
+

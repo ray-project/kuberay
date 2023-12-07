@@ -30,7 +30,6 @@ var instance = rayv1.RayCluster{
 	},
 	Spec: rayv1.RayClusterSpec{
 		HeadGroupSpec: rayv1.HeadGroupSpec{
-			Replicas: pointer.Int32Ptr(1),
 			RayStartParams: map[string]string{
 				"port":                "6379",
 				"object-manager-port": "12345",
@@ -84,9 +83,9 @@ var instance = rayv1.RayCluster{
 		},
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32Ptr(3),
-				MinReplicas: pointer.Int32Ptr(0),
-				MaxReplicas: pointer.Int32Ptr(10000),
+				Replicas:    pointer.Int32(3),
+				MinReplicas: pointer.Int32(0),
+				MaxReplicas: pointer.Int32(10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
 					"port":     "6379",
@@ -300,27 +299,30 @@ func TestGetHeadPort(t *testing.T) {
 	}
 }
 
-func checkContainerEnv(t *testing.T, container v1.Container, envName string, expectedValue string) {
-	foundEnv := false
+func getEnvVar(container v1.Container, envName string) *v1.EnvVar {
 	for _, env := range container.Env {
 		if env.Name == envName {
-			if env.Value != "" {
-				if env.Value != expectedValue {
-					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
-				}
-			} else {
-				// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
-				// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
-				if env.ValueFrom.FieldRef.FieldPath != expectedValue {
-					t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
-				}
-			}
-
-			foundEnv = true
-			break
+			return &env
 		}
 	}
-	if !foundEnv {
+	return nil
+}
+
+func checkContainerEnv(t *testing.T, container v1.Container, envName string, expectedValue string) {
+	env := getEnvVar(container, envName)
+	if env != nil {
+		if env.Value != "" {
+			if env.Value != expectedValue {
+				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
+			}
+		} else {
+			// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
+			// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
+			if env.ValueFrom.FieldRef.FieldPath != expectedValue {
+				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
+			}
+		}
+	} else {
 		t.Fatalf("Couldn't find `%v` env on pod.", envName)
 	}
 }
@@ -331,7 +333,7 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[RayContainerIndex]
@@ -339,6 +341,8 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
+	headRayStartCommandEnv := getEnvVar(rayContainer, KUBERAY_GEN_RAY_START_CMD)
+	assert.True(t, strings.Contains(headRayStartCommandEnv.Value, "ray start"))
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -382,7 +386,7 @@ func TestBuildPod(t *testing.T) {
 	podName = cluster.Name + DashSymbol + string(rayv1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -391,6 +395,8 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
+	workerRayStartCommandEnv := getEnvVar(rayContainer, KUBERAY_GEN_RAY_START_CMD)
+	assert.True(t, strings.Contains(workerRayStartCommandEnv.Value, "ray start"))
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
@@ -401,6 +407,41 @@ func TestBuildPod(t *testing.T) {
 	// Check Envs
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
 	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
+
+	// Try to build pod for serve
+	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
+	val, ok := pod.Labels[RayClusterServingServiceLabelKey]
+	assert.True(t, ok, "Expected serve label is not present")
+	assert.Equal(t, EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
+}
+
+func TestBuildPod_WithOverwriteCommand(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		// When the value of the annotation is "true", KubeRay will not generate the command and args for the container.
+		// Instead, it will use the command and args specified by the use.
+		RayOverwriteContainerCmdAnnotationKey: "true",
+	}
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Command = []string{"I am head"}
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Args = []string{"I am head again"}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[RayContainerIndex].Command = []string{"I am worker"}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[RayContainerIndex].Args = []string{"I am worker again"}
+
+	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	headPod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	headContainer := headPod.Spec.Containers[RayContainerIndex]
+	assert.Equal(t, headContainer.Command, []string{"I am head"})
+	assert.Equal(t, headContainer.Args, []string{"I am head again"})
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + DashSymbol + string(rayv1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	workerPod := BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
+	workerContainer := workerPod.Spec.Containers[RayContainerIndex]
+	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
+	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -408,7 +449,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 
 	actualResult := pod.Labels[RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -463,7 +504,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, RayServiceCreatorLabelValue, "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, RayServiceCreatorLabelValue, "", false)
 
 	hasCorrectDeathEnv := false
 	for _, container := range pod.Spec.Containers {
@@ -494,7 +535,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	// Build a head Pod.
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer := pod.Spec.Containers[RayContainerIndex]
@@ -512,7 +553,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env,
 		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
 	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
@@ -529,7 +570,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	podName = cluster.Name + DashSymbol + string(rayv1.WorkerNode) + DashSymbol + worker.GroupName + DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -546,7 +587,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 		v1.EnvVar{Name: RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
 	worker = cluster.Spec.WorkerGroupSpecs[0]
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[RayContainerIndex]
@@ -615,7 +656,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
@@ -784,7 +825,7 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + DashSymbol + string(rayv1.HeadNode) + DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "")
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, []v1.VolumeMount{
 		{
@@ -1028,7 +1069,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	// Case 2: Head node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
-	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 
 	// Case 3: Worker node with no --block option set.
 	rayStartParams = map[string]string{}
@@ -1038,7 +1079,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	// Case 4: Worker node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
-	assert.Equal(t, "false", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
 
 func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
@@ -1071,37 +1112,37 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 
 func TestSetMissingRayStartParamsAgentListenPort(t *testing.T) {
 	// The "dashboard-agent-listen-port" port will be automatically injected into RayStartParams with a default
-	// value of 52365 (i.e., DefaultDashboardAgentListenPort) when the annotation "ray.io/enableAgentService"
+	// value of 52365 (i.e., DefaultDashboardAgentListenPort) when the annotation "ray.io/enable-serve-service"
 	// is set to true. The behavior is the same for both head and workers.
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	rayStartParams := map[string]string{}
 	annotaions := map[string]string{}
 
-	// Case 1: Head node without "ray.io/enableAgentService=true".
+	// Case 1: Head node without "ray.io/enable-serve-service=true".
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
 	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Head Pod should not have a dashboard-agent-listen-port option set by default.")
 
-	// Case 2: Worker node without "ray.io/enableAgentService=true".
+	// Case 2: Worker node without "ray.io/enable-serve-service=true".
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
 	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Worker Pod should not have a dashboard-agent-listen-port option set by default.")
 
-	// Case 3: Head node with "ray.io/enableAgentService=true" and users do not provide "dashboard-agent-listen-port".
-	annotaions = map[string]string{EnableAgentServiceKey: EnableAgentServiceTrue}
+	// Case 3: Head node with "ray.io/enable-serve-service=true" and users do not provide "dashboard-agent-listen-port".
+	annotaions = map[string]string{EnableServeServiceKey: EnableServeServiceTrue}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
 	assert.Equal(t, fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
 
-	// Case 4: Worker node with "ray.io/enableAgentService=true" and users do not provide "dashboard-agent-listen-port".
+	// Case 4: Worker node with "ray.io/enable-serve-service=true" and users do not provide "dashboard-agent-listen-port".
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
 	assert.Equal(t, fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
 
-	// Case 5: Head node with "ray.io/enableAgentService=true" and users provide "dashboard-agent-listen-port".
+	// Case 5: Head node with "ray.io/enable-serve-service=true" and users provide "dashboard-agent-listen-port".
 	customDashboardAgentListenPort := DefaultDashboardAgentListenPort + 1
 	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
 	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
 
-	// Case 6: Worker node with "ray.io/enableAgentService=true" and users provide "dashboard-agent-listen-port".
+	// Case 6: Worker node with "ray.io/enable-serve-service=true" and users provide "dashboard-agent-listen-port".
 	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
 	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
 	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
@@ -1129,6 +1170,32 @@ func TestGetCustomWorkerInitImage(t *testing.T) {
 	// set the env with "False"
 	os.Setenv(EnableInitContainerInjectionEnvKey, "False")
 	b = getEnableInitContainerInjection()
+	assert.False(t, b)
+}
+
+func TestGetEnableProbesInjection(t *testing.T) {
+	// cleanup
+	defer os.Unsetenv(ENABLE_PROBES_INJECTION)
+
+	// not set the env
+	os.Unsetenv(ENABLE_PROBES_INJECTION)
+	b := getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "true"
+	os.Setenv(ENABLE_PROBES_INJECTION, "true")
+	b = getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "True"
+	os.Setenv(ENABLE_PROBES_INJECTION, "True")
+	b = getEnableProbesInjection()
+	assert.True(t, b)
+	// set the env with "false"
+	os.Setenv(ENABLE_PROBES_INJECTION, "false")
+	b = getEnableProbesInjection()
+	assert.False(t, b)
+	// set the env with "False"
+	os.Setenv(ENABLE_PROBES_INJECTION, "False")
+	b = getEnableProbesInjection()
 	assert.False(t, b)
 }
 

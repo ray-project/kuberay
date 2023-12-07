@@ -62,22 +62,21 @@ func TestCreatePodGroup(t *testing.T) {
 				Template: corev1.PodTemplateSpec{
 					Spec: headSpec,
 				},
-				Replicas: pointer.Int32Ptr(1),
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
 						Spec: workerSpec,
 					},
-					Replicas:    pointer.Int32Ptr(2),
-					MinReplicas: pointer.Int32Ptr(1),
-					MaxReplicas: pointer.Int32Ptr(4),
+					Replicas:    pointer.Int32(2),
+					MinReplicas: pointer.Int32(1),
+					MaxReplicas: pointer.Int32(4),
 				},
 			},
 		},
 	}
 
-	minMember := utils.CalculateDesiredReplicas(&cluster) + *cluster.Spec.HeadGroupSpec.Replicas
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 

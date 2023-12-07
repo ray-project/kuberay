@@ -33,8 +33,6 @@ type HeadGroupSpec struct {
 	HeadService *v1.Service `json:"headService,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// HeadGroupSpec.Replicas is deprecated and ignored; there can only be one head pod per Ray cluster.
-	Replicas *int32 `json:"replicas,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
@@ -158,6 +156,7 @@ const (
 
 // RayCluster is the Schema for the RayClusters API
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
 // +kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0

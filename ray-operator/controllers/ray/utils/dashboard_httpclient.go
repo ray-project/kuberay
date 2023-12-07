@@ -51,9 +51,15 @@ type RayDashboardClientInterface interface {
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
 	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
+
 	GetVersion(ctx context.Context) (ServerVersion, error)
-	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error)
-	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
+	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
+	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (string, error)
+	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string, log *logr.Logger) (string, error)
+	GetJobLog(ctx context.Context, jobName string, log *logr.Logger) (*string, error)
+	StopJob(ctx context.Context, jobName string, log *logr.Logger) error
+	DeleteJob(ctx context.Context, jobName string, log *logr.Logger) error
+
 }
 
 type BaseDashboardClient struct {
@@ -321,22 +327,29 @@ func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1.ServeDeplo
 // RayJobInfo is the response of "ray job status" api.
 // Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
 type RayJobInfo struct {
-	JobStatus  rayv1.JobStatus   `json:"status,omitempty"`
-	Entrypoint string            `json:"entrypoint,omitempty"`
-	Message    string            `json:"message,omitempty"`
-	ErrorType  *string           `json:"error_type,omitempty"`
-	StartTime  int64             `json:"start_time,omitempty"`
-	EndTime    int64             `json:"end_time,omitempty"`
-	Metadata   map[string]string `json:"metadata,omitempty"`
+	JobStatus    rayv1.JobStatus        `json:"status,omitempty"`
+	Entrypoint   string                 `json:"entrypoint,omitempty"`
+	JobId        string                 `json:"job_id,omitempty"`
+	SubmissionId string                 `json:"submission_id,omitempty"`
+	Message      string                 `json:"message,omitempty"`
+	ErrorType    *string                `json:"error_type,omitempty"`
+	StartTime    uint64                 `json:"start_time,omitempty"`
+	EndTime      uint64                 `json:"end_time,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
 }
 
 // RayJobRequest is the request body to submit.
 // Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
 type RayJobRequest struct {
-	Entrypoint string                 `json:"entrypoint"`
-	JobId      string                 `json:"job_id,omitempty"`
-	RuntimeEnv map[string]interface{} `json:"runtime_env,omitempty"`
-	Metadata   map[string]string      `json:"metadata,omitempty"`
+	Entrypoint   string                 `json:"entrypoint"`
+	JobId        string                 `json:"job_id,omitempty"`
+	SubmissionId string                 `json:"submission_id,omitempty"`
+	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
+	Resources    map[string]string      `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -345,6 +358,10 @@ type RayJobResponse struct {
 
 type RayJobStopResponse struct {
 	Stopped bool `json:"stopped"`
+}
+
+type RayJobLogsResponse struct {
+	Logs string `json:"logs,omitempty"`
 }
 
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
@@ -358,6 +375,12 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// This does the right thing, but breaks E2E test
+		//		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
+		return nil, nil
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -381,16 +404,52 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	return &jobInfo, nil
 }
 
+func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var jobInfo []RayJobInfo
+	if err = json.Unmarshal(body, &jobInfo); err != nil {
+		// Maybe body is not valid json, raise an error with the body.
+		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
+	}
+
+	return &jobInfo, nil
+}
+
 func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
 	request, err := ConvertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
 	}
+	return r.SubmitJobReq(ctx, request, &rayJob.Name, log)
+}
+
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string, log *logr.Logger) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
 	}
-	log.Info("Submit a ray job", "rayJob", rayJob.Name, "jobInfo", string(rayJobJson))
+	if name != nil {
+		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
 	if err != nil {
@@ -417,6 +476,40 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	}
 
 	return jobResp.JobId, nil
+}
+
+// Get Job Log
+func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string, log *logr.Logger) (*string, error) {
+	log.Info("Get ray job log", "rayJob", jobName)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// This does the right thing, but breaks E2E test
+		//		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
+		return nil, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var jobLog RayJobLogsResponse
+	if err = json.Unmarshal(body, &jobLog); err != nil {
+		// Maybe body is not valid json, raise an error with the body.
+		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
+	}
+
+	return &jobLog.Logs, nil
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error) {
@@ -455,6 +548,24 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
 		}
 	}
+	return nil
+}
+
+func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string, log *logr.Logger) error {
+	log.Info("Delete a ray job", "rayJob", jobName)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
 	return nil
 }
 

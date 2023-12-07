@@ -26,7 +26,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -50,7 +50,6 @@ var myRayJob = &rayv1.RayJob{
 		RayClusterSpec: &rayv1.RayClusterSpec{
 			RayVersion: "1.12.1",
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Replicas: pointer.Int32(1),
 				RayStartParams: map[string]string{
 					"port":                        "6379",
 					"object-store-memory":         "100000000",
@@ -72,7 +71,7 @@ var myRayJob = &rayv1.RayJob{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.7.0",
+								Image: "rayproject/ray:2.8.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -138,7 +137,7 @@ var myRayJob = &rayv1.RayJob{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.7.0",
+									Image:   "rayproject/ray:2.8.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -273,7 +272,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 	myRayJob.Name = "rayjob-test-with-autoscaler"
 	upscalingMode := rayv1.UpscalingMode("Default")
 	imagePullPolicy := corev1.PullPolicy("IfNotPresent")
-	myRayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling = pointer.BoolPtr(true)
+	myRayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling = pointer.Bool(true)
 	myRayJob.Spec.RayClusterSpec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		UpscalingMode:      &upscalingMode,
 		IdleTimeoutSeconds: pointer.Int32(1),

@@ -8,9 +8,6 @@ import (
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -22,13 +19,18 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -53,6 +55,7 @@ func main() {
 	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
+	var leaderElectionNamespace string
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
@@ -62,6 +65,8 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
+		"Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
 	flag.StringVar(
 		&watchNamespace,
@@ -123,12 +128,17 @@ func main() {
 
 	// Manager options
 	options := ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ray-operator-leader",
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{},
+		},
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		HealthProbeBindAddress:  probeAddr,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "ray-operator-leader",
+		LeaderElectionNamespace: leaderElectionNamespace,
 	}
 
 	// Manager Cache
@@ -140,20 +150,20 @@ func main() {
 	// and that label is provided to the manager cache as a selector for Job resources.
 	selectorsByObject, err := cacheSelectors()
 	exitOnError(err, "unable to create cache selectors")
+	options.Cache.ByObject = selectorsByObject
+
 	if watchNamespaces := strings.Split(watchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
-		options.Namespace = watchNamespaces[0]
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
 		} else {
 			setupLog.Info(fmt.Sprintf("Only watch custom resources in the namespace: %s", watchNamespaces[0]))
+			options.Cache.DefaultNamespaces[watchNamespaces[0]] = cache.Config{}
 		}
-		options.NewCache = cache.BuilderWithOptions(cache.Options{SelectorsByObject: selectorsByObject})
 	} else {
-		options.NewCache = func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
-			opts.SelectorsByObject = selectorsByObject
-			return cache.MultiNamespacedCacheBuilder(watchNamespaces)(config, opts)
-		}
 		setupLog.Info(fmt.Sprintf("Only watch custom resources in multiple namespaces: %v", watchNamespaces))
+		for _, namespace := range watchNamespaces {
+			options.Cache.DefaultNamespaces[namespace] = cache.Config{}
+		}
 	}
 
 	setupLog.Info("Setup manager")
@@ -167,6 +177,10 @@ func main() {
 	exitOnError(ray.NewRayJobReconciler(mgr).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
+	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
+		exitOnError((&rayv1.RayCluster{}).SetupWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayCluster")
+	}
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
@@ -176,14 +190,14 @@ func main() {
 	exitOnError(mgr.Start(ctrl.SetupSignalHandler()), "problem running manager")
 }
 
-func cacheSelectors() (cache.SelectorsByObject, error) {
+func cacheSelectors() (map[client.Object]cache.ByObject, error) {
 	label, err := labels.NewRequirement(common.KubernetesCreatedByLabelKey, selection.Equals, []string{common.ComponentName})
 	if err != nil {
 		return nil, err
 	}
 	selector := labels.NewSelector().Add(*label)
 
-	return cache.SelectorsByObject{
+	return map[client.Object]cache.ByObject{
 		&batchv1.Job{}: {Label: selector},
 	}, nil
 }

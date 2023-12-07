@@ -7,7 +7,7 @@
 
 image:
   repository: rayproject/ray
-  tag: 2.7.0
+  tag: 2.8.0
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay"
@@ -19,7 +19,7 @@ imagePullSecrets: []
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
-  # rayVersion: 2.7.0
+  # rayVersion: 2.8.0
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -84,10 +84,11 @@ head:
   affinity: {}
   # Ray container security context.
   securityContext: {}
+  # Optional: The following volumes/volumeMounts configurations are optional but recommended because
+  # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
   volumes:
     - name: log-volume
       emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
@@ -141,10 +142,11 @@ worker:
   affinity: {}
   # Ray container security context.
   securityContext: {}
+  # Optional: The following volumes/volumeMounts configurations are optional but recommended because
+  # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
   volumes:
     - name: log-volume
       emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
@@ -169,8 +171,8 @@ additionalWorkerGroups:
     labels: {}
     serviceAccountName: ""
     rayStartParams: {}
-  # containerEnv specifies environment variables for the Ray container,
-  # Follows standard K8s container env schema.
+    # containerEnv specifies environment variables for the Ray container,
+    # Follows standard K8s container env schema.
     containerEnv: []
       # - name: EXAMPLE_ENV
       #   value: "1"
@@ -179,15 +181,15 @@ additionalWorkerGroups:
         #     name: my-env-secret
     # ports optionally allows specifying ports for the Ray container.
     # ports: []
-  # resource requests and limits for the Ray head container.
-  # Modify as needed for your application.
-  # Note that the resources in this example are much too small for production;
-  # we don't recommend allocating less than 8G memory for a Ray pod in production.
-  # Ray pods should be sized to take up entire K8s nodes when possible.
-  # Always set CPU and memory limits for Ray pods.
-  # It is usually best to set requests equal to limits.
-  # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources
-  # for further guidance.
+    # resource requests and limits for the Ray head container.
+    # Modify as needed for your application.
+    # Note that the resources in this example are much too small for production;
+    # we don't recommend allocating less than 8G memory for a Ray pod in production.
+    # Ray pods should be sized to take up entire K8s nodes when possible.
+    # Always set CPU and memory limits for Ray pods.
+    # It is usually best to set requests equal to limits.
+    # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources
+    # for further guidance.
     resources:
       limits:
         cpu: 1
@@ -201,10 +203,11 @@ additionalWorkerGroups:
     affinity: {}
     # Ray container security context.
     securityContext: {}
+    # Optional: The following volumes/volumeMounts configurations are optional but recommended because
+    # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
     volumes:
       - name: log-volume
         emptyDir: {}
-  # Ray writes logs to /tmp/ray/session_latests/logs
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume

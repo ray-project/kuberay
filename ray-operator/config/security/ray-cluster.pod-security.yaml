@@ -13,9 +13,6 @@ spec:
   rayVersion: '2.4.0'
   # Ray head pod configuration
   headGroupSpec:
-    # for the head group, replicas should always be 1.
-    # headGroupSpec.replicas is deprecated in KubeRay >= 0.3.0.
-    replicas: 1
     # the following params are used to complete the ray start: ray start --head --block --dashboard-host: '0.0.0.0' ...
     rayStartParams:
       dashboard-host: '0.0.0.0'

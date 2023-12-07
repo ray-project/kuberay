@@ -27,7 +27,7 @@ class CONST:
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
     RAY_IMAGE_KEY = "ray-image"
-    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.0.0-rc.1"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.0.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
@@ -232,7 +232,7 @@ class OperatorManager(ABC):
             if namespace == None:
                 namespace = "default"
             DEFAULT_IMAGE_DICT = {
-               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.7.0'),
+               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.8.0'),
                 CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
             }
             default_operator_manager = DefaultOperatorManager(DEFAULT_IMAGE_DICT, namespace, patch, cluster_manager)
