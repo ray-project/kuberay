@@ -195,6 +195,7 @@ class TestRayService:
 
         K8S_CLUSTER_MANAGER.cleanup()
         K8S_CLUSTER_MANAGER.initialize_cluster()
+        shell_subprocess_run("kind load docker-image podman-in-kuberay:latest --name kind")
         operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         start_curl_pod("curl", "default")

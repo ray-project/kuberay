@@ -40,7 +40,8 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: quay.io/kuberay/podman-in-kuberay:latest
+              image: podman-in-kuberay:latest
+              imagePullPolicy: IfNotPresent
               resources:
                 limits:
                   cpu: 2
@@ -70,7 +71,8 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: quay.io/kuberay/podman-in-kuberay:latest
+                image: podman-in-kuberay:latest
+                imagePullPolicy: IfNotPresent
                 lifecycle:
                   preStop:
                     exec:
