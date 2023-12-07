@@ -32,6 +32,8 @@ var (
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
+	// Get Version paths
+	VersionPath = "/api/version"
 )
 
 var (
@@ -49,6 +51,7 @@ type RayDashboardClientInterface interface {
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
 	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
+	GetVersion(ctx context.Context) (ServerVersion, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error)
 	StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error)
 }
@@ -475,4 +478,34 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	}
 	req.RuntimeEnv = runtimeEnv
 	return req, nil
+}
+
+func (r *RayDashboardClient) GetVersion(ctx context.Context) (ServerVersion, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+VersionPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("GetVersion fail: %s %s", resp.Status, string(body))
+	}
+
+	var versionInfo ServerVersion
+	if err = json.Unmarshal(body, &versionInfo); err != nil {
+		// Maybe body is not valid json, raise an error with the body.
+		return nil, fmt.Errorf("GetVersion fail: %s", string(body))
+	}
+
+	return versionInfo, nil
 }

@@ -22,6 +22,12 @@ type ServeSingleApplicationStatusV1 struct {
 	DeploymentStatuses []ServeDeploymentStatus `json:"deployment_statuses,omitempty"`
 }
 
+type ServerVersion struct {
+	Name    string `json:"name,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
 // ServeDeploymentStatus and ServeApplicationStatus describe the format of status(es) that will
 // be returned by GetSingleApplicationStatus and GetMultiApplicationStatus methods of the dashboard client
 // Describes the status of a deployment
