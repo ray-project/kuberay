@@ -11,7 +11,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -79,7 +79,7 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 	rayClusterSpec := &rayv1api.RayClusterSpec{
 		RayVersion: imageVersion,
 		HeadGroupSpec: rayv1api.HeadGroupSpec{
-			ServiceType:    v1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
+			ServiceType:    corev1.ServiceType(clusterSpec.HeadGroupSpec.ServiceType),
 			Template:       *headPodTemplate,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
@@ -144,7 +144,7 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 }
 
 // Build head node template
-func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*v1.PodTemplateSpec, error) {
+func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*corev1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -161,22 +161,22 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		return nil, err
 	}
 
-	podTemplateSpec := v1.PodTemplateSpec{
+	podTemplateSpec := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: buildNodeGroupAnnotations(computeRuntime, spec.Image),
 			Labels:      map[string]string{},
 		},
-		Spec: v1.PodSpec{
-			Tolerations: []v1.Toleration{},
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Tolerations: []corev1.Toleration{},
+			Containers: []corev1.Container{
 				{
 					Name:  "ray-head",
 					Image: image,
-					Env: []v1.EnvVar{
+					Env: []corev1.EnvVar{
 						{
 							Name: "MY_POD_IP",
-							ValueFrom: &v1.EnvVarSource{
-								FieldRef: &v1.ObjectFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
 									FieldPath: "status.podIP",
 								},
 							},
@@ -184,7 +184,7 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 					},
 					// Customization is not allowed here. We should consider whether to make this part smart.
 					// For now we use serve 8000 port for rayservice and added at util/service.go, do not use the 8000 port here for other purpose.
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							Name:          "redis",
 							ContainerPort: 6379,
@@ -202,14 +202,14 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 							ContainerPort: 8080,
 						},
 					},
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse(cpu),
-							v1.ResourceMemory: resource.MustParse(memory),
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(cpu),
+							corev1.ResourceMemory: resource.MustParse(memory),
 						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse(cpu),
-							v1.ResourceMemory: resource.MustParse(memory),
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(cpu),
+							corev1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
 					VolumeMounts: volMounts,
@@ -228,8 +228,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
-			container.Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 		}
 		globalEnv := convertEnvironmentVariables(envs)
 		if len(globalEnv) > 0 {
@@ -244,8 +244,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 		// If enableServeService add port
 		if enableServeService {
-			container.Ports = append(container.Ports, v1.ContainerPort{Name: "dashboard-agent", ContainerPort: 52365})
-			container.Ports = append(container.Ports, v1.ContainerPort{Name: "serve", ContainerPort: 8000})
+			container.Ports = append(container.Ports, corev1.ContainerPort{Name: "dashboard-agent", ContainerPort: 52365})
+			container.Ports = append(container.Ports, corev1.ContainerPort{Name: "serve", ContainerPort: 8000})
 		}
 
 		// Replace container
@@ -269,7 +269,7 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 	// Add specific tollerations
 	if computeRuntime.Tolerations != nil {
 		for _, t := range computeRuntime.Tolerations {
-			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, v1.Toleration{
+			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, corev1.Toleration{
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
 		}
@@ -282,7 +282,7 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 	// If image pull secret is specified, add it to the pod spec.
 	if len(spec.ImagePullSecret) > 1 {
-		podTemplateSpec.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+		podTemplateSpec.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
 			{
 				Name: spec.ImagePullSecret,
 			},
@@ -293,15 +293,15 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 }
 
 // Convert environment variables
-func convertEnvironmentVariables(envs *api.EnvironmentVariables) []v1.EnvVar {
-	converted := []v1.EnvVar{}
+func convertEnvironmentVariables(envs *api.EnvironmentVariables) []corev1.EnvVar {
+	converted := []corev1.EnvVar{}
 	if envs == nil {
 		return converted
 	}
 	if envs.Values != nil && len(envs.Values) > 0 {
 		// Add values
 		for key, value := range envs.Values {
-			converted = append(converted, v1.EnvVar{
+			converted = append(converted, corev1.EnvVar{
 				Name: key, Value: value,
 			})
 		}
@@ -311,11 +311,11 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []v1.EnvVar {
 		for key, value := range envs.ValuesFrom {
 			switch value.Source {
 			case api.EnvValueFrom_CONFIGMAP:
-				converted = append(converted, v1.EnvVar{
+				converted = append(converted, corev1.EnvVar{
 					Name: key,
-					ValueFrom: &v1.EnvVarSource{
-						ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-							LocalObjectReference: v1.LocalObjectReference{
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
 								Name: value.Name,
 							},
 							Key: value.Key,
@@ -323,11 +323,11 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []v1.EnvVar {
 					},
 				})
 			case api.EnvValueFrom_SECRET:
-				converted = append(converted, v1.EnvVar{
+				converted = append(converted, corev1.EnvVar{
 					Name: key,
-					ValueFrom: &v1.EnvVarSource{
-						SecretKeyRef: &v1.SecretKeySelector{
-							LocalObjectReference: v1.LocalObjectReference{
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
 								Name: value.Name,
 							},
 							Key: value.Key,
@@ -335,20 +335,20 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []v1.EnvVar {
 					},
 				})
 			case api.EnvValueFrom_RESOURCEFIELD:
-				converted = append(converted, v1.EnvVar{
+				converted = append(converted, corev1.EnvVar{
 					Name: key,
-					ValueFrom: &v1.EnvVarSource{
-						ResourceFieldRef: &v1.ResourceFieldSelector{
+					ValueFrom: &corev1.EnvVarSource{
+						ResourceFieldRef: &corev1.ResourceFieldSelector{
 							ContainerName: value.Name,
 							Resource:      value.Key,
 						},
 					},
 				})
 			default:
-				converted = append(converted, v1.EnvVar{
+				converted = append(converted, corev1.EnvVar{
 					Name: key,
-					ValueFrom: &v1.EnvVarSource{
-						FieldRef: &v1.ObjectFieldSelector{
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
 							FieldPath: value.Key,
 						},
 					},
@@ -360,22 +360,22 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []v1.EnvVar {
 }
 
 // Convert Toleration operator from string
-func convertTolerationOperator(val string) v1.TolerationOperator {
+func convertTolerationOperator(val string) corev1.TolerationOperator {
 	if val == "Exists" {
-		return v1.TolerationOpExists
+		return corev1.TolerationOpExists
 	}
-	return v1.TolerationOpEqual
+	return corev1.TolerationOpEqual
 }
 
 // Convert taint effect from string
-func convertTaintEffect(val string) v1.TaintEffect {
+func convertTaintEffect(val string) corev1.TaintEffect {
 	if val == "NoExecute" {
-		return v1.TaintEffectNoExecute
+		return corev1.TaintEffectNoExecute
 	}
 	if val == "NoSchedule" {
-		return v1.TaintEffectNoSchedule
+		return corev1.TaintEffectNoSchedule
 	}
-	return v1.TaintEffectPreferNoSchedule
+	return corev1.TaintEffectPreferNoSchedule
 }
 
 // Construct Ray image
@@ -384,7 +384,7 @@ func constructRayImage(containerImage string, version string) string {
 }
 
 // Build worker pod template
-func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) (*v1.PodTemplateSpec, error) {
+func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) (*corev1.PodTemplateSpec, error) {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -403,18 +403,18 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		return nil, err
 	}
 
-	podTemplateSpec := v1.PodTemplateSpec{
+	podTemplateSpec := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: buildNodeGroupAnnotations(computeRuntime, spec.Image),
 			Labels:      map[string]string{},
 		},
-		Spec: v1.PodSpec{
-			Tolerations: []v1.Toleration{},
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Tolerations: []corev1.Toleration{},
+			Containers: []corev1.Container{
 				{
 					Name:  "ray-worker",
 					Image: image,
-					Env: []v1.EnvVar{
+					Env: []corev1.EnvVar{
 						{
 							Name:  "RAY_DISABLE_DOCKER_CPU_WARNING",
 							Value: "1",
@@ -425,8 +425,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 						},
 						{
 							Name: "CPU_REQUEST",
-							ValueFrom: &v1.EnvVarSource{
-								ResourceFieldRef: &v1.ResourceFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
 									Resource:      "requests.cpu",
 								},
@@ -434,8 +434,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 						},
 						{
 							Name: "CPU_LIMITS",
-							ValueFrom: &v1.EnvVarSource{
-								ResourceFieldRef: &v1.ResourceFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
 									Resource:      "limits.cpu",
 								},
@@ -443,8 +443,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 						},
 						{
 							Name: "MEMORY_REQUESTS",
-							ValueFrom: &v1.EnvVarSource{
-								ResourceFieldRef: &v1.ResourceFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
 									Resource:      "requests.cpu",
 								},
@@ -452,8 +452,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 						},
 						{
 							Name: "MEMORY_LIMITS",
-							ValueFrom: &v1.EnvVarSource{
-								ResourceFieldRef: &v1.ResourceFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
 									Resource:      "limits.cpu",
 								},
@@ -461,43 +461,43 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 						},
 						{
 							Name: "MY_POD_NAME",
-							ValueFrom: &v1.EnvVarSource{
-								FieldRef: &v1.ObjectFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
 									FieldPath: "metadata.name",
 								},
 							},
 						},
 						{
 							Name: "MY_POD_IP",
-							ValueFrom: &v1.EnvVarSource{
-								FieldRef: &v1.ObjectFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
 									FieldPath: "status.podIP",
 								},
 							},
 						},
 					},
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,
 						},
 					},
-					Lifecycle: &v1.Lifecycle{
-						PreStop: &v1.LifecycleHandler{
-							Exec: &v1.ExecAction{
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.LifecycleHandler{
+							Exec: &corev1.ExecAction{
 								Command: []string{
 									"/bin/sh", "-c", "ray stop",
 								},
 							},
 						},
 					},
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse(cpu),
-							v1.ResourceMemory: resource.MustParse(memory),
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(cpu),
+							corev1.ResourceMemory: resource.MustParse(memory),
 						},
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse(cpu),
-							v1.ResourceMemory: resource.MustParse(memory),
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(cpu),
+							corev1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
 					VolumeMounts: volMounts,
@@ -518,8 +518,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			}
 
 			// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-			container.Resources.Requests[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[v1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -554,7 +554,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	// Add specific tollerations
 	if computeRuntime.Tolerations != nil {
 		for _, t := range computeRuntime.Tolerations {
-			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, v1.Toleration{
+			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, corev1.Toleration{
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
 		}
@@ -567,7 +567,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 	// If image pull secret is specified, add it to the pod spec.
 	if len(spec.ImagePullSecret) > 1 {
-		podTemplateSpec.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+		podTemplateSpec.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
 			{
 				Name: spec.ImagePullSecret,
 			},
@@ -578,14 +578,14 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 }
 
 // Build Volume mounts
-func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
+func buildVolumeMounts(apiVolumes []*api.Volume) []corev1.VolumeMount {
 	var (
-		volMounts       []v1.VolumeMount
-		hostToContainer = v1.MountPropagationHostToContainer
-		bidirectonal    = v1.MountPropagationBidirectional
+		volMounts       []corev1.VolumeMount
+		hostToContainer = corev1.MountPropagationHostToContainer
+		bidirectonal    = corev1.MountPropagationBidirectional
 	)
 	for _, vol := range apiVolumes {
-		volMount := v1.VolumeMount{
+		volMount := corev1.VolumeMount{
 			Name:      vol.Name,
 			ReadOnly:  vol.ReadOnly,
 			MountPath: vol.MountPath,
@@ -602,22 +602,22 @@ func buildVolumeMounts(apiVolumes []*api.Volume) []v1.VolumeMount {
 }
 
 // Build host path
-func newHostPathType(pathType string) *v1.HostPathType {
-	hostPathType := new(v1.HostPathType)
-	*hostPathType = v1.HostPathType(pathType)
+func newHostPathType(pathType string) *corev1.HostPathType {
+	hostPathType := new(corev1.HostPathType)
+	*hostPathType = corev1.HostPathType(pathType)
 	return hostPathType
 }
 
 // Build volumes
-func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
-	var vols []v1.Volume
+func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
+	var vols []corev1.Volume
 	for _, rayVol := range apiVolumes {
 		if rayVol.VolumeType == api.Volume_CONFIGMAP {
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					ConfigMap: &v1.ConfigMapVolumeSource{
-						LocalObjectReference: v1.LocalObjectReference{
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
 							Name: rayVol.Source,
 						},
 					},
@@ -625,38 +625,38 @@ func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 			}
 			if len(rayVol.Items) > 0 {
 				// Add items
-				items := []v1.KeyToPath{}
+				items := []corev1.KeyToPath{}
 				for key, value := range rayVol.Items {
-					items = append(items, v1.KeyToPath{Key: key, Path: value})
+					items = append(items, corev1.KeyToPath{Key: key, Path: value})
 				}
 				vol.ConfigMap.Items = items
 			}
 			vols = append(vols, vol)
 		}
 		if rayVol.VolumeType == api.Volume_SECRET {
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
 						SecretName: rayVol.Source,
 					},
 				},
 			}
 			if len(rayVol.Items) > 0 {
 				// Add items
-				items := []v1.KeyToPath{}
+				items := []corev1.KeyToPath{}
 				for key, value := range rayVol.Items {
-					items = append(items, v1.KeyToPath{Key: key, Path: value})
+					items = append(items, corev1.KeyToPath{Key: key, Path: value})
 				}
 				vol.Secret.Items = items
 			}
 			vols = append(vols, vol)
 		}
 		if rayVol.VolumeType == api.Volume_EMPTY_DIR {
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					EmptyDir: &v1.EmptyDirVolumeSource{},
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
 				},
 			}
 			if rayVol.Storage != "" {
@@ -672,29 +672,29 @@ func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 			vols = append(vols, vol)
 		}
 		if rayVol.VolumeType == api.Volume_HOST_PATH {
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					HostPath: &corev1.HostPathVolumeSource{
 						Path: rayVol.Source,
 					},
 				},
 			}
 			switch rayVol.HostPathType {
 			case api.Volume_DIRECTORY:
-				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathDirectory))
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(corev1.HostPathDirectory))
 			case api.Volume_FILE:
-				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathFile))
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(corev1.HostPathFile))
 			default:
-				vol.VolumeSource.HostPath.Type = newHostPathType(string(v1.HostPathDirectory))
+				vol.VolumeSource.HostPath.Type = newHostPathType(string(corev1.HostPathDirectory))
 			}
 			vols = append(vols, vol)
 		}
 		if rayVol.VolumeType == api.Volume_PERSISTENT_VOLUME_CLAIM {
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 						ClaimName: rayVol.Source,
 						ReadOnly:  rayVol.ReadOnly,
 					},
@@ -713,20 +713,20 @@ func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 			if err != nil {
 				return nil, errors.New("storage for ephemeral volume is not specified correctly")
 			}
-			vol := v1.Volume{
+			vol := corev1.Volume{
 				Name: rayVol.Name,
-				VolumeSource: v1.VolumeSource{
-					Ephemeral: &v1.EphemeralVolumeSource{
-						VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+				VolumeSource: corev1.VolumeSource{
+					Ephemeral: &corev1.EphemeralVolumeSource{
+						VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
 							ObjectMeta: metav1.ObjectMeta{
 								Labels: map[string]string{
 									"app.kubernetes.io/managed-by": "kuberay-apiserver",
 								},
 							},
-							Spec: v1.PersistentVolumeClaimSpec{
-								Resources: v1.ResourceRequirements{
-									Requests: v1.ResourceList{
-										v1.ResourceStorage: resource.MustParse(rayVol.Storage),
+							Spec: corev1.PersistentVolumeClaimSpec{
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceStorage: resource.MustParse(rayVol.Storage),
 									},
 								},
 							},
@@ -742,20 +742,20 @@ func buildVols(apiVolumes []*api.Volume) ([]v1.Volume, error) {
 			// Populate access mode if defined
 			switch rayVol.AccessMode {
 			case api.Volume_RWO:
-				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
 				}
 			case api.Volume_RWX:
-				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteMany,
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteMany,
 				}
 			case api.Volume_ROX:
-				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
-					v1.ReadOnlyMany,
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+					corev1.ReadOnlyMany,
 				}
 			default:
-				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
+				vol.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
 				}
 			}
 			vols = append(vols, vol)
@@ -781,7 +781,7 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 }
 
 // Build compute template
-func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
+func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
 	// Create data map
 	dmap := map[string]string{
 		"name":            runtime.Name,
@@ -802,7 +802,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 		}
 	}
 
-	config := &v1.ConfigMap{
+	config := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runtime.Name,
 			Namespace: runtime.Namespace,
@@ -820,28 +820,28 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*v1.ConfigMap, error) {
 // GetNodeHostIP returns the provided node's IP, based on the priority:
 // 1. NodeInternalIP
 // 2. NodeExternalIP
-func GetNodeHostIP(node *v1.Node) (net.IP, error) {
+func GetNodeHostIP(node *corev1.Node) (net.IP, error) {
 	addresses := node.Status.Addresses
-	addressMap := make(map[v1.NodeAddressType][]v1.NodeAddress)
+	addressMap := make(map[corev1.NodeAddressType][]corev1.NodeAddress)
 	for _, nodeAddress := range addresses {
 		addressMap[nodeAddress.Type] = append(addressMap[nodeAddress.Type], nodeAddress)
 	}
-	if addresses, ok := addressMap[v1.NodeInternalIP]; ok {
+	if addresses, ok := addressMap[corev1.NodeInternalIP]; ok {
 		return net.ParseIP(addresses[0].Address), nil
 	}
-	if addresses, ok := addressMap[v1.NodeExternalIP]; ok {
+	if addresses, ok := addressMap[corev1.NodeExternalIP]; ok {
 		return net.ParseIP(addresses[0].Address), nil
 	}
 	return nil, fmt.Errorf("host IP unknown; known addresses: %v", addresses)
 }
 
-func GetContainerByName(containers []v1.Container, name string) (v1.Container, int, bool) {
+func GetContainerByName(containers []corev1.Container, name string) (corev1.Container, int, bool) {
 	for index, container := range containers {
 		if container.Name == name {
 			return container, index, true
 		}
 	}
-	return v1.Container{}, 0, false
+	return corev1.Container{}, 0, false
 }
 
 func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api.AutoscalerOptions, error) {
@@ -859,19 +859,19 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 		options.Image = &autoscalerOptions.Image
 	}
 	if len(autoscalerOptions.ImagePullPolicy) > 0 {
-		options.ImagePullPolicy = (*v1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
+		options.ImagePullPolicy = (*corev1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
 	}
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
-			options.Env = make([]v1.EnvVar, len(autoscalerOptions.Envs.Values))
+			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))
 			ev_count := 0
 			for key, value := range autoscalerOptions.Envs.Values {
-				options.Env[ev_count] = v1.EnvVar{Name: key, Value: value}
+				options.Env[ev_count] = corev1.EnvVar{Name: key, Value: value}
 				ev_count += 1
 			}
 		}
 		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {
-			options.EnvFrom = make([]v1.EnvFromSource, 0)
+			options.EnvFrom = make([]corev1.EnvFromSource, 0)
 			for _, value := range autoscalerOptions.Envs.ValuesFrom {
 				if evfrom := convertEnvFrom(value); evfrom != nil {
 					options.EnvFrom = append(options.EnvFrom, *evfrom)
@@ -899,34 +899,34 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 		if err != nil {
 			return nil, errors.New("memory for autoscaler is not specified correctly")
 		}
-		options.Resources = &v1.ResourceRequirements{
-			Limits: v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse(rcpu),
-				v1.ResourceMemory: resource.MustParse(rmemory),
+		options.Resources = &corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(rcpu),
+				corev1.ResourceMemory: resource.MustParse(rmemory),
 			},
-			Requests: v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse(rcpu),
-				v1.ResourceMemory: resource.MustParse(rmemory),
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(rcpu),
+				corev1.ResourceMemory: resource.MustParse(rmemory),
 			},
 		}
 	}
 	return &options, nil
 }
 
-func convertEnvFrom(from *api.EnvValueFrom) *v1.EnvFromSource {
+func convertEnvFrom(from *api.EnvValueFrom) *corev1.EnvFromSource {
 	switch from.Source {
 	case api.EnvValueFrom_CONFIGMAP:
-		return &v1.EnvFromSource{
-			ConfigMapRef: &v1.ConfigMapEnvSource{
-				LocalObjectReference: v1.LocalObjectReference{
+		return &corev1.EnvFromSource{
+			ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: from.Name,
 				},
 			},
 		}
 	case api.EnvValueFrom_SECRET:
-		return &v1.EnvFromSource{
-			SecretRef: &v1.SecretEnvSource{
-				LocalObjectReference: v1.LocalObjectReference{
+		return &corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: from.Name,
 				},
 			},

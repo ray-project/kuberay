@@ -9,7 +9,7 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -34,7 +34,7 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 		"metrics-export-port": "8080",
 		"num-cpus":            "0",
 	},
-	Template: v1.PodTemplateSpec{
+	Template: corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"openshift.io/scc":    "restricted",
@@ -56,32 +56,32 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 			Name:      "boris-cluster-head-f7zx2",
 			Namespace: "max",
 		},
-		Spec: v1.PodSpec{
+		Spec: corev1.PodSpec{
 			ServiceAccountName: "account",
-			ImagePullSecrets: []v1.LocalObjectReference{
+			ImagePullSecrets: []corev1.LocalObjectReference{
 				{Name: "foo"},
 			},
-			Tolerations: []v1.Toleration{
+			Tolerations: []corev1.Toleration{
 				{
 					Key:      "blah1",
 					Operator: "Exists",
 					Effect:   "NoExecute",
 				},
 			},
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
 					Name:  "ray-head",
 					Image: "blublinsky1/ray310:2.5.0",
-					Env: []v1.EnvVar{
+					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
 							Value: "123",
 						},
 						{
 							Name: "REDIS_PASSWORD",
-							ValueFrom: &v1.EnvVarSource{
-								SecretKeyRef: &v1.SecretKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{
+							ValueFrom: &corev1.EnvVarSource{
+								SecretKeyRef: &corev1.SecretKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
 										Name: "redis-password-secret",
 									},
 									Key: "password",
@@ -90,9 +90,9 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 						},
 						{
 							Name: "CONFIGMAP",
-							ValueFrom: &v1.EnvVarSource{
-								ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{
+							ValueFrom: &corev1.EnvVarSource{
+								ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
 										Name: "special-config",
 									},
 									Key: "special.how",
@@ -101,8 +101,8 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 						},
 						{
 							Name: "ResourceFieldRef",
-							ValueFrom: &v1.EnvVarSource{
-								ResourceFieldRef: &v1.ResourceFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "my-container",
 									Resource:      "resource",
 								},
@@ -110,8 +110,8 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 						},
 						{
 							Name: "FieldRef",
-							ValueFrom: &v1.EnvVarSource{
-								FieldRef: &v1.ObjectFieldSelector{
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
 									FieldPath: "path",
 								},
 							},
@@ -123,7 +123,7 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 	},
 }
 
-var configMapWithoutTolerations = v1.ConfigMap{
+var configMapWithoutTolerations = corev1.ConfigMap{
 	Data: map[string]string{
 		"cpu":             "4",
 		"gpu":             "0",
@@ -134,7 +134,7 @@ var configMapWithoutTolerations = v1.ConfigMap{
 	},
 }
 
-var configMapWithTolerations = v1.ConfigMap{
+var configMapWithTolerations = corev1.ConfigMap{
 	Data: map[string]string{
 		"cpu":             "4",
 		"gpu":             "0",
@@ -154,7 +154,7 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 	RayStartParams: map[string]string{
 		"node-ip-address": "$MY_POD_IP",
 	},
-	Template: v1.PodTemplateSpec{
+	Template: corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"cni.projectcalico.org/containerID": "cce862a899455385e98e3453ba9ef5a376e85ad45c3e95b18e04e001204af728",
@@ -179,23 +179,23 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			Name:      "boris-cluster-worker-8-cpus-4dp9v",
 			Namespace: "max",
 		},
-		Spec: v1.PodSpec{
+		Spec: corev1.PodSpec{
 			ServiceAccountName: "account",
-			ImagePullSecrets: []v1.LocalObjectReference{
+			ImagePullSecrets: []corev1.LocalObjectReference{
 				{Name: "foo"},
 			},
-			Tolerations: []v1.Toleration{
+			Tolerations: []corev1.Toleration{
 				{
 					Key:      "blah1",
 					Operator: "Exists",
 					Effect:   "NoExecute",
 				},
 			},
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
 					Name:  "ray-worker",
 					Image: "blublinsky1/ray310:2.5.0",
-					Env: []v1.EnvVar{
+					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
 							Value: "123",
@@ -260,11 +260,11 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
 			IdleTimeoutSeconds: pointer.Int32(int32(60)),
 			UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
-			ImagePullPolicy:    (*v1.PullPolicy)(pointer.String("Always")),
-			Resources: &v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse("500m"),
-					v1.ResourceMemory: resource.MustParse("512Mi"),
+			ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+			Resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("512Mi"),
 				},
 			},
 		},
@@ -323,25 +323,25 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
-		SubmitterPodTemplate: &v1.PodTemplateSpec{
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
+		SubmitterPodTemplate: &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
 					{
 						Name:  "test-submitter",
 						Image: "image",
-						Resources: v1.ResourceRequirements{
-							Limits: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("2"),
-								v1.ResourceMemory: resource.MustParse("1Gi"),
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("2"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
 							},
-							Requests: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("500m"),
-								v1.ResourceMemory: resource.MustParse("200Mi"),
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("200Mi"),
 							},
 						},
 					},
 				},
-				RestartPolicy: v1.RestartPolicyNever,
+				RestartPolicy: corev1.RestartPolicyNever,
 			},
 		},
 	},
@@ -406,47 +406,47 @@ var autoscalerOptions = &rayv1api.AutoscalerOptions{
 	IdleTimeoutSeconds: pointer.Int32(int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
 	Image:              pointer.String("Some Image"),
-	ImagePullPolicy:    (*v1.PullPolicy)(pointer.String("Always")),
-	Env: []v1.EnvVar{
+	ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+	Env: []corev1.EnvVar{
 		{
 			Name:  "n1",
 			Value: "v1",
 		},
 	},
-	EnvFrom: []v1.EnvFromSource{
+	EnvFrom: []corev1.EnvFromSource{
 		{
-			ConfigMapRef: &v1.ConfigMapEnvSource{
-				LocalObjectReference: v1.LocalObjectReference{
+			ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "ConfigMap",
 				},
 			},
 		},
 		{
-			SecretRef: &v1.SecretEnvSource{
-				LocalObjectReference: v1.LocalObjectReference{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "Secret",
 				},
 			},
 		},
 	},
-	VolumeMounts: []v1.VolumeMount{
+	VolumeMounts: []corev1.VolumeMount{
 		{
 			Name:             "vmount1",
 			MountPath:        "path1",
 			ReadOnly:         false,
-			MountPropagation: (*v1.MountPropagationMode)(pointer.String("None")),
+			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("None")),
 		},
 		{
 			Name:             "vmount2",
 			MountPath:        "path2",
 			ReadOnly:         true,
-			MountPropagation: (*v1.MountPropagationMode)(pointer.String("HostToContainer")),
+			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("HostToContainer")),
 		},
 	},
-	Resources: &v1.ResourceRequirements{
-		Requests: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("500m"),
-			v1.ResourceMemory: resource.MustParse("512Mi"),
+	Resources: &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
 		},
 	},
 }
@@ -557,7 +557,7 @@ func TestAutoscalerOptions(t *testing.T) {
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
-	cluster := FromCrdToApiCluster(&ClusterSpecTest, []v1.Event{})
+	cluster := FromCrdToApiCluster(&ClusterSpecTest, []corev1.Event{})
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
@@ -565,7 +565,7 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	if cluster.ClusterSpec.AutoscalerOptions != nil {
 		t.Errorf("unexpected autoscaler annotations")
 	}
-	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []v1.Event{})
+	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
 	assert.Equal(t, cluster.ClusterSpec.EnableInTreeAutoscaling, true)
 	if cluster.ClusterSpec.AutoscalerOptions == nil {
 		t.Errorf("autoscaler annotations not found")
@@ -631,7 +631,7 @@ func TestPopulateJob(t *testing.T) {
 }
 
 func TestPopulateService(t *testing.T) {
-	service := FromCrdToApiService(&ServiceV1Test, make([]v1.Event, 0))
+	service := FromCrdToApiService(&ServiceV1Test, make([]corev1.Event, 0))
 	fmt.Printf("serviceV1 = %#v\n", service)
 	if service.Name != "test" {
 		t.Errorf("failed to convert name")
@@ -651,7 +651,7 @@ func TestPopulateService(t *testing.T) {
 	if len(service.ServeDeploymentGraphSpec.ServeConfigs) != 3 {
 		t.Errorf("failed to convert serveConfiggs")
 	}
-	service = FromCrdToApiService(&ServiceV2Test, make([]v1.Event, 0))
+	service = FromCrdToApiService(&ServiceV2Test, make([]corev1.Event, 0))
 	fmt.Printf("serviceV2 = %#v\n", service)
 	if service.ServeDeploymentGraphSpec != nil {
 		t.Errorf("unexpected v1 serve spec")

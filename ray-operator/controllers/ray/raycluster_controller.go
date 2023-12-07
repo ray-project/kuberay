@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1121,14 +1120,14 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 
 	// The container's resource consumption remains constant. so hard-coding the resources is acceptable.
 	// In addition, avoid using the GPU for the Redis cleanup Job.
-	pod.Spec.Containers[common.RayContainerIndex].Resources = v1.ResourceRequirements{
-		Limits: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("200m"),
-			v1.ResourceMemory: resource.MustParse("256Mi"),
+	pod.Spec.Containers[common.RayContainerIndex].Resources = corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
-		Requests: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("200m"),
-			v1.ResourceMemory: resource.MustParse("256Mi"),
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	}
 

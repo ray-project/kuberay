@@ -9,7 +9,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"google.golang.org/protobuf/types/known/emptypb"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
 )
 
@@ -79,7 +79,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
-	clusterEventMap := make(map[string][]v1.Event)
+	clusterEventMap := make(map[string][]corev1.Event)
 	for _, cluster := range clusters {
 		clusterEvents, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
 		if err != nil {
@@ -101,7 +101,7 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
 	}
-	clusterEventMap := make(map[string][]v1.Event)
+	clusterEventMap := make(map[string][]corev1.Event)
 	for _, cluster := range clusters {
 		clusterEvents, err := s.resourceManager.GetClusterEvents(ctx, cluster.Name, cluster.Namespace)
 		if err != nil {

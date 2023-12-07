@@ -9,7 +9,6 @@ import (
 	fmtErrors "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -367,8 +366,8 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (v1.PodTemplateSpec, error) {
-	var submitterTemplate v1.PodTemplateSpec
+func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
+	var submitterTemplate corev1.PodTemplateSpec
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
@@ -388,7 +387,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 
 		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
 		if err != nil {
-			return v1.PodTemplateSpec{}, err
+			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[common.RayContainerIndex].Command = k8sJobCommand
 		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
@@ -397,7 +396,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 	}
 
 	// Set PYTHONUNBUFFERED=1 for real-time logging
-	submitterTemplate.Spec.Containers[common.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[common.RayContainerIndex].Env, v1.EnvVar{
+	submitterTemplate.Spec.Containers[common.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  PythonUnbufferedEnvVarName,
 		Value: "1",
 	})
@@ -406,7 +405,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and a boolean indicating whether a new Job was created.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec) (string, bool, error) {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) (string, bool, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,

@@ -3,14 +3,14 @@ package common
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // BuildServiceAccount creates a new ServiceAccount for a head pod with autoscaler.
-func BuildServiceAccount(cluster *rayv1.RayCluster) (*v1.ServiceAccount, error) {
-	sa := &v1.ServiceAccount{
+func BuildServiceAccount(cluster *rayv1.RayCluster) (*corev1.ServiceAccount, error) {
+	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.GetHeadGroupServiceAccountName(cluster),
 			Namespace: cluster.Namespace,
