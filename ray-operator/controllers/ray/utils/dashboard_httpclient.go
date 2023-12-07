@@ -36,9 +36,7 @@ var (
 	VersionPath = "/api/version"
 )
 
-var (
-	ErrJobInfoNotFound = goerrors.New("JobInfo not found")
-)
+var ErrJobInfoNotFound = goerrors.New("JobInfo not found")
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
@@ -52,14 +50,13 @@ type RayDashboardClientInterface interface {
 	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 
-	GetVersion(ctx context.Context) (ServerVersion, error)
+	GetVersion(ctx context.Context) (*ServerVersion, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (string, error)
 	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string, log *logr.Logger) (string, error)
 	GetJobLog(ctx context.Context, jobName string, log *logr.Logger) (*string, error)
 	StopJob(ctx context.Context, jobName string, log *logr.Logger) error
 	DeleteJob(ctx context.Context, jobName string, log *logr.Logger) error
-
 }
 
 type BaseDashboardClient struct {
@@ -591,7 +588,7 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	return req, nil
 }
 
-func (r *RayDashboardClient) GetVersion(ctx context.Context) (ServerVersion, error) {
+func (r *RayDashboardClient) GetVersion(ctx context.Context) (*ServerVersion, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+VersionPath, nil)
 	if err != nil {
 		return nil, err
@@ -618,5 +615,5 @@ func (r *RayDashboardClient) GetVersion(ctx context.Context) (ServerVersion, err
 		return nil, fmt.Errorf("GetVersion fail: %s", string(body))
 	}
 
-	return versionInfo, nil
+	return &versionInfo, nil
 }

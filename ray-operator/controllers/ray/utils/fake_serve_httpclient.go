@@ -94,3 +94,7 @@ func (r *FakeRayDashboardClient) StopJob(_ context.Context, jobName string, log 
 func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, jobName string, log *logr.Logger) error {
 	return nil
 }
+
+func (r *FakeRayDashboardClient) GetVersion(_ context.Context) (*ServerVersion, error) {
+	return nil, nil
+}
