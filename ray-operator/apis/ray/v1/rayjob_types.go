@@ -1,7 +1,7 @@
 package v1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -76,7 +76,7 @@ type RayJobSpec struct {
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
-	SubmitterPodTemplate *v1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
 	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
 	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
 	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.

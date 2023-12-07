@@ -7,7 +7,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -241,7 +241,7 @@ var template = api.ComputeTemplate{
 	},
 }
 
-var expectedToleration = v1.Toleration{
+var expectedToleration = corev1.Toleration{
 	Key:      "blah1",
 	Operator: "Exists",
 	Effect:   "NoExecute",
@@ -251,11 +251,11 @@ var expectedLabels = map[string]string{
 	"foo": "bar",
 }
 
-var expectedHeadNodeEnv = []v1.EnvVar{
+var expectedHeadNodeEnv = []corev1.EnvVar{
 	{
 		Name: "MY_POD_IP",
-		ValueFrom: &v1.EnvVarSource{
-			FieldRef: &v1.ObjectFieldSelector{
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "status.podIP",
 			},
 		},
@@ -266,9 +266,9 @@ var expectedHeadNodeEnv = []v1.EnvVar{
 	},
 	{
 		Name: "REDIS_PASSWORD",
-		ValueFrom: &v1.EnvVarSource{
-			SecretKeyRef: &v1.SecretKeySelector{
-				LocalObjectReference: v1.LocalObjectReference{
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "redis-password-secret",
 				},
 				Key: "password",
@@ -277,9 +277,9 @@ var expectedHeadNodeEnv = []v1.EnvVar{
 	},
 	{
 		Name: "CONFIGMAP",
-		ValueFrom: &v1.EnvVarSource{
-			ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-				LocalObjectReference: v1.LocalObjectReference{
+		ValueFrom: &corev1.EnvVarSource{
+			ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "special-config",
 				},
 				Key: "special.how",
@@ -288,8 +288,8 @@ var expectedHeadNodeEnv = []v1.EnvVar{
 	},
 	{
 		Name: "ResourceFieldRef",
-		ValueFrom: &v1.EnvVarSource{
-			ResourceFieldRef: &v1.ResourceFieldSelector{
+		ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{
 				ContainerName: "my-container",
 				Resource:      "resource",
 			},
@@ -297,8 +297,8 @@ var expectedHeadNodeEnv = []v1.EnvVar{
 	},
 	{
 		Name: "FieldRef",
-		ValueFrom: &v1.EnvVarSource{
-			FieldRef: &v1.ObjectFieldSelector{
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "path",
 			},
 		},
@@ -306,52 +306,52 @@ var expectedHeadNodeEnv = []v1.EnvVar{
 }
 
 func TestBuildVolumes(t *testing.T) {
-	targetVolume := v1.Volume{
+	targetVolume := corev1.Volume{
 		Name: testVolume.Name,
-		VolumeSource: v1.VolumeSource{
-			HostPath: &v1.HostPathVolumeSource{
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
 				Path: testVolume.Source,
-				Type: newHostPathType(string(v1.HostPathDirectory)),
+				Type: newHostPathType(string(corev1.HostPathDirectory)),
 			},
 		},
 	}
-	targetFileVolume := v1.Volume{
+	targetFileVolume := corev1.Volume{
 		Name: testFileVolume.Name,
-		VolumeSource: v1.VolumeSource{
-			HostPath: &v1.HostPathVolumeSource{
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
 				Path: testFileVolume.Source,
-				Type: newHostPathType(string(v1.HostPathFile)),
+				Type: newHostPathType(string(corev1.HostPathFile)),
 			},
 		},
 	}
 
-	targetPVCVolume := v1.Volume{
+	targetPVCVolume := corev1.Volume{
 		Name: testPVCVolume.Name,
-		VolumeSource: v1.VolumeSource{
-			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+		VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: testPVCVolume.Source,
 				ReadOnly:  testPVCVolume.ReadOnly,
 			},
 		},
 	}
 
-	targetEphemeralVolume := v1.Volume{
+	targetEphemeralVolume := corev1.Volume{
 		Name: testEphemeralVolume.Name,
-		VolumeSource: v1.VolumeSource{
-			Ephemeral: &v1.EphemeralVolumeSource{
-				VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+		VolumeSource: corev1.VolumeSource{
+			Ephemeral: &corev1.EphemeralVolumeSource{
+				VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
 							"app.kubernetes.io/managed-by": "kuberay-apiserver",
 						},
 					},
-					Spec: v1.PersistentVolumeClaimSpec{
-						AccessModes: []v1.PersistentVolumeAccessMode{
-							v1.ReadWriteOnce,
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{
+							corev1.ReadWriteOnce,
 						},
-						Resources: v1.ResourceRequirements{
-							Requests: v1.ResourceList{
-								v1.ResourceStorage: resource.MustParse(testEphemeralVolume.Storage),
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse(testEphemeralVolume.Storage),
 							},
 						},
 					},
@@ -360,14 +360,14 @@ func TestBuildVolumes(t *testing.T) {
 		},
 	}
 
-	targetConfigMapVolume := v1.Volume{
+	targetConfigMapVolume := corev1.Volume{
 		Name: "configMap",
-		VolumeSource: v1.VolumeSource{
-			ConfigMap: &v1.ConfigMapVolumeSource{
-				LocalObjectReference: v1.LocalObjectReference{
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "my-config-map",
 				},
-				Items: []v1.KeyToPath{
+				Items: []corev1.KeyToPath{
 					{
 						Key:  "key1",
 						Path: "path1",
@@ -381,19 +381,19 @@ func TestBuildVolumes(t *testing.T) {
 		},
 	}
 
-	targetSecretVolume := v1.Volume{
+	targetSecretVolume := corev1.Volume{
 		Name: "secret",
-		VolumeSource: v1.VolumeSource{
-			Secret: &v1.SecretVolumeSource{
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
 				SecretName: "my-secret",
 			},
 		},
 	}
 
-	targetEmptyDirVolume := v1.Volume{
+	targetEmptyDirVolume := corev1.Volume{
 		Name: "emptyDir",
-		VolumeSource: v1.VolumeSource{
-			EmptyDir: &v1.EmptyDirVolumeSource{
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
 				SizeLimit: &sizelimit,
 			},
 		},
@@ -402,39 +402,39 @@ func TestBuildVolumes(t *testing.T) {
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
-		expect    []v1.Volume
+		expect    []corev1.Volume
 	}{
 		{
 			"normal test",
 			[]*api.Volume{
 				testVolume, testFileVolume,
 			},
-			[]v1.Volume{targetVolume, targetFileVolume},
+			[]corev1.Volume{targetVolume, targetFileVolume},
 		},
 		{
 			"pvc test",
 			[]*api.Volume{testPVCVolume},
-			[]v1.Volume{targetPVCVolume},
+			[]corev1.Volume{targetPVCVolume},
 		},
 		{
 			"ephemeral test",
 			[]*api.Volume{testEphemeralVolume},
-			[]v1.Volume{targetEphemeralVolume},
+			[]corev1.Volume{targetEphemeralVolume},
 		},
 		{
 			"configmap test",
 			[]*api.Volume{testConfigMapVolume},
-			[]v1.Volume{targetConfigMapVolume},
+			[]corev1.Volume{targetConfigMapVolume},
 		},
 		{
 			"secret test",
 			[]*api.Volume{testSecretVolume},
-			[]v1.Volume{targetSecretVolume},
+			[]corev1.Volume{targetSecretVolume},
 		},
 		{
 			"empty dir test",
 			[]*api.Volume{testEmptyDirVolume},
-			[]v1.Volume{targetEmptyDirVolume},
+			[]corev1.Volume{targetEmptyDirVolume},
 		},
 	}
 	for _, tt := range tests {
@@ -458,19 +458,19 @@ func TestBuildVolumes(t *testing.T) {
 }
 
 func TestBuildVolumeMounts(t *testing.T) {
-	hostToContainer := v1.MountPropagationHostToContainer
-	targetVolumeMount := v1.VolumeMount{
+	hostToContainer := corev1.MountPropagationHostToContainer
+	targetVolumeMount := corev1.VolumeMount{
 		Name:      testVolume.Name,
 		ReadOnly:  testVolume.ReadOnly,
 		MountPath: testVolume.MountPath,
 	}
-	targetFileVolumeMount := v1.VolumeMount{
+	targetFileVolumeMount := corev1.VolumeMount{
 		Name:             testFileVolume.Name,
 		ReadOnly:         testFileVolume.ReadOnly,
 		MountPath:        testFileVolume.MountPath,
 		MountPropagation: &hostToContainer,
 	}
-	targetPVCVolumeMount := v1.VolumeMount{
+	targetPVCVolumeMount := corev1.VolumeMount{
 		Name:      testPVCVolume.Name,
 		ReadOnly:  testPVCVolume.ReadOnly,
 		MountPath: testPVCVolume.MountPath,
@@ -478,7 +478,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 	tests := []struct {
 		name      string
 		apiVolume []*api.Volume
-		expect    []v1.VolumeMount
+		expect    []corev1.VolumeMount
 	}{
 		{
 			"normal test",
@@ -486,7 +486,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 				testVolume,
 				testFileVolume,
 			},
-			[]v1.VolumeMount{
+			[]corev1.VolumeMount{
 				targetVolumeMount,
 				targetFileVolumeMount,
 			},
@@ -494,7 +494,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 		{
 			"pvc test",
 			[]*api.Volume{testPVCVolume},
-			[]v1.VolumeMount{targetPVCVolumeMount},
+			[]corev1.VolumeMount{targetPVCVolumeMount},
 		},
 	}
 	for _, tt := range tests {
@@ -612,7 +612,7 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	}
 }
 
-func containsEnv(envs []v1.EnvVar, key string, val string) bool {
+func containsEnv(envs []corev1.EnvVar, key string, val string) bool {
 	for _, env := range envs {
 		if env.Name == key && env.Value == val {
 			return true
@@ -621,6 +621,6 @@ func containsEnv(envs []v1.EnvVar, key string, val string) bool {
 	return false
 }
 
-func tolerationToString(toleration *v1.Toleration) string {
+func tolerationToString(toleration *corev1.Toleration) string {
 	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
 }

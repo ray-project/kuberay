@@ -1,7 +1,7 @@
 package v1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -63,7 +63,7 @@ type RayServiceSpec struct {
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
-	ServeService *v1.Service `json:"serveService,omitempty"`
+	ServeService *corev1.Service `json:"serveService,omitempty"`
 }
 
 type ServeDeploymentGraphSpec struct {

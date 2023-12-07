@@ -13,7 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	//+kubebuilder:scaffold:imports
@@ -138,9 +138,9 @@ var _ = Describe("RayCluster validating webhook", func() {
 				Spec: RayClusterSpec{
 					HeadGroupSpec: HeadGroupSpec{
 						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
-						Template: v1.PodTemplateSpec{
-							Spec: v1.PodSpec{
-								Containers: []v1.Container{},
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{},
 							},
 						},
 					},
@@ -148,18 +148,18 @@ var _ = Describe("RayCluster validating webhook", func() {
 						{
 							GroupName:      "group1",
 							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
-							Template: v1.PodTemplateSpec{
-								Spec: v1.PodSpec{
-									Containers: []v1.Container{},
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{},
 								},
 							},
 						},
 						{
 							GroupName:      "group1",
 							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
-							Template: v1.PodTemplateSpec{
-								Spec: v1.PodSpec{
-									Containers: []v1.Container{},
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{},
 								},
 							},
 						},
