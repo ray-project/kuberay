@@ -374,18 +374,12 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		// This does the right thing, but breaks E2E test
-		//		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
-		return nil, nil
+		return nil, ErrJobInfoNotFound
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
-	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrJobInfoNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
