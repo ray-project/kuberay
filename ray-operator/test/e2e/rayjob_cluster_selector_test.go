@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -59,7 +59,7 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 			},
 			Spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{
-					common.RayClusterLabelKey: rayCluster.Name,
+					utils.RayClusterLabelKey: rayCluster.Name,
 				},
 				Entrypoint: "python /home/ray/jobs/counter.py",
 				RuntimeEnvYAML: `
@@ -98,7 +98,7 @@ env_vars:
 			},
 			Spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{
-					common.RayClusterLabelKey: rayCluster.Name,
+					utils.RayClusterLabelKey: rayCluster.Name,
 				},
 				Entrypoint:               "python /home/ray/jobs/fail.py",
 				ShutdownAfterJobFinishes: false,

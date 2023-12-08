@@ -18,7 +18,6 @@ import (
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
@@ -128,7 +127,7 @@ func createPodGroup(
 		podGroup.Spec.Queue = queue
 	}
 
-	if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
+	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		podGroup.Spec.PriorityClassName = priorityClassName
 	}
 
@@ -140,7 +139,7 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, pod *cor
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
 	}
-	if priorityClassName, ok := app.ObjectMeta.Labels[common.RayPriorityClassName]; ok {
+	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 	pod.Spec.SchedulerName = v.Name()

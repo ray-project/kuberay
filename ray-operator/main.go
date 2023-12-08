@@ -30,7 +30,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -191,7 +191,7 @@ func main() {
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {
-	label, err := labels.NewRequirement(common.KubernetesCreatedByLabelKey, selection.Equals, []string{common.ComponentName})
+	label, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
 		return nil, err
 	}

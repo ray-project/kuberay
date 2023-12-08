@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -78,7 +77,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(k8sClient).ToNot(BeNil())
 
 	// Suggested way to run tests
-	os.Setenv(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
+	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{

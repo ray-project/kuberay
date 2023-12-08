@@ -9,6 +9,7 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/google/shlex"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
@@ -144,7 +145,7 @@ func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.Po
 				{
 					Name: "ray-job-submitter",
 					// Use the image of the Ray head to be defensive against version mismatch issues
-					Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Image,
+					Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("1"),

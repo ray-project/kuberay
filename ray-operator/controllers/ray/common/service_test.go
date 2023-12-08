@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -127,28 +128,28 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
 	assert.Nil(t, err)
 
-	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := string(instanceWithWrongSvc.Name)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualResult = svc.Spec.Selector[RayNodeTypeLabelKey]
+	actualResult = svc.Spec.Selector[utils.RayNodeTypeLabelKey]
 	expectedResult = string(rayv1.HeadNode)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualResult = svc.Spec.Selector[KubernetesApplicationNameLabelKey]
-	expectedResult = ApplicationName
+	actualResult = svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey]
+	expectedResult = utils.ApplicationName
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
 	ports := svc.Spec.Ports
-	expectedResult = DefaultServiceAppProtocol
+	expectedResult = utils.DefaultServiceAppProtocol
 	for _, port := range ports {
-		if *port.AppProtocol != DefaultServiceAppProtocol {
+		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
 	}
@@ -156,12 +157,12 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 
 func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	labels := make(map[string]string)
-	labels[KubernetesApplicationNameLabelKey] = "testname"
+	labels[utils.KubernetesApplicationNameLabelKey] = "testname"
 
 	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
 	assert.Nil(t, err)
 
-	actualResult := svc.Spec.Selector[KubernetesApplicationNameLabelKey]
+	actualResult := svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey]
 	expectedResult := "testname"
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
@@ -204,7 +205,7 @@ func TestGetPortsFromCluster(t *testing.T) {
 		svcNames[port] = name
 	}
 
-	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Ports
+	cPorts := instanceWithWrongSvc.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
 
 	for _, cPort := range cPorts {
 		expectedResult := cPort.Name
@@ -222,8 +223,8 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 	ports := getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify any ports.
-	if ports[MetricsPortName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[MetricsPortName])
+	if ports[utils.MetricsPortName] != int32(utils.DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(utils.DefaultMetricsPort), ports[utils.MetricsPortName])
 	}
 
 	// Test case 2: Only a random port is specified by the user.
@@ -235,21 +236,21 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 	}
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts sets the default metrics port when the user doesn't specify the metrics port but specifies other ports.
-	if ports[MetricsPortName] != int32(DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(DefaultMetricsPort), ports[MetricsPortName])
+	if ports[utils.MetricsPortName] != int32(utils.DefaultMetricsPort) {
+		t.Fatalf("Expected `%v` but got `%v`", int32(utils.DefaultMetricsPort), ports[utils.MetricsPortName])
 	}
 
 	// Test case 3: A custom metrics port is specified by the user.
-	customMetricsPort := int32(DefaultMetricsPort) + 1
+	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
 	metricsPort := corev1.ContainerPort{
-		Name:          MetricsPortName,
+		Name:          utils.MetricsPortName,
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports, metricsPort)
 	ports = getServicePorts(*cluster)
 	// Verify that getServicePorts uses the user's custom metrics port when the user specifies the metrics port.
-	if ports[MetricsPortName] != customMetricsPort {
-		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[MetricsPortName])
+	if ports[utils.MetricsPortName] != customMetricsPort {
+		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[utils.MetricsPortName])
 	}
 }
 
@@ -260,12 +261,12 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	// Set user-specified head service with user-specified labels, annotations, and ports.
 	userName := "user-custom-name"
 	userNamespace := "user-custom-namespace"
-	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", utils.RayClusterLabelKey: "userClusterName"} // Override default cluster name
 	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", headServiceAnnotationKey1: "user_override"}
 	userPort := corev1.ServicePort{Name: "userPort", Port: 12345}
-	userPortOverride := corev1.ServicePort{Name: ClientPortName, Port: 98765} // Override default client port (10001)
+	userPortOverride := corev1.ServicePort{Name: utils.ClientPortName, Port: 98765} // Override default client port (10001)
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
-	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
+	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", utils.RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
 	userType := corev1.ServiceTypeLoadBalancer
 	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
@@ -283,7 +284,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
 	userTemplateClusterName := "userTemplateClusterName"
-	template_labels := map[string]string{RayClusterLabelKey: userTemplateClusterName}
+	template_labels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
 	headService, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, template_labels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
@@ -293,8 +294,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
 	default_labels := HeadServiceLabels(*testRayClusterWithHeadService)
 	// Make sure this test isn't spuriously passing. Check that RayClusterLabelKey is in the default labels.
-	if _, ok := default_labels[RayClusterLabelKey]; !ok {
-		t.Errorf("RayClusterLabelKey=%s should be in the default labels", RayClusterLabelKey)
+	if _, ok := default_labels[utils.RayClusterLabelKey]; !ok {
+		t.Errorf("utils.RayClusterLabelKey=%s should be in the default labels", utils.RayClusterLabelKey)
 	}
 	for k, v := range headService.Spec.Selector {
 		// If k is not in the default labels, then the selector field should not contain it.
@@ -428,13 +429,13 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(*serviceInstance, *instanceWithWrongSvc)
 	assert.Nil(t, err)
 
-	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := string(instanceWithWrongSvc.Name)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[RayServiceLabelKey]
+	actualLabel := svc.Labels[utils.RayServiceLabelKey]
 	expectedLabel := string(serviceInstance.Name)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
@@ -454,13 +455,13 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 	svc, err := BuildServeServiceForRayCluster(*instanceForServeSvc)
 	assert.Nil(t, err)
 
-	actualResult := svc.Spec.Selector[RayClusterLabelKey]
+	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := string(instanceForServeSvc.Name)
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[RayServiceLabelKey]
+	actualLabel := svc.Labels[utils.RayServiceLabelKey]
 	expectedLabel := string(instanceForServeSvc.Name)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
@@ -511,12 +512,12 @@ func TestUserSpecifiedServeService(t *testing.T) {
 
 	userName := "user-custom-name"
 	userNamespace := "user-custom-namespace"
-	userLabels := map[string]string{"userLabelKey": "userLabelValue", RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", utils.RayClusterLabelKey: "userClusterName"} // Override default cluster name
 	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", "userAnnotationKey2": "userAnnotationValue2"}
 	userPort := corev1.ServicePort{Name: "serve", Port: 12345}
-	userPortOverride := corev1.ServicePort{Name: ClientPortName, Port: 98765} // Override default client port (10001)
+	userPortOverride := corev1.ServicePort{Name: utils.ClientPortName, Port: 98765} // Override default client port (10001)
 	userPorts := []corev1.ServicePort{userPort, userPortOverride}
-	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", RayClusterLabelKey: "userSelectorClusterName"}
+	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", utils.RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
 	userType := corev1.ServiceTypeLoadBalancer
 
@@ -548,21 +549,21 @@ func TestUserSpecifiedServeService(t *testing.T) {
 
 	// Check that selectors only have default selectors
 	if len(svc.Spec.Selector) != 2 {
-		t.Errorf("Selectors should have just 2 keys %s and %s", RayClusterLabelKey, RayClusterServingServiceLabelKey)
+		t.Errorf("Selectors should have just 2 keys %s and %s", utils.RayClusterLabelKey, utils.RayClusterServingServiceLabelKey)
 	}
-	if svc.Spec.Selector[RayClusterLabelKey] != instanceWithWrongSvc.Name {
-		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterLabelKey, instanceWithWrongSvc.Name, svc.Spec.Selector[RayClusterLabelKey])
+	if svc.Spec.Selector[utils.RayClusterLabelKey] != instanceWithWrongSvc.Name {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterLabelKey, instanceWithWrongSvc.Name, svc.Spec.Selector[utils.RayClusterLabelKey])
 	}
-	if svc.Spec.Selector[RayClusterServingServiceLabelKey] != EnableRayClusterServingServiceTrue {
-		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", RayClusterServingServiceLabelKey, EnableRayClusterServingServiceTrue, svc.Spec.Selector[RayClusterServingServiceLabelKey])
+	if svc.Spec.Selector[utils.RayClusterServingServiceLabelKey] != utils.EnableRayClusterServingServiceTrue {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterServingServiceLabelKey, utils.EnableRayClusterServingServiceTrue, svc.Spec.Selector[utils.RayClusterServingServiceLabelKey])
 	}
 
 	// ports should only have DefaultServePort
 	ports := svc.Spec.Ports
-	expectedPortName := ServingPortName
+	expectedPortName := utils.ServingPortName
 	expectedPortNumber := int32(8000)
 	for _, port := range ports {
-		if port.Name != ServingPortName {
+		if port.Name != utils.ServingPortName {
 			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
 		}
 		if port.Port != expectedPortNumber {

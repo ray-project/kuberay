@@ -11,7 +11,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var schedulerContainers = map[string]schedulerinterface.BatchSchedulerFactory{
@@ -55,7 +55,7 @@ func NewSchedulerManager(config *rest.Config) *SchedulerManager {
 }
 
 func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {
-	if schedulerName, ok := app.ObjectMeta.Labels[common.RaySchedulerName]; ok {
+	if schedulerName, ok := app.ObjectMeta.Labels[utils.RaySchedulerName]; ok {
 		return batch.GetScheduler(schedulerName)
 	}
 

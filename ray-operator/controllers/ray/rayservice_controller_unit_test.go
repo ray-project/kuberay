@@ -10,7 +10,6 @@ import (
 
 	cmap "github.com/orcaman/concurrent-map"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
@@ -90,7 +89,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				HealthLastUpdateTime: &timeNow,
 			},
 			Applications: map[string]rayv1.AppStatus{
-				common.DefaultServeAppName: {
+				utils.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.RUNNING,
 					Message:              "OK",
 					HealthLastUpdateTime: &timeNow,
@@ -111,7 +110,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				HealthLastUpdateTime: &timeNow,
 			},
 			Applications: map[string]rayv1.AppStatus{
-				common.DefaultServeAppName: {
+				utils.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.NOT_STARTED,
 					Message:              "application not started yet",
 					HealthLastUpdateTime: &timeNow,
@@ -214,8 +213,8 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 			Name:      "head-pod",
 			Namespace: cluster.ObjectMeta.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:  cluster.ObjectMeta.Name,
-				common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayClusterLabelKey:  cluster.ObjectMeta.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
 		Status: corev1.PodStatus{
@@ -326,7 +325,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	ctx := context.TODO()
 	// Create a head service.
-	err := r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
+	err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList := corev1.ServiceList{}
@@ -342,7 +341,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			ContainerPort: 9999,
 		},
 	}
-	err = r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
@@ -353,7 +352,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
-	err = r.reconcileServices(ctx, &rayService, &cluster, common.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
@@ -389,7 +388,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: common.DashboardPortName,
+					Name: utils.DashboardPortName,
 					Port: dashboardPort,
 				},
 			},
@@ -409,7 +408,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
-	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, common.DashboardPortName)
+	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, utils.DashboardPortName)
 	assert.Nil(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }
@@ -677,7 +676,7 @@ func TestReconcileRayCluster(t *testing.T) {
 			Name:      "active-cluster",
 			Namespace: namespace,
 			Annotations: map[string]string{
-				common.RayServiceClusterHashKey: hash,
+				utils.RayServiceClusterHashKey: hash,
 			},
 		},
 	}
