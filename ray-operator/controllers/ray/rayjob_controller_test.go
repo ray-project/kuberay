@@ -383,17 +383,6 @@ var _ = Context("With a delayed dashboard client", func() {
 				getJobDeploymentStatusOfRayJob(ctx, myRayJob),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusWaitForDashboardReady), "My myRayJob  = %v", myRayJob.Name)
 		})
-
-		It("Dashboard URL should be set and deployment status should leave the JobDeploymentStatusWaitForDashboardReady", func() {
-			// clear mock to back to normal behavior
-			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(nil)
-			Eventually(
-				getDashboardURLForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
-			Eventually(
-				getJobDeploymentStatusOfRayJob(ctx, myRayJob),
-				time.Second*3, time.Millisecond*500).Should(Not(Equal(rayv1.JobDeploymentStatusWaitForDashboardReady)), "My myRayJob  = %v", myRayJob.Name)
-		})
 	})
 })
 

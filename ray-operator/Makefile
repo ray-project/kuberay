@@ -64,7 +64,8 @@ fumpt: gofumpt
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
 test: ENVTEST_K8S_VERSION ?= 1.24.2
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out -test.v
+	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out -test.v
 
 test-e2e: WHAT ?= ./test/e2e
 test-e2e: manifests generate fmt vet ## Run e2e tests.
