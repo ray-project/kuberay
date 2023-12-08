@@ -39,7 +39,7 @@ spec:
           # Starting from v1.1.0, KubeRay injects the environment variable `KUBERAY_GEN_RAY_START_CMD`
           # into the Ray container. This variable can be used to retrieve the generated Ray start command.
           # Note that this environment variable does not include the `ulimit` command.
-          args: ["echo head; ulimit -n 65536; $KUBERAY_GEN_RAY_START_CMD"]
+          args: ["ulimit -n 65536; echo head; $KUBERAY_GEN_RAY_START_CMD"]
   workerGroupSpecs:
   - replicas: 1
     minReplicas: 0
@@ -60,4 +60,4 @@ spec:
               memory: "1G"
           # See the comments in headGroupSpec.
           command: ["/bin/bash", "-lc", "--"]
-          args: ["echo worker; ulimit -n 65536; $KUBERAY_GEN_RAY_START_CMD"]
+          args: ["ulimit -n 65536; echo worker; $KUBERAY_GEN_RAY_START_CMD"]
