@@ -13,10 +13,10 @@ import (
 // This is used to expose dashboard and remote submit service apis or external traffic.
 func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) {
 	labels := map[string]string{
-		RayClusterLabelKey:                cluster.Name,
-		RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
-		KubernetesApplicationNameLabelKey: ApplicationName,
-		KubernetesCreatedByLabelKey:       ComponentName,
+		utils.RayClusterLabelKey:                cluster.Name,
+		utils.RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
+		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
 
 	// Copy other configurations from cluster annotations to provide a generic way
@@ -27,7 +27,7 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) 
 	}
 
 	servicePorts := getServicePorts(cluster)
-	dashboardPort := DefaultDashboardPort
+	dashboardPort := utils.DefaultDashboardPort
 	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = int(port)
 	}
@@ -77,8 +77,8 @@ func BuildRouteForRayService(service rayv1.RayService, cluster rayv1.RayCluster)
 	}
 	route.ObjectMeta.Name = serviceName
 	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels[RayServiceLabelKey] = service.Name
-	route.ObjectMeta.Labels[RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
+	route.ObjectMeta.Labels[utils.RayServiceLabelKey] = service.Name
+	route.ObjectMeta.Labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
 
 	return route, nil
 }

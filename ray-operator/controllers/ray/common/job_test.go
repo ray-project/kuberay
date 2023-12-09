@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -197,5 +198,5 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 		},
 	}
 	template := GetDefaultSubmitterTemplate(rayCluster)
-	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Image)
+	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 }

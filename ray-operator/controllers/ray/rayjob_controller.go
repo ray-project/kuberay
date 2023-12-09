@@ -91,9 +91,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object.
-		if !controllerutil.ContainsFinalizer(rayJobInstance, common.RayJobStopJobFinalizer) {
-			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
-			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
 			if err := r.Update(ctx, rayJobInstance); err != nil {
 				r.Log.Error(err, "Failed to update RayJob with finalizer")
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -110,8 +110,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
-		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", utils.RayJobStopJobFinalizer)
+		controllerutil.RemoveFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
 		err := r.Update(ctx, rayJobInstance)
 		if err != nil {
 			r.Log.Error(err, "Failed to remove finalizer for RayJob")
@@ -190,7 +190,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	rayDashboardClient := utils.GetRayDashboardClientFunc()
 	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
-		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardPortName); err != nil || clientURL == "" {
+		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 			if clientURL == "" {
 				err = fmt.Errorf("empty dashboardURL")
 			}
@@ -379,7 +379,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 	}
 
 	// If the command in the submitter pod template isn't set, use the default command.
-	if len(submitterTemplate.Spec.Containers[common.RayContainerIndex].Command) == 0 {
+	if len(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command) == 0 {
 		// Check for deprecated 'runtimeEnv' field usage and log a warning.
 		if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
 			r.Log.Info("Warning: The 'runtimeEnv' field is deprecated. Please use 'runtimeEnvYAML' instead.")
@@ -389,14 +389,14 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[common.RayContainerIndex].Command = k8sJobCommand
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = k8sJobCommand
 		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
-		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
+		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	}
 
 	// Set PYTHONUNBUFFERED=1 for real-time logging
-	submitterTemplate.Spec.Containers[common.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
+	submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  PythonUnbufferedEnvVarName,
 		Value: "1",
 	})
@@ -411,7 +411,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
 			Labels: map[string]string{
-				common.KubernetesCreatedByLabelKey: common.ComponentName,
+				utils.KubernetesCreatedByLabelKey: utils.ComponentName,
 			},
 		},
 		Spec: batchv1.JobSpec{

@@ -15,9 +15,9 @@ func BuildServiceAccount(cluster *rayv1.RayCluster) (*corev1.ServiceAccount, err
 			Name:      utils.GetHeadGroupServiceAccountName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				RayClusterLabelKey:                cluster.Name,
-				KubernetesApplicationNameLabelKey: ApplicationName,
-				KubernetesCreatedByLabelKey:       ComponentName,
+				utils.RayClusterLabelKey:                cluster.Name,
+				utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+				utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 			},
 		},
 	}
@@ -32,9 +32,9 @@ func BuildRole(cluster *rayv1.RayCluster) (*rbacv1.Role, error) {
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				RayClusterLabelKey:                cluster.Name,
-				KubernetesApplicationNameLabelKey: ApplicationName,
-				KubernetesCreatedByLabelKey:       ComponentName,
+				utils.RayClusterLabelKey:                cluster.Name,
+				utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+				utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -62,9 +62,9 @@ func BuildRoleBinding(cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				RayClusterLabelKey:                cluster.Name,
-				KubernetesApplicationNameLabelKey: ApplicationName,
-				KubernetesCreatedByLabelKey:       ComponentName,
+				utils.RayClusterLabelKey:                cluster.Name,
+				utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+				utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 			},
 		},
 		Subjects: []rbacv1.Subject{

@@ -17,10 +17,10 @@ const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 // This is used to expose dashboard for external traffic.
 func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
 	labels := map[string]string{
-		RayClusterLabelKey:                cluster.Name,
-		RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
-		KubernetesApplicationNameLabelKey: ApplicationName,
-		KubernetesCreatedByLabelKey:       ComponentName,
+		utils.RayClusterLabelKey:                cluster.Name,
+		utils.RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
+		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
 
 	// Copy other ingress configurations from cluster annotations to provide a generic way
@@ -40,7 +40,7 @@ func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress
 	var paths []networkingv1.HTTPIngressPath
 	pathType := networkingv1.PathTypeExact
 	servicePorts := getServicePorts(cluster)
-	dashboardPort := int32(DefaultDashboardPort)
+	dashboardPort := int32(utils.DefaultDashboardPort)
 	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = port
 	}
@@ -113,8 +113,8 @@ func BuildIngressForRayService(service rayv1.RayService, cluster rayv1.RayCluste
 	ingress.ObjectMeta.Name = headSvcName
 	ingress.ObjectMeta.Namespace = service.Namespace
 	ingress.ObjectMeta.Labels = map[string]string{
-		RayServiceLabelKey: service.Name,
-		RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
+		utils.RayServiceLabelKey: service.Name,
+		utils.RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
 	}
 
 	return ingress, nil
