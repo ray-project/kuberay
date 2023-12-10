@@ -254,14 +254,6 @@ applications:
 		},
 	}
 
-	fakeRayDashboardClient := prepareFakeRayDashboardClient()
-
-	utils.GetRayDashboardClientFunc = func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
-	}
-
-	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
-
 	myRayCluster := &rayv1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {

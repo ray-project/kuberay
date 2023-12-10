@@ -172,9 +172,9 @@ func main() {
 
 	exitOnError(ray.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(mgr).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(mgr).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {

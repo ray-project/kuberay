@@ -40,15 +40,19 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Log      logr.Logger
 	Recorder record.EventRecorder
+
+	dashboardClientFunc func() utils.RayDashboardClientInterface
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
+func NewRayJobReconciler(mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface) *RayJobReconciler {
 	return &RayJobReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Log:      ctrl.Log.WithName("controllers").WithName("RayJob"),
 		Recorder: mgr.GetEventRecorderFor("rayjob-controller"),
+
+		dashboardClientFunc: dashboardClientFunc,
 	}
 }
 
@@ -102,7 +106,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	} else {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
-			rayDashboardClient := utils.GetRayDashboardClientFunc()
+			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
 			if err != nil {
@@ -187,7 +191,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
 		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {

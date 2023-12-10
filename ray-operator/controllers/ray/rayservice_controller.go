@@ -52,10 +52,13 @@ type RayServiceReconciler struct {
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	ServeConfigs                 cmap.ConcurrentMap
 	RayClusterDeletionTimestamps cmap.ConcurrentMap
+
+	dashboardClientFunc func() utils.RayDashboardClientInterface
+	httpProxyClientFunc func() utils.RayHttpProxyClientInterface
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
+func NewRayServiceReconciler(mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface) *RayServiceReconciler {
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
@@ -63,6 +66,9 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
 		ServeConfigs:                 cmap.New(),
 		RayClusterDeletionTimestamps: cmap.New(),
+
+		dashboardClientFunc: dashboardClientFunc,
+		httpProxyClientFunc: httpProxyClientFunc,
 	}
 }
 
@@ -1001,7 +1007,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 		return err
 	}
 
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
 	var isReady bool
@@ -1051,7 +1057,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardAgentListenPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayServiceStatus)
@@ -1098,7 +1104,7 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 		return err
 	}
 
-	httpProxyClient := utils.GetRayHttpProxyClientFunc()
+	httpProxyClient := r.httpProxyClientFunc()
 	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
 		rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
