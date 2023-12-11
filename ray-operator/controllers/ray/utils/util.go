@@ -380,7 +380,14 @@ func CheckAllPodsRunning(runningPods corev1.PodList) bool {
 	}
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
+			logrus.Info("CheckAllPodsRunning: Pod is not running", "Pod Name", pod.Name, "Pod Status.Phase", pod.Status.Phase)
 			return false
+		}
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
+				logrus.Info("CheckAllPodsRunning: Pod is not ready", "Pod Name", pod.Name, "Pod Status.Conditions[PodReady]", cond)
+				return false
+			}
 		}
 	}
 	return true
