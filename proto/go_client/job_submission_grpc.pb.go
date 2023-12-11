@@ -27,9 +27,9 @@ type RayJobSubmissionServiceClient interface {
 	GetJobLog(ctx context.Context, in *GetJobLogRequest, opts ...grpc.CallOption) (*GetJobLogReply, error)
 	// List all job in a given a given cluster in a namespace. Supports pagination, and sorting on certain fields.
 	ListJobDetails(ctx context.Context, in *ListJobDetailsRequest, opts ...grpc.CallOption) (*ListJobSubmissionInfo, error)
-	// Stops a job by its name and namespace.
+	// Stops a job by its submissionID for a given a given cluster in a namespace.
 	StopRayJob(ctx context.Context, in *StopRayJobSubmissionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// Deletes a job by its name and namespace.
+	// Deletes a job by its submissionID for a given a given cluster in a namespace.
 	DeleteRayJob(ctx context.Context, in *DeleteRayJobSubmissionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -107,9 +107,9 @@ type RayJobSubmissionServiceServer interface {
 	GetJobLog(context.Context, *GetJobLogRequest) (*GetJobLogReply, error)
 	// List all job in a given a given cluster in a namespace. Supports pagination, and sorting on certain fields.
 	ListJobDetails(context.Context, *ListJobDetailsRequest) (*ListJobSubmissionInfo, error)
-	// Stops a job by its name and namespace.
+	// Stops a job by its submissionID for a given a given cluster in a namespace.
 	StopRayJob(context.Context, *StopRayJobSubmissionRequest) (*emptypb.Empty, error)
-	// Deletes a job by its name and namespace.
+	// Deletes a job by its submissionID for a given a given cluster in a namespace.
 	DeleteRayJob(context.Context, *DeleteRayJobSubmissionRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedRayJobSubmissionServiceServer()
 }

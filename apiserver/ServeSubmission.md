@@ -1,243 +1,142 @@
-import json
-from python_apiserver_client import *
+# Managing RayServe with the API server
 
+Ray Serve is a scalable model serving library for building online inference APIs. This document describes creation and management of Ray Serve enabled Ray clusters
 
-def test_toleration():
+## Deploy KubeRay operator and API server
 
-    tol1 = Toleration(key="blah1", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute)
-    print(f"\ntoleration 1: {tol1.to_string()}")
-    t1_json = json.dumps(tol1.to_dict())
-    print(f"toleration 1 JSON: {t1_json}")
+Reffer to [readme](README.md) for setting up KubRay operator and API server.
 
-    tol2 = Toleration(key="blah2", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute,
-                      value="value")
-    print(f"toleration 2: {tol2.to_string()}")
-    t2_json = json.dumps(tol2.to_dict())
-    print(f"toleration 2 JSON: {t2_json}")
+```shell
+make operator-image docker-image cluster load-operator-image load-image  deploy-operator deploy
+```
 
-    assert tol1.to_string() == toleration_decoder(json.loads(t1_json)).to_string()
-    assert tol2.to_string() == toleration_decoder(json.loads(t2_json)).to_string()
+Once they are set up, you first need to create a Ray cluster
 
+## Creating a cluster with RayServe support
 
-def test_templates():
+Before creating a cluster you need to create a template using the following command:
 
-    tol1 = Toleration(key="blah1", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute)
-    tol2 = Toleration(key="blah2", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute,
-                      value="value")
+```shell
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "default-template",
+  "namespace": "default",
+  "cpu": 2,
+  "memory": 4
+}'
+```
 
-    temp1 = Template(name="template1", namespace="namespace", cpu=1, memory=4, tolerations=[tol1, tol2])
-    print(f"\ntemplate 1: {temp1.to_string()}")
-    tm1_json = json.dumps(temp1.to_dict())
-    print(f"template 1 JSON: {tm1_json}")
+Up until rescently the only way to create a Ray cluster supporting RayServe was by using `Create ray service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so that you can experiment with serve APIs directly. Now it is possible by adding the following annotation to the cluster:
 
-    temp2 = Template(name="template2", namespace="namespace", cpu=2, memory=8, gpu=1)
-    print(f"template 2: {temp2.to_string()}")
-    tm2_json = json.dumps(temp2.to_dict())
-    print(f"template 2 JSON: {tm2_json}")
+```json
+"annotations" : {
+    "ray.io/enable-serve-service": "true"
+  },
+```
 
-    assert temp1.to_string() == template_decoder(json.loads(tm1_json)).to_string()
-    assert temp2.to_string() == template_decoder(json.loads(tm2_json)).to_string()
+the complete curl command to creation such cluster is as follows:
 
-
-def test_volumes():
-
-    # hostPath
-    vol = HostPathVolume(name="hostPath", mount_path="tmp/hostPath", source="source",
-                         hostpathtype=HostPath.FILE, mountpropagation=MountPropagationMode.NONE)
-    print(f"\nhostPath volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"host path volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-    vol = PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
-                    mountpropagation=MountPropagationMode.BIDIRECTIONAL)
-    print(f"PVC volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"PVC volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-    vol = EphemeralVolume(name="ephemeral", mount_path="tmp/ephemeral", storage="5Gi", storage_class="blah",
-                          accessmode=AccessMode.RWX)
-    print(f"Ephemeral volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"Ephemeral volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-    vol = EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")
-    print(f"Empty dir volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"Empty dir volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-    vol = ConfigMapVolume(name="confmap", mount_path="tmp/confmap", source="my-map",
-                          items={"sample_code.py": "sample_code.py"})
-    print(f"config map volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"config map volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-    vol = SecretVolume(name="secret", mount_path="tmp/secret", source="my-secret")
-    print(f"secret volume: {vol.to_string()}")
-    vol_json = json.dumps(vol.to_dict())
-    print(f"secret volume json: {vol_json}")
-    assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
-
-
-def test_environment():
-
-    env_v = EnvVarFrom(source=EnvarSource.SECRET, name="my-secret", key="key")
-    print(f"\nEnv variable from: {env_v.to_string()}")
-    env_v_json = json.dumps(env_v.to_dict())
-    print(f"Env variable from JSON: {env_v_json}")
-    assert envvarfrom_decoder(json.loads(env_v_json)).to_string() == env_v.to_string()
-
-    envs = EnvironmentVariables(keyvalue={"key": "val"}, fromref={"key_ref": env_v})
-    print(f"Env variables: {envs.to_string()}")
-    envs_json = json.dumps(envs.to_dict())
-    print(f"Env variables JSON: {envs_json}")
-    assert environmentvariables_decoder(json.loads(envs_json)).to_string() == envs.to_string()
-
-    envs = EnvironmentVariables(fromref={"key_ref": env_v})
-    print(f"Env variables: {envs.to_string()}")
-    envs_json = json.dumps(envs.to_dict())
-    print(f"Env variables JSON: {envs_json}")
-    assert environmentvariables_decoder(json.loads(envs_json)).to_string() == envs.to_string()
-
-    envs = EnvironmentVariables(keyvalue={"key": "val"})
-    print(f"Env variables: {envs.to_string()}")
-    envs_json = json.dumps(envs.to_dict())
-    print(f"Env variables JSON: {envs_json}")
-    assert environmentvariables_decoder(json.loads(envs_json)).to_string() == envs.to_string()
-
-
-def test_head_node_spec():
-
-    env_v = EnvVarFrom(source=EnvarSource.SECRET, name="my-secret", key="key")
-    env_s = EnvironmentVariables(keyvalue={"key": "val"}, fromref={"key_ref": env_v})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
-                         mountpropagation=MountPropagationMode.BIDIRECTIONAL),
-               EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
-
-    head = HeadNodeSpec(compute_template="template", ray_start_params=DEFAULT_HEAD_START_PARAMS,
-                        enable_ingress=True, service_type=ServiceType.ClusterIP, volumes=volumes,
-                        environment=env_s)
-    print(f"\nhead node: {head.to_string()}")
-    head_json = json.dumps(head.to_dict())
-    print(f"head node JSON: {head_json}")
-    assert head_node_spec_decoder(json.loads(head_json)).to_string() == head.to_string()
-
-
-def test_worker_node_spec():
-
-    env_v = EnvVarFrom(source=EnvarSource.SECRET, name="my-secret", key="key")
-    env_s = EnvironmentVariables(keyvalue={"key": "val"}, fromref={"key_ref": env_v})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
-                         mountpropagation=MountPropagationMode.BIDIRECTIONAL),
-               EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
-
-    worker = WorkerNodeSpec(group_name="group", compute_template="template", replicas=2, min_replicas=2,
-                            max_replicas=2, ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
-                            environment=env_s, labels={"key": "value"})
-    print(f"\nworker node: {worker.to_string()}")
-    worker_json = json.dumps(worker.to_dict())
-    print(f"worker node JSON: {worker_json}")
-    assert worker_node_spec_decoder(json.loads(worker_json)).to_string() == worker.to_string()
-
-
-def test_cluster_spec():
-    env_s = EnvironmentVariables(keyvalue={"key": "val"},
-                                 fromref={"key_ref": EnvVarFrom(source=EnvarSource.SECRET,
-                                                                name="my-secret", key="key")})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
-                         mountpropagation=MountPropagationMode.BIDIRECTIONAL),
-               EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
-    spec = ClusterSpec(head_node=HeadNodeSpec(compute_template="template", ray_start_params=DEFAULT_HEAD_START_PARAMS,
-                                              enable_ingress=True, service_type=ServiceType.ClusterIP, volumes=volumes,
-                                              environment=env_s),
-                       worker_groups=[WorkerNodeSpec(group_name="group", compute_template="template", replicas=2,
-                                                     min_replicas=2, max_replicas=2,
-                                                     ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
-                                                     environment=env_s, labels={"key": "value"}),
-                                      WorkerNodeSpec(group_name="group1", compute_template="template1", replicas=2,
-                                                     min_replicas=2, max_replicas=2,
-                                                     ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
-                                                     environment=env_s, labels={"key": "value"})])
-    print(f"\ncluster spec: {spec.to_string()}")
-    spec_json = json.dumps(spec.to_dict())
-    print(f"cluster spec JSON: {spec_json}")
-    assert cluster_spec_decoder(json.loads(spec_json)).to_string() == spec.to_string()
-
-
-def test_cluster():
-
-    event = {"id": "id", "name": "name", "created_at": "ts", "first_timestamp": "ts", "last_timestamp": "ts",
-             "reason": "reason", "message": "message", "type": "warning", "count": "1"}
-    print(f"\ncluster event: {ClusterEvent(event).to_string()}")
-    env_s = EnvironmentVariables(keyvalue={"key": "val"},
-                                 fromref={"key_ref": EnvVarFrom(source=EnvarSource.SECRET, name="my-secret",
-                                                                key="key")})
-    volumes = [PVCVolume(name="pvc", mount_path="tmp/pvc", source="claim", read_only=True,
-                         mountpropagation=MountPropagationMode.BIDIRECTIONAL),
-               EmptyDirVolume(name="emptyDir", mount_path="tmp/emptyDir")]
-    spec = ClusterSpec(head_node=HeadNodeSpec(compute_template="template", ray_start_params=DEFAULT_HEAD_START_PARAMS,
-                                              enable_ingress=True, service_type=ServiceType.ClusterIP, volumes=volumes,
-                                              environment=env_s, annotations={"a_key": "a_val"}),
-                       worker_groups=[WorkerNodeSpec(group_name="group", compute_template="template", replicas=2,
-                                                     min_replicas=2, max_replicas=2,
-                                                     ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
-                                                     environment=env_s, labels={"key": "value"}),
-                                      WorkerNodeSpec(group_name="group1", compute_template="template1", replicas=2,
-                                                     min_replicas=2, max_replicas=2,
-                                                     ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
-                                                     environment=env_s, labels={"key": "value"})])
-    cluster = Cluster(name="test", namespace="default", user="boris", version="2.9.0", cluster_spec=spec,
-                      deployment_environment=Environment.DEV, cluster_environment=env_s)
-    print(f"cluster: {cluster.to_string()}")
-    cluster_json = json.dumps(cluster.to_dict())
-    print(f"cluster JSON: {cluster_json}")
-    assert cluster_decoder(json.loads(cluster_json)).to_string() == cluster.to_string()
-
-    cluster_dict = cluster.to_dict()
-    cluster_dict["created_at"] = "created"
-    cluster_dict["created_status"] = "status"
-    cluster_dict["events"] = [event]
-    print(f"cluster with output: {cluster_decoder(cluster_dict).to_string()}")
-
-
-def test_submission():
-    yaml = """
-    pip:
-      - requests==2.26.0
-      - pendulum==2.1.2
-    env_vars:
-      counter_name: test_counter    
-    """
-    request = RayJobRequest(entrypoint="python /home/ray/samples/sample_code.py",
-                            runtime_env=yaml, num_cpu=.5)
-    print(f"job request: {request.to_string()}")
-    request_json = json.dumps(request.to_dict())
-    print(f"request JSON: {request_json}")
-
-    infoJson = """
-    {
-       "entrypoint":"python /home/ray/samples/sample_code.py",
-       "jobId":"02000000",
-       "submissionId":"raysubmit_KWZLwme56esG3Wcr",
-       "status":"SUCCEEDED",
-       "message":"Job finished successfully.",
-       "startTime":"1699442662879",
-       "endTime":"1699442682405",
-       "runtimeEnv":{
-          "env_vars":"map[counter_name:test_counter]",
-          "pip":"[requests==2.26.0 pendulum==2.1.2]"
+```shell
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "test-cluster",
+  "namespace": "default",
+  "user": "boris",
+  "annotations" : {
+    "ray.io/enable-serve-service": "true"
+  },
+  "clusterSpec": {
+    "headGroupSpec": {
+      "computeTemplate": "default-template",
+      "image": "rayproject/ray:2.8.0-py310",
+      "serviceType": "ClusterIP",
+      "rayStartParams": {
+         "dashboard-host": "0.0.0.0",
+         "metrics-export-port": "8080",
+         "dashboard-agent-listen-port": "52365"
        }
-    }    
-    """
-    job_info = RayJobInfo(json.loads(infoJson))
-    print(job_info.to_string())
+    },
+    "workerGroupSpec": [
+      {
+        "groupName": "small-wg",
+        "computeTemplate": "default-template",
+        "image": "rayproject/ray:2.8.0-py310",
+        "replicas": 1,
+        "minReplicas": 0,
+        "maxReplicas": 5,
+        "rayStartParams": {
+           "node-ip-address": "$MY_POD_IP"
+         }
+      }
+    ]
+  }
+}'
+```
 
-def test_serve():
-    json_string = """{
+To confirm that the cluster is created correctly, check created services using that following command:
+
+```shell
+kubectl get service
+```
+
+that should return the following:
+
+```shell
+test-cluster-head-svc    ClusterIP   10.96.19.185    <none>        8265/TCP,52365/TCP,10001/TCP,8080/TCP,6379/TCP,8000/TCP 
+test-cluster-serve-svc   ClusterIP   10.96.144.162   <none>        8000/TCP
+```
+
+As you can see, in this case two services are created - one for the head node to be able to see the dashboard and configure the cluster and one for submission of the serve requests.
+
+For the head node service note that the additional port - 52365 is created for serve configuration.
+
+## Using Serve submission APIs
+
+Current implementation is based on this Ray [documentation](https://docs.ray.io/en/latest/serve/api/index.html#serve-rest-api) and provides three methods:
+
+* SubmitServeApplications - declaratively deploys a list of Serve applications. If Serve is already running on the Ray cluster, removes all applications not listed in the new config. If Serve is not running on the Ray cluster, starts Serve. List of applications is defined by yaml file (passed as string) and defined [here](https://docs.ray.io/en/latest/serve/production-guide/config.html).
+* GetServeApplications - gets cluster-level info and comprehensive details on all Serve applications deployed on the Ray cluster. Definition of the return data is [here](../proto/serve_submission.proto)
+* DeleteRayServeApplications - shuts down Serve and all applications running on the Ray cluster. Has no effect if Serve is not running on the Ray cluster.
+
+Currently API server does not provide support for serving ML models. Using an API server to support this functionality will negatively impact scalability and performance of model serving. As a result we decided not to support this functionality currently.
+
+### Create Serve applications
+
+Once the cluster is up and running, you can submit an application to the cluster using the following command:
+
+```shell
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/serveapplication/test-cluster' \
+--header 'Content-Type: application/json' \
+--data '{
+  "configyaml": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n"
+}'
+```
+
+This command does not have any return value, it should just finish successfully. Once it is done, you should be able to see application's deployment in the `serve` pane of the Ray dashboard.
+  
+**Note** The easiest way to get to the Ray dashboard is by using `port-forward` command.
+
+```shell
+kubectl port-forward svc/test-cluster-head-svc 8265
+```
+
+and then connecting to `localhost:8265`
+
+### Get Serve applications
+
+Once the serve applcation is submitted, the following command can be used to get applications details.
+
+```shell
+curl -X GET 'localhost:31888/apis/v1/namespaces/default/serveapplication/test-cluster' \
+--header 'Content-Type: application/json' 
+```
+
+This should return JSON similar to the one below:
+
+```json
+{
    "deployMode":"MULTI_APP",
    "proxyLocation":"EveryNode",
    "controllerInfo":{
@@ -754,8 +653,29 @@ def test_serve():
       }
    }
 }
-"""
+```
 
-    json_d = json.loads(json_string)
-    serve = ServeInstance(json_d)
-    print(serve.to_string())
+### Delete Serve applications
+
+Finally, you can delete serve applications using the following command:
+
+```shell
+curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/serveapplication/test-cluster' \
+--header 'Content-Type: application/json' 
+```
+
+You can validate job deletion by looking at the Ray dashboard (serve pane) and ensuring that it was removed
+
+## Managing RayServe with the API server vs RayService CRD
+
+[RayService CRD](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/rayservice-quick-start.html#kuberay-rayservice-quickstart) provides many important features, including:
+
+* In-place updating for Ray Serve applications: See RayService for more details.
+* Zero downtime upgrading for Ray clusters: See RayService for more details.
+* High-availabilable services: See [RayCluter high availability](HACluster.md) for more details.
+
+So why this implementation? Several reasons:
+
+* It is more convinient in development. You can create a cluster and then deploy/undeploy applications until you are happy with results.
+* You can create Ray cluster for serve with the set of features that you want, including [high availabilty](HACluster.md), [autoscaling support](Autoscaling.md), etc. You can choose cluster configuration differently for testing vs production. Moreover, all of this can be done using [Python](../clients/python-apiserver-client/python_apiserver_client)
+* When it comes to upgrading Ray cluster or model in production, using in place update is dangerous. Preffered way of doing it is usage of [traffic splitting](https://gateway-api.sigs.k8s.io/guides/traffic-splitting/), more specifically [canary deployments](https://codefresh.io/learn/software-deployment/what-are-canary-deployments/). This allows to validate new deployments on a small percentage of data, easily rolling back in the case of issues. Managing RayServe with the API server gives one all the basic tools for such implementation and combined with, for example [gateway APIs](https://gateway-api.sigs.k8s.io/) can provide a complete solution for updates management.

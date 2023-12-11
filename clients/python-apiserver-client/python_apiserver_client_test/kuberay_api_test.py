@@ -181,4 +181,109 @@ def test_job_submission():
     assert status == 200
     assert error is None
 
+def test_serve_submission():
+    apis = KubeRayAPIs()
+    # Create template first
+    template = Template(name="default-template", namespace="default", cpu=2, memory=4)
+    status, error = apis.create_compute_template(template)
+    assert status == 200
+    assert error is None
+    # cluster
+    head = HeadNodeSpec(compute_template="default-template",
+                        ray_start_params={"metrics-export-port": "8080", "num-cpus": "0", "dashboard-agent-listen-port": "52365"},
+                        image="rayproject/ray:2.8.0-py310", service_type=ServiceType.ClusterIP)
+    worker = WorkerNodeSpec(group_name="small", compute_template="default-template", replicas=1,
+                            min_replicas=1, max_replicas=1, ray_start_params=DEFAULT_WORKER_START_PARAMS,
+                            image="rayproject/ray:2.8.0-py310")
+    cluster_spec = ClusterSpec(head_node=head, worker_groups=[worker])
 
+    cluster = Cluster(name="test-service", namespace="default", user="boris", version="2.8.0",
+                      annotations={"ray.io/enable-serve-service": "true"}, cluster_spec=cluster_spec)
+    # create
+    status, error = apis.create_cluster(cluster)
+    assert status == 200
+    assert error is None
+    # Wait for the cluster to get ready
+    status, error = apis.wait_cluster_ready(ns="default", name="test-service")
+    assert status == 200
+    assert error is None
+    # submit Ray serve
+    resource_yaml = """
+applications:
+  - name: fruit_app
+    import_path: fruit.deployment_graph
+    route_prefix: /fruit
+    runtime_env:
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+    deployments:
+      - name: MangoStand
+        num_replicas: 1
+        user_config:
+          price: 3
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: OrangeStand
+        num_replicas: 1
+        user_config:
+          price: 2
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: PearStand
+        num_replicas: 1
+        user_config:
+          price: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: FruitMarket
+        num_replicas: 1
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: DAGDriver
+        num_replicas: 1
+        ray_actor_options:
+          num_cpus: 0.1
+  - name: math_app
+    import_path: conditional_dag.serve_dag
+    route_prefix: /calc
+    runtime_env:
+      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+    deployments:
+      - name: Adder
+        num_replicas: 1
+        user_config:
+          increment: 3
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: Multiplier
+        num_replicas: 1
+        user_config:
+          factor: 5
+        ray_actor_options:
+          num_cpus: 0.1
+      - name: Router
+        num_replicas: 1
+      - name: create_order
+        num_replicas: 1
+      - name: DAGDriver
+        num_replicas: 1    
+    """
+    status, error = apis.submit_serve(ns="default", name="test-service", configyaml=resource_yaml)
+    assert status == 200
+    assert error is None
+    # get Ray serve applications
+    status, error, sinfo = apis.get_serve_applications(ns="default", name="test-service")
+    assert status == 200
+    assert error is None
+    print(f"\nService applications {sinfo.to_string()}")
+    # delete serve applications
+    status, error = apis.delete_serve_applications(ns="default", name="test-service")
+    assert status == 200
+    assert error is None
+    # delete cluster
+    status, error = apis.delete_cluster(ns="default", name="test-service")
+    assert status == 200
+    assert error is None
+    # delete template
+    status, error = apis.delete_compute_template(ns="default", name="default-template")
+    assert status == 200
+    assert error is None

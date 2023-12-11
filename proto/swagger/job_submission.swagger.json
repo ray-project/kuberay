@@ -196,7 +196,7 @@
         ]
       },
       "delete": {
-        "summary": "Deletes a job by its name and namespace.",
+        "summary": "Deletes a job by its submissionID for a given a given cluster in a namespace.",
         "operationId": "RayJobSubmissionService_DeleteRayJob",
         "responses": {
           "200": {
@@ -240,7 +240,7 @@
         ]
       },
       "post": {
-        "summary": "Stops a job by its name and namespace.",
+        "summary": "Stops a job by its submissionID for a given a given cluster in a namespace.",
         "operationId": "RayJobSubmissionService_StopRayJob",
         "responses": {
           "200": {

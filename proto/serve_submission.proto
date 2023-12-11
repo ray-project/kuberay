@@ -1,0 +1,196 @@
+syntax = "proto3";
+
+option go_package = "github.com/ray-project/kuberay/proto/go_client";
+package proto;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  schemes: HTTP;
+  responses: {
+    key: "default";
+    value: {
+      schema: {
+        json_schema: {
+          ref: ".api.Status";
+        }
+      }
+    }
+  }
+};
+
+// Only 3 methods defined here - https://docs.ray.io/en/latest/serve/api/index.html#serve-rest-api
+// are included in this service. The actual serve method is not supported here due to the high scalability
+// requirements of it
+service RayServeSubmissionService {
+  // Submit a new Ray Serve Application on the specified cluster in a namespace.
+  rpc SubmitServeApplications(SubmitRayServeApplicationsRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/apis/v1/namespaces/{namespace}/serveapplication/{clustername}"
+      body: "submissionyaml"
+    };
+  }
+
+  // Get Serve applications for a given cluster in a namespace.
+  rpc GetServeApplications(GetRayServeApplicationsRequest) returns (GetRayServeApplicationReply) {
+    option (google.api.http) = {
+      get: "/apis/v1/namespaces/{namespace}/serveapplication/{clustername}"
+    };
+  }
+
+
+  // Shuts down Serve and all applications running on a given cluster in a namespace..
+  rpc DeleteRayServeApplications(DeleteRayServeApplicationsRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/apis/v1/namespaces/{namespace}/serveapplication/{clustername}"
+    };
+  }
+}
+
+message SubmitRayServeApplicationsRequest {
+  // Required. The namespace of the cluster for the job to be created
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The name of the cluster for the job
+  string clustername = 2 [(google.api.field_behavior) = REQUIRED];
+  // Required. Multi-application config for deploying a list of Serve applications to the Ray cluster (yaml).
+  SubmissionYaml submissionyaml = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SubmissionYaml {
+  // Required. Multi-application config for deploying a list of Serve applications to the Ray cluster (yaml).
+  string configyaml = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message GetRayServeApplicationsRequest {
+  // Required. The namespace of the cluster for the job
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The name of the cluster for the job
+  string clustername = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// This is a reply message, so it does not have required fields
+message GetRayServeApplicationReply {
+  string deploy_mode = 1;
+  string proxy_location = 2;
+  ControllerInfo  controller_info = 3;
+  HTTPOptions http_options = 4;
+  GRPCOptions grpc_options = 5;
+  map<string,ServeApplicationDetails> applications = 6;
+  map<string,Proxy> proxies = 7;
+}
+
+message DeleteRayServeApplicationsRequest {
+  // Required. The namespace of the cluster for the job
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. The name of the cluster for the job
+  string clustername = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message ControllerInfo {
+  string node_id = 1;
+  string node_ip = 2;
+  string actor_id = 3;
+  string actor_name = 4;
+  string worker_id = 5;
+  string log_file_path = 6;
+}
+
+message HTTPOptions {
+  string host = 1;
+  int32 port = 2;
+  string root_path = 3;
+  float request_timeout_s = 4;
+  int32 keep_alive_timeout_s = 5;
+}
+
+message GRPCOptions {
+  int32 port = 1;
+  repeated string grpc_servicer_functions = 2;
+}
+
+message Proxy {
+  string node_id = 1;
+  string node_ip = 2;
+  string actor_id = 3;
+  string actor_name = 4;
+  string worker_id = 5;
+  string status = 6;
+  string log_file_path = 7;
+}
+
+message Replica {
+  string node_id = 1;
+  string node_ip = 2;
+  string actor_id = 3;
+  string actor_name = 4;
+  string worker_id = 5;
+  string state = 6;
+  string log_file_path = 7;
+  string replica_id = 8;
+  int32  pid = 9;
+  float start_time_s = 10;
+}
+
+message PlacementGroupBundle {
+  map<string,float> bundle = 1;
+}
+
+message DeploymentSchema {
+  string name = 1;
+  string placement_group_strategy = 3;
+  repeated PlacementGroupBundle placement_group_bundles = 4;
+  int32 num_replicas = 5;
+  int32 max_replicas_per_node = 6;
+  int32 max_concurrent_queries = 7;
+  map<string,string> user_config = 8;
+  map<string,string> autoscaling_config = 9;
+  float graceful_shutdown_wait_loop_s = 10;
+  float graceful_shutdown_timeout_s = 11;
+  float health_check_period_s = 12;
+  float health_check_timeout_s = 13;
+  RayActorOptionSpec ray_actor_options = 14;
+}
+
+message DeploymentApplicationDetails {
+  string name = 1;
+  string status = 2;
+  string message = 3;
+  DeploymentSchema deployment_config = 4;
+  repeated Replica replicas = 5;
+}
+
+message ServeApplicationDetails {
+  string name = 1;
+  string status = 2;
+  string message = 3;
+  string route_prefix = 4;
+  string docs_path = 5;
+  float last_deployed_time_s = 6;
+  map<string,DeploymentApplicationDetails> deployments = 7;
+  ServeDeploymentDetails deployed_app_config = 8;
+}
+
+message RayActorOptionSpec {
+  map<string,string> runtime_env = 1;
+  float num_cpus = 2;
+  float num_gpus = 3;
+  uint64 memory = 4;
+  uint64 object_store_memory = 5;
+  map<string,string> resources = 6;
+  string accelerator_type = 7;
+}
+
+message ServeDeploymentDetails {
+  string name = 1;
+  string host = 2;
+  int32 port = 3;
+  string route_prefix = 4;
+  map<string,string> args = 5;
+  string import_path = 6;
+  map<string,string> runtime_env = 7;
+  repeated DeploymentSchema deployments = 8;
+}
