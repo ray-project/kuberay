@@ -248,11 +248,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(int(replicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
-				for _, cond := range workerPod.Status.Conditions {
-					if cond.Type == corev1.PodReady {
-						cond.Status = corev1.ConditionTrue
-					}
-				}
+				// TODO: Check https://github.com/ray-project/kuberay/issues/1736.
 				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
 			}
 
