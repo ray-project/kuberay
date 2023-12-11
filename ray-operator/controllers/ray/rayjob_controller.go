@@ -9,7 +9,6 @@ import (
 	fmtErrors "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,15 +40,19 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Log      logr.Logger
 	Recorder record.EventRecorder
+
+	dashboardClientFunc func() utils.RayDashboardClientInterface
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(mgr manager.Manager) *RayJobReconciler {
+func NewRayJobReconciler(mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface) *RayJobReconciler {
 	return &RayJobReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Log:      ctrl.Log.WithName("controllers").WithName("RayJob"),
 		Recorder: mgr.GetEventRecorderFor("rayjob-controller"),
+
+		dashboardClientFunc: dashboardClientFunc,
 	}
 }
 
@@ -92,9 +95,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object.
-		if !controllerutil.ContainsFinalizer(rayJobInstance, common.RayJobStopJobFinalizer) {
-			r.Log.Info("Add a finalizer", "finalizer", common.RayJobStopJobFinalizer)
-			controllerutil.AddFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
 			if err := r.Update(ctx, rayJobInstance); err != nil {
 				r.Log.Error(err, "Failed to update RayJob with finalizer")
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -103,7 +106,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	} else {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
-			rayDashboardClient := utils.GetRayDashboardClientFunc()
+			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
 			if err != nil {
@@ -111,8 +114,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", common.RayJobStopJobFinalizer)
-		controllerutil.RemoveFinalizer(rayJobInstance, common.RayJobStopJobFinalizer)
+		r.Log.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", utils.RayJobStopJobFinalizer)
+		controllerutil.RemoveFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
 		err := r.Update(ctx, rayJobInstance)
 		if err != nil {
 			r.Log.Error(err, "Failed to remove finalizer for RayJob")
@@ -127,11 +130,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	// Mark the deployment status as Complete if RayJob is succeed or failed
-	// TODO: (jiaxin.shan) Double check raycluster status to make sure we don't have create duplicate clusters..
-	// But the code here is not elegant. We should spend some time to refactor the flow.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusComplete {
-		// We need to make sure the cluster is deleted or in deletion, then update the status.
+	// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
+	// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
+	// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
+	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
+	// delete the RayCluster.
+	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
+		// If the function `updateState` updates the JobStatus to Complete successfully, we can skip the reconciliation.
 		rayClusterInstance := &rayv1.RayCluster{}
 		rayClusterNamespacedName := types.NamespacedName{
 			Namespace: rayJobInstance.Namespace,
@@ -144,14 +149,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{}, nil
 		}
 
 		if rayClusterInstance.DeletionTimestamp != nil {
 			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{}, nil
 		}
 	}
 
@@ -186,10 +191,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 		// TODO: dashboard service may be changed. Check it instead of using the same URL always
-		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardPortName); err != nil || clientURL == "" {
+		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 			if clientURL == "" {
 				err = fmt.Errorf("empty dashboardURL")
 			}
@@ -306,7 +311,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
-	if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
+	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
 		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
 			// RayCluster down.
@@ -365,8 +370,8 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (v1.PodTemplateSpec, error) {
-	var submitterTemplate v1.PodTemplateSpec
+func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
+	var submitterTemplate corev1.PodTemplateSpec
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
@@ -378,7 +383,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 	}
 
 	// If the command in the submitter pod template isn't set, use the default command.
-	if len(submitterTemplate.Spec.Containers[common.RayContainerIndex].Command) == 0 {
+	if len(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command) == 0 {
 		// Check for deprecated 'runtimeEnv' field usage and log a warning.
 		if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
 			r.Log.Info("Warning: The 'runtimeEnv' field is deprecated. Please use 'runtimeEnvYAML' instead.")
@@ -386,16 +391,16 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 
 		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
 		if err != nil {
-			return v1.PodTemplateSpec{}, err
+			return corev1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[common.RayContainerIndex].Command = k8sJobCommand
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = k8sJobCommand
 		r.Log.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
-		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[common.RayContainerIndex].Command)
+		r.Log.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	}
 
 	// Set PYTHONUNBUFFERED=1 for real-time logging
-	submitterTemplate.Spec.Containers[common.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[common.RayContainerIndex].Env, v1.EnvVar{
+	submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  PythonUnbufferedEnvVarName,
 		Value: "1",
 	})
@@ -404,13 +409,13 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and a boolean indicating whether a new Job was created.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate v1.PodTemplateSpec) (string, bool, error) {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) (string, bool, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
 			Labels: map[string]string{
-				common.KubernetesCreatedByLabelKey: common.ComponentName,
+				utils.KubernetesCreatedByLabelKey: utils.ComponentName,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -466,8 +471,8 @@ func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *ra
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-// isJobSucceedOrFailed indicates whether the job comes into end status.
-func isJobSucceedOrFailed(status rayv1.JobStatus) bool {
+// isJobSucceedOrFail indicates whether the job comes into end status.
+func isJobSucceedOrFail(status rayv1.JobStatus) bool {
 	return (status == rayv1.JobStatusSucceeded) || (status == rayv1.JobStatusFailed)
 }
 
@@ -649,7 +654,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		}
 
 		// special case: is the job is complete status and cluster has been recycled.
-		if isJobSucceedOrFailed(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
 			r.Log.Info("The cluster has been recycled for the job, skip duplicate creation", "rayjob", rayJobInstance.Name)
 			return nil, err
 		}

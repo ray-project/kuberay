@@ -6,7 +6,7 @@ This section walks through how to build and test the operator in a running Kuber
 
 | software | version  |                                                                link |
 |:---------|:--------:|--------------------------------------------------------------------:|
-| kubectl  | v1.21.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
+| kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
 | go       |  v1.20   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
@@ -25,7 +25,7 @@ Currently, KubeRay uses go v1.20 for development.
 ```bash
 go install golang.org/dl/go1.20.11@latest
 go1.20.11 download
-export GOROOT=$(go1.20. env GOROOT)
+export GOROOT=$(go1.20.11 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -283,3 +283,38 @@ RAY_IMAGE=rayproject/ray:2.8.0 OPERATOR_IMAGE=kuberay/operator:nightly python3 t
 ```
 
 See [KubeRay PR #605](https://github.com/ray-project/kuberay/pull/605) for more details about the test framework.
+
+### Building Multi architecture images locally
+
+Most of image repositories supports multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct the image with a matching architectures. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
+Verify Buildx installation and make sure it does not return error
+```
+docker buildx version
+```
+Verify the builder instance has a default(with *) DRIVER/ENDPOINT starting with `docker-container` by running:
+```
+docker buildx ls
+```
+You may see something:
+```
+NAME/NODE    DRIVER/ENDPOINT             STATUS  BUILDKIT             PLATFORMS
+sad_brown *  docker-container
+  sad_brown0 unix:///var/run/docker.sock running v0.12.4              linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/amd64/v4, linux/arm64, linux/riscv64, linux/ppc64le, linux/s390x, linux/386, linux/mips64le, linux/mips64, linux/arm/v7, linux/arm/v6
+default      docker
+  default    default                     running v0.11.7+d3e6c1360f6e linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/amd64/v4, linux/386, linux/arm64, linux/riscv64, linux/ppc64le, linux/s390x, linux/mips64le, linux/mips64, linux/arm/v7, linux/arm/v6
+```
+
+If not, create the instance by running:
+```
+docker buildx create --use --bootstrap
+```
+
+Run the following `docker buildx build` command to build and push linux/arm64 and linux/amd64 images(manifests) in a single command:
+```
+cd ray-operator
+docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my org>/operator:latest --platform linux/amd64,linux/arm64 --push --provenance=false .
+```
+* --platform is a comma separated list of targeted platforms to build.
+* --tag is a remote repo_name:tag to push.
+* --push/--load optionally Push to remote registry or Load into local docker.
+* Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.

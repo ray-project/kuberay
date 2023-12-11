@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -235,8 +235,8 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create 3 workers", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, client.MatchingLabels{
-					common.RayClusterLabelKey:   mySuspendedRayCluster.Name,
-					common.RayNodeGroupLabelKey: "small-group",
+					utils.RayClusterLabelKey:   mySuspendedRayCluster.Name,
+					utils.RayNodeGroupLabelKey: "small-group",
 				},
 					&client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -248,8 +248,8 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a head pod resource", func() {
 			err := k8sClient.List(ctx, &headPods,
 				client.MatchingLabels{
-					common.RayClusterLabelKey:   mySuspendedRayCluster.Name,
-					common.RayNodeGroupLabelKey: "headgroup",
+					utils.RayClusterLabelKey:   mySuspendedRayCluster.Name,
+					utils.RayNodeGroupLabelKey: "headgroup",
 				},
 				&client.ListOptions{Namespace: "default"},
 				client.InNamespace(mySuspendedRayCluster.Namespace))
@@ -292,8 +292,8 @@ var _ = Context("Inside the default namespace", func() {
 
 			Eventually(
 				isAllPodsRunning(ctx, headPods, client.MatchingLabels{
-					common.RayClusterLabelKey:   mySuspendedRayCluster.Name,
-					common.RayNodeGroupLabelKey: "headgroup",
+					utils.RayClusterLabelKey:   mySuspendedRayCluster.Name,
+					utils.RayNodeGroupLabelKey: "headgroup",
 				}, "default"),
 				time.Second*15, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
 
@@ -303,7 +303,7 @@ var _ = Context("Inside the default namespace", func() {
 			}
 
 			Eventually(
-				isAllPodsRunning(ctx, workerPods, client.MatchingLabels{common.RayClusterLabelKey: mySuspendedRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}, "default"),
+				isAllPodsRunning(ctx, workerPods, client.MatchingLabels{utils.RayClusterLabelKey: mySuspendedRayCluster.Name, utils.RayNodeGroupLabelKey: "small-group"}, "default"),
 				time.Second*15, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
 		})
 

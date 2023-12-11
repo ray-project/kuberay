@@ -30,7 +30,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -55,6 +55,7 @@ func main() {
 	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
+	var leaderElectionNamespace string
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
@@ -64,6 +65,8 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
+		"Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
 	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
 	flag.StringVar(
 		&watchNamespace,
@@ -125,13 +128,17 @@ func main() {
 
 	// Manager options
 	options := ctrl.Options{
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{},
+		},
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ray-operator-leader",
+		HealthProbeBindAddress:  probeAddr,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "ray-operator-leader",
+		LeaderElectionNamespace: leaderElectionNamespace,
 	}
 
 	// Manager Cache
@@ -165,11 +172,15 @@ func main() {
 
 	exitOnError(ray.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(mgr).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(mgr).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
+	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
+		exitOnError((&rayv1.RayCluster{}).SetupWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayCluster")
+	}
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
@@ -180,7 +191,7 @@ func main() {
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {
-	label, err := labels.NewRequirement(common.KubernetesCreatedByLabelKey, selection.Equals, []string{common.ComponentName})
+	label, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
 		return nil, err
 	}

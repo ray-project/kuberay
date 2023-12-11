@@ -84,10 +84,10 @@ func setupTest(t *testing.T) {
 				Name:      "headNode",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
-					common.RayNodeGroupLabelKey: headGroupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+					utils.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -116,9 +116,9 @@ func setupTest(t *testing.T) {
 				Name:      "pod1",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeGroupLabelKey: groupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -146,9 +146,9 @@ func setupTest(t *testing.T) {
 				Name:      "pod2",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeGroupLabelKey: groupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -176,9 +176,9 @@ func setupTest(t *testing.T) {
 				Name:      "pod3",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeGroupLabelKey: groupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -206,9 +206,9 @@ func setupTest(t *testing.T) {
 				Name:      "pod4",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeGroupLabelKey: groupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -236,9 +236,9 @@ func setupTest(t *testing.T) {
 				Name:      "pod5",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeGroupLabelKey: groupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeGroupLabelKey: groupNameStr,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -268,10 +268,10 @@ func setupTest(t *testing.T) {
 				Name:      "headNode",
 				Namespace: namespaceStr,
 				Labels: map[string]string{
-					common.RayNodeLabelKey:      "yes",
-					common.RayClusterLabelKey:   instanceName,
-					common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
-					common.RayNodeGroupLabelKey: headGroupNameStr,
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+					utils.RayNodeGroupLabelKey: headGroupNameStr,
 				},
 			},
 			Status: corev1.PodStatus{
@@ -372,19 +372,19 @@ func setupTest(t *testing.T) {
 
 	instanceReqValue := []string{instanceName}
 	instanceReq, err := labels.NewRequirement(
-		common.RayClusterLabelKey,
+		utils.RayClusterLabelKey,
 		selection.Equals,
 		instanceReqValue)
 	assert.Nil(t, err, "Fail to create requirement")
 	groupNameReqValue := []string{groupNameStr}
 	groupNameReq, err := labels.NewRequirement(
-		common.RayNodeGroupLabelKey,
+		utils.RayNodeGroupLabelKey,
 		selection.Equals,
 		groupNameReqValue)
 	assert.Nil(t, err, "Fail to create requirement")
 	headNameReqValue := []string{headGroupNameStr}
 	headNameReq, err := labels.NewRequirement(
-		common.RayNodeGroupLabelKey,
+		utils.RayNodeGroupLabelKey,
 		selection.Equals,
 		headNameReqValue)
 	assert.Nil(t, err, "Fail to create requirement")
@@ -401,7 +401,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 
 	// This test makes some assumptions about the testRayCluster object.
 	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) ENABLE_RANDOM_POD_DELETE is set to true.
-	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+	defer os.Unsetenv(utils.ENABLE_RANDOM_POD_DELETE)
 
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
@@ -412,7 +412,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 	// Case 2: If Autoscaler is enabled, we will respect the value of the feature flag. If the feature flag environment variable
 	// 		   is not set, we will disable random Pod deletion by default.
 	// Here, we enable the Autoscaler and set the feature flag `ENABLE_RANDOM_POD_DELETE` to true to enable random Pod deletion.
-	os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "true")
+	os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "true")
 	enableInTreeAutoscaling := true
 
 	tests := map[string]struct {
@@ -521,7 +521,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 	// This test makes some assumptions about the testRayCluster object.
 	// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Disable random Pod deletion.
-	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+	defer os.Unsetenv(utils.ENABLE_RANDOM_POD_DELETE)
 
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 	expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
@@ -531,7 +531,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 	// is not set, we will disable random Pod deletion by default. Hence, this test will disable random Pod deletion.
 	// In this case, the cluster won't achieve the target state (i.e., `expectedNumWorkerPods` worker Pods) in one reconciliation.
 	// Instead, the Ray Autoscaler will gradually scale down the cluster in subsequent reconciliations until it reaches the target state.
-	os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+	os.Unsetenv(utils.ENABLE_RANDOM_POD_DELETE)
 	enableInTreeAutoscaling := true
 
 	tests := map[string]struct {
@@ -830,7 +830,7 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
-	defer os.Unsetenv(common.ENABLE_RANDOM_POD_DELETE)
+	defer os.Unsetenv(utils.ENABLE_RANDOM_POD_DELETE)
 	// TODO (kevin85421): The tests in this file are not independent. As a workaround,
 	// I added the assertion to prevent the test logic from being affected by other changes.
 	// However, we should refactor the tests in the future.
@@ -885,9 +885,9 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			}
 
 			if tc.ENABLE_RANDOM_POD_DELETE {
-				os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "true")
+				os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "true")
 			} else {
-				os.Setenv(common.ENABLE_RANDOM_POD_DELETE, "false")
+				os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "false")
 			}
 			cluster := testRayCluster.DeepCopy()
 			// Case 1: ENABLE_RANDOM_POD_DELETE is true.
@@ -978,8 +978,8 @@ func TestReconcileHeadService(t *testing.T) {
 			Name:      "head-svc-1",
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:  cluster.Name,
-				common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayClusterLabelKey:  cluster.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
 	}
@@ -991,8 +991,8 @@ func TestReconcileHeadService(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.TODO()
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
-		common.RayClusterLabelKey:  cluster.Name,
-		common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		utils.RayClusterLabelKey:  cluster.Name,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 	})
 
 	// Initialize RayCluster reconciler.
@@ -1249,9 +1249,9 @@ func TestGetHeadPodIP(t *testing.T) {
 			Name:      "unexpectedExtraHeadNode",
 			Namespace: namespaceStr,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:   instanceName,
-				common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
-				common.RayNodeGroupLabelKey: headGroupNameStr,
+				utils.RayClusterLabelKey:   instanceName,
+				utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+				utils.RayNodeGroupLabelKey: headGroupNameStr,
 			},
 		},
 	}
@@ -1574,8 +1574,8 @@ func TestCalculateStatus(t *testing.T) {
 			Name:      "headNode",
 			Namespace: namespaceStr,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:  instanceName,
-				common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
 		Status: corev1.PodStatus{
@@ -1843,7 +1843,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	podList.Items[0].Status.Phase = corev1.PodRunning
 	podList.Items[0].Status.ContainerStatuses = []corev1.ContainerStatus{
 		{
-			Name: podList.Items[0].Spec.Containers[common.RayContainerIndex].Name,
+			Name: podList.Items[0].Spec.Containers[utils.RayContainerIndex].Name,
 			State: corev1.ContainerState{
 				Terminated: &corev1.ContainerStateTerminated{},
 			},
@@ -1975,7 +1975,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	setupTest(t)
 
-	defer os.Unsetenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
 
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -1986,7 +1986,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	if gcsFTEnabledCluster.Annotations == nil {
 		gcsFTEnabledCluster.Annotations = make(map[string]string)
 	}
-	gcsFTEnabledCluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
 	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
 	ctx := context.Background()
 
@@ -2014,9 +2014,9 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			if tc.enableGCSFTRedisCleanup == "unset" {
-				os.Unsetenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)
+				os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
 			} else {
-				os.Setenv(common.ENABLE_GCS_FT_REDIS_CLEANUP, tc.enableGCSFTRedisCleanup)
+				os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, tc.enableGCSFTRedisCleanup)
 			}
 
 			cluster := gcsFTEnabledCluster.DeepCopy()
@@ -2063,7 +2063,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			assert.Equal(t, 1, len(rayClusterList.Items))
 			assert.Equal(t, tc.expectedNumFinalizers, len(rayClusterList.Items[0].Finalizers))
 			if tc.expectedNumFinalizers > 0 {
-				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], common.GCSFaultToleranceRedisCleanupFinalizer))
+				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 
 				// No Pod should be created before adding the GCS FT Redis cleanup finalizer.
 				podList := corev1.PodList{}
@@ -2099,11 +2099,11 @@ func Test_RedisCleanup(t *testing.T) {
 	if gcsFTEnabledCluster.Annotations == nil {
 		gcsFTEnabledCluster.Annotations = make(map[string]string)
 	}
-	gcsFTEnabledCluster.Annotations[common.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
 	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
 
 	// Add the Redis cleanup finalizer to the RayCluster and modify the RayCluster's DeleteTimestamp to trigger the Redis cleanup.
-	controllerutil.AddFinalizer(gcsFTEnabledCluster, common.GCSFaultToleranceRedisCleanupFinalizer)
+	controllerutil.AddFinalizer(gcsFTEnabledCluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
 	now := metav1.Now()
 	gcsFTEnabledCluster.DeletionTimestamp = &now
 
@@ -2115,9 +2115,9 @@ func Test_RedisCleanup(t *testing.T) {
 			Name:      "headNode",
 			Namespace: gcsFTEnabledCluster.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
-				common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
-				common.RayNodeGroupLabelKey: headGroupName,
+				utils.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
+				utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+				utils.RayNodeGroupLabelKey: headGroupName,
 			},
 		},
 	}
@@ -2126,9 +2126,9 @@ func Test_RedisCleanup(t *testing.T) {
 			Name:      "workerNode",
 			Namespace: gcsFTEnabledCluster.Namespace,
 			Labels: map[string]string{
-				common.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
-				common.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
-				common.RayNodeGroupLabelKey: gcsFTEnabledCluster.Spec.WorkerGroupSpecs[0].GroupName,
+				utils.RayClusterLabelKey:   gcsFTEnabledCluster.Name,
+				utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				utils.RayNodeGroupLabelKey: gcsFTEnabledCluster.Spec.WorkerGroupSpecs[0].GroupName,
 			},
 		},
 	}
@@ -2181,9 +2181,9 @@ func Test_RedisCleanup(t *testing.T) {
 				headPods := corev1.PodList{}
 				err := fakeClient.List(ctx, &headPods, client.InNamespace(namespaceStr),
 					client.MatchingLabels{
-						common.RayClusterLabelKey:   cluster.Name,
-						common.RayNodeGroupLabelKey: headGroupName,
-						common.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+						utils.RayClusterLabelKey:   cluster.Name,
+						utils.RayNodeGroupLabelKey: headGroupName,
+						utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 					})
 				assert.Nil(t, err)
 				assert.Equal(t, 1, len(headPods.Items))
@@ -2192,9 +2192,9 @@ func Test_RedisCleanup(t *testing.T) {
 				workerPods := corev1.PodList{}
 				err := fakeClient.List(ctx, &workerPods, client.InNamespace(namespaceStr),
 					client.MatchingLabels{
-						common.RayClusterLabelKey:   cluster.Name,
-						common.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
-						common.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+						utils.RayClusterLabelKey:   cluster.Name,
+						utils.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
+						utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
 					})
 				assert.Nil(t, err)
 				assert.Equal(t, 1, len(workerPods.Items))
@@ -2229,7 +2229,7 @@ func Test_RedisCleanup(t *testing.T) {
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 1, len(rayClusterList.Items))
-				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], common.GCSFaultToleranceRedisCleanupFinalizer))
+				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]

@@ -46,7 +46,9 @@ spec:
         initContainers: {{- toYaml .Values.head.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
+          - {{ if .Values.head.volumeMounts }}
+            volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
+            {{- end }}
             name: ray-head
             {{- if .Values.head.image }}
             image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
@@ -79,7 +81,9 @@ spec:
           {{- if .Values.head.sidecarContainers }}
           {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
           {{- end }}
+        {{ if .Values.head.volumes }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
+        {{- end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
@@ -123,7 +127,9 @@ spec:
         initContainers: {{- toYaml $values.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
+          - {{ if $values.volumeMounts }}
+            volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
+            {{- end }}
             name: ray-worker
             {{- if $values.image }}
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
@@ -154,7 +160,9 @@ spec:
           {{- if $values.sidecarContainers }}
           {{- toYaml $values.sidecarContainers | nindent 10 }}
           {{- end }}
+        {{ if $values.volumes }}
         volumes: {{- toYaml $values.volumes | nindent 10 }}
+        {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
@@ -198,7 +206,9 @@ spec:
         initContainers: {{- toYaml .Values.worker.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+          - {{ if .Values.worker.volumeMounts }}
+            volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+            {{- end }}
             name: ray-worker
             {{- if .Values.worker.image }}
             image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
@@ -229,7 +239,9 @@ spec:
           {{- if .Values.worker.sidecarContainers }}
           {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
           {{- end }}
+        {{ if .Values.worker.volumes }}
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
+        {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}

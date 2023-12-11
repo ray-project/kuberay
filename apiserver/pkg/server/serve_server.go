@@ -9,7 +9,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"google.golang.org/protobuf/types/known/emptypb"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
 )
 
@@ -107,7 +107,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	if err != nil {
 		return nil, util.Wrap(err, "failed to list rayservice.")
 	}
-	serviceEventMap := make(map[string][]v1.Event)
+	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
 		if err != nil {
@@ -126,7 +126,7 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
 	}
-	serviceEventMap := make(map[string][]v1.Event)
+	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
 		if err != nil {

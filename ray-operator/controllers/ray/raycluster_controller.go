@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -182,17 +181,17 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// the Redis cleanup job should be activated. Users can disable the feature by setting the environment
 	// variable `ENABLE_GCS_FT_REDIS_CLEANUP` to `false`, and undertake the Redis storage namespace cleanup
 	// manually after the RayCluster CR deletion.
-	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(common.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
+	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
 	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
-			if !controllerutil.ContainsFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer) {
+			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
 				r.Log.Info(
 					"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
-					"finalizer", common.GCSFaultToleranceRedisCleanupFinalizer)
-				controllerutil.AddFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+					"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
+				controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
 				if err := r.Update(ctx, instance); err != nil {
-					r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", common.GCSFaultToleranceRedisCleanupFinalizer))
+					r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", utils.GCSFaultToleranceRedisCleanupFinalizer))
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
 				// Only start the RayCluster reconciliation after the finalizer is added.
@@ -201,12 +200,12 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		} else {
 			r.Log.Info(
 				fmt.Sprintf("The RayCluster with GCS enabled, %s, is being deleted. Start to handle the Redis cleanup finalizer %s.",
-					instance.Name, common.GCSFaultToleranceRedisCleanupFinalizer),
+					instance.Name, utils.GCSFaultToleranceRedisCleanupFinalizer),
 				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
 
 			// Delete the head Pod if it exists.
 			headPods := corev1.PodList{}
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 			if err := r.List(ctx, &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
@@ -219,7 +218,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				r.Log.Info(fmt.Sprintf(
 					"Delete the head Pod %s before the Redis cleanup. "+
 						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
-					headPod.Name, headPod.Annotations[common.RayExternalStorageNSAnnotationKey]))
+					headPod.Name, headPod.Annotations[utils.RayExternalStorageNSAnnotationKey]))
 				if err := r.Delete(ctx, &headPod); err != nil {
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
@@ -228,7 +227,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			// Delete all worker Pods if they exist.
 			for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
 				workerPods := corev1.PodList{}
-				filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: workerGroup.GroupName}
+				filterLabels = client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeGroupLabelKey: workerGroup.GroupName}
 				if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
@@ -251,13 +250,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				r.Log.Info(fmt.Sprintf(
 					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
 						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
-					headPods.Items[0].Name, headPods.Items[0].Annotations[common.RayExternalStorageNSAnnotationKey]))
+					headPods.Items[0].Name, headPods.Items[0].Annotations[utils.RayExternalStorageNSAnnotationKey]))
 				// Requeue after 10 seconds because it takes much longer than DefaultRequeueDuration (2 seconds) for the head Pod to be terminated.
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
 
 			// We can start the Redis cleanup process now because the head Pod has been terminated.
-			filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode)}
+			filterLabels = client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode)}
 			redisCleanupJobs := batchv1.JobList{}
 			if err := r.List(ctx, &redisCleanupJobs, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -272,9 +271,9 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					r.Log.Info(fmt.Sprintf(
 						"The Redis cleanup Job %s has been completed. "+
 							"The storage namespace %s in Redis has been fully deleted.",
-						redisCleanupJob.Name, redisCleanupJob.Annotations[common.RayExternalStorageNSAnnotationKey]))
+						redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
 					// Remove the finalizer from the RayCluster CR.
-					controllerutil.RemoveFinalizer(instance, common.GCSFaultToleranceRedisCleanupFinalizer)
+					controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
 					if err := r.Update(ctx, instance); err != nil {
 						r.Log.Error(err, "Failed to remove finalizer for RayCluster")
 						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -289,7 +288,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 						"The Redis cleanup Job %s has failed, requeue the RayCluster CR after 5 minute. "+
 							"You should manually delete the storage namespace %s in Redis and remove the RayCluster's finalizer. "+
 							"Please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.",
-						redisCleanupJob.Name, redisCleanupJob.Annotations[common.RayExternalStorageNSAnnotationKey]))
+						redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
 					return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 				}
 			} else {
@@ -345,7 +344,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
-	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
+	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
 		if err := r.reconcileServeService(ctx, instance); err != nil {
 			if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
 				r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
@@ -383,10 +382,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// Unconditionally requeue after the number of seconds specified in the
 	// environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
 	// environment variable is not set, requeue after the default value.
-	requeueAfterSeconds, err := strconv.Atoi(os.Getenv(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV))
+	requeueAfterSeconds, err := strconv.Atoi(os.Getenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV))
 	if err != nil {
-		r.Log.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d seconds", common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS), "cluster name", request.Name)
-		requeueAfterSeconds = common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
+		r.Log.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d seconds", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS), "cluster name", request.Name)
+		requeueAfterSeconds = utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
 	}
 	r.Log.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
@@ -440,7 +439,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
 	headRoutes := routev1.RouteList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Route Listing error!", "Route.Error", err)
 		return err
@@ -474,7 +473,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	headIngresses := networkingv1.IngressList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
@@ -506,7 +505,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 // Return nil only when the head service successfully created or already exists.
 func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1.RayCluster) error {
 	services := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 
 	if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
@@ -526,8 +525,8 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	} else {
 		// Create head service if there's no existing one in the cluster.
 		labels := make(map[string]string)
-		if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[common.KubernetesApplicationNameLabelKey]; ok {
-			labels[common.KubernetesApplicationNameLabelKey] = val
+		if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[utils.KubernetesApplicationNameLabelKey]; ok {
+			labels[utils.KubernetesApplicationNameLabelKey] = val
 		}
 		annotations := make(map[string]string)
 		// TODO (kevin85421): KubeRay has already exposed the entire head service (#1040) to users.
@@ -585,7 +584,7 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	// check if all the pods exist
 	headPods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 	if err := r.List(ctx, &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
@@ -662,7 +661,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		// check if WorkerGroupSpecs has been changed and we need to kill worker pods
 		for _, worker := range instance.Spec.WorkerGroupSpecs {
 			workerPods := corev1.PodList{}
-			filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
+			filterLabels = client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeGroupLabelKey: worker.GroupName}
 			if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 				return err
 			}
@@ -690,7 +689,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		r.Log.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
-		filterLabels = client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeGroupLabelKey: worker.GroupName}
+		filterLabels = client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeGroupLabelKey: worker.GroupName}
 		if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 			return err
 		}
@@ -775,7 +774,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// default behavior is stable enough, we can remove this feature flag.
 			enableRandomPodDelete := false
 			if enableInTreeAutoscaling {
-				if s := os.Getenv(common.ENABLE_RANDOM_POD_DELETE); strings.ToLower(s) == "true" {
+				if s := os.Getenv(utils.ENABLE_RANDOM_POD_DELETE); strings.ToLower(s) == "true" {
 					enableRandomPodDelete = true
 				}
 			}
@@ -880,7 +879,7 @@ func shouldDeletePod(pod corev1.Pod, nodeType rayv1.RayNodeType) (bool, string) 
 // (1) https://discuss.kubernetes.io/t/pod-spec-containers-and-pod-status-containerstatuses-can-have-a-different-order-why/25273
 // (2) https://github.com/kubernetes/kubernetes/blob/03762cbcb52b2a4394e4d795f9d3517a78a5e1a2/pkg/api/v1/pod/util.go#L261-L268
 func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTerminated {
-	rayContainerName := pod.Spec.Containers[common.RayContainerIndex].Name
+	rayContainerName := pod.Spec.Containers[utils.RayContainerIndex].Name
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == rayContainerName {
 			return containerStatus.State.Terminated
@@ -1024,14 +1023,14 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Pod {
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayv1.HeadNode) + common.DashSymbol)
+	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol)
 	podName = utils.CheckName(podName)                                       // making sure the name is valid
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	// Check whether serve is enabled and add serve label
 	serveLabel := false
-	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
+	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
 		serveLabel = true
 	}
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
@@ -1051,7 +1050,7 @@ func getCreator(instance rayv1.RayCluster) string {
 	if instance.Labels == nil {
 		return ""
 	}
-	creatorName, exist := instance.Labels[common.KubernetesCreatedByLabelKey]
+	creatorName, exist := instance.Labels[utils.KubernetesCreatedByLabelKey]
 
 	if !exist {
 		return ""
@@ -1062,7 +1061,7 @@ func getCreator(instance rayv1.RayCluster) string {
 
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
-	podName := strings.ToLower(instance.Name + common.DashSymbol + string(rayv1.WorkerNode) + common.DashSymbol + worker.GroupName + common.DashSymbol)
+	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol)
 	podName = utils.CheckName(podName)                                       // making sure the name is valid
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
 
@@ -1073,7 +1072,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	creatorName := getCreator(instance)
 	// Check whether serve is enabled and add serve label
 	serveLabel := false
-	if enableServeServiceValue, exist := instance.Annotations[common.EnableServeServiceKey]; exist && enableServeServiceValue == common.EnableServeServiceTrue {
+	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
 		serveLabel = true
 	}
 	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
@@ -1087,13 +1086,14 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 
 func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) batchv1.Job {
 	pod := r.buildHeadPod(instance)
-	pod.Labels[common.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
+	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
 	// Only keep the Ray container in the Redis cleanup Job.
-	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[common.RayContainerIndex]}
-	pod.Spec.Containers[common.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
-	pod.Spec.Containers[common.RayContainerIndex].Args = []string{
-		"python -c " +
+	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
+	pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+	pod.Spec.Containers[utils.RayContainerIndex].Args = []string{
+		"echo \"To get more information about manually delete the storage namespace in Redis and remove the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" && " +
+			"python -c " +
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
 			"from urllib.parse import urlparse; " +
 			"import os; " +
@@ -1105,29 +1105,29 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 	}
 
 	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
-	pod.Spec.Containers[common.RayContainerIndex].LivenessProbe = nil
-	pod.Spec.Containers[common.RayContainerIndex].ReadinessProbe = nil
+	pod.Spec.Containers[utils.RayContainerIndex].LivenessProbe = nil
+	pod.Spec.Containers[utils.RayContainerIndex].ReadinessProbe = nil
 
 	// Set the environment variables to ensure that the cleanup Job has at least 60s.
-	pod.Spec.Containers[common.RayContainerIndex].Env = append(pod.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
+	pod.Spec.Containers[utils.RayContainerIndex].Env = append(pod.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  "RAY_redis_db_connect_retries",
 		Value: "120",
 	})
-	pod.Spec.Containers[common.RayContainerIndex].Env = append(pod.Spec.Containers[common.RayContainerIndex].Env, corev1.EnvVar{
+	pod.Spec.Containers[utils.RayContainerIndex].Env = append(pod.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  "RAY_redis_db_connect_wait_milliseconds",
 		Value: "500",
 	})
 
 	// The container's resource consumption remains constant. so hard-coding the resources is acceptable.
 	// In addition, avoid using the GPU for the Redis cleanup Job.
-	pod.Spec.Containers[common.RayContainerIndex].Resources = v1.ResourceRequirements{
-		Limits: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("200m"),
-			v1.ResourceMemory: resource.MustParse("256Mi"),
+	pod.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
-		Requests: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("200m"),
-			v1.ResourceMemory: resource.MustParse("256Mi"),
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	}
 
@@ -1186,7 +1186,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: newInstance.Name}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
 	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
 		return nil, err
 	}
@@ -1227,7 +1227,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 // Best effort to obtain the ip of the head node.
 func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1.RayCluster) (string, error) {
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Failed to list pods while getting head pod ip.")
 		return "", err
@@ -1262,8 +1262,8 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
 	filterLabels := client.MatchingLabels{
-		common.RayClusterLabelKey:  instance.Name,
-		common.RayNodeTypeLabelKey: "head",
+		utils.RayClusterLabelKey:  instance.Name,
+		utils.RayNodeTypeLabelKey: "head",
 	}
 	if err := r.List(ctx, &rayHeadSvc, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err

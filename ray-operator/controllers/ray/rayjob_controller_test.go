@@ -23,7 +23,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -198,7 +197,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("Should create a number of workers equal to the replica setting", func() {
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayJob.Status.RayClusterName, common.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
@@ -227,7 +226,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob")
 
 			// confirm the number of worker pods increased.
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayJob.Status.RayClusterName, common.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
@@ -315,7 +314,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to update RayCluster replica")
 
 			// confirm a new worker pod is created.
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayJob.Status.RayClusterName, common.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
@@ -352,7 +351,7 @@ var _ = Context("Inside the default namespace with autoscaler", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob")
 
 			// confirm the number of worker pods is not changed.
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayJob.Status.RayClusterName, common.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Consistently(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
@@ -373,7 +372,7 @@ var _ = Context("With a delayed dashboard client", func() {
 	Describe("When creating a rayjob", func() {
 		It("should create a rayjob object", func() {
 			// setup mock first
-			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(&mockedGetJobInfo)
+			fakeRayDashboardClient.GetJobInfoMock.Store(&mockedGetJobInfo)
 			err := k8sClient.Create(ctx, myRayJob)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayJob resource")
 		})
@@ -386,7 +385,7 @@ var _ = Context("With a delayed dashboard client", func() {
 
 		It("Dashboard URL should be set and deployment status should leave the JobDeploymentStatusWaitForDashboardReady", func() {
 			// clear mock to back to normal behavior
-			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(nil)
+			fakeRayDashboardClient.GetJobInfoMock.Store(nil)
 			Eventually(
 				getDashboardURLForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base/insecure
+namespace: ray-system
+patchesJson6902:
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+  target:
+    kind: Deployment
+    name: kuberay-apiserver
+    version: v1
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: latest

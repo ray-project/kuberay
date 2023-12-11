@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -88,7 +88,7 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
-		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(1) * time.Second}
+		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
 		return nil
 	}
@@ -145,7 +145,7 @@ func withNamespace() contextOption {
 		require.NotNil(t, tCtx.k8client, "A k8s client must be created prior to creating a namespace")
 		require.NotNil(t, tCtx.ctx, "A context must exist prior to creating a namespace")
 		require.NotEmpty(t, tCtx.namespaceName, "Namespace name must be set prior to creating a namespace")
-		nsName := &v1.Namespace{
+		nsName := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: tCtx.namespaceName,
 			},
@@ -392,7 +392,7 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 }
 
 func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[string]string) string {
-	cm := &v1.ConfigMap{
+	cm := &corev1.ConfigMap{
 		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{Name: e2etc.configMapName, Namespace: e2etc.namespaceName},
 		Immutable:  new(bool),

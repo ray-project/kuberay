@@ -5,7 +5,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -63,25 +63,25 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			}
 			memorys = apiJob.JobSubmitter.Memory
 		}
-		rayJob.Spec.SubmitterPodTemplate = &v1.PodTemplateSpec{
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
+		rayJob.Spec.SubmitterPodTemplate = &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
 					{
 						Name:  "ray-job-submitter",
 						Image: apiJob.JobSubmitter.Image,
-						Resources: v1.ResourceRequirements{
-							Limits: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse(cpus),
-								v1.ResourceMemory: resource.MustParse(memorys),
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse(cpus),
+								corev1.ResourceMemory: resource.MustParse(memorys),
 							},
-							Requests: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse(cpus),
-								v1.ResourceMemory: resource.MustParse(memorys),
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse(cpus),
+								corev1.ResourceMemory: resource.MustParse(memorys),
 							},
 						},
 					},
 				},
-				RestartPolicy: v1.RestartPolicyNever,
+				RestartPolicy: corev1.RestartPolicyNever,
 			},
 		}
 	}

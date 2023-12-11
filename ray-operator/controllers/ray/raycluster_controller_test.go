@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -119,8 +118,8 @@ var _ = Context("Inside the default namespace", func() {
 		},
 	}
 
-	headFilterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "headgroup"}
-	workerFilterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayCluster.Name, common.RayNodeGroupLabelKey: "small-group"}
+	headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+	workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayCluster.Name, utils.RayNodeGroupLabelKey: "small-group"}
 
 	Describe("When creating a raycluster", func() {
 		It("should create a raycluster object", func() {
@@ -139,7 +138,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: "raycluster-sample-head-svc", Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1.HeadNode)))
+			Expect(svc.Spec.Selector[utils.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1.HeadNode)))
 		})
 
 		It("should create 3 workers", func() {
@@ -203,7 +202,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("cluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(common.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("should re-create a deleted worker", func() {

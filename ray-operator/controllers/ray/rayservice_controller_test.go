@@ -21,7 +21,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -255,14 +254,6 @@ applications:
 		},
 	}
 
-	fakeRayDashboardClient := prepareFakeRayDashboardClient()
-
-	utils.GetRayDashboardClientFunc = func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
-	}
-
-	utils.GetRayHttpProxyClientFunc = utils.GetFakeRayHttpProxyClient
-
 	myRayCluster := &rayv1.RayCluster{}
 
 	Describe("When creating a rayservice", func() {
@@ -298,7 +289,7 @@ applications:
 		})
 
 		It("should create more than 1 worker", func() {
-			filterLabels := client.MatchingLabels{common.RayClusterLabelKey: myRayService.Status.ActiveServiceStatus.RayClusterName, common.RayNodeGroupLabelKey: "small-group"}
+			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayService.Status.ActiveServiceStatus.RayClusterName, utils.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -311,13 +302,13 @@ applications:
 					// Each worker Pod should have a container port with the name "dashboard-agent"
 					exist := false
 					for _, port := range pod.Spec.Containers[0].Ports {
-						if port.Name == common.DashboardAgentListenPortName {
+						if port.Name == utils.DashboardAgentListenPortName {
 							exist = true
 							break
 						}
 					}
 					if !exist {
-						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, common.DashboardAgentListenPortName))
+						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, utils.DashboardAgentListenPortName))
 					}
 				}
 			}
@@ -336,7 +327,7 @@ applications:
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1.HeadNode)))
+			Expect(svc.Spec.Selector[utils.RayIDLabelKey]).Should(Equal(utils.GenerateIdentifier(myRayCluster.Name, rayv1.HeadNode)))
 		})
 
 		It("should create a new serve service resource", func() {
@@ -344,7 +335,7 @@ applications:
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(myRayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My serve service = %v", svc)
-			Expect(svc.Spec.Selector[common.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
+			Expect(svc.Spec.Selector[utils.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
@@ -554,7 +545,7 @@ applications:
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
+			oldTime := myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
 			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
 
 			// Confirm not switch to a new RayCluster
@@ -570,7 +561,7 @@ applications:
 			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
 			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
 			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
-			Expect(myRayService.Status.ActiveServiceStatus.Applications[common.DefaultServeAppName].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
+			Expect(myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
 		})
 
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
@@ -747,8 +738,8 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func(
 func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) {
 	headPods := corev1.PodList{}
 	headFilterLabels := client.MatchingLabels{
-		common.RayClusterLabelKey:  rayClusterName,
-		common.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		utils.RayClusterLabelKey:  rayClusterName,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 	}
 
 	Eventually(

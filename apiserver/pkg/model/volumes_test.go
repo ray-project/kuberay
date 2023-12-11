@@ -6,24 +6,24 @@ import (
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	hostToContainer = v1.MountPropagationHostToContainer
-	bidirectonal    = v1.MountPropagationBidirectional
+	hostToContainer = corev1.MountPropagationHostToContainer
+	bidirectonal    = corev1.MountPropagationBidirectional
 	sizelimit       = resource.MustParse("100Gi")
 )
 
-var podTemplateTest = v1.PodTemplateSpec{
-	Spec: v1.PodSpec{
-		Containers: []v1.Container{
+var podTemplateTest = corev1.PodTemplateSpec{
+	Spec: corev1.PodSpec{
+		Containers: []corev1.Container{
 			{
 				Name:  "ray-head",
 				Image: "blah",
-				VolumeMounts: []v1.VolumeMount{
+				VolumeMounts: []corev1.VolumeMount{
 					{
 						Name:             "hostPath",
 						MountPath:        "/tmp/hostPath",
@@ -53,20 +53,20 @@ var podTemplateTest = v1.PodTemplateSpec{
 				},
 			},
 		},
-		Volumes: []v1.Volume{
+		Volumes: []corev1.Volume{
 			{
 				Name: "hostPath",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					HostPath: &corev1.HostPathVolumeSource{
 						Path: "/tmp",
-						Type: newHostPathType(string(v1.HostPathDirectory)),
+						Type: newHostPathType(string(corev1.HostPathDirectory)),
 					},
 				},
 			},
 			{
 				Name: "pvc",
-				VolumeSource: v1.VolumeSource{
-					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 						ClaimName: "pvcclaim",
 						ReadOnly:  false,
 					},
@@ -74,18 +74,18 @@ var podTemplateTest = v1.PodTemplateSpec{
 			},
 			{
 				Name: "ephemeral",
-				VolumeSource: v1.VolumeSource{
-					Ephemeral: &v1.EphemeralVolumeSource{
-						VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+				VolumeSource: corev1.VolumeSource{
+					Ephemeral: &corev1.EphemeralVolumeSource{
+						VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
 							ObjectMeta: metav1.ObjectMeta{
 								Labels: map[string]string{
 									"app.kubernetes.io/managed-by": "kuberay-apiserver",
 								},
 							},
-							Spec: v1.PersistentVolumeClaimSpec{
-								Resources: v1.ResourceRequirements{
-									Requests: v1.ResourceList{
-										v1.ResourceStorage: resource.MustParse("5Gi"),
+							Spec: corev1.PersistentVolumeClaimSpec{
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceStorage: resource.MustParse("5Gi"),
 									},
 								},
 							},
@@ -95,12 +95,12 @@ var podTemplateTest = v1.PodTemplateSpec{
 			},
 			{
 				Name: "configMap",
-				VolumeSource: v1.VolumeSource{
-					ConfigMap: &v1.ConfigMapVolumeSource{
-						LocalObjectReference: v1.LocalObjectReference{
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
 							Name: "my-config-map",
 						},
-						Items: []v1.KeyToPath{
+						Items: []corev1.KeyToPath{
 							{
 								Key:  "key1",
 								Path: "path1",
@@ -115,16 +115,16 @@ var podTemplateTest = v1.PodTemplateSpec{
 			},
 			{
 				Name: "secret",
-				VolumeSource: v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
 						SecretName: "my-secret",
 					},
 				},
 			},
 			{
 				Name: "emptyDir",
-				VolumeSource: v1.VolumeSource{
-					EmptyDir: &v1.EmptyDirVolumeSource{
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{
 						SizeLimit: &sizelimit,
 					},
 				},
@@ -183,9 +183,9 @@ var expectedVolumes = []*api.Volume{
 }
 
 // Build host path
-func newHostPathType(pathType string) *v1.HostPathType {
-	hostPathType := new(v1.HostPathType)
-	*hostPathType = v1.HostPathType(pathType)
+func newHostPathType(pathType string) *corev1.HostPathType {
+	hostPathType := new(corev1.HostPathType)
+	*hostPathType = corev1.HostPathType(pathType)
 	return hostPathType
 }
 

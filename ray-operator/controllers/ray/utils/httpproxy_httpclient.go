@@ -15,9 +15,6 @@ type RayHttpProxyClientInterface interface {
 	SetHostIp(hostIp string, port int)
 }
 
-// GetRayHttpProxyClientFunc Used for unit tests.
-var GetRayHttpProxyClientFunc = GetRayHttpProxyClient
-
 func GetRayHttpProxyClient() RayHttpProxyClientInterface {
 	return &RayHttpProxyClient{}
 }

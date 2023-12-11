@@ -61,12 +61,10 @@ vet: ## Run go vet against code.
 fumpt: gofumpt
 	$(GOFUMPT) -l -w ../
 
-ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
-test: manifests generate fmt vet ## Run tests.
-	mkdir -p ${ENVTEST_ASSETS_DIR}
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-	export ENVTEST_K8S_VERSION=1.24.2; source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test $(WHAT) -v -coverprofile cover.out
+test: ENVTEST_K8S_VERSION ?= 1.24.2
+test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out
 
 test-e2e: WHAT ?= ./test/e2e
 test-e2e: manifests generate fmt vet ## Run e2e tests.
@@ -126,19 +124,45 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --renderer=markdown \
     --output-path=../docs/reference/api.md
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(CONTROLLER_GEN)/.. go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
+certmanager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
-kustomize: ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) || GOBIN=$(KUSTOMIZE)/.. go install sigs.k8s.io/kustomize/kustomize/v5@latest
+deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
+	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	($(KUSTOMIZE) build config/default-with-webhooks | kubectl create -f -) || ($(KUSTOMIZE) build config/default-with-webhooks | kubectl replace -f -)
 
-GOFUMPT = $(shell pwd)/bin/gofumpt
-gofumpt: ## Download gofumpt locally if necessary.
-	test -s $(GOFUMPT) || GOBIN=$(GOFUMPT)/.. go install mvdan.cc/gofumpt@latest
+undeploy-with-webhooks: ## Undeploy controller with webhooks from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/default-with-webhooks | kubectl delete -f -
 
-CRD_REF_DOCS = $(shell pwd)/bin/crd-ref-docs
+##@ Binaries
+
+## Local bin directory
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+CONTROLLER_GEN = $(LOCALBIN)/controller-gen
+$(CONTROLLER_GEN): $(LOCALBIN)
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
+
+KUSTOMIZE = $(LOCALBIN)/kustomize
+$(KUSTOMIZE): $(LOCALBIN)
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+	test -s $(KUSTOMIZE) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kustomize/kustomize/v5@latest
+
+ENVTEST = $(LOCALBIN)/setup-envtest
+$(ENVTEST): $(LOCALBIN)
+envtest: $(ENVTEST) ## Download envtest locally if necessary.
+	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+GOFUMPT = $(LOCALBIN)/gofumpt
+$(GOFUMPT): $(LOCALBIN)
+gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
+	test -s $(GOFUMPT) || GOBIN=$(LOCALBIN) go install mvdan.cc/gofumpt@latest
+
+CRD_REF_DOCS = $(LOCALBIN)/crd-ref-docs
+$(CRD_REF_DOCS): $(LOCALBIN)
 .PHONY: crd-ref-docs
-crd-ref-docs: ## Download crd-ref-docs locally if necessary.
-	test -s $(CRD_REF_DOCS) || GOBIN=$(CRD_REF_DOCS)/.. go install github.com/elastic/crd-ref-docs@latest
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@latest

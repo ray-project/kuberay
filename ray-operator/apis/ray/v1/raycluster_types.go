@@ -1,7 +1,7 @@
 package v1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,15 +28,15 @@ type RayClusterSpec struct {
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
-	ServiceType v1.ServiceType `json:"serviceType,omitempty"`
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 	// HeadService is the Kubernetes service of the head pod.
-	HeadService *v1.Service `json:"headService,omitempty"`
+	HeadService *corev1.Service `json:"headService,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
-	Template v1.PodTemplateSpec `json:"template"`
+	Template corev1.PodTemplateSpec `json:"template"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
@@ -55,7 +55,7 @@ type WorkerGroupSpec struct {
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is a pod template for the worker
-	Template v1.PodTemplateSpec `json:"template"`
+	Template corev1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 }
@@ -70,21 +70,21 @@ type ScaleStrategy struct {
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
 	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
-	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
-	ImagePullPolicy *v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// Optional list of environment variables to set in the autoscaler container.
-	Env []v1.EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 	// Optional list of sources to populate environment variables in the autoscaler container.
-	EnvFrom []v1.EnvFromSource `json:"envFrom,omitempty"`
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
-	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 	// SecurityContext defines the security options the container should be run with.
 	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-	SecurityContext *v1.SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
@@ -156,6 +156,7 @@ const (
 
 // RayCluster is the Schema for the RayClusters API
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0

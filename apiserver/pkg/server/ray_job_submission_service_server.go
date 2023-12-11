@@ -14,6 +14,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 )
 
@@ -28,12 +30,14 @@ type RayJobSubmissionServiceServer struct {
 	clusterServer *ClusterServer
 	log           logr.Logger
 	api.UnimplementedRayJobSubmissionServiceServer
+
+	dashboardClientFunc func() utils.RayDashboardClientInterface
 }
 
 // Create RayJobSubmissionServiceServer
 func NewRayJobSubmissionServiceServer(clusterServer *ClusterServer, options *RayJobSubmissionServiceServerOptions) *RayJobSubmissionServiceServer {
 	zl := zerolog.New(os.Stdout).Level(zerolog.DebugLevel)
-	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice")}
+	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClient}
 }
 
 // Submit Ray job
@@ -44,7 +48,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	request := &utils.RayJobRequest{Entrypoint: req.Jobsubmission.Entrypoint}
 	if req.Jobsubmission.SubmissionId != "" {
@@ -90,11 +94,14 @@ func (s *RayJobSubmissionServiceServer) GetJobDetails(ctx context.Context, req *
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	nodeInfo, err := rayDashboardClient.GetJobInfo(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
+	}
+	if nodeInfo == nil {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "RayJob", Resource: "JobSubmission"}, req.Submissionid)
 	}
 	return convertNodeInfo(nodeInfo), nil
 }
@@ -107,11 +114,14 @@ func (s *RayJobSubmissionServiceServer) GetJobLog(ctx context.Context, req *api.
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	jlog, err := rayDashboardClient.GetJobLog(ctx, req.Submissionid, &s.log)
 	if err != nil {
 		return nil, err
+	}
+	if jlog == nil {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "RayJob", Resource: "JobSubmission"}, req.Submissionid)
 	}
 	return &api.GetJobLogReply{Log: *jlog}, nil
 }
@@ -124,7 +134,7 @@ func (s *RayJobSubmissionServiceServer) ListJobDetails(ctx context.Context, req 
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	nodesInfo, err := rayDashboardClient.ListJobs(ctx)
 	if err != nil {
@@ -145,7 +155,7 @@ func (s *RayJobSubmissionServiceServer) StopRayJob(ctx context.Context, req *api
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.StopJob(ctx, req.Submissionid, &s.log)
 	if err != nil {
@@ -162,7 +172,7 @@ func (s *RayJobSubmissionServiceServer) DeleteRayJob(ctx context.Context, req *a
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.DeleteJob(ctx, req.Submissionid, &s.log)
 	if err != nil {

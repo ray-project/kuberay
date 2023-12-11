@@ -52,10 +52,13 @@ type RayServiceReconciler struct {
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	ServeConfigs                 cmap.ConcurrentMap
 	RayClusterDeletionTimestamps cmap.ConcurrentMap
+
+	dashboardClientFunc func() utils.RayDashboardClientInterface
+	httpProxyClientFunc func() utils.RayHttpProxyClientInterface
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
+func NewRayServiceReconciler(mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface) *RayServiceReconciler {
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
@@ -63,6 +66,9 @@ func NewRayServiceReconciler(mgr manager.Manager) *RayServiceReconciler {
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
 		ServeConfigs:                 cmap.New(),
 		RayClusterDeletionTimestamps: cmap.New(),
+
+		dashboardClientFunc: dashboardClientFunc,
+		httpProxyClientFunc: httpProxyClientFunc,
 	}
 }
 
@@ -196,7 +202,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateIngress, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, common.HeadService); err != nil {
+		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
@@ -204,7 +210,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, common.ServingService); err != nil {
+		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
@@ -392,7 +398,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 // cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that are owned by the RayService instance.
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	rayClusterList := rayv1.RayClusterList{}
-	filterLabels := client.MatchingLabels{common.RayServiceLabelKey: rayServiceInstance.Name}
+	filterLabels := client.MatchingLabels{utils.RayServiceLabelKey: rayServiceInstance.Name}
 	var err error
 	if err = r.List(ctx, &rayClusterList, client.InNamespace(rayServiceInstance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Fail to list RayCluster for "+rayServiceInstance.Name)
@@ -493,7 +499,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 
 		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
 		// each WorkerGroup, then do nothing.
-		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[common.HashWithoutReplicasAndWorkersToDeleteKey]
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
 		errContextFailedToSerialize := "Failed to serialize new RayCluster config. " +
 			"Manual config updates will NOT be tracked accurately. " +
@@ -511,7 +517,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 		// Case 2: Otherwise, if everything is identical except some change in WorkerGroupSpecs,
 		// then Update.
 
-		activeClusterHash = activeRayCluster.ObjectMeta.Annotations[common.HashWithoutWorkerGroupSpecKey]
+		activeClusterHash = activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutWorkerGroupSpecKey]
 		goalClusterHash, err = generateHashWithoutWorkerGroupSpec(rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
 			r.Log.Error(err, errContextFailedToSerialize)
@@ -633,23 +639,23 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
 	}
-	rayClusterLabel[common.RayServiceLabelKey] = rayService.Name
-	rayClusterLabel[common.KubernetesCreatedByLabelKey] = common.RayServiceCreatorLabelValue
+	rayClusterLabel[utils.RayServiceLabelKey] = rayService.Name
+	rayClusterLabel[utils.KubernetesCreatedByLabelKey] = utils.RayServiceCreatorLabelValue
 
 	rayClusterAnnotations := make(map[string]string)
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	rayClusterAnnotations[common.EnableServeServiceKey] = common.EnableServeServiceTrue
+	rayClusterAnnotations[utils.EnableServeServiceKey] = utils.EnableServeServiceTrue
 	errContext := "Failed to serialize RayCluster config. " +
 		"Manual config updates will NOT be tracked accurately. " +
 		"Please tear down the cluster and apply a new config."
-	rayClusterAnnotations[common.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec) // ARCHIT: new hash saved here
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		r.Log.Error(err, errContext)
 		return nil, err
 	}
-	rayClusterAnnotations[common.HashWithoutWorkerGroupSpecKey], err = generateHashWithoutWorkerGroupSpec(rayService.Spec.RayClusterSpec) // ARCHIT: new hash saved here
+	rayClusterAnnotations[utils.HashWithoutWorkerGroupSpecKey], err = generateHashWithoutWorkerGroupSpec(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		r.Log.Error(err, errContext)
 		return nil, err
@@ -820,7 +826,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 					"err: %v", err)
 			return false, err
 		}
-		serveAppStatuses = map[string]*utils.ServeApplicationStatus{common.DefaultServeAppName: singleApplicationStatus}
+		serveAppStatuses = map[string]*utils.ServeApplicationStatus{utils.DefaultServeAppName: singleApplicationStatus}
 	} else if serveConfigType == utils.MULTI_APP {
 		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 			err = fmt.Errorf(
@@ -841,7 +847,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	newApplications := make(map[string]rayv1.AppStatus)
 	for appName, app := range serveAppStatuses {
 		if appName == "" {
-			appName = common.DefaultServeAppName
+			appName = utils.DefaultServeAppName
 		}
 
 		prevApplicationStatus := rayServiceServeStatus.Applications[appName]
@@ -981,7 +987,7 @@ func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceI
 	return nil
 }
 
-func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType common.ServiceType) error {
+func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
 	r.Log.Info(
 		"reconcileServices", "serviceType", serviceType,
 		"RayService name", rayServiceInstance.Name, "RayService namespace", rayServiceInstance.Namespace,
@@ -991,9 +997,9 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	var err error
 
 	switch serviceType {
-	case common.HeadService:
+	case utils.HeadService:
 		newSvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
-	case common.ServingService:
+	case utils.ServingService:
 		newSvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
 	default:
 		return fmt.Errorf("unknown service type %v", serviceType)
@@ -1010,8 +1016,8 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 	if err == nil {
 		// Only update the service if the RayCluster switches.
-		if newSvc.Spec.Selector[common.RayClusterLabelKey] == oldSvc.Spec.Selector[common.RayClusterLabelKey] {
-			r.Log.Info(fmt.Sprintf("RayCluster %v's %v has already exists, skip Update", newSvc.Spec.Selector[common.RayClusterLabelKey], serviceType))
+		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
+			r.Log.Info(fmt.Sprintf("RayCluster %v's %v has already exists, skip Update", newSvc.Spec.Selector[utils.RayClusterLabelKey], serviceType))
 			return nil
 		}
 
@@ -1057,12 +1063,12 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	var clientURL string
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardAgentListenPortName); err != nil || clientURL == "" {
 		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
 	var isReady bool
@@ -1109,10 +1115,10 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, common.DashboardAgentListenPortName); err != nil || clientURL == "" {
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardAgentListenPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := r.dashboardClientFunc()
 	rayDashboardClient.InitClient(clientURL)
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(rayServiceInstance, rayClusterInstance, rayServiceStatus)
@@ -1153,17 +1159,17 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
 	allPods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: rayClusterInstance.Name}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayClusterInstance.Name}
 
 	if err := r.List(ctx, &allPods, client.InNamespace(rayClusterInstance.Namespace), filterLabels); err != nil {
 		return err
 	}
 
-	httpProxyClient := utils.GetRayHttpProxyClientFunc()
+	httpProxyClient := r.httpProxyClientFunc()
 	httpProxyClient.InitClient()
 	for _, pod := range allPods.Items {
-		rayContainer := pod.Spec.Containers[common.RayContainerIndex]
-		servingPort := utils.FindContainerPort(&rayContainer, common.ServingPortName, common.DefaultServingPort)
+		rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+		servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
 		httpProxyClient.SetHostIp(pod.Status.PodIP, servingPort)
 		if pod.Labels == nil {
 			pod.Labels = make(map[string]string)
@@ -1176,9 +1182,9 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 		}
 
 		if httpProxyClient.CheckHealth() == nil {
-			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceTrue
+			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 		} else {
-			pod.Labels[common.RayClusterServingServiceLabelKey] = common.EnableRayClusterServingServiceFalse
+			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
 		}
 
 		if !reflect.DeepEqual(originalLabels, pod.Labels) {
@@ -1256,7 +1262,7 @@ func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayCluste
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
 func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
 	podList := corev1.PodList{}
-	filterLabels := client.MatchingLabels{common.RayClusterLabelKey: instance.Name, common.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 
 	if err := r.List(ctx, &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Failed to list the head Pod of the RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
