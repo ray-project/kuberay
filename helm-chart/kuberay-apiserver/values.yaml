@@ -76,7 +76,7 @@ rbacEnable: true
 singleNamespaceInstall: false
 
 # security definition. Comment it out if security is not required
-#security:
+# security:
 #  proxy:
 #    repository: kuberay/security-proxy
 #    tag: nightly
