@@ -23,7 +23,7 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestGenerateRayClusterJsonHash(t *testing.T) {
+func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	// `generateRayClusterJsonHash` will mute fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down. Hence, `hash1` should be equal to
 	// `hash2` in this case.
@@ -43,36 +43,111 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 		},
 	}
 
-	hash1, err := generateRayClusterJsonHash(cluster.Spec)
+	hash1, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	assert.Nil(t, err)
 
 	*cluster.Spec.WorkerGroupSpecs[0].Replicas++
-	hash2, err := generateRayClusterJsonHash(cluster.Spec)
+	hash2, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	assert.Nil(t, err)
 	assert.Equal(t, hash1, hash2)
 
 	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
 	cluster.Spec.RayVersion = "2.100.0"
-	hash3, err := generateRayClusterJsonHash(cluster.Spec)
+	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	assert.Nil(t, err)
 	assert.NotEqual(t, hash1, hash3)
+
+	// MinReplicas will not be muted, so `hash4` should not be equal to `hash1`.
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
+	hash4, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash4)
 }
 
-func TestCompareRayClusterJsonHash(t *testing.T) {
-	cluster1 := rayv1.RayCluster{
+func TestGenerateHashWithoutWorkerGroupSpec(t *testing.T) {
+	// `generateRayClusterJsonHash` will mute fields that will not trigger new RayCluster preparation. For example,
+	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down. Hence, `hash1` should be equal to
+	// `hash2` in this case.
+	cluster := rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			RayVersion: "2.8.0",
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+					Replicas:    pointer.Int32(2),
+					MinReplicas: pointer.Int32(1),
+					MaxReplicas: pointer.Int32(4),
+				},
+			},
 		},
 	}
-	cluster2 := cluster1.DeepCopy()
-	cluster2.Spec.RayVersion = "2.100.0"
-	equal, err := compareRayClusterJsonHash(cluster1.Spec, cluster2.Spec)
-	assert.Nil(t, err)
-	assert.False(t, equal)
 
-	equal, err = compareRayClusterJsonHash(cluster1.Spec, cluster1.Spec)
+	hash1, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
 	assert.Nil(t, err)
-	assert.True(t, equal)
+
+	cluster.Spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
+	hash2, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash2)
+
+	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
+	cluster.Spec.RayVersion = "2.100.0"
+	hash3, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash3)
+
+	// MinReplicas will be muted, so `hash4` should equal to `hash1`.
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
+	hash4, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash4)
+
+	// Adding a new worker group spec should not affect the hash.
+	cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{},
+		},
+		Replicas:    pointer.Int32(2),
+		MinReplicas: pointer.Int32(1),
+		MaxReplicas: pointer.Int32(4),
+	})
+	hash5, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash5)
+}
+
+func TestGetClusterAction(t *testing.T) {
+	clusterSpec1 := rayv1.RayClusterSpec{
+		RayVersion: "2.8.0",
+		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+			{
+				Replicas:    pointer.Int32(2),
+				MinReplicas: pointer.Int32(1),
+				MaxReplicas: pointer.Int32(4),
+			},
+		},
+	}
+	clusterSpec2 := clusterSpec1.DeepCopy()
+	clusterSpec2.RayVersion = "2.100.0"
+
+	// Test Case 1: Different RayVersions should lead to RolloutNew.
+	action, err := getClusterAction(clusterSpec1, *clusterSpec2)
+	assert.Nil(t, err)
+	assert.Equal(t, RolloutNew, action)
+
+	// Test Case 2: Same spec should lead to DoNothing.
+	action, err = getClusterAction(clusterSpec1, clusterSpec1)
+	assert.Nil(t, err)
+	assert.Equal(t, DoNothing, action)
+
+	// Test Case 3: Only WorkerGroupSpecs different should lead to Update.
+	clusterSpec3 := clusterSpec1.DeepCopy()
+	clusterSpec3.WorkerGroupSpecs[0].Replicas = pointer.Int32(5)
+	action, err = getClusterAction(clusterSpec1, *clusterSpec3)
+	assert.Nil(t, err)
+	assert.Equal(t, Update, action)
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
@@ -669,14 +744,17 @@ func TestReconcileRayCluster(t *testing.T) {
 		Status: rayv1.RayServiceStatuses{},
 	}
 
-	hash, err := generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
+	hash1, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	assert.Nil(t, err)
+	hash2, err := generateHashWithoutWorkerGroupSpec(rayService.Spec.RayClusterSpec)
 	assert.Nil(t, err)
 	activeCluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-cluster",
 			Namespace: namespace,
 			Annotations: map[string]string{
-				utils.RayServiceClusterHashKey: hash,
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash1,
+				utils.HashWithoutWorkerGroupSpecKey:            hash2,
 			},
 		},
 	}
