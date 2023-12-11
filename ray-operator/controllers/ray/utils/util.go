@@ -381,6 +381,9 @@ func CheckAllPodsRunning(runningPods corev1.PodList) bool {
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
 			logrus.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+			if len(pod.Status.Conditions) == 0 {
+				logrus.Info("[CheckAllPodsRunning] Pod len(conditions) = 0")
+			}
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == corev1.PodReady {
 					logrus.Info(fmt.Sprintf("[CheckAllPodsRunning 1] Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
@@ -388,6 +391,9 @@ func CheckAllPodsRunning(runningPods corev1.PodList) bool {
 			}
 			logrus.Info("[CheckAllPodsRunning] 6666666")
 			return false
+		}
+		if len(pod.Status.Conditions) == 0 {
+			logrus.Info("[CheckAllPodsRunning] Pod len(conditions) = 0")
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady {
