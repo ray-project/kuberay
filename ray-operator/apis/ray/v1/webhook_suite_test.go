@@ -120,6 +120,33 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("RayCluster validating webhook", func() {
+	Context("when name is invalid", func() {
+		It("should return error", func() {
+			rayCluster := RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "invalid.name",
+				},
+				Spec: RayClusterSpec{
+					HeadGroupSpec: HeadGroupSpec{
+						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{},
+							},
+						},
+					},
+					WorkerGroupSpecs: []WorkerGroupSpec{},
+				},
+			}
+
+			err := k8sClient.Create(context.TODO(), &rayCluster)
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("RayCluster.ray.io \"invalid.name\" is invalid: metadata.name:"))
+		})
+	})
+
 	Context("when groupNames are not unique", func() {
 		var name, namespace string
 		var rayCluster RayCluster

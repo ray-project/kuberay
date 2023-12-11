@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"regexp"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -13,6 +15,7 @@ import (
 
 // log is for logging in this package.
 var rayclusterlog = logf.Log.WithName("raycluster-resource")
+var nameRegex, _ = regexp.Compile("^[a-z]([-a-z0-9]*[a-z0-9])?$")
 
 func (r *RayCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -45,9 +48,15 @@ func (r *RayCluster) ValidateDelete() (admission.Warnings, error) {
 
 func (r *RayCluster) validateRayCluster() error {
 	var allErrs field.ErrorList
+
+	if err := r.validateName(); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
 	if err := r.validateWorkerGroups(); err != nil {
 		allErrs = append(allErrs, err)
 	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}
@@ -55,6 +64,13 @@ func (r *RayCluster) validateRayCluster() error {
 	return apierrors.NewInvalid(
 		schema.GroupKind{Group: "ray.io", Kind: "RayCluster"},
 		r.Name, allErrs)
+}
+
+func (r *RayCluster) validateName() *field.Error {
+	if !nameRegex.MatchString(r.Name) {
+		return field.Invalid(field.NewPath("metadata").Child("name"), r.Name, "name must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')")
+	}
+	return nil
 }
 
 func (r *RayCluster) validateWorkerGroups() *field.Error {
