@@ -194,6 +194,11 @@ var _ = Context("Inside the default namespace", func() {
 				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
 			}
 
+			for _, workerPod := range workerPods.Items {
+				fmt.Printf("workerPod %v, conditions: %v\n", workerPod.Name, workerPod.Status.Conditions)
+			}
+			// Expect(1).Should(Equal(2))
+
 			Eventually(
 				isAllPodsRunning(ctx, workerPods, workerFilterLabels, "default"),
 				time.Second*15, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
@@ -203,6 +208,14 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
 				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+
+			workerPods := &corev1.PodList{}
+			err := k8sClient.List(ctx, workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"})
+			Expect(err).NotTo(HaveOccurred(), "failed list worker pods")
+			for _, workerPod := range workerPods.Items {
+				fmt.Printf("workerPod %v, conditions: %v\n", workerPod.Name, workerPod.Status.Conditions)
+			}
+			Expect(1).Should(Equal(2))
 		})
 
 		It("should re-create a deleted worker", func() {

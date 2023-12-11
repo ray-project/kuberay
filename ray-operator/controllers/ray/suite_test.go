@@ -57,7 +57,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func(ctx SpecContext) {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logf.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
