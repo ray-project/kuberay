@@ -87,22 +87,17 @@ func TestGenerateHashWithoutWorkerGroupSpec(t *testing.T) {
 	hash1, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
 	assert.Nil(t, err)
 
-	cluster.Spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
+	// MinReplicas will be muted, so `hash4` should equal to `hash1`.
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
 	hash2, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
 	assert.Nil(t, err)
 	assert.Equal(t, hash1, hash2)
 
-	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
-	cluster.Spec.RayVersion = "2.100.0"
+	// Removing a worker group spec should not affect the hash.
+	cluster.Spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
 	hash3, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
 	assert.Nil(t, err)
-	assert.NotEqual(t, hash1, hash3)
-
-	// MinReplicas will be muted, so `hash4` should equal to `hash1`.
-	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
-	hash4, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
-	assert.Nil(t, err)
-	assert.Equal(t, hash1, hash4)
+	assert.Equal(t, hash1, hash3)
 
 	// Adding a new worker group spec should not affect the hash.
 	cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
@@ -113,9 +108,15 @@ func TestGenerateHashWithoutWorkerGroupSpec(t *testing.T) {
 		MinReplicas: pointer.Int32(1),
 		MaxReplicas: pointer.Int32(4),
 	})
+	hash4, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash4)
+
+	// RayVersion will not be muted, so `hash4` should not be equal to `hash1`.
+	cluster.Spec.RayVersion = "2.100.0"
 	hash5, err := generateHashWithoutWorkerGroupSpec(cluster.Spec)
 	assert.Nil(t, err)
-	assert.Equal(t, hash1, hash5)
+	assert.NotEqual(t, hash1, hash5)
 }
 
 func TestGetClusterAction(t *testing.T) {
