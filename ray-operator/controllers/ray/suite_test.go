@@ -45,6 +45,9 @@ var (
 	cfg       *rest.Config
 	k8sClient client.Client
 	testEnv   *envtest.Environment
+
+	fakeRayDashboardClient *utils.FakeRayDashboardClient
+	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
 )
 
 func TestAPIs(t *testing.T) {
@@ -86,13 +89,22 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
 
+	fakeRayDashboardClient = prepareFakeRayDashboardClient()
+	fakeRayHttpProxyClient = &utils.FakeRayHttpProxyClient{}
+
 	err = NewReconciler(mgr).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
-	err = NewRayServiceReconciler(mgr).SetupWithManager(mgr)
+	err = NewRayServiceReconciler(mgr, func() utils.RayDashboardClientInterface {
+		return fakeRayDashboardClient
+	}, func() utils.RayHttpProxyClientInterface {
+		return fakeRayHttpProxyClient
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
-	err = NewRayJobReconciler(mgr).SetupWithManager(mgr)
+	err = NewRayJobReconciler(mgr, func() utils.RayDashboardClientInterface {
+		return fakeRayDashboardClient
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {
@@ -102,7 +114,6 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 })
 
 var _ = AfterSuite(func() {
-	utils.GetRayDashboardClientFunc = utils.GetRayDashboardClient
 	By("tearing down the test environment")
 
 	// NOTE(simon): the error is ignored because it gets raised in macOS due

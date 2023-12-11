@@ -372,7 +372,7 @@ var _ = Context("With a delayed dashboard client", func() {
 	Describe("When creating a rayjob", func() {
 		It("should create a rayjob object", func() {
 			// setup mock first
-			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(&mockedGetJobInfo)
+			fakeRayDashboardClient.GetJobInfoMock.Store(&mockedGetJobInfo)
 			err := k8sClient.Create(ctx, myRayJob)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayJob resource")
 		})
@@ -385,7 +385,7 @@ var _ = Context("With a delayed dashboard client", func() {
 
 		It("Dashboard URL should be set and deployment status should leave the JobDeploymentStatusWaitForDashboardReady", func() {
 			// clear mock to back to normal behavior
-			utils.GetRayDashboardClientFunc().(*utils.FakeRayDashboardClient).GetJobInfoMock.Store(nil)
+			fakeRayDashboardClient.GetJobInfoMock.Store(nil)
 			Eventually(
 				getDashboardURLForRayJob(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)

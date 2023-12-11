@@ -57,9 +57,6 @@ type BaseDashboardClient struct {
 	dashboardURL string
 }
 
-// GetRayDashboardClientFunc Used for unit tests.
-var GetRayDashboardClientFunc = GetRayDashboardClient
-
 func GetRayDashboardClient() RayDashboardClientInterface {
 	return &RayDashboardClient{}
 }

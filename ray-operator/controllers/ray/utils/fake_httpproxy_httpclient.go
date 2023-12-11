@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-func GetFakeRayHttpProxyClient() RayHttpProxyClientInterface {
-	return &FakeRayHttpProxyClient{}
-}
-
 type FakeRayHttpProxyClient struct {
 	client       http.Client
 	httpProxyURL string
