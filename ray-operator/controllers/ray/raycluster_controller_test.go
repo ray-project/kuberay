@@ -321,7 +321,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("set suspend to false and then revert it to true before all Pods are running", func() {
-			// suspend a Raycluster and check that all pods are deleted.
+			// set suspend to false
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
