@@ -160,11 +160,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
-	// Set rayClusterName and rayJobId first, to avoid duplicate submission.
-	// Initialize the job status to Pending and deployment status to Initializing.
-	err = r.initRayJobStatusIfNeed(ctx, rayJobInstance)
-	if err != nil {
-		r.Log.Error(err, "failed to set jobId or rayCluster name", "RayJob", request.NamespacedName)
+	// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
+	// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
+	if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
@@ -485,10 +483,17 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// This function is the sole place where `JobDeploymentStatusInitializing` is defined. It initializes `Status.JobId` and `Status.RayClusterName`
+// prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations.
 func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
-	shouldUpdateStatus := false
+	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
+	// Please don't update `shouldUpdateStatus` below.
+	r.Log.Info("initRayJobStatusIfNeed", "shouldUpdateStatus", shouldUpdateStatus, "RayJob", rayJob.Name, "jobId", rayJob.Status.JobId, "rayClusterName", rayJob.Status.RayClusterName, "jobStatus", rayJob.Status.JobStatus)
+	if !shouldUpdateStatus {
+		return nil
+	}
+
 	if rayJob.Status.JobId == "" {
-		shouldUpdateStatus = true
 		if rayJob.Spec.JobId != "" {
 			rayJob.Status.JobId = rayJob.Spec.JobId
 		} else {
@@ -497,7 +502,6 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	}
 
 	if rayJob.Status.RayClusterName == "" {
-		shouldUpdateStatus = true
 		// if the clusterSelector is not empty, default use this cluster name
 		// we assume the length of clusterSelector is one
 		if len(rayJob.Spec.ClusterSelector) != 0 {
@@ -513,14 +517,10 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	}
 
 	if rayJob.Status.JobStatus == "" {
-		shouldUpdateStatus = true
 		rayJob.Status.JobStatus = rayv1.JobStatusPending
 	}
 
-	if shouldUpdateStatus {
-		return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing, nil)
-	}
-	return nil
+	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing, nil)
 }
 
 func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, oldJobDeploymentStatus rayv1.JobDeploymentStatus, jobInfo *utils.RayJobInfo) bool {
@@ -625,25 +625,23 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return rayClusterInstance, nil
 		}
 
-		r.Log.Info("Update ray cluster replica", "raycluster", rayClusterNamespacedName)
+		r.Log.Info("Update RayCluster replica", "RayCluster", rayClusterNamespacedName)
 		if err := r.Update(ctx, rayClusterInstance); err != nil {
-			r.Log.Error(err, "Fail to update ray cluster replica!", "rayCluster", rayClusterNamespacedName)
+			r.Log.Error(err, "Fail to update RayCluster replica!", "RayCluster", rayClusterNamespacedName)
 			// Error updating the RayCluster object.
 			return nil, client.IgnoreNotFound(err)
 		}
 
 	} else if errors.IsNotFound(err) {
-		// TODO: If both ClusterSelector and RayClusterSpec are not set, we avoid should attempting to retrieve a RayCluster instance.
+		// TODO: If both ClusterSelector and RayClusterSpec are not set, we should avoid retrieving a RayCluster instance.
 		// Consider moving this logic to a more appropriate location.
 		if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
-			err := fmt.Errorf("Both ClusterSelector and RayClusterSpec are undefined")
-			r.Log.Error(err, "Failed to configure RayCluster instance due to missing configuration")
+			err := fmt.Errorf("one of ClusterSelector or RayClusterSpec must be set, but both are undefined, err: %v", err)
 			return nil, err
 		}
 
 		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
 			err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
-			r.Log.Error(err, "Get rayCluster instance error!")
 			return nil, err
 		}
 
@@ -657,7 +655,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return nil, nil
 		}
 
-		r.Log.Info("RayCluster not found, creating rayCluster!", "raycluster", rayClusterNamespacedName)
+		r.Log.Info("RayCluster not found, creating RayCluster!", "raycluster", rayClusterNamespacedName)
 		rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
 		if err != nil {
 			r.Log.Error(err, "unable to construct a new rayCluster")
