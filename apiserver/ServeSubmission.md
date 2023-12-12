@@ -27,7 +27,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 }'
 ```
 
-Up until rescently the only way to create a Ray cluster supporting RayServe was by using `Create ray service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so that you can experiment with serve APIs directly. Now it is possible by adding the following annotation to the cluster:
+Up until recently the only way to create a Ray cluster supporting RayServe was by using `Create ray service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so that you can experiment with serve APIs directly. Now it is possible by adding the following annotation to the cluster:
 
 ```json
 "annotations" : {
@@ -90,7 +90,7 @@ test-cluster-serve-svc   ClusterIP   10.96.144.162   <none>        8000/TCP
 
 As you can see, in this case two services are created - one for the head node to be able to see the dashboard and configure the cluster and one for submission of the serve requests.
 
-For the head node service note that the additional port - 52365 is created for serve configuration.
+For the head node service, note that the additional port - 52365 is created for serve configuration.
 
 ## Using Serve submission APIs
 
@@ -672,10 +672,10 @@ You can validate job deletion by looking at the Ray dashboard (serve pane) and e
 
 * In-place updating for Ray Serve applications: See RayService for more details.
 * Zero downtime upgrading for Ray clusters: See RayService for more details.
-* High-availabilable services: See [RayCluter high availability](HACluster.md) for more details.
+* High-availability services: See [RayCluter high availability](HACluster.md) for more details.
 
 So why this implementation? Several reasons:
 
-* It is more convinient in development. You can create a cluster and then deploy/undeploy applications until you are happy with results.
-* You can create Ray cluster for serve with the set of features that you want, including [high availabilty](HACluster.md), [autoscaling support](Autoscaling.md), etc. You can choose cluster configuration differently for testing vs production. Moreover, all of this can be done using [Python](../clients/python-apiserver-client/python_apiserver_client)
-* When it comes to upgrading Ray cluster or model in production, using in place update is dangerous. Preffered way of doing it is usage of [traffic splitting](https://gateway-api.sigs.k8s.io/guides/traffic-splitting/), more specifically [canary deployments](https://codefresh.io/learn/software-deployment/what-are-canary-deployments/). This allows to validate new deployments on a small percentage of data, easily rolling back in the case of issues. Managing RayServe with the API server gives one all the basic tools for such implementation and combined with, for example [gateway APIs](https://gateway-api.sigs.k8s.io/) can provide a complete solution for updates management.
+* It is more convenient in development. You can create a cluster and then deploy/undeploy applications until you are happy with results.
+* You can create Ray cluster for serve with the set of features that you want, including [high availability](HACluster.md), [autoscaling support](Autoscaling.md), etc. You can choose cluster configuration differently for testing vs production. Moreover, all of this can be done using [Python](../clients/python-apiserver-client/python_apiserver_client)
+* When it comes to upgrading Ray cluster or model in production, using in place update is dangerous. The preferred way of doing it is usage of [traffic splitting](https://gateway-api.sigs.k8s.io/guides/traffic-splitting/), more specifically [canary deployments](https://codefresh.io/learn/software-deployment/what-are-canary-deployments/). This allows to validate new deployments on a small percentage of data, easily rolling back in the case of issues. Managing RayServe with the API server gives one all the basic tools for such implementation and combined with, for example [gateway APIs](https://gateway-api.sigs.k8s.io/) can provide a complete solution for updates management.
