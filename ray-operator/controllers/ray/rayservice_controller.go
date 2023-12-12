@@ -374,7 +374,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			enableZeroDowntime = false
 		}
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
-			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will be false and we will
+			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
 			r.markRestartAndAddPendingClusterName(rayServiceInstance)
 		} else {
