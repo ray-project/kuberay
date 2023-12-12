@@ -1054,7 +1054,9 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardAgentListenPortName); err != nil || clientURL == "" {
+	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, then use DashboardAgentPort. Else, use DashboardPort.
+
+	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 	rayDashboardClient := r.dashboardClientFunc()
