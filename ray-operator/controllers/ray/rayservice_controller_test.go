@@ -483,6 +483,39 @@ applications:
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(Equal(initialPendingClusterName), "New active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
+		It("should update the active RayCluster in place when WorkerGroupSpecs are modified by the user in RayServiceSpec", func() {
+			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
+
+			// Add a new worker group to the RayServiceSpec
+			newWorkerGroupSpec := myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].DeepCopy()
+			newWorkerGroupSpec.GroupName = "worker-group-2"
+
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
+				myRayService.Spec.RayClusterSpec.WorkerGroupSpecs = append(myRayService.Spec.RayClusterSpec.WorkerGroupSpecs, *newWorkerGroupSpec)
+				return k8sClient.Update(ctx, myRayService)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
+
+			// Confirm it didn't switch to a new RayCluster
+			Consistently(
+				getRayClusterNameFunc(ctx, myRayService),
+				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+
+			// Verify that the active RayCluster eventually reflects the changes in WorkerGroupSpecs
+			Eventually(
+				getActiveRayClusterWorkerGroupSpecsFunc(ctx, myRayService),
+				time.Second*15,
+				time.Millisecond*500,
+			).Should(
+				HaveLen(2),
+			)
+		})
 
 		It("Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.", func() {
 			// Make sure (1) Dashboard client is healthy (2) All the three Ray Serve deployments in the active RayCluster are HEALTHY.
@@ -692,6 +725,19 @@ func getRayClusterNameFunc(ctx context.Context, rayService *rayv1.RayService) fu
 			return "", err
 		}
 		return rayService.Status.ActiveServiceStatus.RayClusterName, nil
+	}
+}
+
+func getActiveRayClusterWorkerGroupSpecsFunc(ctx context.Context, rayService *rayv1.RayService) func() ([]rayv1.WorkerGroupSpec, error) {
+	return func() ([]rayv1.WorkerGroupSpec, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
+			return nil, err
+		}
+		rayCluster := &rayv1.RayCluster{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, rayCluster); err != nil {
+			return nil, err
+		}
+		return rayCluster.Spec.WorkerGroupSpecs, nil
 	}
 }
 
