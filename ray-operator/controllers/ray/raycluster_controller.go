@@ -312,11 +312,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		return ctrl.Result{}, nil
 	}
 
-	if instance.Spec.Suspend != nil && *instance.Spec.Suspend && instance.Status.State == rayv1.Suspended {
-		r.Log.Info("RayCluster is suspended, skipping reconcile", "cluster name", request.Name)
-		return ctrl.Result{}, nil
-	}
-
 	if err := r.reconcileAutoscalerServiceAccount(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
 			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
