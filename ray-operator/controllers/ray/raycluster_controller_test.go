@@ -200,6 +200,9 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("cluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+			// Note that RayCluster is `ready` when all Pods are Running and their PodReady conditions are true.
+			// However, in envtest, PodReady conditions are automatically set to true when Pod.Status.Phase is set to Running.
+			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
 				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
