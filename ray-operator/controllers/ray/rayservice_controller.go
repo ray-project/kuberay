@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -382,7 +383,10 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, nil, nil
 	} else if clusterAction == Update {
 		// Update the active cluster.
-		activeRayCluster.Spec = rayServiceInstance.Spec.RayClusterSpec
+		r.Log.Info("Updating the active RayCluster instance.")
+		if activeRayCluster, err = r.constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name); err != nil {
+			return nil, nil, err
+		}
 		if err := r.updateRayClusterInstance(ctx, activeRayCluster); err != nil {
 			return nil, nil, err
 		}
@@ -563,9 +567,13 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 
 	switch clusterAction {
 	case RolloutNew:
+		r.Log.Info("Creating a new pending RayCluster instance.")
 		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 	case Update:
-		pendingRayCluster.Spec = rayServiceInstance.Spec.RayClusterSpec
+		r.Log.Info("Updating the pending RayCluster instance.")
+		if pendingRayCluster, err = r.constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name); err != nil {
+			return nil, err
+		}
 		err = r.updateRayClusterInstance(ctx, pendingRayCluster)
 	}
 
@@ -579,13 +587,36 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 // updateRayClusterInstance updates the RayCluster instance.
 func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
 	r.Log.V(1).Info("updateRayClusterInstance", "rayClusterInstance", rayClusterInstance)
-	if err := r.Update(ctx, rayClusterInstance); err != nil {
-		r.Log.Error(err, "Fail to update RayCluster "+rayClusterInstance.Name)
+
+	// Fetch the current state of the RayCluster
+	currentRayCluster := &rayv1.RayCluster{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      rayClusterInstance.Name,
+		Namespace: rayClusterInstance.Namespace,
+	}, currentRayCluster)
+
+	if err != nil {
+		r.Log.Error(err, "Failed to get the current state of RayCluster")
 		return err
 	}
-	r.Log.V(1).Info("updated RayCluster", "rayClusterInstance", rayClusterInstance)
+
+	// Update the fetched RayCluster with new changes
+	currentRayCluster.Spec = rayClusterInstance.Spec
+
+	// Update the labels and annotations
+	currentRayCluster.Labels = rayClusterInstance.Labels
+	currentRayCluster.Annotations = rayClusterInstance.Annotations
+
+	// Update the RayCluster
+	if err = r.Update(ctx, currentRayCluster); err != nil {
+		r.Log.Error(err, "Fail to update RayCluster "+currentRayCluster.Name)
+		return err
+	}
+
+	r.Log.V(1).Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
 	return nil
 }
+
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
 // One important part is that if this method deletes the old RayCluster, it will return instantly. It depends on the controller to call it again to generate the new RayCluster instance.
