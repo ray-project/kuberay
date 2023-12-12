@@ -382,6 +382,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, nil, nil
 	} else if clusterAction == Update {
 		// Update the active cluster.
+		activeRayCluster.Spec = rayServiceInstance.Spec.RayClusterSpec
 		if err := r.updateRayClusterInstance(ctx, activeRayCluster); err != nil {
 			return nil, nil, err
 		}
@@ -564,6 +565,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	case RolloutNew:
 		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 	case Update:
+		pendingRayCluster.Spec = rayServiceInstance.Spec.RayClusterSpec
 		err = r.updateRayClusterInstance(ctx, pendingRayCluster)
 	}
 
