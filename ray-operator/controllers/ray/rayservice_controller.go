@@ -594,7 +594,6 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 		Name:      rayClusterInstance.Name,
 		Namespace: rayClusterInstance.Namespace,
 	}, currentRayCluster)
-
 	if err != nil {
 		r.Log.Error(err, "Failed to get the current state of RayCluster")
 		return err
@@ -616,7 +615,6 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 	r.Log.V(1).Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
 	return nil
 }
-
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
 // One important part is that if this method deletes the old RayCluster, it will return instantly. It depends on the controller to call it again to generate the new RayCluster instance.
