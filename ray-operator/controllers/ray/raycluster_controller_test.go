@@ -340,13 +340,13 @@ var _ = Context("Inside the default namespace", func() {
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
-			// We only update worker Pod statuses so that the head Pod status is still Pending.
+			// only update worker Pod statuses so that the head Pod status is still Pending.
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
 				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
 			}
 
-			// Change suspend to true before all Pods are Running.
+			// change suspend to true before all Pods are Running.
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
