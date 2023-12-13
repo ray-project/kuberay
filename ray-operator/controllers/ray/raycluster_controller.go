@@ -1196,6 +1196,12 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
 	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 
+	totalResources := utils.CalculateDesiredResources(newInstance)
+	newInstance.Status.DesiredCPUs = totalResources[corev1.ResourceCPU]
+	newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
+	newInstance.Status.DesiredGPUs = sumGPUs(totalResources)
+	newInstance.Status.DesiredTPUs = totalResources[corev1.ResourceName("google.com/tpu")]
+
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(newInstance.Spec.HeadGroupSpec)
 	if err != nil {
@@ -1465,4 +1471,17 @@ func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance
 	instance.Status.Reason = clusterReason
 	r.Log.Info("updateClusterReason", "Update CR Status.Reason", clusterReason)
 	return r.Status().Update(ctx, instance)
+}
+
+// sumGPUs sums the GPUs in the given resource list.
+func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quantity {
+	totalGPUs := resource.Quantity{}
+
+	for key, val := range resources {
+		if strings.HasSuffix(string(key), "gpu") && !val.IsZero() {
+			totalGPUs.Add(val)
+		}
+	}
+
+	return totalGPUs
 }
