@@ -34,8 +34,6 @@ type JobDeploymentStatus string
 
 const (
 	JobDeploymentStatusInitializing         JobDeploymentStatus = "Initializing"
-	JobDeploymentStatusWaitForK8sJob        JobDeploymentStatus = "WaitForK8sJob"
-	JobDeploymentStatusFailedJobDeploy      JobDeploymentStatus = "FailedJobDeploy"
 	JobDeploymentStatusRunning              JobDeploymentStatus = "Running"
 	JobDeploymentStatusFailedToGetJobStatus JobDeploymentStatus = "FailedToGetJobStatus"
 	JobDeploymentStatusComplete             JobDeploymentStatus = "Complete"
