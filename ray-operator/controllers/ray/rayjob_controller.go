@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	fmtErrors "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -146,14 +145,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if !errors.IsNotFound(err) {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
+			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			return ctrl.Result{}, nil
 		}
 
 		if rayClusterInstance.DeletionTimestamp != nil {
-			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete, nil); err != nil {
+			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			return ctrl.Result{}, nil
@@ -176,7 +175,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspended {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended, err)
+		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
@@ -235,7 +234,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		r.Log.Error(err, "failed to get k8s job")
-		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusFailedToGetJobStatus, err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
@@ -243,16 +241,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 	if err != nil {
 		r.Log.Error(err, "failed to get job info", "jobId", rayJobInstance.Status.JobId)
-		err = r.updateState(ctx, rayJobInstance, jobInfo, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusFailedToGetJobStatus, err)
 		// Dashboard service in head pod takes time to start, it's possible we get connection refused error.
 		// Requeue after few seconds to avoid continuous connection errors.
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	// Update RayJob.Status (Kubernetes CR) from Ray Job Status from Dashboard service
-	if r.shouldUpdateJobStatus(rayJobInstance.Status.JobStatus, rayJobInstance.Status.JobDeploymentStatus, jobInfo) {
-		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning, nil)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	if jobInfo != nil {
+		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 	}
 
 	if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
@@ -285,7 +283,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.DashboardURL = ""
 			rayJobInstance.Status.JobId = ""
 			rayJobInstance.Status.Message = ""
-			err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1.JobStatusStopped, rayv1.JobDeploymentStatusSuspended, nil)
+			err = r.updateState(ctx, rayJobInstance, jobInfo, rayv1.JobStatusStopped, rayv1.JobDeploymentStatusSuspended)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
@@ -517,22 +515,11 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 		rayJob.Status.JobStatus = rayv1.JobStatusPending
 	}
 
-	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing, nil)
-}
-
-func (r *RayJobReconciler) shouldUpdateJobStatus(oldJobStatus rayv1.JobStatus, oldJobDeploymentStatus rayv1.JobDeploymentStatus, jobInfo *utils.RayJobInfo) bool {
-	if jobInfo != nil {
-		jobStatusChanged := (oldJobStatus != jobInfo.JobStatus)
-		// If the status changed, or if we didn't have the status before and now we have it, update the status and deployment status.
-		if jobStatusChanged || oldJobDeploymentStatus == rayv1.JobDeploymentStatusFailedToGetJobStatus {
-			return true
-		}
-	}
-	return false
+	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing)
 }
 
 // make sure the priority is correct
-func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *utils.RayJobInfo, jobStatus rayv1.JobStatus, jobDeploymentStatus rayv1.JobDeploymentStatus, err error) error {
+func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *utils.RayJobInfo, jobStatus rayv1.JobStatus, jobDeploymentStatus rayv1.JobDeploymentStatus) error {
 	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
 
 	// Let's skip update the APIServer if it's synced.
@@ -555,10 +542,10 @@ func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
 	rayJob.Status.ObservedGeneration = rayJob.ObjectMeta.Generation
 
-	if errStatus := r.Status().Update(ctx, rayJob); errStatus != nil {
-		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
+	if err := r.Status().Update(ctx, rayJob); err != nil {
+		return err
 	}
-	return err
+	return nil
 }
 
 // TODO: select existing rayclusters by ClusterSelector

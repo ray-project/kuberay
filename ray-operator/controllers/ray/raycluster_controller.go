@@ -553,6 +553,8 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	return nil
 }
 
+var GetK8sAPIServerClient func() (*client.Client, error)
+
 // Return nil only when the serve service successfully created or already exists.
 func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
@@ -706,6 +708,20 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if err := r.List(ctx, &workerPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 			return err
 		}
+
+		r.Log.Info("reconcilePods", "Found worker pods", len(workerPods.Items), "worker group", worker.GroupName)
+		k8sClient, err := GetK8sAPIServerClient()
+		if err != nil {
+			r.Log.Info("reconcilePods", "Fail to get k8s api server client")
+			return err
+		}
+
+		workerPodsInK8sAPIServer := corev1.PodList{}
+		if err = (*k8sClient).List(ctx, &workerPodsInK8sAPIServer, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+			r.Log.Info("Fail to list worker Pods from K8s api server")
+			return err
+		}
+		r.Log.Info("reconcilePods", "Found worker pods in k8s api server", len(workerPodsInK8sAPIServer.Items), "worker group", worker.GroupName)
 
 		// Delete unhealthy worker Pods
 		deletedWorkers := make(map[string]struct{})

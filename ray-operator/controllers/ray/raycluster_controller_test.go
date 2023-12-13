@@ -205,7 +205,7 @@ var _ = Context("Inside the default namespace", func() {
 			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("should re-create a deleted worker", func() {
@@ -253,10 +253,6 @@ var _ = Context("Inside the default namespace", func() {
 				return k8sClient.Update(ctx, myRayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
-		})
-
-		It("should have only 2 running workers", func() {
-			// retry listing pods, given that last update may not immediately happen.
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
@@ -292,6 +288,21 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*2, time.Millisecond*200).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
+		// It("scale down to 1 worker", func() {
+		// 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// 		Eventually(
+		// 			getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+		// 			time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+		// 		myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
+		// 		myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{workerPods.Items[0].Name, workerPods.Items[1].Name, workerPods.Items[2].Name}
+		// 		return k8sClient.Update(ctx, myRayCluster)
+		// 	})
+		// 	Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
+		// 	Eventually(
+		// 		listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+		// 		time.Second*15, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		// })
+
 		It("should delete all head and worker pods if suspended", func() {
 			// suspend a Raycluster and check that all pods are deleted.
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -308,16 +319,18 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
-
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Consistently(
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*2, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("cluster's .status.state should be updated to 'suspended' shortly after all Pods are terminated", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Suspended))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Suspended))
 		})
 
 		It("set suspend to false and then revert it to true before all Pods are running", func() {
@@ -339,6 +352,9 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
+			Consistently(
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*2, time.Millisecond*200).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// only update worker Pod statuses so that the head Pod status is still Pending.
 			for _, workerPod := range workerPods.Items {
@@ -361,15 +377,17 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
-
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Consistently(
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*2, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// RayCluster should be in Suspended state.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Suspended))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Suspended))
 		})
 
 		It("should run all head and worker pods if un-suspended", func() {
@@ -391,7 +409,9 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
-
+			Consistently(
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+				time.Second*2, time.Millisecond*200).Should(Equal(4), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			// We need to also manually update Pod statuses back to "Running" or else they will always stay as Pending.
 			// This is because we don't run kubelets in the unit tests to update the status subresource.
 			for _, headPod := range headPods.Items {
@@ -408,7 +428,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("cluster's .status.state should be updated back to 'ready' after being un-suspended", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 	})
 })

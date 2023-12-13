@@ -57,7 +57,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func(ctx SpecContext) {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logf.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -88,17 +88,20 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
+	GetK8sAPIServerClient = func() (*client.Client, error) {
+		return &k8sClient, nil
+	}
 
-	fakeRayDashboardClient = prepareFakeRayDashboardClient()
-	fakeRayHttpProxyClient = &utils.FakeRayHttpProxyClient{}
+	// fakeRayDashboardClient = prepareFakeRayDashboardClient()
+	// fakeRayHttpProxyClient = &utils.FakeRayHttpProxyClient{}
 
 	err = NewReconciler(mgr).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	err = NewRayServiceReconciler(mgr, func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
+		return &utils.FakeRayDashboardClient{}
 	}, func() utils.RayHttpProxyClientInterface {
-		return fakeRayHttpProxyClient
+		return &utils.FakeRayHttpProxyClient{}
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 

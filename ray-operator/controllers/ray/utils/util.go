@@ -228,6 +228,9 @@ func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 
 		// Add this check to make testing easier.
 		workerReplicas = *workerGroupSpec.MinReplicas
 	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
+		logrus.Warn(
+			fmt.Sprintf("replicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
+				"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.Replicas, *workerGroupSpec.MaxReplicas))
 		workerReplicas = *workerGroupSpec.MaxReplicas
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
