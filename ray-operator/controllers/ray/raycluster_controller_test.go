@@ -225,23 +225,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
-		It("should update a raycluster object deleting a random pod", func() {
-			// adding a scale down
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
-
-				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
-				// We need to handle conflict error and retry the update.
-				return k8sClient.Update(ctx, myRayCluster)
-			})
-
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
-		})
-
-		It("should update a raycluster object", func() {
+		It("simulate Ray Autoscaler scales down", func() {
 			// adding a scale strategy
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
@@ -260,6 +244,16 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
+			// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. Here, we simulate the Ray
+			// Autoscaler's behavior after the scale-down process is completed.
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
+					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
+				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+				return k8sClient.Update(ctx, myRayCluster)
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
 		})
 
 		It("should increase replicas past maxReplicas", func() {
