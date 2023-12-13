@@ -247,7 +247,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	if jobInfo != nil {
-		// This check should be removed.
+		// TODO (kevin85421): `GetJobInfo` should not return both JobInfo and error with nil values,
+		// but it does when the job is not found. This check is a workaround to avoid dereferencing
+		// a nil pointer.
 		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning)
 	}
 
