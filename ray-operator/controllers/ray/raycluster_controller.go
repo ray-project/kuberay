@@ -585,6 +585,15 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// if RayCluster is suspended, delete all pods and skip reconcile
 	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
 		clusterLabel := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
+		allPods := corev1.PodList{}
+		if err := r.List(ctx, &allPods, client.InNamespace(instance.Namespace), clusterLabel); err != nil {
+			return err
+		}
+
+		if len(allPods.Items) == 0 {
+			return nil
+		}
+
 		if err := r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(instance.Namespace), clusterLabel); err != nil {
 			return err
 		}
