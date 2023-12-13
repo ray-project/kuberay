@@ -168,7 +168,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	var rayClusterInstance *rayv1.RayCluster
 	if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
-		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusFailedToGetOrCreateRayCluster, err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	// If there is no cluster instance and no error suspend the job deployment
@@ -645,11 +644,6 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return nil, err
 		}
 
-		// special case: is the job is complete status and cluster has been recycled.
-		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
-			r.Log.Info("The cluster has been recycled for the job, skip duplicate creation", "rayjob", rayJobInstance.Name)
-			return nil, err
-		}
 		// special case: don't create a cluster instance and don't return an error if the suspend flag of the job is true
 		if rayJobInstance.Spec.Suspend {
 			return nil, nil
