@@ -42,7 +42,7 @@ func (s *RayServeSubmissionServiceServer) SubmitServeApplications(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := utils.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.DeployApplication(ctx, req.Submissionyaml.Configyaml)
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *RayServeSubmissionServiceServer) GetServeApplications(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := utils.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	serveDetails, err := rayDashboardClient.GetServeDetails(ctx)
 	if err != nil {
@@ -76,7 +76,7 @@ func (s *RayServeSubmissionServiceServer) DeleteRayServeApplications(ctx context
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClientFunc()
+	rayDashboardClient := utils.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.DeleteServeApplications(ctx)
 	if err != nil {
