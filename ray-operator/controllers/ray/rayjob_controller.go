@@ -313,7 +313,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-// createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist, otherwise returns the existing one. It returns the Job name.
+// createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
 func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
 	jobName := rayJobInstance.Name
 	jobNamespace := rayJobInstance.Namespace
