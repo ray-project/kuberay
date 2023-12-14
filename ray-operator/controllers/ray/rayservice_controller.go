@@ -510,7 +510,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			"Please manually tear down the cluster and apply a new config."
 		if err != nil {
 			r.Log.Error(err, errContextFailedToSerialize)
-			return RolloutNew
+			return DoNothing
 		}
 
 		if activeClusterHash == goalClusterHash {
@@ -525,7 +525,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 		goalClusterHash, err = generateHashWithoutWorkerGroupSpec(rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
 			r.Log.Error(err, errContextFailedToSerialize)
-			return RolloutNew
+			return DoNothing
 		}
 
 		if activeClusterHash == goalClusterHash {
