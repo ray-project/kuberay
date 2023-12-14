@@ -33,14 +33,10 @@ func IsJobTerminal(status JobStatus) bool {
 type JobDeploymentStatus string
 
 const (
-	JobDeploymentStatusInitializing                  JobDeploymentStatus = "Initializing"
-	JobDeploymentStatusFailedToGetOrCreateRayCluster JobDeploymentStatus = "FailedToGetOrCreateRayCluster"
-	JobDeploymentStatusWaitForK8sJob                 JobDeploymentStatus = "WaitForK8sJob"
-	JobDeploymentStatusFailedJobDeploy               JobDeploymentStatus = "FailedJobDeploy"
-	JobDeploymentStatusRunning                       JobDeploymentStatus = "Running"
-	JobDeploymentStatusFailedToGetJobStatus          JobDeploymentStatus = "FailedToGetJobStatus"
-	JobDeploymentStatusComplete                      JobDeploymentStatus = "Complete"
-	JobDeploymentStatusSuspended                     JobDeploymentStatus = "Suspended"
+	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
+	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
+	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
+	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 )
 
 // RayJobSpec defines the desired state of RayJob

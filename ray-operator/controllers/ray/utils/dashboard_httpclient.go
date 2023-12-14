@@ -481,7 +481,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string, log 
 	var jobLog RayJobLogsResponse
 	if err = json.Unmarshal(body, &jobLog); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
-		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
+		return nil, fmt.Errorf("GetJobLog fail: %s", string(body))
 	}
 
 	return &jobLog.Logs, nil
