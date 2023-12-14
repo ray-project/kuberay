@@ -212,28 +212,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 
 	// Ensure k8s job has been created
-	jobName, wasJobCreated, err := r.getOrCreateK8sJob(ctx, rayJobInstance, rayClusterInstance)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if wasJobCreated {
-		r.Log.Info("K8s job successfully created", "RayJob", rayJobInstance.Name, "jobId", jobName)
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created k8s job %s", jobName)
-	} else {
-		r.Log.Info("K8s job successfully retrieved", "RayJob", rayJobInstance.Name, "jobId", jobName)
-	}
-
-	// Check the status of the k8s job and update the RayJobInstance status accordingly.
-	// Get the k8s job
-	k8sJob := &batchv1.Job{}
-	err = r.Client.Get(ctx, types.NamespacedName{Name: jobName, Namespace: rayJobInstance.Namespace}, k8sJob)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("Job not found", "RayJob", rayJobInstance.Name, "jobId", jobName)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		r.Log.Error(err, "failed to get k8s job")
+	if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
@@ -334,8 +313,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-// getOrCreateK8sJob creates a Kubernetes Job for the Ray Job if it doesn't exist, otherwise returns the existing one. It returns the Job name and a boolean indicating whether the Job was created.
-func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (string, bool, error) {
+// createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist, otherwise returns the existing one. It returns the Job name.
+func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
 	jobName := rayJobInstance.Name
 	jobNamespace := rayJobInstance.Namespace
 
@@ -346,18 +325,18 @@ func (r *RayJobReconciler) getOrCreateK8sJob(ctx context.Context, rayJobInstance
 			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance, rayClusterInstance)
 			if err != nil {
 				r.Log.Error(err, "failed to get submitter template")
-				return "", false, err
+				return err
 			}
 			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
 
 		// Some other error occurred while trying to get the Job
-		r.Log.Error(err, "failed to get k8s Job")
-		return "", false, err
+		r.Log.Error(err, "failed to get Kubernetes Job")
+		return err
 	}
 
-	// Job already exists, instead of returning an error we return a "success"
-	return jobName, false, nil
+	r.Log.Info("Kubernetes Job already exists", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	return nil
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
@@ -399,8 +378,8 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 	return submitterTemplate, nil
 }
 
-// createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and a boolean indicating whether a new Job was created.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) (string, bool, error) {
+// createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and an error.
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
@@ -422,17 +401,17 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
-		return "", false, err
+		return err
 	}
 
 	// Create the Kubernetes Job
 	if err := r.Client.Create(ctx, job); err != nil {
 		r.Log.Error(err, "failed to create k8s Job")
-		return "", false, err
+		return err
 	}
-
-	// Return the Job's name and true indicating a new job was created
-	return job.Name, true, nil
+	r.Log.Info("Kubernetes Job created", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created Kubernetes Job %s", job.Name)
+	return nil
 }
 
 func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *rayv1.RayJob) (reconcile.Result, error) {
