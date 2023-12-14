@@ -241,17 +241,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// the RayJob is submitted against the RayCluster created by THIS job, then
 		// try to gracefully stop the Ray job and delete (suspend) the cluster
 		if rayJobInstance.Spec.Suspend && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			info, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			if !rayv1.IsJobTerminal(info.JobStatus) {
+			if !rayv1.IsJobTerminal(jobInfo.JobStatus) {
 				err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
 				if err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
-			if info.JobStatus != rayv1.JobStatusStopped {
+			if jobInfo.JobStatus != rayv1.JobStatusStopped {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 
@@ -304,6 +300,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
+	// TODO (kevin85421): Use the source of truth `jobInfo.JobStatus` instead.
 	if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
 		// Requeue the RayJob to poll its status from the running Ray job
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
