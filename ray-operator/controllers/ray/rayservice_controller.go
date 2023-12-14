@@ -586,7 +586,9 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 
 // updateRayClusterInstance updates the RayCluster instance.
 func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
-	r.Log.V(1).Info("updateRayClusterInstance", "rayClusterInstance", rayClusterInstance)
+	r.Log.V(1).Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
+	// Printing the whole RayCluster is too noisy. Only print the spec.
+	r.Log.V(1).Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
 
 	// Fetch the current state of the RayCluster
 	currentRayCluster := &rayv1.RayCluster{}
