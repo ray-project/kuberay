@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -591,14 +590,18 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 	r.Log.V(1).Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
 
 	// Fetch the current state of the RayCluster
-	currentRayCluster := &rayv1.RayCluster{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      rayClusterInstance.Name,
+	currentRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{
 		Namespace: rayClusterInstance.Namespace,
-	}, currentRayCluster)
+		Name:      rayClusterInstance.Name,
+	})
 	if err != nil {
-		r.Log.Error(err, "Failed to get the current state of RayCluster")
+		r.Log.Error(err, "Failed to get the current state of RayCluster", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
 		return err
+	}
+
+	if currentRayCluster == nil {
+		r.Log.Info("RayCluster not found, possibly deleted", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
+		return nil
 	}
 
 	// Update the fetched RayCluster with new changes
