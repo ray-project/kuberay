@@ -97,7 +97,7 @@ e2e-test: ## Run end to end tests using a pre-exiting cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
 	
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
-local-e2e-test: docker-image operator-image cluster load-image load-operator-image deploy-operator deploy load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
@@ -147,6 +147,7 @@ ifneq (${OPERATOR_IMAGE_TAG}, latest)
 	$(ENGINE) pull kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
 endif	
 	$(KIND) load docker-image kuberay/security-proxy:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
