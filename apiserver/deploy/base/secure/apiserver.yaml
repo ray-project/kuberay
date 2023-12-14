@@ -41,8 +41,8 @@ spec:
           httpGet:
             path: /healthz
             port: http
-      - name: security-proxy-container
-        image: quay.io/ibmdpdev/api-server-proxy:secure
+      - name: kuberay-security-proxy
+        image: kuberay/security-proxy:nightly
         imagePullPolicy: IfNotPresent
         ports:
           - name: http

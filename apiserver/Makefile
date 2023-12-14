@@ -147,7 +147,6 @@ ifneq (${OPERATOR_IMAGE_TAG}, latest)
 	$(ENGINE) pull kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
 endif	
 	$(KIND) load docker-image kuberay/security-proxy:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
-
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
@@ -164,13 +163,22 @@ docker-push: ## Push image for the api server.
 
 ##@ Deployment
 .PHONY: install
-install: kustomize ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	cd deploy/local && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
-	$(KUSTOMIZE) build deploy/local | kubectl create -f -
+install: kustomize docker-image load-image  ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+	cd deploy/local/insecure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
+	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
 .PHONY: uninstall
 uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build deploy/local | kubectl delete -f -
+	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
+
+.PHONY: install-secure
+install-secure: kustomize docker-image security-proxy-image load-image load-security-proxy-image  ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+	cd deploy/local/secure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG) && $(KUSTOMIZE) edit set image kuberay/security-proxy=kuberay/security-proxy:latest
+	$(KUSTOMIZE) build deploy/local/secure | kubectl create -f -
+
+.PHONY: uninstall-secure
+uninstall-secure: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
 
 .PHONY: deploy
 deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 

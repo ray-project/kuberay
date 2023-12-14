@@ -13,3 +13,6 @@ images:
 - name: kuberay/apiserver
   newName: kuberay/apiserver
   newTag: nightly
+- name: kuberay/security-proxy
+  newName: kuberay/security-proxy
+  newTag: nightly
