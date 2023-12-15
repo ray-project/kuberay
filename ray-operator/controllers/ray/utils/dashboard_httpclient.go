@@ -351,6 +351,7 @@ type RayJobLogsResponse struct {
 	Logs string `json:"logs,omitempty"`
 }
 
+// Note that RayJobInfo and error can't be nil at the same time.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
@@ -364,9 +365,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		// This does the right thing, but breaks E2E test
-		//		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
-		return nil, nil
+		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
 	}
 
 	body, err := io.ReadAll(resp.Body)
