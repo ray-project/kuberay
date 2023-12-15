@@ -375,7 +375,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 	return submitterTemplate, nil
 }
 
-// createNewK8sJob creates a new Kubernetes Job. It returns the Job's name and an error.
+// createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
