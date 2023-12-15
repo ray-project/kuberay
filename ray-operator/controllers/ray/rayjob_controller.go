@@ -224,14 +224,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Requeue after few seconds to avoid continuous connection errors.
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
+	r.Log.Info("GetJobInfo", "Job Info", jobInfo)
 
-	if jobInfo != nil {
-		// TODO (kevin85421): `GetJobInfo` should not return both JobInfo and error with nil values,
-		// but it does when the job is not found. This check is a workaround to avoid dereferencing
-		// a nil pointer.
-		err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning)
-	}
-
+	err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
@@ -271,9 +266,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			// Job may takes long time to start and finish, let's just periodically requeue the job and check status.
 		}
-		if isJobPendingOrRunning(jobInfo.JobStatus) {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-		}
 	}
 
 	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
@@ -301,8 +293,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 
 	// TODO (kevin85421): Use the source of truth `jobInfo.JobStatus` instead.
-	if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+	if isJobPendingOrRunning(jobInfo.JobStatus) {
 		// Requeue the RayJob to poll its status from the running Ray job
+		r.Log.Info("Requeue the RayJob because the Ray job is not in a terminal state", "RayJob", rayJobInstance.Name, "JobStatus", jobInfo.JobStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 	// Otherwise only reconcile the RayJob upon new events for watched resources

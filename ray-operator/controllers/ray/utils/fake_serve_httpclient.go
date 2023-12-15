@@ -60,7 +60,7 @@ func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (
 	if mock := r.GetJobInfoMock.Load(); mock != nil {
 		return (*mock)(ctx, jobId)
 	}
-	return nil, nil
+	return &RayJobInfo{JobStatus: rayv1.JobStatusRunning}, nil
 }
 
 func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
