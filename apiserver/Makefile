@@ -103,6 +103,7 @@ local-e2e-test: operator-image cluster load-operator-image deploy-operator insta
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
 KIND_CLUSTER_NAME ?= ray-api-server-cluster
 OPERATOR_IMAGE_TAG ?= latest
+SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
 	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
@@ -143,10 +144,10 @@ endif
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
-ifneq (${OPERATOR_IMAGE_TAG}, latest)
-	$(ENGINE) pull kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+ifneq (${SECURITY_IMAGE_TAG}, latest)
+	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 endif	
-	$(KIND) load docker-image kuberay/security-proxy:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 	
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
