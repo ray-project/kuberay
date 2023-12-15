@@ -170,7 +170,7 @@ install: kustomize docker-image load-image  ## Install the kuberay api server wi
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
 .PHONY: uninstall
-uninstall: ## Remove the kuberay api without security server from the K8s cluster specified in ~/.kube/config.
+uninstall: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
 
 .PHONY: install-secure
@@ -179,7 +179,7 @@ install-secure: kustomize docker-image security-proxy-image load-image load-secu
 	$(KUSTOMIZE) build deploy/local/secure | kubectl create -f -
 
 .PHONY: uninstall-secure
-uninstall-secure: ## Remove the kuberay api with security server from the K8s cluster specified in ~/.kube/config.
+uninstall-secure: ## Remove the kuberay api server with security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
 
 .PHONY: deploy
