@@ -16,7 +16,7 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestGetOrCreateK8sJob(t *testing.T) {
+func TestCreateK8sJobIfNeed(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
@@ -67,21 +67,15 @@ func TestGetOrCreateK8sJob(t *testing.T) {
 		Recorder: &record.FakeRecorder{},
 	}
 
-	retrievedJobName, wasCreated, err := rayJobReconciler.getOrCreateK8sJob(ctx, rayJob, rayCluster)
-
+	err := rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
 	assert.NoError(t, err)
-	assert.False(t, wasCreated)
-	assert.Equal(t, "test-rayjob", retrievedJobName)
 
 	// Test 2: Create a new k8s job if it does not already exist
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayCluster, rayJob).Build()
 	rayJobReconciler.Client = fakeClient
 
-	retrievedJobName, wasCreated, err = rayJobReconciler.getOrCreateK8sJob(ctx, rayJob, rayCluster)
-
+	err = rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
 	assert.NoError(t, err)
-	assert.True(t, wasCreated)
-	assert.Equal(t, "test-rayjob", retrievedJobName)
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {
