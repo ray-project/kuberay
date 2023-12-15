@@ -79,7 +79,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
 
-	// Suggested way to run tests
+	// The RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is an insurance to keep reconciliation continuously triggered to hopefully fix an unexpected state.
+	// In a production environment, the requeue period is set to five minutes by default, which is relatively infrequent.
+	// TODO: We probably should not shorten RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV here just to make tests pass.
+	// Instead, we should fix the reconciliation if any unexpected happened.
 	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,

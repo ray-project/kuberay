@@ -205,7 +205,7 @@ var _ = Context("Inside the default namespace", func() {
 			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("should re-create a deleted worker", func() {
@@ -311,7 +311,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("cluster's .status.state should be updated to 'suspended' shortly after all Pods are terminated", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Suspended))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Suspended))
 		})
 
 		It("set suspend to false and then revert it to true before all Pods are running", func() {
@@ -363,7 +363,7 @@ var _ = Context("Inside the default namespace", func() {
 			// RayCluster should be in Suspended state.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Suspended))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Suspended))
 		})
 
 		It("should run all head and worker pods if un-suspended", func() {
@@ -402,7 +402,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("cluster's .status.state should be updated back to 'ready' after being un-suspended", func() {
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 	})
 })
