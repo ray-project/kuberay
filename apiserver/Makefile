@@ -122,7 +122,7 @@ operator-image: ## Build the operator image to be loaded in your kind cluster.
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
@@ -165,21 +165,21 @@ docker-push: ## Push image for the api server.
 
 ##@ Deployment
 .PHONY: install
-install: kustomize docker-image load-image  ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+install: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
 	cd deploy/local/insecure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
 .PHONY: uninstall
-uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+uninstall: ## Remove the kuberay api without security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
 
 .PHONY: install-secure
-install-secure: kustomize docker-image security-proxy-image load-image load-security-proxy-image  ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+install-secure: kustomize docker-image security-proxy-image load-image load-security-proxy-image  ## Install the kuberay api server with security to the K8s cluster specified in ~/.kube/config.
 	cd deploy/local/secure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG) && $(KUSTOMIZE) edit set image kuberay/security-proxy=kuberay/security-proxy:latest
 	$(KUSTOMIZE) build deploy/local/secure | kubectl create -f -
 
 .PHONY: uninstall-secure
-uninstall-secure: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
+uninstall-secure: ## Remove the kuberay api with security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
 
 .PHONY: deploy
