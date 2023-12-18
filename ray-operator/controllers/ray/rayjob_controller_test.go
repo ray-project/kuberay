@@ -270,7 +270,7 @@ var _ = Context("Inside the default namespace", func() {
 			// The RayCluster.Status.State should be Ready.
 			Eventually(
 				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS+5), time.Millisecond*500).Should(Equal(rayv1.Ready))
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("Dashboard URL should be set", func() {
