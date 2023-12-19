@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -88,12 +89,12 @@ func TestGetClusterAction(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, DoNothing, action)
 
-	// Test Case 3: Different WorkerGroupSpecs should lead to Update.
+	// Test Case 3: Different WorkerGroupSpecs should lead to RolloutNew.
 	clusterSpec3 := clusterSpec1.DeepCopy()
 	clusterSpec3.WorkerGroupSpecs[0].MinReplicas = pointer.Int32(5)
 	action, err = getClusterAction(clusterSpec1, *clusterSpec3)
 	assert.Nil(t, err)
-	assert.Equal(t, Update, action)
+	assert.Equal(t, RolloutNew, action)
 
 	// Test Case 4: Adding a new WorkerGroupSpec should lead to Update.
 	clusterSpec4 := clusterSpec1.DeepCopy()
@@ -106,12 +107,12 @@ func TestGetClusterAction(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, Update, action)
 
-	// Test Case 5: Removing a WorkerGroupSpec should lead to Update.
+	// Test Case 5: Removing a WorkerGroupSpec should lead to RolloutNew.
 	clusterSpec5 := clusterSpec1.DeepCopy()
 	clusterSpec5.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
 	action, err = getClusterAction(clusterSpec1, *clusterSpec5)
 	assert.Nil(t, err)
-	assert.Equal(t, Update, action)
+	assert.Equal(t, RolloutNew, action)
 
 	// Test Case 6: Only changing the number of replicas should lead to DoNothing.
 	clusterSpec6 := clusterSpec1.DeepCopy()
@@ -119,6 +120,46 @@ func TestGetClusterAction(t *testing.T) {
 	action, err = getClusterAction(clusterSpec1, *clusterSpec6)
 	assert.Nil(t, err)
 	assert.Equal(t, DoNothing, action)
+
+	// Test Case 7: Only changing the number of replicas in an existing WorkerGroupSpec *and* adding a new WorkerGroupSpec should lead to Update.
+	clusterSpec7 := clusterSpec1.DeepCopy()
+	clusterSpec7.WorkerGroupSpecs[0].Replicas = pointer.Int32(3)
+	clusterSpec7.WorkerGroupSpecs = append(clusterSpec7.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		Replicas:    pointer.Int32(2),
+		MinReplicas: pointer.Int32(1),
+		MaxReplicas: pointer.Int32(4),
+	})
+	action, err = getClusterAction(clusterSpec1, *clusterSpec7)
+	assert.Nil(t, err)
+	assert.Equal(t, Update, action)
+
+	// Test Case 8: Adding two new WorkerGroupSpecs should lead to Update.
+	clusterSpec8 := clusterSpec1.DeepCopy()
+	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		Replicas:    pointer.Int32(2),
+		MinReplicas: pointer.Int32(1),
+		MaxReplicas: pointer.Int32(4),
+	})
+	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		Replicas:    pointer.Int32(3),
+		MinReplicas: pointer.Int32(2),
+		MaxReplicas: pointer.Int32(5),
+	})
+	action, err = getClusterAction(clusterSpec1, *clusterSpec8)
+	assert.Nil(t, err)
+	assert.Equal(t, Update, action)
+
+	// Test Case 9: Changing an existing WorkerGroupSpec outside of Replicas/WorkersToDelete *and* adding a new WorkerGroupSpec should lead to RolloutNew.
+	clusterSpec9 := clusterSpec1.DeepCopy()
+	clusterSpec9.WorkerGroupSpecs[0].MaxReplicas = pointer.Int32(5)
+	clusterSpec9.WorkerGroupSpecs = append(clusterSpec9.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		Replicas:    pointer.Int32(2),
+		MinReplicas: pointer.Int32(1),
+		MaxReplicas: pointer.Int32(4),
+	})
+	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
+	assert.Nil(t, err)
+	assert.Equal(t, RolloutNew, action)
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
@@ -723,6 +764,7 @@ func TestReconcileRayCluster(t *testing.T) {
 			Namespace: namespace,
 			Annotations: map[string]string{
 				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
 			},
 		},
 	}
