@@ -13,7 +13,7 @@ const (
 	RayIDLabelKey                            = "ray.io/identifier"
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
-	HashWithoutWorkerGroupSpecKey            = "ray.io/hash-without-worker-group-spec"
+	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0

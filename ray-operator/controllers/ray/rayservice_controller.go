@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -499,7 +500,6 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			r.Log.Info("No active Ray cluster. RayService operator should prepare a new Ray cluster.")
 			return RolloutNew
 		}
-		// TODO (Archit): Maybe factor out the above stuff
 
 		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
 		// each WorkerGroup, then do nothing.
@@ -518,19 +518,34 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			return DoNothing
 		}
 
-		// Case 2: Otherwise, if everything is identical except some change in WorkerGroupSpecs,
-		// then Update.
+		// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
 
-		activeClusterHash = activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutWorkerGroupSpecKey]
-		goalClusterHash, err = generateHashWithoutWorkerGroupSpec(rayServiceInstance.Spec.RayClusterSpec)
+		activeClusterHash = activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
 		if err != nil {
 			r.Log.Error(err, errContextFailedToSerialize)
 			return DoNothing
 		}
+		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
 
-		if activeClusterHash == goalClusterHash {
-			r.Log.Info("Active Ray cluster config matches goal config, except for WorkerGroupSpecs. Updating RayCluster.")
-			return Update
+		if goalNumWorkerGroups > activeClusterNumWorkerGroups {
+
+			// Remove the new workergroup(s) from the end before calculating the hash.
+			goalClusterSpec := rayServiceInstance.Spec.RayClusterSpec.DeepCopy()
+			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:activeClusterNumWorkerGroups]
+
+			// Generate the hash of the old worker group specs.
+			goalClusterHash, err = generateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
+			if err != nil {
+				r.Log.Error(err, errContextFailedToSerialize)
+				return DoNothing
+			}
+
+			if activeClusterHash == goalClusterHash {
+				r.Log.Info("Active Ray cluster config matches goal config, except that one or more entries were appended to WorkerGroupSpecs. Updating RayCluster.")
+				return Update
+			}
 		}
 
 		// Case 3: Otherwise, rollout a new cluster.
@@ -691,11 +706,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		r.Log.Error(err, errContext)
 		return nil, err
 	}
-	rayClusterAnnotations[utils.HashWithoutWorkerGroupSpecKey], err = generateHashWithoutWorkerGroupSpec(rayService.Spec.RayClusterSpec)
-	if err != nil {
-		r.Log.Error(err, errContext)
-		return nil, err
-	}
+	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1247,26 +1258,24 @@ func getClusterAction(old_spec rayv1.RayClusterSpec, new_spec rayv1.RayClusterSp
 		return DoNothing, nil
 	}
 
-	// Case 2: Otherwise, if everything is identical except some change in WorkerGroupSpecs,
-	// then Update.
-	same_hash, err = compareRayClusterJsonHash(old_spec, new_spec, generateHashWithoutWorkerGroupSpec)
-	if err != nil {
-		return DoNothing, err
-	}
-	if same_hash {
-		return Update, nil
+	// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+	// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
+	new_spec_without_new_worker_groups := new_spec.DeepCopy()
+	if len(new_spec.WorkerGroupSpecs) > len(old_spec.WorkerGroupSpecs) {
+		// Remove the new worker groups from the new spec.
+		new_spec_without_new_worker_groups.WorkerGroupSpecs = new_spec_without_new_worker_groups.WorkerGroupSpecs[:len(old_spec.WorkerGroupSpecs)]
+
+		same_hash, err = compareRayClusterJsonHash(old_spec, *new_spec_without_new_worker_groups, generateHashWithoutReplicasAndWorkersToDelete)
+		if err != nil {
+			return DoNothing, err
+		}
+		if same_hash {
+			return Update, nil
+		}
 	}
 
 	// Case 3: Otherwise, rollout a new cluster.
 	return RolloutNew, nil
-}
-
-func generateHashWithoutWorkerGroupSpec(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
-	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
-	updatedRayClusterSpec.WorkerGroupSpecs = nil
-
-	// Generate a hash for the RayClusterSpec.
-	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
 func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
