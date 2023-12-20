@@ -526,7 +526,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			return DoNothing
 		}
 		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
-
+		r.Log.Info("number of worker groups", "activeClusterNumWorkerGroups", activeClusterNumWorkerGroups, "goalNumWorkerGroups", goalNumWorkerGroups)
 		if goalNumWorkerGroups > activeClusterNumWorkerGroups {
 
 			// Remove the new workergroup(s) from the end before calculating the hash.
