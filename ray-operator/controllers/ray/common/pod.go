@@ -689,6 +689,13 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
 	rayStartParams["block"] = "true"
 
+	// Hardcode the dashboard-agent-listen-port to the default value if it is not provided. This is purely a
+	// defensive measure; Ray will already use this default value if the flag is not provided.
+	// The default value is used by the RayCluster health probe; see https://github.com/ray-project/kuberay/issues/1760
+	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
+		rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(utils.DefaultDashboardAgentListenPort)
+	}
+
 	return rayStartParams
 }
 
