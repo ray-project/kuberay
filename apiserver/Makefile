@@ -97,12 +97,13 @@ e2e-test: ## Run end to end tests using a pre-exiting cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
 	
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
-local-e2e-test: docker-image operator-image cluster load-image load-operator-image deploy-operator deploy load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
 KIND_CLUSTER_NAME ?= ray-api-server-cluster
 OPERATOR_IMAGE_TAG ?= latest
+SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
 	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
@@ -121,7 +122,7 @@ operator-image: ## Build the operator image to be loaded in your kind cluster.
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
@@ -143,11 +144,11 @@ endif
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
-ifneq (${OPERATOR_IMAGE_TAG}, latest)
-	$(ENGINE) pull kuberay/security-proxy:$(OPERATOR_IMAGE_TAG)
+ifneq (${SECURITY_IMAGE_TAG}, latest)
+	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 endif	
-	$(KIND) load docker-image kuberay/security-proxy:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
-
+	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
@@ -164,13 +165,22 @@ docker-push: ## Push image for the api server.
 
 ##@ Deployment
 .PHONY: install
-install: kustomize ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	cd deploy/local && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
-	$(KUSTOMIZE) build deploy/local | kubectl create -f -
+install: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
+	cd deploy/local/insecure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
+	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
 .PHONY: uninstall
-uninstall: ## Install the kuberay api server to the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build deploy/local | kubectl delete -f -
+uninstall: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
+
+.PHONY: install-secure
+install-secure: kustomize docker-image security-proxy-image load-image load-security-proxy-image  ## Install the kuberay api server with security to the K8s cluster specified in ~/.kube/config.
+	cd deploy/local/secure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG) && $(KUSTOMIZE) edit set image kuberay/security-proxy=kuberay/security-proxy:latest
+	$(KUSTOMIZE) build deploy/local/secure | kubectl create -f -
+
+.PHONY: uninstall-secure
+uninstall-secure: ## Remove the kuberay api server with security server from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
 
 .PHONY: deploy
 deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 

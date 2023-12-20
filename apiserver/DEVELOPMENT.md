@@ -159,7 +159,9 @@ make docker-image
 
 #### Start Kubernetes Deployment
 
-Note that you should make your KubeRay API server image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. If you are using a Kind cluster for development, you can run `make load-image` to load the newly built API server image into the Kind cluster.  The operator image will also be needed to be loaded on your cluster. You can use `make operator-image` to build a fresh image from sources, and, if you are using a Kind cluster for development, you can run `make load-operator-image`.
+Note that you should make your KubeRay API server image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. If you are using a Kind cluster for development, you can run `make load-image` to load the newly built API server image into the Kind cluster.  The operator image will also be needed to be loaded on your cluster. If you want run secure API server, you can build security proxy using `make security-proxy-image` and load it to the cluster using `make load-security-proxy-image`
+
+You can use `make operator-image` to build a fresh image from sources, and, if you are using a Kind cluster for development, you can run `make load-operator-image`.
 
 ```bash
 #Optionally, to load the api server image into the local kind cluster created with make cluster
@@ -168,8 +170,11 @@ make load-image
 #To use the  helm charts
 make deploy
 
-#To use the configuration from deploy/base
+#To use the configuration from deploy/base for insecure API server
 make install
+
+#To use the configuration from deploy/base for secure API server
+make install-secure
 ```
 
 #### Stop Kubernetes Deployment
@@ -178,8 +183,11 @@ make install
 #To use the helm charts
 make undeploy
 
-#To use the configuration
+#To use the configuration insecure
 make uninstall
+
+#To use the configuration secure
+make uninstall-secure
 ```
 
 #### Local Kind Cluster Deployment
@@ -190,7 +198,9 @@ As a convenience for local development the following `make` targets are provided
 * `make clean-cluster` -- deletes the local kind cluster created with `make cluster`
 * `load-image` -- loads the docker image defined by the `IMG` make variable into the kind cluster. The default value for variable is: `kuberay/apiserver:latest`. The name of the image can be changed by using `make load-image -e IMG=<your image name and tag>`
 * `operator-image` -- Build the operator image to be loaded in your kind cluster. The operator image build is `kuberay/operator:latest`. The image tag can be overridden from the command line: ( example: `make operator-image -e OPERATOR_IMAGE_TAG=foo`)
-* `load-operator-image` -- Load the operator image to the kind cluster created with `make cluster`.  It should be used in conjunction with the `deploy-operator targe`
+* `load-operator-image` -- Load the operator image to the kind cluster created with `make cluster`.  It should be used in conjunction with the `deploy-operator target`
+* `security-proxy-image` -- Build the security proxy image to be loaded in your kind cluster. The security proxy image build is `kuberay/security-proxy:latest`. The image tag can be overridden from the command line: ( example: `make security-proxy-image -e SECURITY_IMAGE_TAG=foo`)
+* `load-security-proxy-image` -- Load the security proxy image to the kind cluster created with `make cluster`.  It should be used in conjunction with the `install-secure`
 * `deploy-operator` -- Deploy operator into your cluster.  The tag for the operator image is `kuberay/operator:latest`.
 * `undeploy-operator` -- Undeploy operator from your cluster
 * `load-ray-test-image` -- Load the ray test images into the cluster.
