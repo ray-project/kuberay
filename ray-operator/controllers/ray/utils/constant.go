@@ -94,6 +94,9 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+	// This environment variable is used by Ray Autoscaler V2. For the Autoscaler V2 alpha
+	// release, its value is the Pod name. This may change in the future.
+	RAY_CLOUD_INSTANCE_ID = "RAY_CLOUD_INSTANCE_ID"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
