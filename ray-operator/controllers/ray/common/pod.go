@@ -689,13 +689,6 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
 	rayStartParams["block"] = "true"
 
-	// Add dashboard listen port for RayService.
-	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		if value, ok := annotations[utils.EnableServeServiceKey]; ok && value == utils.EnableServeServiceTrue {
-			rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(utils.DefaultDashboardAgentListenPort)
-		}
-	}
-
 	return rayStartParams
 }
 

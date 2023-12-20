@@ -323,15 +323,6 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 		ports = getDefaultPorts()
 	}
 
-	// Check if agent port is defined. If not, check if enable agent service.
-	if _, agentDefined := ports[utils.DashboardAgentListenPortName]; !agentDefined {
-		enableServeServiceValue, exist := cluster.Annotations[utils.EnableServeServiceKey]
-		if exist && enableServeServiceValue == utils.EnableServeServiceTrue {
-			// If agent port is not in the config, add default value for it.
-			ports[utils.DashboardAgentListenPortName] = utils.DefaultDashboardAgentListenPort
-		}
-	}
-
 	// check if metrics port is defined. If not, add default value for it.
 	if _, metricsDefined := ports[utils.MetricsPortName]; !metricsDefined {
 		ports[utils.MetricsPortName] = utils.DefaultMetricsPort

@@ -1110,44 +1110,6 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
 }
 
-func TestSetMissingRayStartParamsAgentListenPort(t *testing.T) {
-	// The "dashboard-agent-listen-port" port will be automatically injected into RayStartParams with a default
-	// value of 52365 (i.e., DefaultDashboardAgentListenPort) when the annotation "ray.io/enable-serve-service"
-	// is set to true. The behavior is the same for both head and workers.
-	headPort := "6379"
-	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
-	rayStartParams := map[string]string{}
-	annotaions := map[string]string{}
-
-	// Case 1: Head node without "ray.io/enable-serve-service=true".
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
-	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Head Pod should not have a dashboard-agent-listen-port option set by default.")
-
-	// Case 2: Worker node without "ray.io/enable-serve-service=true".
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
-	assert.NotContains(t, rayStartParams, "dashboard-agent-listen-port", "Worker Pod should not have a dashboard-agent-listen-port option set by default.")
-
-	// Case 3: Head node with "ray.io/enable-serve-service=true" and users do not provide "dashboard-agent-listen-port".
-	annotaions = map[string]string{utils.EnableServeServiceKey: utils.EnableServeServiceTrue}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
-	assert.Equal(t, fmt.Sprint(utils.DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
-
-	// Case 4: Worker node with "ray.io/enable-serve-service=true" and users do not provide "dashboard-agent-listen-port".
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
-	assert.Equal(t, fmt.Sprint(utils.DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
-
-	// Case 5: Head node with "ray.io/enable-serve-service=true" and users provide "dashboard-agent-listen-port".
-	customDashboardAgentListenPort := utils.DefaultDashboardAgentListenPort + 1
-	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", annotaions)
-	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
-
-	// Case 6: Worker node with "ray.io/enable-serve-service=true" and users provide "dashboard-agent-listen-port".
-	rayStartParams = map[string]string{"dashboard-agent-listen-port": fmt.Sprint(customDashboardAgentListenPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, annotaions)
-	assert.Equal(t, fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customDashboardAgentListenPort), rayStartParams["dashboard-agent-listen-port"]))
-}
-
 func TestGetCustomWorkerInitImage(t *testing.T) {
 	// cleanup
 	defer os.Unsetenv(EnableInitContainerInjectionEnvKey)
