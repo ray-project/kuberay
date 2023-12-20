@@ -1243,31 +1243,31 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	return nil
 }
 
-func getClusterAction(old_spec rayv1.RayClusterSpec, new_spec rayv1.RayClusterSpec) (ClusterAction, error) {
+func getClusterAction(oldSpec rayv1.RayClusterSpec, newSpec rayv1.RayClusterSpec) (ClusterAction, error) {
 	// Return the appropriate action based on the difference in the old and new RayCluster specs.
 
 	// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
 	// each WorkerGroup, then do nothing.
-	same_hash, err := compareRayClusterJsonHash(old_spec, new_spec, generateHashWithoutReplicasAndWorkersToDelete)
+	sameHash, err := compareRayClusterJsonHash(oldSpec, newSpec, generateHashWithoutReplicasAndWorkersToDelete)
 	if err != nil {
 		return DoNothing, err
 	}
-	if same_hash {
+	if sameHash {
 		return DoNothing, nil
 	}
 
 	// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 	// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
-	new_spec_without_new_worker_groups := new_spec.DeepCopy()
-	if len(new_spec.WorkerGroupSpecs) > len(old_spec.WorkerGroupSpecs) {
+	newSpec_without_new_worker_groups := newSpec.DeepCopy()
+	if len(newSpec.WorkerGroupSpecs) > len(oldSpec.WorkerGroupSpecs) {
 		// Remove the new worker groups from the new spec.
-		new_spec_without_new_worker_groups.WorkerGroupSpecs = new_spec_without_new_worker_groups.WorkerGroupSpecs[:len(old_spec.WorkerGroupSpecs)]
+		newSpec_without_new_worker_groups.WorkerGroupSpecs = newSpec_without_new_worker_groups.WorkerGroupSpecs[:len(oldSpec.WorkerGroupSpecs)]
 
-		same_hash, err = compareRayClusterJsonHash(old_spec, *new_spec_without_new_worker_groups, generateHashWithoutReplicasAndWorkersToDelete)
+		sameHash, err = compareRayClusterJsonHash(oldSpec, *newSpec_without_new_worker_groups, generateHashWithoutReplicasAndWorkersToDelete)
 		if err != nil {
 			return DoNothing, err
 		}
-		if same_hash {
+		if sameHash {
 			return Update, nil
 		}
 	}
