@@ -541,7 +541,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *ra
 			}
 
 			if activeClusterHash == goalClusterHash {
-				r.Log.Info("Active Ray cluster config matches goal config, except that one or more entries were appended to WorkerGroupSpecs. Updating RayCluster.")
+				r.Log.Info("Active RayCluster config matches goal config, except that one or more entries were appended to WorkerGroupSpecs. Updating RayCluster.")
 				return Update
 			}
 		}
