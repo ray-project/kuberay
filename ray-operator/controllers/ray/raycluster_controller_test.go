@@ -244,16 +244,8 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. Here, we simulate the Ray
-			// Autoscaler's behavior after the scale-down process is completed.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
-					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
-				return k8sClient.Update(ctx, myRayCluster)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayCluster resource")
+
+			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
 		})
 
 		It("should increase replicas past maxReplicas", func() {
@@ -449,4 +441,17 @@ func isAllPodsRunning(ctx context.Context, podlist corev1.PodList, filterLabels 
 		}
 	}
 	return true
+}
+
+func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, workerGroupIndex int) {
+	// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. In this function,
+	// we simulate the behavior of the Ray Autoscaler after the scaling process has finished.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		Eventually(
+			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
+			time.Second*9, time.Millisecond*500).Should(BeNil(), "raycluster = %v", rayCluster)
+		rayCluster.Spec.WorkerGroupSpecs[workerGroupIndex].ScaleStrategy.WorkersToDelete = []string{}
+		return k8sClient.Update(ctx, rayCluster)
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to clean up WorkersToDelete")
 }
