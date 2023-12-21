@@ -10315,6 +10315,7 @@ spec:
               suspend:
                 type: boolean
               ttlSecondsAfterFinished:
+                default: 0
                 format: int32
                 type: integer
             required:
@@ -20683,6 +20684,7 @@ spec:
               suspend:
                 type: boolean
               ttlSecondsAfterFinished:
+                default: 0
                 format: int32
                 type: integer
             required:

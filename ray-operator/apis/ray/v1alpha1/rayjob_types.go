@@ -58,6 +58,7 @@ type RayJobSpec struct {
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
+	// +kubebuilder:default:=0
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
