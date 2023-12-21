@@ -267,29 +267,27 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				redisCleanupJob := redisCleanupJobs.Items[0]
 				r.Log.Info("Redis cleanup Job status", "Job name", redisCleanupJob.Name,
 					"Active", redisCleanupJob.Status.Active, "Succeeded", redisCleanupJob.Status.Succeeded, "Failed", redisCleanupJob.Status.Failed)
-				if redisCleanupJob.Status.Succeeded > 0 {
-					r.Log.Info(fmt.Sprintf(
-						"The Redis cleanup Job %s has been completed. "+
-							"The storage namespace %s in Redis has been fully deleted.",
-						redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
-					// Remove the finalizer from the RayCluster CR.
+				if condition, finished := utils.IsJobFinished(&redisCleanupJob); finished {
 					controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
 					if err := r.Update(ctx, instance); err != nil {
-						r.Log.Error(err, "Failed to remove finalizer for RayCluster")
 						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 					}
-					r.Log.Info(fmt.Sprintf(
-						"The Redis cleanup finalizer has been successfully removed from the RayCluster CR %s. "+
-							"We do not need to requeue the RayCluster CR anymore.", instance.Name))
+					switch condition {
+					case batchv1.JobComplete:
+						r.Log.Info(fmt.Sprintf(
+							"The Redis cleanup Job %s has been completed. "+
+								"The storage namespace %s in Redis has been fully deleted.",
+							redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
+					case batchv1.JobFailed:
+						r.Log.Info(fmt.Sprintf(
+							"The Redis cleanup Job %s has failed, requeue the RayCluster CR after 5 minute. "+
+								"You should manually delete the storage namespace %s in Redis and remove the RayCluster's finalizer. "+
+								"Please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.",
+							redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
+					}
 					return ctrl.Result{}, nil
-				}
-				if redisCleanupJob.Status.Failed > 0 {
-					r.Log.Info(fmt.Sprintf(
-						"The Redis cleanup Job %s has failed, requeue the RayCluster CR after 5 minute. "+
-							"You should manually delete the storage namespace %s in Redis and remove the RayCluster's finalizer. "+
-							"Please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.",
-						redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
-					return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+				} else { // the redisCleanupJob is still running
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
 			} else {
 				redisCleanupJob := r.buildRedisCleanupJob(*instance)
@@ -1169,6 +1167,8 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) b
 				ObjectMeta: pod.ObjectMeta,
 				Spec:       pod.Spec,
 			},
+			// make this job be best-effort only for 5 minutes.
+			ActiveDeadlineSeconds: pointer.Int64(300),
 		},
 	}
 

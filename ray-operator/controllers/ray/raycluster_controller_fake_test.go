@@ -2230,10 +2230,12 @@ func Test_RedisCleanup(t *testing.T) {
 				assert.Nil(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 1, len(rayClusterList.Items))
 				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
+				assert.Equal(t, int64(300), *jobList.Items[0].Spec.ActiveDeadlineSeconds)
 
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
 				job.Status.Succeeded = 1
+				job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
 				err = fakeClient.Status().Update(ctx, &job)
 				assert.Nil(t, err, "Fail to update Job status")
 
