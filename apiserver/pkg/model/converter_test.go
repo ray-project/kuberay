@@ -285,7 +285,7 @@ var JobNewClusterTest = rayv1api.RayJob{
 			"job_submission_id": "123",
 		},
 		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: &secondsValue,
+		TTLSecondsAfterFinished: secondsValue,
 		RayClusterSpec:          &ClusterSpecTest.Spec,
 	},
 }
@@ -301,7 +301,7 @@ var JobExistingClusterTest = rayv1api.RayJob{
 	Spec: rayv1api.RayJobSpec{
 		Entrypoint:              "python /home/ray/samples/sample_code.py",
 		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: &secondsValue,
+		TTLSecondsAfterFinished: secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
@@ -319,7 +319,7 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 	Spec: rayv1api.RayJobSpec{
 		Entrypoint:              "python /home/ray/samples/sample_code.py",
 		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: &secondsValue,
+		TTLSecondsAfterFinished: secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
