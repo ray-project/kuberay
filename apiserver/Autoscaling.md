@@ -41,7 +41,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
     "enableInTreeAutoscaling": true,
     "autoscalerOptions": {
         "upscalingMode": "Default",
-        "idleTimeoutSeconds": 60,
+        "idleTimeoutSeconds": 30,
         "cpu": "500m",
         "memory": "512Mi"
     },
@@ -116,9 +116,18 @@ Note that only head pod is running and it has 2 containers
 
 Create a detached actor:
 
-```shell
-export HEAD_POD=$(kubectl get pods --selector=ray.io/node-type=head -o custom-columns=POD:metadata.name --no-headers)
-kubectl exec -it $HEAD_POD -- python3 /home/ray/samples/detached_actor.py actor1
+```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "create-actor",
+  "namespace": "default",
+  "user": "boris",
+  "entrypoint": "python /home/ray/samples/detached_actor.py actor1",
+  "clusterSelector": {
+    "ray.io/cluster": "test-cluster"
+  }
+}'
 ```
 
 Because we have specified `num_cpu: 0` for head node, this will cause creation of a worker node. Run:
@@ -140,11 +149,21 @@ You can see that a worker node have been created.
 
 Run:
 
-```shell
-kubectl exec -it $HEAD_POD -- python3 /home/ray/samples/terminate_detached_actor.py actor1
+```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
+--header 'Content-Type: application/json' \
+--data '{
+  "name": "delete-actor",
+  "namespace": "default",
+  "user": "boris",
+  "entrypoint": "python /home/ray/samples/terminate_detached_actor.py actor1",
+  "clusterSelector": {
+    "ray.io/cluster": "test-cluster"
+  }
+}'
 ```
 
-A worker Pod will be deleted after `idleTimeoutSeconds` (default 60s) seconds. Run:
+A worker Pod will be deleted after `idleTimeoutSeconds` (default 60s, we specified 30) seconds. Run:
 
 ```shell
 kubectl get pods
