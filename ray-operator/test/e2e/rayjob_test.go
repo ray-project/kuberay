@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -110,8 +109,8 @@ env_vars:
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
 
 		// And the RayJob deployment status is updated accordingly
-		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 10*time.Second).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
 
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
