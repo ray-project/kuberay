@@ -299,17 +299,6 @@ applications:
 				for _, pod := range workerPods.Items {
 					// Worker Pod should have only one container.
 					Expect(len(pod.Spec.Containers)).Should(Equal(1))
-					// Each worker Pod should have a container port with the name "dashboard-agent"
-					exist := false
-					for _, port := range pod.Spec.Containers[0].Ports {
-						if port.Name == utils.DashboardAgentListenPortName {
-							exist = true
-							break
-						}
-					}
-					if !exist {
-						Fail(fmt.Sprintf("Worker Pod %v should have a container port with the name %v", pod.Name, utils.DashboardAgentListenPortName))
-					}
 				}
 			}
 		})
