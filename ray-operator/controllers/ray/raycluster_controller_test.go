@@ -244,7 +244,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
 				time.Second*15, time.Millisecond*500).Should(Equal(2), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			
+
 			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
 		})
 
