@@ -364,6 +364,7 @@ jobs:
       run: |
         CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
       working-directory: ${{env.working-directory}}
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
     - name: Cross Compile linux/arm64 Operator binary
       env:
@@ -376,24 +377,26 @@ jobs:
         sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         CC=$CC CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
       working-directory: ${{env.working-directory}}
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
     - name: Build MultiArch Docker Image and Push on Merge
       uses: docker/build-push-action@v5
       env:
-        PUSH: ${{contains(fromJson('["refs/heads/master"]'), github.ref)}}
         REPO_ORG: kuberay
         REPO_NAME: operator
       with:
         platforms: linux/amd64,linux/arm64
         context: ${{env.working-directory}}
         file: ${{env.working-directory}}/Dockerfile.buildx
-        push: ${{env.PUSH}}
+        push: true
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
           docker.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
           docker.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
 
   test-compatibility-2_5_0:
     needs:
