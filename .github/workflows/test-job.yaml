@@ -397,7 +397,6 @@ jobs:
           docker.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
       if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-
   test-compatibility-2_5_0:
     needs:
       - build_operator
