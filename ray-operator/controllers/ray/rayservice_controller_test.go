@@ -431,6 +431,8 @@ applications:
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+
+			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
 		})
 
 		It("Autoscaler updates the pending RayCluster and should not switch to a new RayCluster", func() {
@@ -482,6 +484,8 @@ applications:
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(Equal(initialPendingClusterName), "New active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
+
+			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
 		})
 
 		It("Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.", func() {
