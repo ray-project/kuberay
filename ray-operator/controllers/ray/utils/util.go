@@ -307,6 +307,8 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	return sumResourceList(minResourcesList)
 }
 
+// calculatePodResource returns the total resources of a pod.
+// Request values take precedence over limit values.
 func calculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
