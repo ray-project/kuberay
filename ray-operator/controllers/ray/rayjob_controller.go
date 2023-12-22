@@ -360,6 +360,12 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		},
 	}
 
+	// Without TTLSecondsAfterFinished, the job has a default deletion policy of `orphanDependents` causing
+	// Pods created by an unmanaged Job to be left around after that Job is fully deleted.
+	if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+		job.Spec.TTLSecondsAfterFinished = pointer.Int32(rayJobInstance.Spec.TTLSecondsAfterFinished)
+	}
+
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
@@ -376,10 +382,11 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	return nil
 }
 
-// Delete the RayCluster and the Kubernetes Job associated with the RayJob to release the compute resources.
+// Delete the RayCluster associated with the RayJob to release the compute resources.
+// In the future, we may also need to delete other Kubernetes resources. Note that
+// this function doesn't delete the Kubernetes Job. Instead, we use the built-in
+// TTL mechanism of the Kubernetes Job for deletion.
 func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
-	// TODO (kevin85421): The logics of RayCluster and Kubernetes Job deletion are pretty similar.
-	// It would be great if we can refactor the code to avoid code duplication.
 	clusterIdentifier := types.NamespacedName{
 		Name:      rayJobInstance.Status.RayClusterName,
 		Namespace: rayJobInstance.Namespace,
@@ -390,9 +397,8 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 			return err
 		}
 		// If the cluster is not found, it means the cluster has been already deleted.
-		// Return nil to make this function idempotent.
+		// Don't return error to make this function idempotent.
 		r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
-		return nil
 	} else {
 		if cluster.DeletionTimestamp != nil {
 			r.Log.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
@@ -402,36 +408,6 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 			}
 			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
-			return nil
-		}
-	}
-
-	// TODO (kevin85421): We should use MatchingLabels to get the job instead after we have well-defined labels.
-	// TODO (kevin85421): If KubeRay supports various submission methods in the future, we should add a check
-	// here to determine whether it's necessary to delete the Kubernetes Job.
-	jobIdentifier := types.NamespacedName{
-		Name:      rayJobInstance.Name,
-		Namespace: rayJobInstance.Namespace,
-	}
-	job := batchv1.Job{}
-	if err := r.Get(ctx, jobIdentifier, &job); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		// If the Kubernetes Job is not found, it means the Kubernetes Job has been already deleted.
-		// Return nil to make this function idempotent.
-		r.Log.Info("The associated Kubernetes Job has been already deleted and it can not be found", "Kubernetes Job", jobIdentifier)
-		return nil
-	} else {
-		if job.DeletionTimestamp != nil {
-			r.Log.Info("The Kubernetes Job deletion is ongoing.", "rayjob", rayJobInstance.Name, "Kubernetes Job", job.Name)
-		} else {
-			if err := r.Delete(ctx, &job); err != nil {
-				return err
-			}
-			r.Log.Info("The associated Kubernetes Job is deleted", "Kubernetes Job", jobIdentifier)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted Kubernetes Job %s/%s", jobIdentifier.Namespace, jobIdentifier.Name)
-			return nil
 		}
 	}
 	return nil
