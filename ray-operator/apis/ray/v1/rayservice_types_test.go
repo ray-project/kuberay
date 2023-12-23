@@ -361,6 +361,10 @@ var expected = `{
 
          },
          "rayClusterStatus":{
+            "desiredCPUs": "0",
+            "desiredMemory": "0",
+            "desiredGPUs": "0",
+            "desiredTPUs": "0",
             "head":{}
          }
       },
@@ -369,6 +373,10 @@ var expected = `{
 
          },
          "rayClusterStatus":{
+            "desiredCPUs": "0",
+            "desiredMemory": "0",
+            "desiredGPUs": "0",
+            "desiredTPUs": "0",
             "head":{}
          }
       }

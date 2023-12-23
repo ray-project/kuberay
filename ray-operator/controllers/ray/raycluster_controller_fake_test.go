@@ -33,6 +33,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -2333,6 +2334,47 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, tc.desiredReplicas, len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", tc.desiredReplicas, len(podList.Items))
+		})
+	}
+}
+
+func TestSumGPUs(t *testing.T) {
+	nvidiaGPUResourceName := corev1.ResourceName("nvidia.com/gpu")
+	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
+
+	tests := map[string]struct {
+		input    map[corev1.ResourceName]resource.Quantity
+		expected resource.Quantity
+	}{
+		"no GPUs specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU: resource.MustParse("1"),
+			},
+			resource.MustParse("0"),
+		},
+		"one GPU type specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				nvidiaGPUResourceName: resource.MustParse("1"),
+				googleTPUResourceName: resource.MustParse("1"),
+			},
+			resource.MustParse("1"),
+		},
+		"multiple GPUs specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU:                 resource.MustParse("1"),
+				nvidiaGPUResourceName:              resource.MustParse("3"),
+				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
+				googleTPUResourceName:              resource.MustParse("1"),
+			},
+			resource.MustParse("5"),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := sumGPUs(tc.input)
+			assert.True(t, tc.expected.Equal(result), "GPU number is wrong")
 		})
 	}
 }
