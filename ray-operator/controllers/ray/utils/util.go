@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -509,4 +510,16 @@ func FindContainerPort(container *corev1.Container, portName string, defaultPort
 		}
 	}
 	return defaultPort
+}
+
+// IsJobFinished checks whether the given Job has finished execution.
+// It does not discriminate between successful and failed terminations.
+// src: https://github.com/kubernetes/kubernetes/blob/a8a1abc25cad87333840cd7d54be2efaf31a3177/pkg/controller/job/utils.go#L26
+func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
+	for _, c := range j.Status.Conditions {
+		if (c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed) && c.Status == corev1.ConditionTrue {
+			return c.Type, true
+		}
+	}
+	return "", false
 }
