@@ -5,14 +5,15 @@ const (
 	// Default application name
 	DefaultServeAppName = "default"
 	// Belows used as label key
-	RayServiceLabelKey               = "ray.io/service"
-	RayClusterLabelKey               = "ray.io/cluster"
-	RayNodeTypeLabelKey              = "ray.io/node-type"
-	RayNodeGroupLabelKey             = "ray.io/group"
-	RayNodeLabelKey                  = "ray.io/is-ray-node"
-	RayIDLabelKey                    = "ray.io/identifier"
-	RayClusterServingServiceLabelKey = "ray.io/serve"
-	RayServiceClusterHashKey         = "ray.io/cluster-hash"
+	RayServiceLabelKey                       = "ray.io/service"
+	RayClusterLabelKey                       = "ray.io/cluster"
+	RayNodeTypeLabelKey                      = "ray.io/node-type"
+	RayNodeGroupLabelKey                     = "ray.io/group"
+	RayNodeLabelKey                          = "ray.io/is-ray-node"
+	RayIDLabelKey                            = "ray.io/identifier"
+	RayClusterServingServiceLabelKey         = "ray.io/serve"
+	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
+	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
