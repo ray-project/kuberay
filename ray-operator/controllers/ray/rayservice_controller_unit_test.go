@@ -29,7 +29,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 	// `hash2` in this case.
 	cluster := rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			RayVersion: "2.8.0",
+			RayVersion: "2.9.0",
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
@@ -61,7 +61,7 @@ func TestGenerateRayClusterJsonHash(t *testing.T) {
 func TestCompareRayClusterJsonHash(t *testing.T) {
 	cluster1 := rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			RayVersion: "2.8.0",
+			RayVersion: "2.9.0",
 		},
 	}
 	cluster2 := cluster1.DeepCopy()

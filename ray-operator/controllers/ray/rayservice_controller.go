@@ -1054,7 +1054,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 
-	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, error.
+	// TODO(architkulkarni): Check the RayVersion. If < 2.9.0, error.
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err

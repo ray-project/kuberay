@@ -397,46 +397,6 @@ jobs:
           docker.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
       if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-  test-compatibility-2_5_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-latest
-    name: Compatibility Test - 2.5.0
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.5.0
-
-  test-compatibility-2_6_3:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-latest
-    name: Compatibility Test - 2.6.3
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.6.3
-
   test-compatibility-2_7_0:
     needs:
       - build_operator
@@ -476,6 +436,26 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 2.8.0
+
+  test-compatibility-2_9_0:
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
+    runs-on: ubuntu-latest
+    name: Compatibility Test - 2.9.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 2.9.0
 
   test-compatibility-nightly:
     needs:
