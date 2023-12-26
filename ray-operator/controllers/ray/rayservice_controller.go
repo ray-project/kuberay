@@ -1258,12 +1258,12 @@ func getClusterAction(oldSpec rayv1.RayClusterSpec, newSpec rayv1.RayClusterSpec
 
 	// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 	// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
-	newSpec_without_new_worker_groups := newSpec.DeepCopy()
+	newSpecWithoutWorkerGroups := newSpec.DeepCopy()
 	if len(newSpec.WorkerGroupSpecs) > len(oldSpec.WorkerGroupSpecs) {
 		// Remove the new worker groups from the new spec.
-		newSpec_without_new_worker_groups.WorkerGroupSpecs = newSpec_without_new_worker_groups.WorkerGroupSpecs[:len(oldSpec.WorkerGroupSpecs)]
+		newSpecWithoutWorkerGroups.WorkerGroupSpecs = newSpecWithoutWorkerGroups.WorkerGroupSpecs[:len(oldSpec.WorkerGroupSpecs)]
 
-		sameHash, err = compareRayClusterJsonHash(oldSpec, *newSpec_without_new_worker_groups, generateHashWithoutReplicasAndWorkersToDelete)
+		sameHash, err = compareRayClusterJsonHash(oldSpec, *newSpecWithoutWorkerGroups, generateHashWithoutReplicasAndWorkersToDelete)
 		if err != nil {
 			return DoNothing, err
 		}
