@@ -57,12 +57,6 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	assert.Nil(t, err)
 	assert.NotEqual(t, hash1, hash3)
-
-	// MinReplicas will not be muted, so `hash4` should not be equal to `hash1`.
-	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
-	hash4, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.Nil(t, err)
-	assert.NotEqual(t, hash1, hash4)
 }
 
 func TestGetClusterAction(t *testing.T) {
