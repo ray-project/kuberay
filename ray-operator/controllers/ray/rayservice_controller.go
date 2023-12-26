@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -364,7 +365,8 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return nil, nil, err
 	}
 
-	if r.shouldPrepareNewRayCluster(rayServiceInstance, activeRayCluster) {
+	clusterAction := r.shouldPrepareNewRayCluster(rayServiceInstance, activeRayCluster)
+	if clusterAction == RolloutNew {
 		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
 		enableZeroDowntime := true
@@ -372,9 +374,21 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			enableZeroDowntime = false
 		}
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
-			r.markRestart(rayServiceInstance)
+			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
+			// actually create the pending RayCluster instance.
+			r.markRestartAndAddPendingClusterName(rayServiceInstance)
 		} else {
 			r.Log.Info("Zero-downtime upgrade is disabled (ENABLE_ZERO_DOWNTIME: false). Skip preparing a new RayCluster.")
+		}
+		return activeRayCluster, nil, nil
+	} else if clusterAction == Update {
+		// Update the active cluster.
+		r.Log.Info("Updating the active RayCluster instance.")
+		if activeRayCluster, err = r.constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name); err != nil {
+			return nil, nil, err
+		}
+		if err := r.updateRayClusterInstance(ctx, activeRayCluster); err != nil {
+			return nil, nil, err
 		}
 		return activeRayCluster, nil, nil
 	}
@@ -468,65 +482,156 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(rayServiceInstance *rayv1
 	}
 }
 
+type ClusterAction int
+
+const (
+	DoNothing  ClusterAction = iota // value 0
+	Update                          // value 1
+	RolloutNew                      // value 2
+)
+
 // shouldPrepareNewRayCluster checks if we need to generate a new pending cluster.
-func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1.RayService, activeRayCluster *rayv1.RayCluster) bool {
+func (r *RayServiceReconciler) shouldPrepareNewRayCluster(rayServiceInstance *rayv1.RayService, activeRayCluster *rayv1.RayCluster) ClusterAction {
 	// Prepare new RayCluster if:
 	// 1. No active cluster and no pending cluster
 	// 2. No pending cluster, and the active RayCluster has changed.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
 		if activeRayCluster == nil {
 			r.Log.Info("No active Ray cluster. RayService operator should prepare a new Ray cluster.")
-			return true
+			return RolloutNew
 		}
-		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.RayServiceClusterHashKey]
-		goalClusterHash, err := generateRayClusterJsonHash(rayServiceInstance.Spec.RayClusterSpec)
+
+		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
+		// each WorkerGroup, then do nothing.
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		errContextFailedToSerialize := "Failed to serialize new RayCluster config. " +
+			"Manual config updates will NOT be tracked accurately. " +
+			"Please manually tear down the cluster and apply a new config."
 		if err != nil {
-			errContext := "Failed to serialize new RayCluster config. " +
-				"Manual config updates will NOT be tracked accurately. " +
-				"Please manually tear down the cluster and apply a new config."
-			r.Log.Error(err, errContext)
-			return true
+			r.Log.Error(err, errContextFailedToSerialize)
+			return DoNothing
 		}
 
-		if activeClusterHash != goalClusterHash {
-			r.Log.Info("Active RayCluster config doesn't match goal config. " +
-				"RayService operator should prepare a new Ray cluster.\n" +
-				"* Active RayCluster config hash: " + activeClusterHash + "\n" +
-				"* Goal RayCluster config hash: " + goalClusterHash)
-		} else {
-			r.Log.Info("Active Ray cluster config matches goal config.")
+		if activeClusterHash == goalClusterHash {
+			r.Log.Info("Active Ray cluster config matches goal config. No need to update RayCluster.")
+			return DoNothing
 		}
 
-		return activeClusterHash != goalClusterHash
+		// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
+		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
+		if err != nil {
+			r.Log.Error(err, errContextFailedToSerialize)
+			return DoNothing
+		}
+		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
+		r.Log.Info("number of worker groups", "activeClusterNumWorkerGroups", activeClusterNumWorkerGroups, "goalNumWorkerGroups", goalNumWorkerGroups)
+		if goalNumWorkerGroups > activeClusterNumWorkerGroups {
+
+			// Remove the new workergroup(s) from the end before calculating the hash.
+			goalClusterSpec := rayServiceInstance.Spec.RayClusterSpec.DeepCopy()
+			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:activeClusterNumWorkerGroups]
+
+			// Generate the hash of the old worker group specs.
+			goalClusterHash, err = generateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
+			if err != nil {
+				r.Log.Error(err, errContextFailedToSerialize)
+				return DoNothing
+			}
+
+			if activeClusterHash == goalClusterHash {
+				r.Log.Info("Active RayCluster config matches goal config, except that one or more entries were appended to WorkerGroupSpecs. Updating RayCluster.")
+				return Update
+			}
+		}
+
+		// Case 3: Otherwise, rollout a new cluster.
+		r.Log.Info("Active RayCluster config doesn't match goal config. " +
+			"RayService operator should prepare a new Ray cluster.\n" +
+			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
+			"* Goal RayCluster config hash: " + goalClusterHash)
+		return RolloutNew
 	}
 
-	return false
+	return DoNothing
 }
 
 // createRayClusterInstanceIfNeeded checks if we need to create a new RayCluster instance. If so, create one.
 func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Context, rayServiceInstance *rayv1.RayService, pendingRayCluster *rayv1.RayCluster) (*rayv1.RayCluster, error) {
+	// Early return if no pending RayCluster needs to be created.
 	if rayServiceInstance.Status.PendingServiceStatus.RayClusterName == "" {
-		// No exist pending RayCluster and no need to create one.
 		return nil, nil
 	}
 
-	// Create a new RayCluster if:
-	// 1. No RayCluster pending.
-	// 2. Config update for the pending cluster.
-	equal, err := compareRayClusterJsonHash(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
-	if err != nil {
-		r.Log.Error(err, "Fail to generate hash for RayClusterSpec")
-		return nil, err
-	}
+	var clusterAction ClusterAction
+	var err error
 
-	if pendingRayCluster == nil || !equal {
-		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
+	if pendingRayCluster == nil {
+		clusterAction = RolloutNew
+	} else {
+		clusterAction, err = getClusterAction(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
+			r.Log.Error(err, "Fail to generate hash for RayClusterSpec")
 			return nil, err
 		}
 	}
 
+	switch clusterAction {
+	case RolloutNew:
+		r.Log.Info("Creating a new pending RayCluster instance.")
+		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
+	case Update:
+		r.Log.Info("Updating the pending RayCluster instance.")
+		if pendingRayCluster, err = r.constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name); err != nil {
+			return nil, err
+		}
+		err = r.updateRayClusterInstance(ctx, pendingRayCluster)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
 	return pendingRayCluster, nil
+}
+
+// updateRayClusterInstance updates the RayCluster instance.
+func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
+	r.Log.V(1).Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
+	// Printing the whole RayCluster is too noisy. Only print the spec.
+	r.Log.V(1).Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
+
+	// Fetch the current state of the RayCluster
+	currentRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{
+		Namespace: rayClusterInstance.Namespace,
+		Name:      rayClusterInstance.Name,
+	})
+	if err != nil {
+		r.Log.Error(err, "Failed to get the current state of RayCluster", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
+		return err
+	}
+
+	if currentRayCluster == nil {
+		r.Log.Info("RayCluster not found, possibly deleted", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
+		return nil
+	}
+
+	// Update the fetched RayCluster with new changes
+	currentRayCluster.Spec = rayClusterInstance.Spec
+
+	// Update the labels and annotations
+	currentRayCluster.Labels = rayClusterInstance.Labels
+	currentRayCluster.Annotations = rayClusterInstance.Annotations
+
+	// Update the RayCluster
+	if err = r.Update(ctx, currentRayCluster); err != nil {
+		r.Log.Error(err, "Fail to update RayCluster "+currentRayCluster.Name)
+		return err
+	}
+
+	r.Log.V(1).Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
+	return nil
 }
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
@@ -591,14 +696,15 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 		rayClusterAnnotations[k] = v
 	}
 	rayClusterAnnotations[utils.EnableServeServiceKey] = utils.EnableServeServiceTrue
-	rayClusterAnnotations[utils.RayServiceClusterHashKey], err = generateRayClusterJsonHash(rayService.Spec.RayClusterSpec)
+	errContext := "Failed to serialize RayCluster config. " +
+		"Manual config updates will NOT be tracked accurately. " +
+		"Please tear down the cluster and apply a new config."
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
-		errContext := "Failed to serialize RayCluster config. " +
-			"Manual config updates will NOT be tracked accurately. " +
-			"Please tear down the cluster and apply a new config."
 		r.Log.Error(err, errContext)
 		return nil, err
 	}
+	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -862,7 +968,7 @@ func updateDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHe
 	}
 }
 
-func (r *RayServiceReconciler) markRestart(rayServiceInstance *rayv1.RayService) {
+func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(rayServiceInstance *rayv1.RayService) {
 	// Generate RayCluster name for pending cluster.
 	r.Log.V(1).Info("Current cluster is unhealthy, prepare to restart.", "Status", rayServiceInstance.Status)
 	rayServiceInstance.Status.ServiceStatus = rayv1.Restarting
@@ -1139,8 +1245,41 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 	return nil
 }
 
-func generateRayClusterJsonHash(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
-	// Mute all fields that will not trigger new RayCluster preparation. For example,
+func getClusterAction(oldSpec rayv1.RayClusterSpec, newSpec rayv1.RayClusterSpec) (ClusterAction, error) {
+	// Return the appropriate action based on the difference in the old and new RayCluster specs.
+
+	// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
+	// each WorkerGroup, then do nothing.
+	sameHash, err := compareRayClusterJsonHash(oldSpec, newSpec, generateHashWithoutReplicasAndWorkersToDelete)
+	if err != nil {
+		return DoNothing, err
+	}
+	if sameHash {
+		return DoNothing, nil
+	}
+
+	// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+	// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
+	newSpecWithoutWorkerGroups := newSpec.DeepCopy()
+	if len(newSpec.WorkerGroupSpecs) > len(oldSpec.WorkerGroupSpecs) {
+		// Remove the new worker groups from the new spec.
+		newSpecWithoutWorkerGroups.WorkerGroupSpecs = newSpecWithoutWorkerGroups.WorkerGroupSpecs[:len(oldSpec.WorkerGroupSpecs)]
+
+		sameHash, err = compareRayClusterJsonHash(oldSpec, *newSpecWithoutWorkerGroups, generateHashWithoutReplicasAndWorkersToDelete)
+		if err != nil {
+			return DoNothing, err
+		}
+		if sameHash {
+			return Update, nil
+		}
+	}
+
+	// Case 3: Otherwise, rollout a new cluster.
+	return RolloutNew, nil
+}
+
+func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
+	// Mute certain fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
 	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
 	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
@@ -1152,13 +1291,13 @@ func generateRayClusterJsonHash(rayClusterSpec rayv1.RayClusterSpec) (string, er
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
-func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayClusterSpec) (bool, error) {
-	hash1, err1 := generateRayClusterJsonHash(spec1)
+func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayClusterSpec, hashFunc func(rayv1.RayClusterSpec) (string, error)) (bool, error) {
+	hash1, err1 := hashFunc(spec1)
 	if err1 != nil {
 		return false, err1
 	}
 
-	hash2, err2 := generateRayClusterJsonHash(spec2)
+	hash2, err2 := hashFunc(spec2)
 	if err2 != nil {
 		return false, err2
 	}
