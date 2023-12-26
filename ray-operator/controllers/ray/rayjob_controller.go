@@ -15,7 +15,6 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -123,9 +122,33 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	// Do not reconcile the RayJob if the deployment status is marked as Complete
-	if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
-		r.Log.Info("rayjob is complete, skip reconciliation", "rayjob", rayJobInstance.Name)
+	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
+	switch rayJobInstance.Status.JobDeploymentStatus {
+	case rayv1.JobDeploymentStatusComplete:
+		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
+		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			// TODO (kevin85421): Revisit EndTime and ensure it will always be set after the job is completed.
+			ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
+			nowTime := time.Now()
+			shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
+			r.Log.Info(
+				"RayJob is completed",
+				"shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
+				"ttlSecondsAfterFinished", ttlSeconds,
+				"Status.endTime", rayJobInstance.Status.EndTime,
+				"Now", nowTime,
+				"ShutdownTime", shutdownTime)
+			if shutdownTime.After(nowTime) {
+				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
+				r.Log.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
+				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
+			} else {
+				if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+				}
+			}
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -135,28 +158,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
 	// delete the RayCluster.
 	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
-		// If the function `updateState` updates the JobStatus to Complete successfully, we can skip the reconciliation.
-		rayClusterInstance := &rayv1.RayCluster{}
-		rayClusterNamespacedName := types.NamespacedName{
-			Namespace: rayJobInstance.Namespace,
-			Name:      rayJobInstance.Status.RayClusterName,
+		if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
-			if !errors.IsNotFound(err) {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			return ctrl.Result{}, nil
-		}
-
-		if rayClusterInstance.DeletionTimestamp != nil {
-			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			return ctrl.Result{}, nil
-		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 
 	// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
@@ -246,8 +251,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 
-			_, err = r.deleteCluster(ctx, rayJobInstance)
-			if err != nil && !errors.IsNotFound(err) {
+			if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 			// Since RayCluster instance is gone, remove it status also
@@ -268,39 +272,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 
-	// Let's use rayJobInstance.Status.JobStatus to make sure we only delete cluster after the CR is updated.
-	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
-		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			// the RayJob is submitted against the RayCluster created by THIS job, so we can tear that
-			// RayCluster down.
-			if rayJobInstance.Spec.TTLSecondsAfterFinished != nil {
-				r.Log.V(3).Info("TTLSecondsAfterSetting", "end_time", rayJobInstance.Status.EndTime.Time, "now", time.Now(), "ttl", *rayJobInstance.Spec.TTLSecondsAfterFinished)
-				ttlDuration := time.Duration(*rayJobInstance.Spec.TTLSecondsAfterFinished) * time.Second
-				if rayJobInstance.Status.EndTime.Time.Add(ttlDuration).After(time.Now()) {
-					// time.Until prints duration until target time. We add additional 2 seconds to make sure we have buffer and requeueAfter is not 0.
-					delta := int32(time.Until(rayJobInstance.Status.EndTime.Time.Add(ttlDuration).Add(2 * time.Second)).Seconds())
-					r.Log.Info("TTLSecondsAfterFinish not reached, requeue it after", "RayJob", rayJobInstance.Name, "time(s)", delta)
-					return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-				}
-			}
-			r.Log.Info("shutdownAfterJobFinishes set to true, we will delete cluster",
-				"RayJob", rayJobInstance.Name, "clusterName", fmt.Sprintf("%s/%s", rayJobInstance.Namespace, rayJobInstance.Status.RayClusterName))
-			_, err = r.deleteCluster(ctx, rayJobInstance)
-			if err != nil && !errors.IsNotFound(err) {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-			}
-		}
-	}
-
-	// TODO (kevin85421): Use the source of truth `jobInfo.JobStatus` instead.
-	if isJobPendingOrRunning(jobInfo.JobStatus) {
-		// Requeue the RayJob to poll its status from the running Ray job
-		r.Log.Info("Requeue the RayJob because the Ray job is not in a terminal state", "RayJob", rayJobInstance.Name, "JobStatus", jobInfo.JobStatus)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-	}
-	// Otherwise only reconcile the RayJob upon new events for watched resources
-	// to avoid infinite reconciliation.
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
@@ -388,6 +360,12 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		},
 	}
 
+	// Without TTLSecondsAfterFinished, the job has a default deletion policy of `orphanDependents` causing
+	// Pods created by an unmanaged Job to be left around after that Job is fully deleted.
+	if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+		job.Spec.TTLSecondsAfterFinished = pointer.Int32(rayJobInstance.Spec.TTLSecondsAfterFinished)
+	}
+
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
@@ -404,7 +382,11 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	return nil
 }
 
-func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *rayv1.RayJob) (reconcile.Result, error) {
+// Delete the RayCluster associated with the RayJob to release the compute resources.
+// In the future, we may also need to delete other Kubernetes resources. Note that
+// this function doesn't delete the Kubernetes Job. Instead, we use the built-in
+// TTL mechanism of the Kubernetes Job for deletion.
+func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
 	clusterIdentifier := types.NamespacedName{
 		Name:      rayJobInstance.Status.RayClusterName,
 		Namespace: rayJobInstance.Namespace,
@@ -412,23 +394,23 @@ func (r *RayJobReconciler) deleteCluster(ctx context.Context, rayJobInstance *ra
 	cluster := rayv1.RayCluster{}
 	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
 		if !errors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			return err
 		}
+		// If the cluster is not found, it means the cluster has been already deleted.
+		// Don't return error to make this function idempotent.
 		r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	} else {
 		if cluster.DeletionTimestamp != nil {
 			r.Log.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
 		} else {
 			if err := r.Delete(ctx, &cluster); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				return err
 			}
 			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 	}
-	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	return nil
 }
 
 // isJobSucceedOrFail indicates whether the job comes into end status.

@@ -439,9 +439,7 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		pbJob.ClusterSpec = PopulateRayClusterSpec(*job.Spec.RayClusterSpec)
 	}
 
-	if job.Spec.TTLSecondsAfterFinished != nil {
-		pbJob.TtlSecondsAfterFinished = *job.Spec.TTLSecondsAfterFinished
-	}
+	pbJob.TtlSecondsAfterFinished = job.Spec.TTLSecondsAfterFinished
 
 	if job.DeletionTimestamp != nil {
 		pbJob.DeleteAt = &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()}

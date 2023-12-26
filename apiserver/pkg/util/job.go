@@ -30,7 +30,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			Metadata:                 apiJob.Metadata,
 			RuntimeEnvYAML:           apiJob.RuntimeEnv,
 			ShutdownAfterJobFinishes: apiJob.ShutdownAfterJobFinishes,
-			TTLSecondsAfterFinished:  &apiJob.TtlSecondsAfterFinished,
+			TTLSecondsAfterFinished:  apiJob.TtlSecondsAfterFinished,
 			JobId:                    apiJob.JobId,
 			RayClusterSpec:           nil,
 			ClusterSelector:          apiJob.ClusterSelector,

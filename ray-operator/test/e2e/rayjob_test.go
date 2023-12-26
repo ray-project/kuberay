@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -66,17 +65,22 @@ env_vars:
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 
+		// TODO (kevin85421): We may need to use `Eventually` instead if the assertion is flaky.
 		// Assert the RayCluster has been torn down
 		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayJob.Status.RayClusterName, metav1.GetOptions{})
 		test.Expect(err).To(MatchError(k8serrors.NewNotFound(rayv1.Resource("rayclusters"), rayJob.Status.RayClusterName)))
+
+		// Assert the submitter Job has been cascade deleted
+		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+
+		// TODO (kevin85421): Check whether the Pods associated with the RayCluster and the submitter Job have been deleted.
+		// For Kubernetes Jobs, the default deletion behavior is "orphanDependents," which means the Pods will not be
+		// cascadingly deleted with the Kubernetes Job by default.
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
-
-		// Assert the submitter Job has been cascade deleted
-		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
 
 	test.T().Run("Failing RayJob without cluster shutdown after finished", func(t *testing.T) {
@@ -110,8 +114,10 @@ env_vars:
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
 
 		// And the RayJob deployment status is updated accordingly
-		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 10*time.Second).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// TODO (kevin85421): Ensure the RayCluster and Kubernetes Job are not deleted because `ShutdownAfterJobFinishes` is false.
 
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
