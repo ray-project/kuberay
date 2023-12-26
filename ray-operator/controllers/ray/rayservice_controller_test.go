@@ -535,6 +535,7 @@ applications:
 			initialPendingClusterName, _ := getPreparingRayClusterNameFunc(ctx, myRayService)()
 
 			// Add a new worker group to the RayServiceSpec
+			oldNumWorkerGroupSpecs := len(myRayService.Spec.RayClusterSpec.WorkerGroupSpecs)
 			newWorkerGroupSpec := myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].DeepCopy()
 			newWorkerGroupSpec.GroupName = "worker-group-3"
 
@@ -548,7 +549,7 @@ applications:
 			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource with new WorkerGroupSpecs")
 
 			// Sanity check: length of myRayService.Spec.RayClusterSpec.WorkerGroupSpecs should be 3
-			Expect(myRayService.Spec.RayClusterSpec.WorkerGroupSpecs).Should(HaveLen(3))
+			Expect(myRayService.Spec.RayClusterSpec.WorkerGroupSpecs).Should(HaveLen(oldNumWorkerGroupSpecs + 1))
 
 			// Confirm it didn't switch to a new RayCluster
 			Consistently(
@@ -561,7 +562,7 @@ applications:
 				time.Second*15,
 				time.Millisecond*500,
 			).Should(
-				HaveLen(3),
+				HaveLen(oldNumWorkerGroupSpecs + 1),
 			)
 
 			// The pending RayCluster will become the active RayCluster after:
