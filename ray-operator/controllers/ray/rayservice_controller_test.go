@@ -485,7 +485,7 @@ applications:
 		})
 		It("should update the active RayCluster in place when WorkerGroupSpecs are modified by the user in RayServiceSpec", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
-
+			oldNumWorkerGroupSpecs := len(myRayService.Spec.RayClusterSpec.WorkerGroupSpecs)
 			// Add a new worker group to the RayServiceSpec
 			newWorkerGroupSpec := myRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].DeepCopy()
 			newWorkerGroupSpec.GroupName = "worker-group-2"
@@ -513,7 +513,7 @@ applications:
 				time.Second*15,
 				time.Millisecond*500,
 			).Should(
-				HaveLen(2),
+				HaveLen(oldNumWorkerGroupSpecs + 1),
 			)
 		})
 		It("should update the pending RayCluster in place when WorkerGroupSpecs are modified by the user in RayServiceSpec", func() {
