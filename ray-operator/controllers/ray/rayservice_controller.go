@@ -796,7 +796,6 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 		// Single app mode is removed. It should be impossible to reach here. If we somehow do, return an error.
 		// TODO(architkulkarni): Delete serveConfigType and unify the code path for both SINGLE_APP and MULTI_APP
 		return fmt.Errorf("Single app mode is removed. Please use multi app mode (serveConfigV2) instead.")
-
 	} else if serveConfigType == utils.MULTI_APP {
 		r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
