@@ -132,6 +132,19 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	case rayv1.JobDeploymentStatusRunning:
+		// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
+		// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
+		// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
+		// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
+		// delete the RayCluster.
+		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
+			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+		// TODO (kevin85421): Don't return here; we still need to move some of the code below into this block.
 	case rayv1.JobDeploymentStatusComplete:
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
@@ -157,19 +170,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				}
 			}
 		}
+		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
-	}
-
-	// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
-	// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
-	// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
-	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
-	// delete the RayCluster.
-	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
-		if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 
 	var rayClusterInstance *rayv1.RayCluster
