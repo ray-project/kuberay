@@ -124,6 +124,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 	switch rayJobInstance.Status.JobDeploymentStatus {
+	case rayv1.JobDeploymentStatusNew:
+		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
+		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
+		r.Log.Info("JobDeploymentStatusNew", "RayJob", rayJobInstance.Name)
+		if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete:
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
@@ -162,12 +170,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-	}
-
-	// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
-	// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
-	if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	var rayClusterInstance *rayv1.RayCluster

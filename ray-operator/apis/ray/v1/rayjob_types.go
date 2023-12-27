@@ -33,6 +33,7 @@ func IsJobTerminal(status JobStatus) bool {
 type JobDeploymentStatus string
 
 const (
+	JobDeploymentStatusNew          JobDeploymentStatus = ""
 	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
 	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
