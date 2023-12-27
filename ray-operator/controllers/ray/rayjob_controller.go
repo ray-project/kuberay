@@ -505,10 +505,9 @@ func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob
 	return nil
 }
 
-// TODO: select existing rayclusters by ClusterSelector
 func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, rayJobInstance *rayv1.RayJob) (*rayv1.RayCluster, error) {
 	rayClusterInstanceName := rayJobInstance.Status.RayClusterName
-	r.Log.V(3).Info("try to find existing RayCluster instance", "name", rayClusterInstanceName)
+	r.Log.Info("try to find existing RayCluster instance", "name", rayClusterInstanceName)
 	rayClusterNamespacedName := types.NamespacedName{
 		Namespace: rayJobInstance.Namespace,
 		Name:      rayClusterInstanceName,
@@ -517,6 +516,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	rayClusterInstance := &rayv1.RayCluster{}
 	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 		if errors.IsNotFound(err) {
+			r.Log.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 			// TODO: If both ClusterSelector and RayClusterSpec are not set, we should avoid retrieving a RayCluster instance.
 			// Consider moving this logic to a more appropriate location.
 			if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
@@ -534,23 +534,19 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 				return nil, nil
 			}
 
-			r.Log.Info("RayCluster not found, creating RayCluster!", "raycluster", rayClusterNamespacedName)
+			r.Log.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
 			if err != nil {
-				r.Log.Error(err, "unable to construct a new rayCluster")
-				// Error construct the RayCluster object - requeue the request.
+				r.Log.Error(err, "unable to construct a new RayCluster")
 				return nil, err
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
-				r.Log.Error(err, "unable to create rayCluster for rayJob", "rayCluster", rayClusterInstance)
-				// Error creating the RayCluster object - requeue the request.
+				r.Log.Error(err, "unable to create RayCluster for RayJob", "RayCluster", rayClusterInstance)
 				return nil, err
 			}
-			r.Log.Info("created rayCluster for rayJob", "rayCluster", rayClusterInstance)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created cluster %s", rayJobInstance.Status.RayClusterName)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created RayCluster %s", rayJobInstance.Status.RayClusterName)
 		} else {
 			r.Log.Error(err, "Fail to get RayCluster!")
-			// Error reading the RayCluster object - requeue the request.
 			return nil, err
 		}
 	}
