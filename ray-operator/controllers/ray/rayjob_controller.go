@@ -90,18 +90,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object.
-		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
-			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
-			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
-			if err := r.Update(ctx, rayJobInstance); err != nil {
-				r.Log.Error(err, "Failed to update RayJob with finalizer")
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-		}
-	} else {
+	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
@@ -125,6 +114,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
+		// TODO (kevin85421): Write a utility function to add finalizer for both RayJob and RayCluster.
+		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
+			if err := r.Update(ctx, rayJobInstance); err != nil {
+				r.Log.Error(err, "Failed to update RayJob with finalizer")
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+		}
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
 		r.Log.Info("JobDeploymentStatusNew", "RayJob", rayJobInstance.Name)
