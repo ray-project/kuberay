@@ -44,9 +44,6 @@ var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 
-	var numReplicas int32 = 1
-	var numCpus float64 = 0.1
-
 	testServeAppName := "app1"
 	testServeConfigV2 := fmt.Sprintf(`
 applications:
@@ -89,36 +86,7 @@ applications:
 			Namespace: "default",
 		},
 		Spec: rayv1.RayServiceSpec{
-			ServeDeploymentGraphSpec: rayv1.ServeDeploymentGraphSpec{
-				ImportPath: "fruit.deployment_graph",
-				RuntimeEnv: runtimeEnvStr,
-				ServeConfigSpecs: []rayv1.ServeConfigSpec{
-					{
-						Name:        "MangoStand",
-						NumReplicas: &numReplicas,
-						UserConfig:  "price: 3",
-						RayActorOptions: rayv1.RayActorOptionSpec{
-							NumCpus: &numCpus,
-						},
-					},
-					{
-						Name:        "OrangeStand",
-						NumReplicas: &numReplicas,
-						UserConfig:  "price: 2",
-						RayActorOptions: rayv1.RayActorOptionSpec{
-							NumCpus: &numCpus,
-						},
-					},
-					{
-						Name:        "PearStand",
-						NumReplicas: &numReplicas,
-						UserConfig:  "price: 1",
-						RayActorOptions: rayv1.RayActorOptionSpec{
-							NumCpus: &numCpus,
-						},
-					},
-				},
-			},
+			ServeConfigV2: testServeConfigV2,
 			RayClusterSpec: rayv1.RayClusterSpec{
 				RayVersion: "1.12.1",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -710,17 +678,6 @@ applications:
 		})
 
 		It("should reconcile status correctly when multi-app config type is used.", func() {
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
-
-				myRayService.Spec.ServeDeploymentGraphSpec = rayv1.ServeDeploymentGraphSpec{}
-				myRayService.Spec.ServeConfigV2 = testServeConfigV2
-				return k8sClient.Update(ctx, myRayService)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService serve config")
-
 			// Set multi-application status to healthy.
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
