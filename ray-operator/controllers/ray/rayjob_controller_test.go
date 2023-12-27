@@ -33,7 +33,6 @@ import (
 	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
@@ -203,35 +202,6 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
-		// If in-tree autoscaling is disabled, the user should be able to update the replica settings.
-		// This test verifies that the RayJob controller correctly updates the replica settings and increases the number of workers in this scenario.
-		It("should increase number of worker pods by updating RayJob", func() {
-			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-
-			myRayCluster := &rayv1.RayCluster{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-
-			newReplicas := *myRayCluster.Spec.WorkerGroupSpecs[0].Replicas + 1
-
-			// simulate updating the RayJob directly.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = newReplicas
-				return k8sClient.Update(ctx, myRayJob)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob")
-
-			// confirm the number of worker pods increased.
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
-			workerPods := corev1.PodList{}
-			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(int(newReplicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-		})
-
 		It("should be able to update all Pods to Running", func() {
 			myRayCluster := &rayv1.RayCluster{}
 			Eventually(
@@ -301,101 +271,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
 				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
-		})
-	})
-})
-
-var _ = Context("Inside the default namespace with autoscaler", func() {
-	ctx := context.TODO()
-	myRayJob := myRayJob.DeepCopy()
-	myRayJob.Name = "rayjob-test-with-autoscaler"
-	upscalingMode := rayv1.UpscalingMode("Default")
-	imagePullPolicy := corev1.PullPolicy("IfNotPresent")
-	myRayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling = pointer.Bool(true)
-	myRayJob.Spec.RayClusterSpec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-		UpscalingMode:      &upscalingMode,
-		IdleTimeoutSeconds: pointer.Int32(1),
-		ImagePullPolicy:    &imagePullPolicy,
-	}
-
-	Describe("When creating a rayjob", func() {
-		It("should create a rayjob object", func() {
-			err := k8sClient.Create(ctx, myRayJob)
-			Expect(err).NotTo(HaveOccurred(), "failed to create test RayJob resource")
-		})
-
-		It("should see a rayjob object", func() {
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, myRayJob),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayJob  = %v", myRayJob.Name)
-		})
-
-		// if In-tree autoscaling is enabled, the autoscaler should adjust the number of replicas based on the workload.
-		// This test emulates the behavior of the autoscaler by directly updating the RayCluster and verifying if the number of worker pods increases accordingly.
-		It("should create new worker since autoscaler increases the replica", func() {
-			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-
-			myRayCluster := &rayv1.RayCluster{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-
-			// simulate autoscaler by updating the RayCluster directly. Note that the autoscaler
-			// will not update the RayJob directly.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Active RayCluster = %v", myRayCluster.Name)
-				*myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = *myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas + 1
-				return k8sClient.Update(ctx, myRayCluster)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update RayCluster replica")
-
-			// confirm a new worker pod is created.
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
-			workerPods := corev1.PodList{}
-			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)+1), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			// confirm RayJob controller does not revert the number of workers.
-			Consistently(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*5, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)+1), fmt.Sprintf("workerGroup %v", workerPods.Items))
-		})
-
-		// if In-tree autoscaling is enabled, only the autoscaler should update replicas to prevent race conditions
-		// between user updates and autoscaler decisions. RayJob controller should not modify the replica. Consider this scenario:
-		// 1. The autoscaler updates replicas to 10 based on the current workload.
-		// 2. The user updates replicas to 15 in the RayJob YAML file.
-		// 3. Both RayJob controller and the autoscaler attempt to update replicas, causing worker pods to be repeatedly created and terminated.
-		// This test emulates a user attempting to update the replica and verifies that the number of worker pods remains unaffected by this change.
-		It("should not increase number of workers by updating RayJob", func() {
-			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-
-			myRayCluster := &rayv1.RayCluster{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-
-			oldReplicas := *myRayCluster.Spec.WorkerGroupSpecs[0].Replicas
-
-			// simulate updating the RayJob directly.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas = *myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas + 1
-				return k8sClient.Update(ctx, myRayJob)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob")
-
-			// confirm the number of worker pods is not changed.
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
-			workerPods := corev1.PodList{}
-			Consistently(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*5, time.Millisecond*500).Should(Equal(int(oldReplicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
 })
