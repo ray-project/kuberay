@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"k8s.io/apimachinery/pkg/util/json"
 
@@ -42,7 +41,6 @@ type RayDashboardClientInterface interface {
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
-	ConvertServeConfigV1(rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (string, error)
@@ -257,58 +255,6 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	}
 
 	return applicationStatuses, nil
-}
-
-func (r *BaseDashboardClient) ConvertServeConfigV1(configV1Spec rayv1.ServeDeploymentGraphSpec) ServingClusterDeployments {
-	applicationRuntimeEnv := make(map[string]interface{})
-	_ = yaml.Unmarshal([]byte(configV1Spec.RuntimeEnv), &applicationRuntimeEnv)
-
-	convertedDeploymentSpecs := make([]ServeConfigSpec, len(configV1Spec.ServeConfigSpecs))
-
-	for i, config := range configV1Spec.ServeConfigSpecs {
-		userConfig := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.UserConfig), &userConfig)
-
-		autoscalingConfig := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.AutoscalingConfig), &autoscalingConfig)
-
-		runtimeEnv := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.RayActorOptions.RuntimeEnv), &runtimeEnv)
-
-		resources := make(map[string]interface{})
-		_ = yaml.Unmarshal([]byte(config.RayActorOptions.Resources), &resources)
-
-		convertedDeploymentSpecs[i] = ServeConfigSpec{
-			Name:                      config.Name,
-			NumReplicas:               config.NumReplicas,
-			RoutePrefix:               config.RoutePrefix,
-			MaxConcurrentQueries:      config.MaxConcurrentQueries,
-			UserConfig:                userConfig,
-			AutoscalingConfig:         autoscalingConfig,
-			GracefulShutdownWaitLoopS: config.GracefulShutdownWaitLoopS,
-			GracefulShutdownTimeoutS:  config.GracefulShutdownTimeoutS,
-			HealthCheckPeriodS:        config.HealthCheckPeriodS,
-			HealthCheckTimeoutS:       config.GracefulShutdownTimeoutS,
-			RayActorOptions: RayActorOptionSpec{
-				RuntimeEnv:        runtimeEnv,
-				NumCpus:           config.RayActorOptions.NumCpus,
-				NumGpus:           config.RayActorOptions.NumGpus,
-				Memory:            config.RayActorOptions.Memory,
-				ObjectStoreMemory: config.RayActorOptions.ObjectStoreMemory,
-				Resources:         resources,
-				AcceleratorType:   config.RayActorOptions.AcceleratorType,
-			},
-		}
-	}
-
-	servingClusterDeployments := ServingClusterDeployments{
-		ImportPath:  configV1Spec.ImportPath,
-		RuntimeEnv:  applicationRuntimeEnv,
-		Deployments: convertedDeploymentSpecs,
-		Port:        configV1Spec.Port,
-	}
-
-	return servingClusterDeployments
 }
 
 // RayJobInfo is the response of "ray job status" api.
