@@ -150,13 +150,18 @@ class RayFTTestCase(unittest.TestCase):
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
 
-    @unittest.skipIf(
-        ray_version == '2.8.0',
-        'test_detached_actor is too flaky with Ray 2.8.0 due to https://github.com/ray-project/ray/issues/41343.'
-        'However, it is fixed in Ray 2.9.0 and the nightly.'
-    )
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""
+
+        # We must do this check here and not in a @unittest.skipIf decorator because
+        # the decorator is evaluated at import time, and the environment variables
+        # modifying the gloabl variable `ray_version` are not read until runtime.
+        if ray_version == '2.8.0':
+            raise unittest.SkipTest(
+                'test_detached_actor is too flaky with Ray 2.8.0 due to'
+                'https://github.com/ray-project/ray/issues/41343.'
+                'It is fixed in Ray 2.9.0 and the nightly.')
+
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
 
