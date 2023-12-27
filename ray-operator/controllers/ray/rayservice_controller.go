@@ -112,9 +112,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if rayServiceInstance.Spec.ServeConfigV2 != "" && !reflect.DeepEqual(rayServiceInstance.Spec.ServeDeploymentGraphSpec, rayv1.ServeDeploymentGraphSpec{}) {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, fmt.Errorf("Found non-nil specifications for both serveConfigV1 and serveConfigV2. Please specify only one of the fields.")
-	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 	r.cleanUpServeConfigCache(rayServiceInstance)
 
@@ -762,15 +759,10 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 
 	serveConfigType := r.determineServeConfigType(rayServiceInstance)
 	if serveConfigType == utils.SINGLE_APP {
-		cachedServeConfig, isServeConfig := cachedConfigObj.(rayv1.ServeDeploymentGraphSpec)
-		if !isServeConfig {
-			shouldUpdate = true
-			reason = fmt.Sprintf("No V1 Serve Config of type ServeDeploymentGraphSpec has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-		} else if !utils.CompareJsonStruct(cachedServeConfig, rayServiceInstance.Spec.ServeDeploymentGraphSpec) {
-			shouldUpdate = true
-			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-		}
-		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfig, "current Serve config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+		// Single app mode is removed. It should be impossible to reach here. If we somehow do, return an error.
+		// TODO(architkulkarni): Delete serveConfigType and unify the code path for both SINGLE_APP and MULTI_APP
+		r.Log.Error(fmt.Errorf("Single app mode is removed. Please use multi app mode (serveConfigV2) instead."), "shouldUpdate")
+		return true
 	} else if serveConfigType == utils.MULTI_APP {
 		cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
 		if !isServeConfigV2 {
@@ -801,27 +793,10 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	serveConfigType := r.determineServeConfigType(rayServiceInstance)
 
 	if serveConfigType == utils.SINGLE_APP {
-		r.Log.V(1).Info("updateServeDeployment", "V1 config", rayServiceInstance.Spec.ServeDeploymentGraphSpec)
+		// Single app mode is removed. It should be impossible to reach here. If we somehow do, return an error.
+		// TODO(architkulkarni): Delete serveConfigType and unify the code path for both SINGLE_APP and MULTI_APP
+		return fmt.Errorf("Single app mode is removed. Please use multi app mode (serveConfigV2) instead.")
 
-		convertedConfig := rayDashboardClient.ConvertServeConfigV1(rayServiceInstance.Spec.ServeDeploymentGraphSpec)
-		configJson, err := json.Marshal(convertedConfig)
-		if err != nil {
-			return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
-		}
-		r.Log.V(1).Info("updateServeDeployment", "SINGLE_APP json config", string(configJson))
-		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, utils.SINGLE_APP); err != nil {
-			err = fmt.Errorf(
-				"Fail to create / update Serve deployments. If you observe this error consistently, "+
-					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
-					"https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
-					"err: %v", err)
-			return err
-		}
-
-		cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
-		r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeDeploymentGraphSpec)
-		r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
-		return nil
 	} else if serveConfigType == utils.MULTI_APP {
 		r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
