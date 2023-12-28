@@ -38,47 +38,37 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-var runtimeEnvStr = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
-
 var _ = Context("Inside the default namespace", func() {
 	ctx := context.TODO()
 	var workerPods corev1.PodList
 
 	testServeAppName := "app1"
 	testServeConfigV2 := fmt.Sprintf(`
-applications:
-  - name: %s
-    import_path: fruit.deployment_graph
-    runtime_env:
-      working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-    deployments:
-      - name: MangoStand
-        num_replicas: 1
-        user_config:
-          price: 3
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: OrangeStand
-        num_replicas: 1
-        user_config:
-          price: 2
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: PearStand
-        num_replicas: 1
-        user_config:
-          price: 1
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: FruitMarket
-        num_replicas: 1
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: DAGDriver
-        num_replicas: 1
-        route_prefix: "/"
-        ray_actor_options:
-          num_cpus: 0.1`, testServeAppName)
+    applications:
+    - name: %s
+      import_path: fruit.deployment_graph
+      route_prefix: /fruit
+      runtime_env:
+        working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+      deployments:
+        - name: MangoStand
+          num_replicas: 1
+          user_config:
+            price: 3
+          ray_actor_options:
+            num_cpus: 0.1
+        - name: OrangeStand
+          num_replicas: 1
+          user_config:
+            price: 2
+          ray_actor_options:
+            num_cpus: 0.1
+        - name: PearStand
+          num_replicas: 1
+          user_config:
+            price: 1
+          ray_actor_options:
+            num_cpus: 0.1`, testServeAppName)
 
 	myRayService := &rayv1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
@@ -88,7 +78,7 @@ applications:
 		Spec: rayv1.RayServiceSpec{
 			ServeConfigV2: testServeConfigV2,
 			RayClusterSpec: rayv1.RayClusterSpec{
-				RayVersion: "1.12.1",
+				RayVersion: "2.9.0",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: map[string]string{
 						"port":                        "6379",
@@ -111,7 +101,7 @@ applications:
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.8.0",
+									Image: "rayproject/ray:2.9.0",
 									Env: []corev1.EnvVar{
 										{
 											Name: "MY_POD_IP",
@@ -185,7 +175,7 @@ applications:
 								Containers: []corev1.Container{
 									{
 										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.8.0",
+										Image:   "rayproject/ray:2.9.0",
 										Command: []string{"echo"},
 										Args:    []string{"Hello Ray"},
 										Env: []corev1.EnvVar{
@@ -547,7 +537,8 @@ applications:
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// Change serve status to be unhealthy
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY))
+			unhealthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &unhealthyStatus})
 
 			// Confirm not switch to a new RayCluster.
 			Consistently(
@@ -578,7 +569,8 @@ applications:
 				checkAllDeploymentStatusesUnhealthy(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 
 			// Confirm not switch to a new RayCluster.
 			Consistently(
@@ -601,7 +593,8 @@ applications:
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
 			oldTime := myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 
 			// Confirm not switch to a new RayCluster
 			Consistently(
@@ -669,7 +662,8 @@ applications:
 				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// The cluster should switch once the deployments are finished updating
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
 
 			Eventually(
@@ -681,20 +675,11 @@ applications:
 			// Set multi-application status to healthy.
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-			// Set single-application status to unhealthy.
-			unhealthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY)
-			fakeRayDashboardClient.SetSingleApplicationStatus(unhealthyStatus)
 
-			// The status should remain healthy, because we have set serveConfigTypeForTesting to MULTI_APP
-			// Then the rayservice controller should pull the deployment statuses from the multi-app API and not the single-app API
-			// So regardless of what the single-app API is returning, the status of the rayservice should remain healthy
-			// because the multi-app API is returning healthy statuses.
+			// The status should remain healthy.
 			Consistently(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*5, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-
-			// reset states to healthy for following test cases
-			fakeRayDashboardClient.SetSingleApplicationStatus(healthyStatus)
 		})
 	})
 })
@@ -703,6 +688,8 @@ func prepareFakeRayDashboardClient() *utils.FakeRayDashboardClient {
 	client := &utils.FakeRayDashboardClient{}
 
 	client.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+	healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+	client.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{"app": &healthyStatus})
 
 	return client
 }
