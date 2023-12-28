@@ -554,9 +554,10 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	}
 	r.Log.Info("Found associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 
+	// Verify that RayJob is not in cluster selector mode first to avoid nil pointer dereference error during spec comparison.
+	// This is checked by ensuring len(rayJobInstance.Spec.ClusterSelector) equals 0.
 	if len(rayJobInstance.Spec.ClusterSelector) == 0 && !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
-		r.Log.Info("Detected changes in RayClusterSpec of RayJob, these changes will be disregarded", "RayJob", rayJobInstance.Name)
-		r.Log.Info("Note: RayJob supports changes to replicas only. To modify replicas, please enable autoscaling or update the RayCluster directly")
+		r.Log.Info("Disregard changes in RayClusterSpec of RayJob", "RayJob", rayJobInstance.Name)
 	}
 
 	return rayClusterInstance, nil
