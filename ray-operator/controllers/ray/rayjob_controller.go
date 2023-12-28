@@ -143,6 +143,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 		// TODO (kevin85421): Don't return here; we still need to move some of the code below into this block.
+	case rayv1.JobDeploymentStatusSuspended:
+		if !rayJobInstance.Spec.Suspend {
+			r.Log.Info("The status is 'Suspended', but the suspend flag is false. Transition the status to 'New'.")
+			if err = r.updateState(ctx, rayJobInstance, nil, rayv1.JobStatusNew, rayv1.JobDeploymentStatusNew); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+		// TODO (kevin85421): We may not need to requeue the RayJob if it has already been suspended.
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete:
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
@@ -164,7 +174,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
 				if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
 		}
@@ -178,10 +188,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	// If there is no cluster instance and no error suspend the job deployment
 	if rayClusterInstance == nil {
-		// Already suspended?
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspended {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
 		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -254,7 +260,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			// Since RayCluster instance is gone, remove it status also
 			// on RayJob resource
@@ -469,7 +475,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	}
 
 	if rayJob.Status.JobStatus == "" {
-		rayJob.Status.JobStatus = rayv1.JobStatusPending
+		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
 
 	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing)
