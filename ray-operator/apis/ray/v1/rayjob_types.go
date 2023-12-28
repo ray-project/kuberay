@@ -13,6 +13,7 @@ type JobStatus string
 
 // https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
 const (
+	JobStatusNew       JobStatus = ""
 	JobStatusPending   JobStatus = "PENDING"
 	JobStatusRunning   JobStatus = "RUNNING"
 	JobStatusStopped   JobStatus = "STOPPED"

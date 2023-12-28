@@ -77,6 +77,14 @@ env_vars:
 		// For Kubernetes Jobs, the default deletion behavior is "orphanDependents," which means the Pods will not be
 		// cascadingly deleted with the Kubernetes Job by default.
 
+		test.T().Logf("Update `suspend` to true. However, since the RayJob is completed, the status should not be updated to `Suspended`.")
+		rayJob.Spec.Suspend = true
+		// TODO (kevin85421): We may need to retry `Update` if 409 conflict makes the test flaky.
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Update(test.Ctx(), rayJob, metav1.UpdateOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		test.Expect(err).NotTo(HaveOccurred())

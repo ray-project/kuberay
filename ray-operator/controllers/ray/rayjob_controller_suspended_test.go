@@ -57,41 +57,13 @@ var _ = Context("Inside the default namespace", func() {
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: "2.8.0",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					ServiceType: corev1.ServiceTypeClusterIP,
-					RayStartParams: map[string]string{
-						"port":                        "6379",
-						"object-store-memory":         "100000000",
-						"dashboard-host":              "0.0.0.0",
-						"num-cpus":                    "1",
-						"node-ip-address":             "127.0.0.1",
-						"block":                       "true",
-						"dashboard-agent-listen-port": "52365",
-					},
+					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"rayCluster": "raycluster-sample",
-								"groupName":  "headgroup",
-							},
-							Annotations: map[string]string{
-								"key": "value",
-							},
-						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.2.0",
-									Env: []corev1.EnvVar{
-										{
-											Name: "MY_POD_IP",
-											ValueFrom: &corev1.EnvVarSource{
-												FieldRef: &corev1.ObjectFieldSelector{
-													FieldPath: "status.podIP",
-												},
-											},
-										},
-									},
+									Image: "rayproject/ray:2.8.0",
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
 											corev1.ResourceCPU:    resource.MustParse("1"),
@@ -127,50 +99,17 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						Replicas:    pointer.Int32(3),
-						MinReplicas: pointer.Int32(0),
-						MaxReplicas: pointer.Int32(10000),
-						GroupName:   "small-group",
-						RayStartParams: map[string]string{
-							"port":                        "6379",
-							"num-cpus":                    "1",
-							"dashboard-agent-listen-port": "52365",
-						},
+						Replicas:       pointer.Int32(3),
+						MinReplicas:    pointer.Int32(0),
+						MaxReplicas:    pointer.Int32(10000),
+						GroupName:      "small-group",
+						RayStartParams: map[string]string{},
 						Template: corev1.PodTemplateSpec{
-							ObjectMeta: metav1.ObjectMeta{
-								Namespace: "default",
-								Labels: map[string]string{
-									"rayCluster": "raycluster-sample",
-									"groupName":  "small-group",
-								},
-							},
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{
-										Name:    "ray-worker",
-										Image:   "rayproject/ray:2.2.0",
-										Command: []string{"echo"},
-										Args:    []string{"Hello Ray"},
-										Env: []corev1.EnvVar{
-											{
-												Name: "MY_POD_IP",
-												ValueFrom: &corev1.EnvVarSource{
-													FieldRef: &corev1.ObjectFieldSelector{
-														FieldPath: "status.podIP",
-													},
-												},
-											},
-										},
-										Ports: []corev1.ContainerPort{
-											{
-												Name:          "client",
-												ContainerPort: 80,
-											},
-											{
-												Name:          "dashboard-agent",
-												ContainerPort: 52365,
-											},
-										},
+										Name:  "ray-worker",
+										Image: "rayproject/ray:2.8.0",
 									},
 								},
 							},
