@@ -314,10 +314,10 @@ class CurlServiceRule(Rule):
 
             else:
                 output = shell_subprocess_check_output(cmd)
-                if hasattr(query.get("expected_output"), "__iter__"):
-                    assert output.decode('utf-8') in query["expected_output"]
+                if not isinstance(query.get("expected_output"), str) and hasattr(query.get("expected_output"), "__iter__"):
+                    assert output.decode('utf-8') in query["expected_output"], f"Expected {output.decode('utf-8')} to be in {query['expected_output']}"
                 else:
-                    assert output.decode('utf-8') == query["expected_output"]
+                    assert output.decode('utf-8') == query["expected_output"], f"Expected {output.decode('utf-8')} to equal {query['expected_output']}"
 
 class AutoscaleRule(Rule):
     def __init__(
