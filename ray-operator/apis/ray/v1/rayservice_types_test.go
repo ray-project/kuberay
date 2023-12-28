@@ -12,12 +12,6 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var (
-	numReplicas   int32 = 1
-	numCpus             = 0.1
-	runtimeEnvStr       = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
-)
-
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "rayservice-sample",
