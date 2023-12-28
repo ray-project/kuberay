@@ -14,8 +14,10 @@ import (
 )
 
 // log is for logging in this package.
-var rayclusterlog = logf.Log.WithName("raycluster-resource")
-var nameRegex, _ = regexp.Compile("^[a-z]([-a-z0-9]*[a-z0-9])?$")
+var (
+	rayclusterlog = logf.Log.WithName("raycluster-resource")
+	nameRegex, _  = regexp.Compile("^[a-z]([-a-z0-9]*[a-z0-9])?$")
+)
 
 func (r *RayCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
