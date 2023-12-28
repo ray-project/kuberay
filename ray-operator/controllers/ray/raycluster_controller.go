@@ -185,16 +185,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
-			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
+			if added, err := utils.AddFinalizer(r, ctx, instance, utils.GCSFaultToleranceRedisCleanupFinalizer); err != nil {
+				r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", utils.GCSFaultToleranceRedisCleanupFinalizer))
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			} else if added {
 				r.Log.Info(
 					"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
 					"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
-				controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
-				if err := r.Update(ctx, instance); err != nil {
-					r.Log.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", utils.GCSFaultToleranceRedisCleanupFinalizer))
-					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-				}
-				// Only start the RayCluster reconciliation after the finalizer is added.
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 			}
 		} else {

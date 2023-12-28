@@ -114,14 +114,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
-		// TODO (kevin85421): Write a utility function to add finalizer for both RayJob and RayCluster.
-		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
+		if added, err := utils.AddFinalizer(r, ctx, rayJobInstance, utils.RayJobStopJobFinalizer); err != nil {
+			r.Log.Error(err, "Failed to update RayJob with finalizer")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		} else if added {
 			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
-			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
-			if err := r.Update(ctx, rayJobInstance); err != nil {
-				r.Log.Error(err, "Failed to update RayJob with finalizer")
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
 		}
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
