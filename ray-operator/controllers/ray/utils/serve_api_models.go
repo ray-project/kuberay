@@ -5,7 +5,7 @@ package utils
 // multi-application schema.
 
 // ServeDeploymentStatus and ServeApplicationStatus describe the format of status(es) that will
-// be returned by GetMultiApplicationStatus methods of the dashboard client
+// be returned by the GetMultiApplicationStatus method of the dashboard client
 // Describes the status of a deployment
 type ServeDeploymentStatus struct {
 	Name    string `json:"name,omitempty"`
