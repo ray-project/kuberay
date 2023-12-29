@@ -2,6 +2,7 @@
 
 ## Packages
 - [ray.io/v1](#rayiov1)
+- [ray.io/v1alpha1](#rayiov1alpha1)
 
 
 ## ray.io/v1
@@ -67,7 +68,7 @@ RayCluster is the Schema for the RayClusters API
 
 | Field | Description |
 | --- | --- |
-| `apiVersion` _string_ | `ray.io/v1`
+| `apiVersion` _string_ | `ray.io/v1alpha1`
 | `kind` _string_ | `RayCluster`
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |
 | `spec` _[RayClusterSpec](#rayclusterspec)_ | Specification of the desired behavior of the RayCluster. |
@@ -77,7 +78,7 @@ RayCluster is the Schema for the RayClusters API
 
 
 
-RayClusterSpec defines the desired state of RayCluster
+EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN! NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized. var app appsv1.Deployment{} RayClusterSpec defines the desired state of RayCluster
 
 _Appears in:_
 - [RayCluster](#raycluster)
@@ -92,7 +93,6 @@ _Appears in:_
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |
-| `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended. A suspended RayCluster will have head pods and worker pods deleted. |
 
 
 #### RayJob
@@ -105,7 +105,7 @@ RayJob is the Schema for the rayjobs API
 
 | Field | Description |
 | --- | --- |
-| `apiVersion` _string_ | `ray.io/v1`
+| `apiVersion` _string_ | `ray.io/v1alpha1`
 | `kind` _string_ | `RayJob`
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |
 | `spec` _[RayJobSpec](#rayjobspec)_ |  |
@@ -150,7 +150,7 @@ RayService is the Schema for the rayservices API
 
 | Field | Description |
 | --- | --- |
-| `apiVersion` _string_ | `ray.io/v1`
+| `apiVersion` _string_ | `ray.io/v1alpha1`
 | `kind` _string_ | `RayService`
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |
 | `spec` _[RayServiceSpec](#rayservicespec)_ |  |

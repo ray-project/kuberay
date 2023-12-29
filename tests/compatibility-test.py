@@ -28,8 +28,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Default Ray version
-ray_version = '2.8.0'
+# parse global variables from env
+ray_image = os.getenv('RAY_IMAGE', 'rayproject/ray:2.9.0')
+ray_version = ray_image.split(':')[-1]
+kuberay_operator_image = os.getenv('OPERATOR_IMAGE')
+
 
 class BasicRayTestCase(unittest.TestCase):
     """Test the basic functionalities of RayCluster by executing simple jobs."""
@@ -151,12 +154,14 @@ class RayFTTestCase(unittest.TestCase):
             self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
 
     @unittest.skipIf(
-        ray_version == '2.8.0' or ray_version == 'nightly',
-        'test_detached_actor is too flaky with Ray 2.8.0 and Ray nightly.'
-        'Therefore, skip it until https://github.com/ray-project/ray/issues/41343 is solved.'
+        ray_version == '2.8.0',
+        'test_detached_actor is too flaky with Ray 2.8.0 due to '
+        'https://github.com/ray-project/ray/issues/41343. '
+        'It is fixed in Ray 2.9.0 and the nightly.'
     )
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""
+
         headpod = get_head_pod(RayFTTestCase.ray_cluster_ns)
         headpod_name = headpod.metadata.name
 
@@ -261,18 +266,8 @@ class KubeRayHealthCheckTestCase(unittest.TestCase):
         utils.wait_for_new_head(CONST.CREATE_NEW_POD, old_head_pod_name, restart_count,
             RayFTTestCase.ray_cluster_ns, timeout=300, retry_interval_ms=1000)
 
-def parse_environment():
-    global ray_version, ray_image, kuberay_operator_image
-    for k, v in os.environ.items():
-        if k == 'RAY_IMAGE':
-            ray_image = v
-            ray_version = ray_image.split(':')[-1]
-        elif k == 'OPERATOR_IMAGE':
-            kuberay_operator_image = v
-
 
 if __name__ == '__main__':
-    parse_environment()
     logger.info('Setting Ray image to: {}'.format(ray_image))
     logger.info('Setting Ray version to: {}'.format(ray_version))
     logger.info('Setting KubeRay operator image to: {}'.format(kuberay_operator_image))

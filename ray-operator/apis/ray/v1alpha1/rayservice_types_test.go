@@ -1,4 +1,4 @@
-package v1
+package v1alpha1
 
 import (
 	"encoding/json"
@@ -12,12 +12,63 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+var (
+	numReplicas   int32 = 1
+	numCpus             = 0.1
+	runtimeEnvStr       = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
+)
+
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "rayservice-sample",
 		Namespace: "default",
 	},
 	Spec: RayServiceSpec{
+		ServeDeploymentGraphSpec: ServeDeploymentGraphSpec{
+			ImportPath: "fruit.deployment_graph",
+			RuntimeEnv: runtimeEnvStr,
+			ServeConfigSpecs: []ServeConfigSpec{
+				{
+					Name:        "MangoStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 3",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "OrangeStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 2",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "PearStand",
+					NumReplicas: &numReplicas,
+					UserConfig:  "price: 1",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "FruitMarket",
+					NumReplicas: &numReplicas,
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+				{
+					Name:        "DAGDriver",
+					NumReplicas: &numReplicas,
+					RoutePrefix: "/",
+					RayActorOptions: RayActorOptionSpec{
+						NumCpus: &numCpus,
+					},
+				},
+			},
+		},
 		RayClusterSpec: RayClusterSpec{
 			HeadGroupSpec: HeadGroupSpec{
 				RayStartParams: map[string]string{
@@ -41,7 +92,7 @@ var myRayService = &RayService{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
+								Image: "rayproject/ray:2.8.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -107,7 +158,7 @@ var myRayService = &RayService{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.9.0",
+									Image:   "rayproject/ray:2.8.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -137,6 +188,51 @@ var expected = `{
       "creationTimestamp":null
    },
    "spec":{
+      "serveConfig":{
+         "importPath":"fruit.deployment_graph",
+         "runtimeEnv":"working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"",
+         "deployments":[
+            {
+               "name":"MangoStand",
+               "numReplicas":1,
+               "userConfig":"price: 3",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"OrangeStand",
+               "numReplicas":1,
+               "userConfig":"price: 2",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"PearStand",
+               "numReplicas":1,
+               "userConfig":"price: 1",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"FruitMarket",
+               "numReplicas":1,
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            },
+            {
+               "name":"DAGDriver",
+               "numReplicas":1,
+               "routePrefix":"/",
+               "rayActorOptions":{
+                  "numCpus":0.1
+               }
+            }
+         ]
+      },
       "rayClusterConfig":{
          "headGroupSpec":{
             "rayStartParams":{
@@ -161,7 +257,7 @@ var expected = `{
                   "containers":[
                      {
                         "name":"ray-head",
-                        "image":"rayproject/ray:2.9.0",
+                        "image":"rayproject/ray:2.8.0",
                         "ports":[
                            {
                               "name":"gcs-server",
@@ -228,7 +324,7 @@ var expected = `{
                      "containers":[
                         {
                            "name":"ray-worker",
-                           "image":"rayproject/ray:2.9.0",
+                           "image":"rayproject/ray:2.8.0",
                            "command":[
                               "echo"
                            ],
@@ -265,10 +361,6 @@ var expected = `{
 
          },
          "rayClusterStatus":{
-            "desiredCPUs": "0",
-            "desiredMemory": "0",
-            "desiredGPUs": "0",
-            "desiredTPUs": "0",
             "head":{}
          }
       },
@@ -277,10 +369,6 @@ var expected = `{
 
          },
          "rayClusterStatus":{
-            "desiredCPUs": "0",
-            "desiredMemory": "0",
-            "desiredGPUs": "0",
-            "desiredTPUs": "0",
             "head":{}
          }
       }

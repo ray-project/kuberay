@@ -90,18 +90,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object.
-		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
-			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
-			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
-			if err := r.Update(ctx, rayJobInstance); err != nil {
-				r.Log.Error(err, "Failed to update RayJob with finalizer")
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-		}
-	} else {
+	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
@@ -124,6 +113,46 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 	switch rayJobInstance.Status.JobDeploymentStatus {
+	case rayv1.JobDeploymentStatusNew:
+		// TODO (kevin85421): Write a utility function to add finalizer for both RayJob and RayCluster.
+		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
+			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
+			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
+			if err := r.Update(ctx, rayJobInstance); err != nil {
+				r.Log.Error(err, "Failed to update RayJob with finalizer")
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+		}
+		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
+		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
+		r.Log.Info("JobDeploymentStatusNew", "RayJob", rayJobInstance.Name)
+		if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	case rayv1.JobDeploymentStatusRunning:
+		// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
+		// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
+		// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
+		// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
+		// delete the RayCluster.
+		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
+			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+		// TODO (kevin85421): Don't return here; we still need to move some of the code below into this block.
+	case rayv1.JobDeploymentStatusSuspended:
+		if !rayJobInstance.Spec.Suspend {
+			r.Log.Info("The status is 'Suspended', but the suspend flag is false. Transition the status to 'New'.")
+			if err = r.updateState(ctx, rayJobInstance, nil, rayv1.JobStatusNew, rayv1.JobDeploymentStatusNew); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+		// TODO (kevin85421): We may not need to requeue the RayJob if it has already been suspended.
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete:
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
@@ -145,29 +174,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
 				if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
 		}
+		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
-	}
-
-	// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
-	// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
-	// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
-	// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
-	// delete the RayCluster.
-	if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
-		if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-	}
-
-	// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
-	// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
-	if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
 	var rayClusterInstance *rayv1.RayCluster
@@ -176,10 +188,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	// If there is no cluster instance and no error suspend the job deployment
 	if rayClusterInstance == nil {
-		// Already suspended?
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspended {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
 		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -252,7 +260,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			// Since RayCluster instance is gone, remove it status also
 			// on RayJob resource
@@ -467,7 +475,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	}
 
 	if rayJob.Status.JobStatus == "" {
-		rayJob.Status.JobStatus = rayv1.JobStatusPending
+		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
 
 	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing)
@@ -503,110 +511,57 @@ func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob
 	return nil
 }
 
-// TODO: select existing rayclusters by ClusterSelector
 func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, rayJobInstance *rayv1.RayJob) (*rayv1.RayCluster, error) {
 	rayClusterInstanceName := rayJobInstance.Status.RayClusterName
-	r.Log.V(3).Info("try to find existing RayCluster instance", "name", rayClusterInstanceName)
+	r.Log.Info("try to find existing RayCluster instance", "name", rayClusterInstanceName)
 	rayClusterNamespacedName := types.NamespacedName{
 		Namespace: rayJobInstance.Namespace,
 		Name:      rayClusterInstanceName,
 	}
 
 	rayClusterInstance := &rayv1.RayCluster{}
-	err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance)
-	if err == nil {
-		r.Log.Info("Found associated RayCluster for RayJob", "rayjob", rayJobInstance.Name, "raycluster", rayClusterNamespacedName)
-
-		// Case1: The job is submitted to an existing ray cluster, simply return the rayClusterInstance.
-		// We do not use rayJobInstance.Spec.RayClusterSpec == nil to check if the cluster selector mode is activated.
-		// This is because a user might set both RayClusterSpec and ClusterSelector. with rayJobInstance.Spec.RayClusterSpec == nil,
-		// though the RayJob controller will still use ClusterSelector, but it's now able to update the replica.
-		// this could result in a conflict as both the RayJob controller and the autoscaler in the existing RayCluster might try to update replicas simultaneously.
-		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-			r.Log.Info("ClusterSelector is being used to select an existing RayCluster. RayClusterSpec will be disregarded", "raycluster", rayClusterNamespacedName)
-			return rayClusterInstance, nil
-		}
-
-		// Note, unlike the RayService, which creates new Ray clusters if any spec is changed,
-		// RayJob only supports changing the replicas. Changes to other specs may lead to
-		// unexpected behavior. Therefore, the following code focuses solely on updating replicas.
-
-		// Case2: In-tree autoscaling is enabled, only the autoscaler should update replicas to prevent race conditions
-		// between user updates and autoscaler decisions. RayJob controller should not modify the replica. Consider this scenario:
-		// 1. The autoscaler updates replicas to 10 based on the current workload.
-		// 2. The user updates replicas to 15 in the RayJob YAML file.
-		// 3. Both RayJob controller and the autoscaler attempt to update replicas, causing worker pods to be repeatedly created and terminated.
-		if rayJobInstance.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *rayJobInstance.Spec.RayClusterSpec.EnableInTreeAutoscaling {
-			// Note, currently, there is no method to verify if the user has updated the RayJob since the last reconcile.
-			// In future, we could utilize annotation that stores the hash of the RayJob since last reconcile to compare.
-			// For now, we just log a warning message to remind the user regadless whether user has updated RayJob.
-			r.Log.Info("Since in-tree autoscaling is enabled, any adjustments made to the RayJob will be disregarded and will not be propagated to the RayCluster.")
-			return rayClusterInstance, nil
-		}
-
-		// Case3: In-tree autoscaling is disabled, respect the user's replicas setting.
-		// Loop over all worker groups and update replicas.
-		areReplicasIdentical := true
-		for i := range rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs {
-			if *rayClusterInstance.Spec.WorkerGroupSpecs[i].Replicas != *rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas {
-				areReplicasIdentical = false
-				*rayClusterInstance.Spec.WorkerGroupSpecs[i].Replicas = *rayJobInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas
+	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
+			// TODO: If both ClusterSelector and RayClusterSpec are not set, we should avoid retrieving a RayCluster instance.
+			// Consider moving this logic to a more appropriate location.
+			if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
+				err := fmt.Errorf("one of ClusterSelector or RayClusterSpec must be set, but both are undefined, err: %v", err)
+				return nil, err
 			}
-		}
 
-		// Other specs rather than replicas are changed, warn the user that the RayJob supports replica changes only.
-		if !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
-			r.Log.Info("RayJob supports replica changes only. Adjustments made to other specs will be disregarded as they may cause unexpected behavior")
-		}
+			if len(rayJobInstance.Spec.ClusterSelector) != 0 {
+				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
+				return nil, err
+			}
 
-		// Avoid updating the RayCluster's replicas if it's identical to the RayJob's replicas.
-		if areReplicasIdentical {
-			return rayClusterInstance, nil
-		}
+			// special case: don't create a cluster instance and don't return an error if the suspend flag of the job is true
+			if rayJobInstance.Spec.Suspend {
+				return nil, nil
+			}
 
-		r.Log.Info("Update RayCluster replica", "RayCluster", rayClusterNamespacedName)
-		if err := r.Update(ctx, rayClusterInstance); err != nil {
-			r.Log.Error(err, "Fail to update RayCluster replica!", "RayCluster", rayClusterNamespacedName)
-			// Error updating the RayCluster object.
-			return nil, client.IgnoreNotFound(err)
-		}
-
-	} else if errors.IsNotFound(err) {
-		// TODO: If both ClusterSelector and RayClusterSpec are not set, we should avoid retrieving a RayCluster instance.
-		// Consider moving this logic to a more appropriate location.
-		if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
-			err := fmt.Errorf("one of ClusterSelector or RayClusterSpec must be set, but both are undefined, err: %v", err)
+			r.Log.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
+			if err != nil {
+				r.Log.Error(err, "unable to construct a new RayCluster")
+				return nil, err
+			}
+			if err := r.Create(ctx, rayClusterInstance); err != nil {
+				r.Log.Error(err, "unable to create RayCluster for RayJob", "RayCluster", rayClusterInstance)
+				return nil, err
+			}
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created RayCluster %s", rayJobInstance.Status.RayClusterName)
+		} else {
+			r.Log.Error(err, "Fail to get RayCluster!")
 			return nil, err
 		}
+	}
+	r.Log.Info("Found associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 
-		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-			err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
-			return nil, err
-		}
-
-		// special case: don't create a cluster instance and don't return an error if the suspend flag of the job is true
-		if rayJobInstance.Spec.Suspend {
-			return nil, nil
-		}
-
-		r.Log.Info("RayCluster not found, creating RayCluster!", "raycluster", rayClusterNamespacedName)
-		rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
-		if err != nil {
-			r.Log.Error(err, "unable to construct a new rayCluster")
-			// Error construct the RayCluster object - requeue the request.
-			return nil, err
-		}
-		if err := r.Create(ctx, rayClusterInstance); err != nil {
-			r.Log.Error(err, "unable to create rayCluster for rayJob", "rayCluster", rayClusterInstance)
-			// Error creating the RayCluster object - requeue the request.
-			return nil, err
-		}
-		r.Log.Info("created rayCluster for rayJob", "rayCluster", rayClusterInstance)
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created cluster %s", rayJobInstance.Status.RayClusterName)
-	} else {
-		r.Log.Error(err, "Get rayCluster instance error!")
-		// Error reading the RayCluster object - requeue the request.
-		return nil, err
+	// Verify that RayJob is not in cluster selector mode first to avoid nil pointer dereference error during spec comparison.
+	// This is checked by ensuring len(rayJobInstance.Spec.ClusterSelector) equals 0.
+	if len(rayJobInstance.Spec.ClusterSelector) == 0 && !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
+		r.Log.Info("Disregard changes in RayClusterSpec of RayJob", "RayJob", rayJobInstance.Name)
 	}
 
 	return rayClusterInstance, nil
