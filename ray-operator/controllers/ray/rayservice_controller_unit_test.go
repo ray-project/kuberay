@@ -640,7 +640,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 				dashboardClient = &utils.FakeRayDashboardClient{}
 			}
 			prevRayServiceStatus := rayv1.RayServiceStatus{Applications: tc.applications}
-			isReady, err := r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus, utils.MULTI_APP)
+			isReady, err := r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedReady, isReady)
 		})

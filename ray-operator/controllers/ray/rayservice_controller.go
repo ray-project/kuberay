@@ -757,74 +757,45 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
 		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
 
-	serveConfigType := r.determineServeConfigType(rayServiceInstance)
-	if serveConfigType == utils.SINGLE_APP {
-		// Single app mode is removed. It should be impossible to reach here. If we somehow do, return an error.
-		// TODO(architkulkarni): Delete serveConfigType and unify the code path for both SINGLE_APP and MULTI_APP
-		r.Log.Error(fmt.Errorf("Single app mode is removed. Please use multi app mode (serveConfigV2) instead."), "shouldUpdate")
-		return true
-	} else if serveConfigType == utils.MULTI_APP {
-		cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
-		if !isServeConfigV2 {
-			shouldUpdate = true
-			reason = fmt.Sprintf("No V2 Serve Config of type string has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-		} else if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
-			shouldUpdate = true
-			reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-		}
-		r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
+	cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
+	if !isServeConfigV2 {
+		shouldUpdate = true
+		reason = fmt.Sprintf("No V2 Serve Config of type string has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+	} else if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
+		shouldUpdate = true
+		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 	}
+	r.Log.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 
 	return shouldUpdate
 }
 
-// Determines the serve config type from a ray service instance
-// If the user has set a value for `ServeConfigV2`, the config type is MULTI_APP
-// Otherwise, the user should have set a value for `ServeConfig`, in which case the config type is SINGLE_APP
-func (r *RayServiceReconciler) determineServeConfigType(rayServiceInstance *rayv1.RayService) utils.RayServeConfigType {
-	if rayServiceInstance.Spec.ServeConfigV2 == "" {
-		return utils.SINGLE_APP
-	} else {
-		return utils.MULTI_APP
-	}
-}
-
 func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
-	serveConfigType := r.determineServeConfigType(rayServiceInstance)
+	r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
-	if serveConfigType == utils.SINGLE_APP {
-		// Single app mode is removed. It should be impossible to reach here. If we somehow do, return an error.
-		// TODO(architkulkarni): Delete serveConfigType and unify the code path for both SINGLE_APP and MULTI_APP
-		return fmt.Errorf("Single app mode is removed. Please use multi app mode (serveConfigV2) instead.")
-	} else if serveConfigType == utils.MULTI_APP {
-		r.Log.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
-
-		serveConfig := make(map[string]interface{})
-		if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
-			return err
-		}
-
-		configJson, err := json.Marshal(serveConfig)
-		if err != nil {
-			return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
-		}
-		r.Log.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
-		if err := rayDashboardClient.UpdateDeployments(ctx, configJson, serveConfigType); err != nil {
-			err = fmt.Errorf(
-				"Fail to create / update Serve applications. If you observe this error consistently, "+
-					"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
-					"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
-					"err: %v", err)
-			return err
-		}
-
-		cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
-		r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
-		r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
-		return nil
-	} else {
-		return fmt.Errorf("Serve config type should either be SINGLE_APP or MULTI_APP, but got unrecognized serve config type: %s", serveConfigType)
+	serveConfig := make(map[string]interface{})
+	if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
+		return err
 	}
+
+	configJson, err := json.Marshal(serveConfig)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
+	}
+	r.Log.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
+	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
+		err = fmt.Errorf(
+			"Fail to create / update Serve applications. If you observe this error consistently, "+
+				"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
+				"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
+				"err: %v", err)
+		return err
+	}
+
+	cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
+	r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
+	r.Log.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
+	return nil
 }
 
 // `getAndCheckServeStatus` gets Serve applications' and deployments' statuses and check whether the
@@ -833,29 +804,15 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // (1) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
 // (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
 
-func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus, serveConfigType utils.RayServeConfigType) (bool, error) {
+func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus) (bool, error) {
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
-	if serveConfigType == utils.SINGLE_APP {
-		var singleApplicationStatus *utils.ServeApplicationStatus
-		if singleApplicationStatus, err = dashboardClient.GetSingleApplicationStatus(ctx); err != nil {
-			err = fmt.Errorf(
-				"Failed to get Serve deployment statuses from the head's dashboard agent port (the head service's port with the name `dashboard-agent`). "+
-					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
-					"err: %v", err)
-			return false, err
-		}
-		serveAppStatuses = map[string]*utils.ServeApplicationStatus{utils.DefaultServeAppName: singleApplicationStatus}
-	} else if serveConfigType == utils.MULTI_APP {
-		if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
-			err = fmt.Errorf(
-				"Failed to get Serve application statuses from the dashboard agent (the head service's port with the name `dashboard-agent`). "+
-					"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
-					"err: %v", err)
-			return false, err
-		}
-	} else {
-		return false, fmt.Errorf("Unrecognized serve config type %s", string(serveConfigType))
+	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
+		err = fmt.Errorf(
+			"Failed to get Serve application statuses from the dashboard agent (the head service's port with the name `dashboard-agent`). "+
+				"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
+				"err: %v", err)
+		return false, err
 	}
 
 	r.Log.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
@@ -1091,7 +1048,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayDashboardClient.InitClient(clientURL)
 
 	var isReady bool
-	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance)); err != nil {
+	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
 		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
@@ -1154,7 +1111,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	var isReady bool
-	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus, r.determineServeConfigType(rayServiceInstance)); err != nil {
+	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
 		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
