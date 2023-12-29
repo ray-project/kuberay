@@ -177,7 +177,7 @@ message RayService {
   // Required field. This field indicates the user who owns the ray service.
   string user = 3 [(google.api.field_behavior) = REQUIRED];
   // The config for ray serve deployments V1.
-  ServeDeploymentGraphSpec serve_deployment_graph_spec = 4;
+  ServeDeploymentGraphSpec serve_deployment_graph_spec = 4 [deprecated=true];
   // Config for serve deployment V2. Note that only one config V1 or V2 can be specified
   string serve_config_V2 = 9;
   // Serve deployment related health check

@@ -366,11 +366,6 @@ func (r *ResourceManager) UpdateRayServiceConfigs(ctx context.Context, request *
 		newWorkerGroups := util.UpdateRayServiceWorkerGroupSpecs(updateService.WorkerGroupUpdateSpec, oldWorkerGroups)
 		service.Spec.RayClusterSpec.WorkerGroupSpecs = newWorkerGroups
 	}
-	if updateService.ServeDeploymentGraphSpec != nil {
-		oldServeDeploymentGraphSpec := service.Spec.ServeDeploymentGraphSpec
-		newServeDeploymentGraphSpec := util.UpdateServeDeploymentGraphSpec(updateService.ServeDeploymentGraphSpec, oldServeDeploymentGraphSpec)
-		service.Spec.ServeDeploymentGraphSpec = newServeDeploymentGraphSpec
-	}
 	service.Annotations["ray.io/update-timestamp"] = r.clientManager.Time().Now().String()
 	newService, err := client.Update(ctx, service, metav1.UpdateOptions{})
 	if err != nil {

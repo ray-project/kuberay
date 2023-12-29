@@ -12,63 +12,12 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var (
-	numReplicas   int32 = 1
-	numCpus             = 0.1
-	runtimeEnvStr       = "working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\""
-)
-
 var myRayService = &RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "rayservice-sample",
 		Namespace: "default",
 	},
 	Spec: RayServiceSpec{
-		ServeDeploymentGraphSpec: ServeDeploymentGraphSpec{
-			ImportPath: "fruit.deployment_graph",
-			RuntimeEnv: runtimeEnvStr,
-			ServeConfigSpecs: []ServeConfigSpec{
-				{
-					Name:        "MangoStand",
-					NumReplicas: &numReplicas,
-					UserConfig:  "price: 3",
-					RayActorOptions: RayActorOptionSpec{
-						NumCpus: &numCpus,
-					},
-				},
-				{
-					Name:        "OrangeStand",
-					NumReplicas: &numReplicas,
-					UserConfig:  "price: 2",
-					RayActorOptions: RayActorOptionSpec{
-						NumCpus: &numCpus,
-					},
-				},
-				{
-					Name:        "PearStand",
-					NumReplicas: &numReplicas,
-					UserConfig:  "price: 1",
-					RayActorOptions: RayActorOptionSpec{
-						NumCpus: &numCpus,
-					},
-				},
-				{
-					Name:        "FruitMarket",
-					NumReplicas: &numReplicas,
-					RayActorOptions: RayActorOptionSpec{
-						NumCpus: &numCpus,
-					},
-				},
-				{
-					Name:        "DAGDriver",
-					NumReplicas: &numReplicas,
-					RoutePrefix: "/",
-					RayActorOptions: RayActorOptionSpec{
-						NumCpus: &numCpus,
-					},
-				},
-			},
-		},
 		RayClusterSpec: RayClusterSpec{
 			HeadGroupSpec: HeadGroupSpec{
 				RayStartParams: map[string]string{
@@ -188,51 +137,6 @@ var expected = `{
       "creationTimestamp":null
    },
    "spec":{
-      "serveConfig":{
-         "importPath":"fruit.deployment_graph",
-         "runtimeEnv":"working_dir:\n - \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"",
-         "deployments":[
-            {
-               "name":"MangoStand",
-               "numReplicas":1,
-               "userConfig":"price: 3",
-               "rayActorOptions":{
-                  "numCpus":0.1
-               }
-            },
-            {
-               "name":"OrangeStand",
-               "numReplicas":1,
-               "userConfig":"price: 2",
-               "rayActorOptions":{
-                  "numCpus":0.1
-               }
-            },
-            {
-               "name":"PearStand",
-               "numReplicas":1,
-               "userConfig":"price: 1",
-               "rayActorOptions":{
-                  "numCpus":0.1
-               }
-            },
-            {
-               "name":"FruitMarket",
-               "numReplicas":1,
-               "rayActorOptions":{
-                  "numCpus":0.1
-               }
-            },
-            {
-               "name":"DAGDriver",
-               "numReplicas":1,
-               "routePrefix":"/",
-               "rayActorOptions":{
-                  "numCpus":0.1
-               }
-            }
-         ]
-      },
       "rayClusterConfig":{
          "headGroupSpec":{
             "rayStartParams":{

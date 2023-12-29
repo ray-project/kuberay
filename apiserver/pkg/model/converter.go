@@ -3,7 +3,6 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 
 	klog "k8s.io/klog/v2"
@@ -493,7 +492,6 @@ func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *a
 		Name:                               service.Name,
 		Namespace:                          service.Namespace,
 		User:                               service.Labels[util.RayClusterUserLabelKey],
-		ServeDeploymentGraphSpec:           PopulateServeDeploymentGraphSpec(service.Spec.ServeDeploymentGraphSpec),
 		ServeConfig_V2:                     service.Spec.ServeConfigV2,
 		ClusterSpec:                        PopulateRayClusterSpec(service.Spec.RayClusterSpec),
 		ServiceUnhealthySecondThreshold:    PoplulateUnhealthySecondThreshold(service.Spec.ServiceUnhealthySecondThreshold),
@@ -503,61 +501,6 @@ func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *a
 		DeleteAt:                           &timestamp.Timestamp{Seconds: deleteTime},
 	}
 	return pbService
-}
-
-func PopulateServeDeploymentGraphSpec(spec rayv1api.ServeDeploymentGraphSpec) *api.ServeDeploymentGraphSpec {
-	if reflect.DeepEqual(spec, rayv1api.ServeDeploymentGraphSpec{}) {
-		return nil
-	}
-	return &api.ServeDeploymentGraphSpec{
-		ImportPath:   spec.ImportPath,
-		RuntimeEnv:   spec.RuntimeEnv,
-		ServeConfigs: PopulateServeConfig(spec.ServeConfigSpecs),
-	}
-}
-
-func PopulateServeConfig(serveConfigSpecs []rayv1api.ServeConfigSpec) []*api.ServeConfig {
-	serveConfigs := make([]*api.ServeConfig, 0)
-	for _, serveConfigSpec := range serveConfigSpecs {
-		var actorOptions *api.ActorOptions
-		if reflect.DeepEqual(serveConfigSpec.RayActorOptions, rayv1api.RayActorOptionSpec{}) {
-			actorOptions = nil
-		} else {
-			actorOptions = &api.ActorOptions{
-				RuntimeEnv:       serveConfigSpec.RayActorOptions.RuntimeEnv,
-				CustomResource:   serveConfigSpec.RayActorOptions.Resources,
-				AccceleratorType: serveConfigSpec.RayActorOptions.AcceleratorType,
-			}
-			if ncpus := serveConfigSpec.RayActorOptions.NumCpus; ncpus != nil {
-				actorOptions.CpusPerActor = *ncpus
-			}
-			if ngpus := serveConfigSpec.RayActorOptions.NumGpus; ngpus != nil {
-				actorOptions.GpusPerActor = *ngpus
-			}
-			if mem := serveConfigSpec.RayActorOptions.Memory; mem != nil {
-				actorOptions.MemoryPerActor = *mem
-			}
-			if omem := serveConfigSpec.RayActorOptions.ObjectStoreMemory; omem != nil {
-				actorOptions.ObjectStoreMemoryPerActor = *omem
-			}
-		}
-		serveConfig := &api.ServeConfig{
-			DeploymentName:    serveConfigSpec.Name,
-			AutoscalingConfig: serveConfigSpec.AutoscalingConfig,
-			UserConfig:        serveConfigSpec.UserConfig,
-			RoutePrefix:       serveConfigSpec.RoutePrefix,
-			ActorOptions:      actorOptions,
-		}
-		if serveConfigSpec.NumReplicas != nil {
-			serveConfig.Replicas = *serveConfigSpec.NumReplicas
-		}
-		if serveConfigSpec.MaxConcurrentQueries != nil {
-			serveConfig.MaxConcurrentQueries = *serveConfigSpec.MaxConcurrentQueries
-		}
-
-		serveConfigs = append(serveConfigs, serveConfig)
-	}
-	return serveConfigs
 }
 
 func PoplulateUnhealthySecondThreshold(value *int32) int32 {
