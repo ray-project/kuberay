@@ -16,7 +16,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
-	cmap "github.com/orcaman/concurrent-map"
+	cmap "github.com/orcaman/concurrent-map/v2"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
@@ -51,8 +51,8 @@ type RayServiceReconciler struct {
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
-	ServeConfigs                 cmap.ConcurrentMap
-	RayClusterDeletionTimestamps cmap.ConcurrentMap
+	ServeConfigs                 cmap.ConcurrentMap[string, string]
+	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
 	httpProxyClientFunc func() utils.RayHttpProxyClientInterface
@@ -65,8 +65,8 @@ func NewRayServiceReconciler(mgr manager.Manager, dashboardClientFunc func() uti
 		Scheme:                       mgr.GetScheme(),
 		Log:                          ctrl.Log.WithName("controllers").WithName("RayService"),
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeConfigs:                 cmap.New(),
-		RayClusterDeletionTimestamps: cmap.New(),
+		ServeConfigs:                 cmap.New[string](),
+		RayClusterDeletionTimestamps: cmap.New[time.Time](),
 
 		dashboardClientFunc: dashboardClientFunc,
 		httpProxyClientFunc: httpProxyClientFunc,
@@ -411,20 +411,15 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	// after becoming inactive to give the ingress time to update.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
-			cachedTimestampObj, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
+			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
 			if !exists {
 				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
 				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
 				r.Log.V(1).Info(fmt.Sprintf("Scheduled dangling RayCluster "+
 					"%s for deletion at %s", rayClusterInstance.Name, deletionTimestamp))
 			} else {
-				cachedTimestamp, isTimestamp := cachedTimestampObj.(time.Time)
 				reasonForDeletion := ""
-				if !isTimestamp {
-					reasonForDeletion = fmt.Sprintf("Deletion cache contains "+
-						"unexpected, non-timestamp object for RayCluster %s. "+
-						"Deleting cluster immediately.", rayClusterInstance.Name)
-				} else if time.Since(cachedTimestamp) > 0*time.Second {
+				if time.Since(cachedTimestamp) > 0*time.Second {
 					reasonForDeletion = fmt.Sprintf("Deletion timestamp %s "+
 						"for RayCluster %s has passed. Deleting cluster "+
 						"immediately.", cachedTimestamp, rayClusterInstance.Name)
@@ -724,7 +719,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serveStatus *rayv1.RayServiceStatus) bool {
 	// If the Serve config has not been cached, update the Serve config.
 	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
-	cachedConfigObj, exist := r.ServeConfigs.Get(cacheKey)
+	cachedServeConfigV2, exist := r.ServeConfigs.Get(cacheKey)
 
 	if !exist {
 		r.Log.V(1).Info("shouldUpdate",
@@ -757,11 +752,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(rayServiceInstan
 	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
 		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
 
-	cachedServeConfigV2, isServeConfigV2 := cachedConfigObj.(string)
-	if !isServeConfigV2 {
-		shouldUpdate = true
-		reason = fmt.Sprintf("No V2 Serve Config of type string has been cached for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
-	} else if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
+	if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
 		shouldUpdate = true
 		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 	}
