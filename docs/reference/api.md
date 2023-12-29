@@ -277,26 +277,6 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s depoyments, statefulsets, etc. |
 
 
-#### RayActorOptionSpec
-
-
-
-RayActorOptionSpec defines the desired state of RayActor
-
-_Appears in:_
-- [ServeConfigSpec](#serveconfigspec)
-
-| Field | Description |
-| --- | --- |
-| `runtimeEnv` _string_ |  |
-| `numCpus` _float_ |  |
-| `numGpus` _float_ |  |
-| `memory` _integer_ |  |
-| `objectStoreMemory` _integer_ |  |
-| `resources` _string_ |  |
-| `acceleratorType` _string_ |  |
-
-
 #### RayCluster
 
 
@@ -317,7 +297,7 @@ RayCluster is the Schema for the RayClusters API
 
 
 
-EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN! NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized. var app appsv1.Deployment{} RayClusterSpec defines the desired state of RayCluster
+RayClusterSpec defines the desired state of RayCluster
 
 _Appears in:_
 - [RayCluster](#raycluster)
@@ -332,6 +312,7 @@ _Appears in:_
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |
+| `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended. A suspended RayCluster will have head pods and worker pods deleted. |
 
 
 #### RayJob
@@ -406,8 +387,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `serveConfig` _[ServeDeploymentGraphSpec](#servedeploymentgraphspec)_ | Important: Run "make" to regenerate code after modifying this file |
-| `serveConfigV2` _string_ | Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |
+| `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |
 | `serviceUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |
 | `deploymentUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |
@@ -428,47 +408,6 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |
-
-
-#### ServeConfigSpec
-
-
-
-ServeConfigSpec defines the desired state of RayService Reference to http://rayserve.org
-
-_Appears in:_
-- [ServeDeploymentGraphSpec](#servedeploymentgraphspec)
-
-| Field | Description |
-| --- | --- |
-| `name` _string_ |  |
-| `numReplicas` _integer_ |  |
-| `routePrefix` _string_ |  |
-| `maxConcurrentQueries` _integer_ |  |
-| `userConfig` _string_ |  |
-| `autoscalingConfig` _string_ |  |
-| `gracefulShutdownWaitLoopS` _integer_ |  |
-| `gracefulShutdownTimeoutS` _integer_ |  |
-| `healthCheckPeriodS` _integer_ |  |
-| `healthCheckTimeoutS` _integer_ |  |
-| `rayActorOptions` _[RayActorOptionSpec](#rayactoroptionspec)_ |  |
-
-
-#### ServeDeploymentGraphSpec
-
-
-
-
-
-_Appears in:_
-- [RayServiceSpec](#rayservicespec)
-
-| Field | Description |
-| --- | --- |
-| `importPath` _string_ |  |
-| `runtimeEnv` _string_ |  |
-| `deployments` _[ServeConfigSpec](#serveconfigspec) array_ |  |
-| `port` _integer_ |  |
 
 
 #### UpscalingMode

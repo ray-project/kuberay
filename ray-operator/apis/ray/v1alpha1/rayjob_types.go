@@ -13,6 +13,7 @@ type JobStatus string
 
 // https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
 const (
+	JobStatusNew       JobStatus = ""
 	JobStatusPending   JobStatus = "PENDING"
 	JobStatusRunning   JobStatus = "RUNNING"
 	JobStatusStopped   JobStatus = "STOPPED"
@@ -33,6 +34,7 @@ func IsJobTerminal(status JobStatus) bool {
 type JobDeploymentStatus string
 
 const (
+	JobDeploymentStatusNew          JobDeploymentStatus = ""
 	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
 	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
