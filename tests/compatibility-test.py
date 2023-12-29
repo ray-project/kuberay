@@ -154,9 +154,9 @@ class RayFTTestCase(unittest.TestCase):
             self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
 
     @unittest.skipIf(
-        ray_version == '2.8.0' or ray_version == 'nightly',
-        'test_detached_actor is too flaky with Ray 2.8.0 due to'
-        'https://github.com/ray-project/ray/issues/41343.'
+        ray_version == '2.8.0',
+        'test_detached_actor is too flaky with Ray 2.8.0 due to '
+        'https://github.com/ray-project/ray/issues/41343. '
         'It is fixed in Ray 2.9.0 and the nightly.'
     )
     def test_detached_actor(self):
