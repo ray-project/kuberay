@@ -347,7 +347,6 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 	},
 }
 
-
 var ServiceV2Test = rayv1api.RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
@@ -590,4 +589,3 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "image", job.JobSubmitter.Image)
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
 }
-

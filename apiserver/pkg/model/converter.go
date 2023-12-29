@@ -503,7 +503,6 @@ func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *a
 	return pbService
 }
 
-
 func PoplulateUnhealthySecondThreshold(value *int32) int32 {
 	if value == nil {
 		return 0
