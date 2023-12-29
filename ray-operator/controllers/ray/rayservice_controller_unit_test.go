@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	cmap "github.com/orcaman/concurrent-map"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
@@ -663,7 +663,7 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 		Recorder:     &record.FakeRecorder{},
 		Scheme:       scheme.Scheme,
 		Log:          ctrl.Log.WithName("controllers").WithName("RayService"),
-		ServeConfigs: cmap.New(),
+		ServeConfigs: cmap.New[string](),
 	}
 
 	namespace := "ray"
