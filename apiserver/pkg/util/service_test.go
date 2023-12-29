@@ -1,11 +1,9 @@
 package util
 
 import (
-	"reflect"
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -66,25 +64,10 @@ func TestBuildService(t *testing.T) {
 	if err.Error() != "two serve configuration are defined, only one is allowed" {
 		t.Errorf("wrong error returned")
 	}
-	got, err := NewRayService(apiServiceV1, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Nil(t, err)
-	if reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1api.ServeDeploymentGraphSpec{}) {
-		t.Errorf("Got empty V1")
-	}
-	if got.RayService.Spec.ServeConfigV2 != "" {
-		t.Errorf("Got non empty V2")
-	}
-	assert.Equal(t, int32(2), *got.Spec.ServeDeploymentGraphSpec.ServeConfigSpecs[0].MaxConcurrentQueries)
-	assert.Nil(t, got.Spec.ServiceUnhealthySecondThreshold)
-	assert.Nil(t, got.Spec.DeploymentUnhealthySecondThreshold)
-
-	got, err = NewRayService(apiServiceV2, map[string]*api.ComputeTemplate{"foo": &template})
+	got, err := NewRayService(apiServiceV2, map[string]*api.ComputeTemplate{"foo": &template})
 	assert.Nil(t, err)
 	if got.RayService.Spec.ServeConfigV2 == "" {
 		t.Errorf("Got empty V2")
-	}
-	if !reflect.DeepEqual(got.Spec.ServeDeploymentGraphSpec, rayv1api.ServeDeploymentGraphSpec{}) {
-		t.Errorf("Got non empty V1")
 	}
 	assert.NotNil(t, got.Spec.ServiceUnhealthySecondThreshold)
 	assert.Nil(t, got.Spec.DeploymentUnhealthySecondThreshold)

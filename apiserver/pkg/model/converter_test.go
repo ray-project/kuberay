@@ -347,45 +347,6 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 	},
 }
 
-var ServiceV1Test = rayv1api.RayService{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "test",
-		Namespace: "test",
-		Labels: map[string]string{
-			"ray.io/user": "user",
-		},
-	},
-	Spec: rayv1api.RayServiceSpec{
-		ServeDeploymentGraphSpec: rayv1api.ServeDeploymentGraphSpec{
-			ImportPath: "fruit.deployment_graph",
-			RuntimeEnv: "working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"",
-			ServeConfigSpecs: []rayv1api.ServeConfigSpec{
-				{
-					Name:        "MangoStand",
-					NumReplicas: &deploymentReplicas,
-					UserConfig:  "price: 3",
-					RayActorOptions: rayv1api.RayActorOptionSpec{
-						NumCpus: &floatNumber,
-					},
-				},
-				{
-					Name:        "OrangeStand",
-					NumReplicas: &deploymentReplicas,
-				},
-				{
-					Name:        "PearStand",
-					NumReplicas: &deploymentReplicas,
-					UserConfig:  "price: 1",
-					RayActorOptions: rayv1api.RayActorOptionSpec{
-						NumCpus: &floatNumber,
-					},
-				},
-			},
-		},
-		RayClusterSpec:                  ClusterSpecTest.Spec,
-		ServiceUnhealthySecondThreshold: &unhealthySecondThreshold,
-	},
-}
 
 var ServiceV2Test = rayv1api.RayService{
 	ObjectMeta: metav1.ObjectMeta{
@@ -630,33 +591,3 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
 }
 
-func TestPopulateService(t *testing.T) {
-	service := FromCrdToApiService(&ServiceV1Test, make([]corev1.Event, 0))
-	fmt.Printf("serviceV1 = %#v\n", service)
-	if service.Name != "test" {
-		t.Errorf("failed to convert name")
-	}
-	if service.Namespace != "test" {
-		t.Errorf("failed to convert namespace")
-	}
-	if service.User != "user" {
-		t.Errorf("failed to convert user")
-	}
-	if service.ServeDeploymentGraphSpec == nil {
-		t.Errorf("failed to convert v1 serve spec")
-	}
-	if service.ServeConfig_V2 != "" {
-		t.Errorf("unexpected v2 server spec")
-	}
-	if len(service.ServeDeploymentGraphSpec.ServeConfigs) != 3 {
-		t.Errorf("failed to convert serveConfiggs")
-	}
-	service = FromCrdToApiService(&ServiceV2Test, make([]corev1.Event, 0))
-	fmt.Printf("serviceV2 = %#v\n", service)
-	if service.ServeDeploymentGraphSpec != nil {
-		t.Errorf("unexpected v1 serve spec")
-	}
-	if service.ServeConfig_V2 == "" {
-		t.Errorf("failed to convert v2 server spec")
-	}
-}

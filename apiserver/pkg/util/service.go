@@ -1,7 +1,6 @@
 package util
 
 import (
-	"encoding/base64"
 	"errors"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -86,66 +85,6 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 	} else {
 		deploymentUnhealthySecondThreshold = nil
 	}
-
-	if apiService.ServeDeploymentGraphSpec != nil {
-		// V1 definition
-		serveConfigSpecs := make([]rayv1api.ServeConfigSpec, 0)
-		for _, serveConfig := range apiService.ServeDeploymentGraphSpec.ServeConfigs {
-			actorOptions := rayv1api.RayActorOptionSpec{}
-			if serveConfig.ActorOptions != nil {
-				if serveConfig.ActorOptions.RuntimeEnv != "" {
-					actorOptions.RuntimeEnv = serveConfig.ActorOptions.RuntimeEnv
-				}
-				if serveConfig.ActorOptions.CpusPerActor > 0 {
-					actorOptions.NumCpus = &serveConfig.ActorOptions.CpusPerActor
-				}
-				if serveConfig.ActorOptions.GpusPerActor > 0 {
-					actorOptions.NumGpus = &serveConfig.ActorOptions.GpusPerActor
-				}
-				if serveConfig.ActorOptions.MemoryPerActor > 0 {
-					actorOptions.Memory = &serveConfig.ActorOptions.MemoryPerActor
-				}
-				if serveConfig.ActorOptions.ObjectStoreMemoryPerActor > 0 {
-					actorOptions.ObjectStoreMemory = &serveConfig.ActorOptions.ObjectStoreMemoryPerActor
-				}
-				if serveConfig.ActorOptions.CustomResource != "" {
-					actorOptions.Resources = serveConfig.ActorOptions.CustomResource
-				}
-				if serveConfig.ActorOptions.AccceleratorType != "" {
-					actorOptions.AcceleratorType = serveConfig.ActorOptions.AccceleratorType
-				}
-			}
-			serveConfigSpec := rayv1api.ServeConfigSpec{
-				Name:            serveConfig.DeploymentName,
-				NumReplicas:     &serveConfig.Replicas,
-				RayActorOptions: actorOptions,
-			}
-			if serveConfig.MaxConcurrentQueries > 0 {
-				serveConfigSpec.MaxConcurrentQueries = &serveConfig.MaxConcurrentQueries
-			}
-			if serveConfig.RoutePrefix != "" {
-				serveConfigSpec.RoutePrefix = serveConfig.RoutePrefix
-			}
-			if serveConfig.UserConfig != "" {
-				serveConfigSpec.UserConfig = serveConfig.UserConfig
-			}
-			if serveConfig.AutoscalingConfig != "" {
-				serveConfigSpec.AutoscalingConfig = serveConfig.AutoscalingConfig
-			}
-
-			serveConfigSpecs = append(serveConfigSpecs, serveConfigSpec)
-		}
-		return &rayv1api.RayServiceSpec{
-			ServeDeploymentGraphSpec: rayv1api.ServeDeploymentGraphSpec{
-				ImportPath:       apiService.ServeDeploymentGraphSpec.ImportPath,
-				RuntimeEnv:       apiService.ServeDeploymentGraphSpec.RuntimeEnv,
-				ServeConfigSpecs: serveConfigSpecs,
-			},
-			RayClusterSpec:                     *newRayClusterSpec,
-			ServiceUnhealthySecondThreshold:    serviceUnhealthySecondThreshold,
-			DeploymentUnhealthySecondThreshold: deploymentUnhealthySecondThreshold,
-		}, nil
-	}
 	// V2 definition
 	return &rayv1api.RayServiceSpec{
 		ServeConfigV2:                      apiService.ServeConfig_V2,
@@ -180,45 +119,4 @@ func updateWorkerGroupSpec(updateSpec *api.WorkerGroupUpdateSpec, workerGroupSpe
 	workerGroupSpec.MinReplicas = &minReplicas
 	workerGroupSpec.MaxReplicas = &maxReplicas
 	return workerGroupSpec
-}
-
-func UpdateServeDeploymentGraphSpec(updateSpecs *api.ServeDeploymentGraphSpec, serveDeploymentGraphspec rayv1api.ServeDeploymentGraphSpec) rayv1api.ServeDeploymentGraphSpec {
-	if updateSpecs.ImportPath != "" {
-		serveDeploymentGraphspec.ImportPath = updateSpecs.ImportPath
-	}
-	if updateSpecs.RuntimeEnv != "" {
-		serveDeploymentGraphspec.RuntimeEnv = base64.StdEncoding.EncodeToString([]byte(updateSpecs.RuntimeEnv))
-	}
-
-	if updateSpecs.ServeConfigs != nil {
-		specMap := map[string]*api.ServeConfig{}
-		for _, spec := range updateSpecs.ServeConfigs {
-			if spec != nil {
-				specMap[spec.DeploymentName] = spec
-			}
-		}
-		for i, spec := range serveDeploymentGraphspec.ServeConfigSpecs {
-			if updateSpec, ok := specMap[spec.Name]; ok {
-				newSpec := updateServeConfigSpec(updateSpec, spec)
-				serveDeploymentGraphspec.ServeConfigSpecs[i] = newSpec
-			}
-		}
-	}
-	return serveDeploymentGraphspec
-}
-
-func updateServeConfigSpec(updateSpec *api.ServeConfig, serveConfigSpec rayv1api.ServeConfigSpec) rayv1api.ServeConfigSpec {
-	if updateSpec.Replicas != 0 {
-		serveConfigSpec.NumReplicas = &updateSpec.Replicas
-	}
-	if updateSpec.ActorOptions.CpusPerActor != 0 {
-		serveConfigSpec.RayActorOptions.NumCpus = &updateSpec.ActorOptions.CpusPerActor
-	}
-	if updateSpec.ActorOptions.GpusPerActor != 0 {
-		serveConfigSpec.RayActorOptions.NumGpus = &updateSpec.ActorOptions.GpusPerActor
-	}
-	if updateSpec.ActorOptions.MemoryPerActor != 0 {
-		serveConfigSpec.RayActorOptions.Memory = &updateSpec.ActorOptions.MemoryPerActor
-	}
-	return serveConfigSpec
 }
