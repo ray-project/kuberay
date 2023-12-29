@@ -26,24 +26,6 @@ var apiService2Serve = &api.RayService{
 	},
 }
 
-var apiServiceV1 = &api.RayService{
-	Name:        "test",
-	Namespace:   "test",
-	User:        "test",
-	ClusterSpec: rayCluster.ClusterSpec,
-	ServeDeploymentGraphSpec: &api.ServeDeploymentGraphSpec{
-		ImportPath: "Some path",
-		RuntimeEnv: "Some environment",
-		ServeConfigs: []*api.ServeConfig{
-			{
-				DeploymentName:       "test",
-				Replicas:             2,
-				MaxConcurrentQueries: 2,
-			},
-		},
-	},
-}
-
 var apiServiceV2 = &api.RayService{
 	Name:                            "test",
 	Namespace:                       "test",

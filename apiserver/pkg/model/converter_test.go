@@ -16,14 +16,12 @@ import (
 )
 
 var (
-	enableIngress                    = true
-	deploymentReplicas       int32   = 1
-	workerReplicas           int32   = 5
-	workerMinReplicas        int32   = 1
-	workerMaxReplicas        int32   = 3
-	unhealthySecondThreshold int32   = 900
-	floatNumber              float64 = 1
-	secondsValue             int32   = 100
+	enableIngress                  = true
+	workerReplicas           int32 = 5
+	workerMinReplicas        int32 = 1
+	workerMaxReplicas        int32 = 3
+	unhealthySecondThreshold int32 = 900
+	secondsValue             int32 = 100
 )
 
 var headSpecTest = rayv1api.HeadGroupSpec{
