@@ -13,7 +13,6 @@ import (
 
 type FakeRayDashboardClient struct {
 	BaseDashboardClient
-	singleAppStatus  ServeApplicationStatus
 	multiAppStatuses map[string]*ServeApplicationStatus
 	serveDetails     ServeDetails
 
@@ -27,17 +26,9 @@ func (r *FakeRayDashboardClient) InitClient(url string) {
 	r.dashboardURL = "http://" + url
 }
 
-func (r *FakeRayDashboardClient) GetDeployments(_ context.Context) (string, error) {
-	panic("Fake GetDeployments not implemented")
-}
-
-func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte) error {
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
-}
-
-func (r *FakeRayDashboardClient) GetSingleApplicationStatus(_ context.Context) (*ServeApplicationStatus, error) {
-	return &r.singleAppStatus, nil
 }
 
 func (r *FakeRayDashboardClient) GetMultiApplicationStatus(_ context.Context) (map[string]*ServeApplicationStatus, error) {
@@ -46,10 +37,6 @@ func (r *FakeRayDashboardClient) GetMultiApplicationStatus(_ context.Context) (m
 
 func (r *FakeRayDashboardClient) GetServeDetails(_ context.Context) (*ServeDetails, error) {
 	return &r.serveDetails, nil
-}
-
-func (r *FakeRayDashboardClient) SetSingleApplicationStatus(status ServeApplicationStatus) {
-	r.singleAppStatus = status
 }
 
 func (r *FakeRayDashboardClient) SetMultiApplicationStatuses(statuses map[string]*ServeApplicationStatus) {

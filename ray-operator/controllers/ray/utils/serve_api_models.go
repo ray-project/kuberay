@@ -1,29 +1,11 @@
 package utils
 
-// Defines which Ray Serve config schema is used for `serveConfigV2`; can be SINGLE_APP or MULTI_APP. Please see the Ray Serve docs
-// https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeApplicationSchema.html and
+// Please see the Ray Serve docs
 // https://docs.ray.io/en/latest/serve/api/doc/ray.serve.schema.ServeDeploySchema.html for the
-// single-application schema and multi-application schema, respectively.
-type RayServeConfigType string
-
-const (
-	MULTI_APP  RayServeConfigType = "MULTI_APP"
-	SINGLE_APP RayServeConfigType = "SINGLE_APP"
-)
-
-// V1 Serve API Response format
-type ServeAppStatusInfoV1 struct {
-	Status  string `json:"status,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
-type ServeSingleApplicationStatusV1 struct {
-	ApplicationStatus  ServeAppStatusInfoV1    `json:"app_status,omitempty"`
-	DeploymentStatuses []ServeDeploymentStatus `json:"deployment_statuses,omitempty"`
-}
+// multi-application schema.
 
 // ServeDeploymentStatus and ServeApplicationStatus describe the format of status(es) that will
-// be returned by GetSingleApplicationStatus and GetMultiApplicationStatus methods of the dashboard client
+// be returned by the GetMultiApplicationStatus method of the dashboard client
 // Describes the status of a deployment
 type ServeDeploymentStatus struct {
 	Name    string `json:"name,omitempty"`

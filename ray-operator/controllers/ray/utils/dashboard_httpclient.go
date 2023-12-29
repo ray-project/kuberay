@@ -22,9 +22,6 @@ import (
 )
 
 var (
-	// Single-application URL paths
-	DeployPath = "/api/serve/deployments/"
-	StatusPath = "/api/serve/deployments/status"
 	// Multi-application URL paths
 	ServeDetailsPath = "/api/serve/applications/"
 	DeployPathV2     = "/api/serve/applications/"
@@ -34,10 +31,7 @@ var (
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
-	GetDeployments(context.Context) (string, error)
-	UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error
-	// V1/single-app Rest API
-	GetSingleApplicationStatus(context.Context) (*ServeApplicationStatus, error)
+	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
@@ -112,41 +106,12 @@ func (r *RayDashboardClient) InitClient(url string) {
 	r.dashboardURL = "http://" + url
 }
 
-// GetDeployments get the current deployments in the Ray cluster.
-func (r *RayDashboardClient) GetDeployments(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+DeployPath, nil)
-	if err != nil {
-		return "", err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("GetDeployments fail: %s %s", resp.Status, string(body))
-	}
-
-	return string(body), nil
-}
-
 // UpdateDeployments update the deployments in the Ray cluster.
-func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte, serveConfigType RayServeConfigType) error {
+func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte) error {
 	var req *http.Request
 	var err error
-	if serveConfigType == SINGLE_APP {
-		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPath, bytes.NewBuffer(configJson)); err != nil {
-			return err
-		}
-	} else if serveConfigType == MULTI_APP {
-		if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("Unrecognized config type: %s", serveConfigType)
+	if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
+		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -163,48 +128,6 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 
 	return nil
-}
-
-// GetDeploymentsStatus get the current deployment statuses in the Ray cluster.
-func (r *RayDashboardClient) GetSingleApplicationStatus(ctx context.Context) (*ServeApplicationStatus, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+StatusPath, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("GetDeploymentsStatus fail: %s %s", resp.Status, string(body))
-	}
-
-	var status ServeSingleApplicationStatusV1
-	if err = json.Unmarshal(body, &status); err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal bytes into application status object: %s", string(body))
-	}
-
-	defaultAppStatus := ServeApplicationStatus{
-		Name:        "default",
-		Message:     status.ApplicationStatus.Message,
-		Status:      status.ApplicationStatus.Status,
-		Deployments: make(map[string]ServeDeploymentStatus),
-	}
-
-	for _, deployment := range status.DeploymentStatuses {
-		deploymentStatus := ServeDeploymentStatus{
-			Status:  deployment.Status,
-			Message: deployment.Message,
-		}
-
-		defaultAppStatus.Deployments[deployment.Name] = deploymentStatus
-	}
-	return &defaultAppStatus, nil
 }
 
 func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
