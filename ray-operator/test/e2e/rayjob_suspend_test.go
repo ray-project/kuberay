@@ -39,6 +39,7 @@ func TestRayJobSuspend(t *testing.T) {
 				RayClusterSpec:           newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
 				Entrypoint:               "python /home/ray/jobs/long_running.py",
 				ShutdownAfterJobFinishes: true,
+				TTLSecondsAfterFinished:  600,
 				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
 			},
 		}
