@@ -173,7 +173,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				r.Log.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
-				if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
+				if err = r.releaseComputeResources(ctx, rayJobInstance, false); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
@@ -259,7 +259,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 
-			if err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
+			if err = r.releaseComputeResources(ctx, rayJobInstance, true); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			// Since RayCluster instance is gone, remove it status also
@@ -394,10 +394,11 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 // In the future, we may also need to delete other Kubernetes resources. Note that
 // this function doesn't delete the Kubernetes Job. Instead, we use the built-in
 // TTL mechanism of the Kubernetes Job for deletion.
-func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
+func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob, isSuspend bool) error {
+	namespace := rayJobInstance.Namespace
 	clusterIdentifier := types.NamespacedName{
 		Name:      rayJobInstance.Status.RayClusterName,
-		Namespace: rayJobInstance.Namespace,
+		Namespace: namespace,
 	}
 	cluster := rayv1.RayCluster{}
 	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
@@ -416,6 +417,27 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 			}
 			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
+		}
+	}
+
+	// Since the name of the Kubernetes Job is the same as the RayJob, we need to set the TTL of the Kubernetes Job to clean
+	// up the Kubernetes Job and its Pods when suspending, and a new submitter Kubernetes Job must be created to resubmit the
+	// Ray job if the RayJob is resumed.
+	if isSuspend {
+		jobName := rayJobInstance.Name
+		job := &batchv1.Job{}
+		if err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: jobName}, job); err != nil {
+			if errors.IsNotFound(err) {
+				r.Log.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+			} else {
+				r.Log.Error(err, "Failed to get Kubernetes Job")
+				return err
+			}
+		}
+		job.Spec.TTLSecondsAfterFinished = pointer.Int32(0)
+		if err := r.Client.Update(ctx, job); err != nil {
+			r.Log.Error(err, "Failed to update the TTL of the Kubernetes Job")
+			return err
 		}
 	}
 	return nil
