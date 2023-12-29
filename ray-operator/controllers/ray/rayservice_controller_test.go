@@ -424,7 +424,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
 			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -520,7 +521,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
 			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
+			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
@@ -639,8 +641,8 @@ var _ = Context("Inside the default namespace", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
 
 			// The cluster shouldn't switch until deployments are finished updating
-			fakeRayDashboardClient.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.UPDATING, rayv1.ApplicationStatusEnum.DEPLOYING))
-
+			updatingStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UPDATING, rayv1.ApplicationStatusEnum.DEPLOYING)
+			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &updatingStatus})
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService),
@@ -676,7 +678,6 @@ var _ = Context("Inside the default namespace", func() {
 func prepareFakeRayDashboardClient() *utils.FakeRayDashboardClient {
 	client := &utils.FakeRayDashboardClient{}
 
-	client.SetSingleApplicationStatus(generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING))
 	healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 	client.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{"app": &healthyStatus})
 
