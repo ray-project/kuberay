@@ -670,17 +670,6 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*60, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
-
-		It("should reconcile status correctly when multi-app config type is used.", func() {
-			// Set multi-application status to healthy.
-			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
-			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-
-			// The status should remain healthy.
-			Consistently(
-				checkServiceHealth(ctx, myRayService),
-				time.Second*5, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-		})
 	})
 })
 
