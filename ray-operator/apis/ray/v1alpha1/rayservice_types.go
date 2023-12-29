@@ -54,7 +54,6 @@ var DeploymentStatusEnum = struct {
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	ServeDeploymentGraphSpec ServeDeploymentGraphSpec `json:"serveConfig,omitempty"`
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
 	RayClusterSpec RayClusterSpec `json:"rayClusterConfig,omitempty"`
@@ -64,40 +63,6 @@ type RayServiceSpec struct {
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *corev1.Service `json:"serveService,omitempty"`
-}
-
-type ServeDeploymentGraphSpec struct {
-	ImportPath       string            `json:"importPath"`
-	RuntimeEnv       string            `json:"runtimeEnv,omitempty"`
-	ServeConfigSpecs []ServeConfigSpec `json:"deployments,omitempty"`
-	Port             int               `json:"port,omitempty"`
-}
-
-// ServeConfigSpec defines the desired state of RayService
-// Reference to http://rayserve.org
-type ServeConfigSpec struct {
-	Name                      string             `json:"name"`
-	NumReplicas               *int32             `json:"numReplicas,omitempty"`
-	RoutePrefix               string             `json:"routePrefix,omitempty"`
-	MaxConcurrentQueries      *int32             `json:"maxConcurrentQueries,omitempty"`
-	UserConfig                string             `json:"userConfig,omitempty"`
-	AutoscalingConfig         string             `json:"autoscalingConfig,omitempty"`
-	GracefulShutdownWaitLoopS *int32             `json:"gracefulShutdownWaitLoopS,omitempty"`
-	GracefulShutdownTimeoutS  *int32             `json:"gracefulShutdownTimeoutS,omitempty"`
-	HealthCheckPeriodS        *int32             `json:"healthCheckPeriodS,omitempty"`
-	HealthCheckTimeoutS       *int32             `json:"healthCheckTimeoutS,omitempty"`
-	RayActorOptions           RayActorOptionSpec `json:"rayActorOptions,omitempty"`
-}
-
-// RayActorOptionSpec defines the desired state of RayActor
-type RayActorOptionSpec struct {
-	RuntimeEnv        string   `json:"runtimeEnv,omitempty"`
-	NumCpus           *float64 `json:"numCpus,omitempty"`
-	NumGpus           *float64 `json:"numGpus,omitempty"`
-	Memory            *uint64  `json:"memory,omitempty"`
-	ObjectStoreMemory *uint64  `json:"objectStoreMemory,omitempty"`
-	Resources         string   `json:"resources,omitempty"`
-	AcceleratorType   string   `json:"acceleratorType,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService

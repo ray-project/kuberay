@@ -11139,6 +11139,8 @@ spec:
                     type: object
                   rayVersion:
                     type: string
+                  suspend:
+                    type: boolean
                   workerGroupSpecs:
                     items:
                       properties:
@@ -14442,69 +14444,6 @@ spec:
                 required:
                 - headGroupSpec
                 type: object
-              serveConfig:
-                properties:
-                  deployments:
-                    items:
-                      properties:
-                        autoscalingConfig:
-                          type: string
-                        gracefulShutdownTimeoutS:
-                          format: int32
-                          type: integer
-                        gracefulShutdownWaitLoopS:
-                          format: int32
-                          type: integer
-                        healthCheckPeriodS:
-                          format: int32
-                          type: integer
-                        healthCheckTimeoutS:
-                          format: int32
-                          type: integer
-                        maxConcurrentQueries:
-                          format: int32
-                          type: integer
-                        name:
-                          type: string
-                        numReplicas:
-                          format: int32
-                          type: integer
-                        rayActorOptions:
-                          properties:
-                            acceleratorType:
-                              type: string
-                            memory:
-                              format: int64
-                              type: integer
-                            numCpus:
-                              type: number
-                            numGpus:
-                              type: number
-                            objectStoreMemory:
-                              format: int64
-                              type: integer
-                            resources:
-                              type: string
-                            runtimeEnv:
-                              type: string
-                          type: object
-                        routePrefix:
-                          type: string
-                        userConfig:
-                          type: string
-                      required:
-                      - name
-                      type: object
-                    type: array
-                  importPath:
-                    type: string
-                  port:
-                    type: integer
-                  runtimeEnv:
-                    type: string
-                required:
-                - importPath
-                type: object
               serveConfigV2:
                 type: string
               serveService:
@@ -14742,6 +14681,30 @@ spec:
                       availableWorkerReplicas:
                         format: int32
                         type: integer
+                      desiredCPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredGPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredMemory:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredTPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
                       desiredWorkerReplicas:
                         format: int32
                         type: integer
@@ -14822,6 +14785,30 @@ spec:
                       availableWorkerReplicas:
                         format: int32
                         type: integer
+                      desiredCPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredGPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredMemory:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      desiredTPUs:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
                       desiredWorkerReplicas:
                         format: int32
                         type: integer

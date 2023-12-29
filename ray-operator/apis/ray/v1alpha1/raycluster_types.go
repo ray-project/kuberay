@@ -2,12 +2,13 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-// var app appsv1.Deployment{}
+
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -23,6 +24,9 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
+	// Suspend indicates whether a RayCluster should be suspended.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -106,6 +110,7 @@ const (
 	Ready     ClusterState = "ready"
 	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
+	Suspended ClusterState = "suspended"
 )
 
 // RayClusterStatus defines the observed state of RayCluster
@@ -122,6 +127,14 @@ type RayClusterStatus struct {
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
 	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
+	// DesiredCPUs indicates total desired CPUs for the cluster
+	DesiredCPUs resource.Quantity `json:"desiredCPUs,omitempty"`
+	// DesiredMemory indicates total desired memory for the cluster
+	DesiredMemory resource.Quantity `json:"desiredMemory,omitempty"`
+	// DesiredGPUs indicates total desired GPUs for the cluster
+	DesiredGPUs resource.Quantity `json:"desiredGPUs,omitempty"`
+	// DesiredTPUs indicates total desired TPUs for the cluster
+	DesiredTPUs resource.Quantity `json:"desiredTPUs,omitempty"`
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
@@ -158,8 +171,13 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
 // +kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0
+// +kubebuilder:printcolumn:name="cpus",type=string,JSONPath=".status.desiredCPUs",priority=0
+// +kubebuilder:printcolumn:name="memory",type=string,JSONPath=".status.desiredMemory",priority=0
+// +kubebuilder:printcolumn:name="gpus",type=string,JSONPath=".status.desiredGPUs",priority=0
+// +kubebuilder:printcolumn:name="tpus",type=string,JSONPath=".status.desiredTPUs",priority=1
 // +kubebuilder:printcolumn:name="status",type="string",JSONPath=".status.state",priority=0
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 // +kubebuilder:printcolumn:name="head pod IP",type="string",JSONPath=".status.head.podIP",priority=1
