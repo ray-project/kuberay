@@ -324,11 +324,6 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 
 	// If the command in the submitter pod template isn't set, use the default command.
 	if len(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command) == 0 {
-		// Check for deprecated 'runtimeEnv' field usage and log a warning.
-		if len(rayJobInstance.Spec.RuntimeEnv) > 0 {
-			r.Log.Info("Warning: The 'runtimeEnv' field is deprecated. Please use 'runtimeEnvYAML' instead.")
-		}
-
 		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err

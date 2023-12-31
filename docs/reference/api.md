@@ -125,7 +125,6 @@ _Appears in:_
 | --- | --- |
 | `entrypoint` _string_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file |
 | `metadata` _object (keys:string, values:string)_ | Refer to Kubernetes API documentation for fields of `metadata`. |
-| `runtimeEnv` _string_ | RuntimeEnv is base64 encoded. This field is deprecated, please use RuntimeEnvYAML instead. |
 | `runtimeEnvYAML` _string_ | RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string. |
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |
@@ -344,7 +343,6 @@ _Appears in:_
 | --- | --- |
 | `entrypoint` _string_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file |
 | `metadata` _object (keys:string, values:string)_ | Refer to Kubernetes API documentation for fields of `metadata`. |
-| `runtimeEnv` _string_ | RuntimeEnv is base64 encoded. This field is deprecated, please use RuntimeEnvYAML instead. |
 | `runtimeEnvYAML` _string_ | RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string. |
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |

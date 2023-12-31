@@ -48,9 +48,6 @@ type RayJobSpec struct {
 	Entrypoint string `json:"entrypoint"`
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `json:"metadata,omitempty"`
-	// RuntimeEnv is base64 encoded.
-	// This field is deprecated, please use RuntimeEnvYAML instead.
-	RuntimeEnv string `json:"runtimeEnv,omitempty"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.
 	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
