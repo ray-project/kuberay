@@ -1,7 +1,6 @@
 package common
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -15,28 +14,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// GetDecodedRuntimeEnv decodes the runtime environment for the Ray job from a base64-encoded string.
-func GetDecodedRuntimeEnv(runtimeEnv string) (string, error) {
-	decodedBytes, err := base64.StdEncoding.DecodeString(runtimeEnv)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode runtimeEnv: %v: %v", runtimeEnv, err)
-	}
-	return string(decodedBytes), nil
-}
-
 // GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
 func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
-	runtimeEnv := rayJobInstance.Spec.RuntimeEnv
 	runtimeEnvYAML := rayJobInstance.Spec.RuntimeEnvYAML
-
-	// Check if both runtimeEnv and RuntimeEnvYAML are specified.
-	if len(runtimeEnv) > 0 && len(runtimeEnvYAML) > 0 {
-		return "", fmt.Errorf("Both runtimeEnv and RuntimeEnvYAML are specified. Please specify only one of the fields.")
-	}
-
-	if len(runtimeEnv) > 0 {
-		return GetDecodedRuntimeEnv(runtimeEnv)
-	}
 
 	if len(runtimeEnvYAML) > 0 {
 		// Convert YAML to JSON

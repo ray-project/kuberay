@@ -3,11 +3,12 @@ package utils
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
@@ -414,17 +415,13 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 		Metadata:   rayJob.Spec.Metadata,
 		JobId:      rayJob.Status.JobId,
 	}
-	if len(rayJob.Spec.RuntimeEnv) == 0 {
+	if len(rayJob.Spec.RuntimeEnvYAML) == 0 {
 		return req, nil
 	}
-	decodeBytes, err := base64.StdEncoding.DecodeString(rayJob.Spec.RuntimeEnv)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to decode runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnv, err)
-	}
 	var runtimeEnv map[string]interface{}
-	err = json.Unmarshal(decodeBytes, &runtimeEnv)
+	err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", decodeBytes, err)
+		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
 	}
 	req.RuntimeEnv = runtimeEnv
 	return req, nil

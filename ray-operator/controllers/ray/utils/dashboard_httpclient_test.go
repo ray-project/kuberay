@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 
@@ -16,7 +15,18 @@ import (
 )
 
 const (
-	runtimeEnvStr = "{\n    \"working_dir\": \"./\",\n    \"pip\": [\n        \"requests==2.26.0\",\n        \"pendulum==2.1.2\"\n    ],\n    \"conda\": {\n        \"dependencies\": [\n            \"pytorch\",\n            \"torchvision\",\n            \"pip\",\n            {\n                \"pip\": [\n                    \"pendulum\"\n                ]\n            }\n        ]\n    },\n    \"eager_install\": false\n}"
+	runtimeEnvStr = `working_dir: "./"
+pip:
+- requests==2.26.0
+- pendulum==2.1.2
+conda:
+  dependencies:
+  - pytorch
+  - torchvision
+  - pip
+  - pip:
+    - pendulum
+eager_install: false`
 )
 
 var _ = Describe("RayFrameworkGenerator", func() {
@@ -29,7 +39,6 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 	BeforeEach(func() {
 		expectJobId = "raysubmit_test001"
-		encodedRuntimeEnv := base64.StdEncoding.EncodeToString([]byte(runtimeEnvStr))
 		rayJob = &rayv1.RayJob{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "rayjob-sample",
@@ -40,7 +49,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				Metadata: map[string]string{
 					"owner": "test1",
 				},
-				RuntimeEnv: encodedRuntimeEnv,
+				RuntimeEnvYAML: runtimeEnvStr,
 			},
 		}
 		rayDashboardClient = &RayDashboardClient{}

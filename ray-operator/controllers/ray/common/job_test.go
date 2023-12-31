@@ -12,7 +12,7 @@ import (
 
 var testRayJob = &rayv1.RayJob{
 	Spec: rayv1.RayJobSpec{
-		RuntimeEnv: "eyJ0ZXN0IjoidGVzdCJ9", // {"test":"test"} in base64
+		RuntimeEnvYAML: "test: test",
 		Metadata: map[string]string{
 			"testKey": "testValue",
 		},
@@ -28,12 +28,6 @@ var testRayJob = &rayv1.RayJob{
 		DashboardURL: "http://127.0.0.1:8265",
 		JobId:        "testJobId",
 	},
-}
-
-func TestGetDecodedRuntimeEnv(t *testing.T) {
-	decoded, err := GetDecodedRuntimeEnv(testRayJob.Spec.RuntimeEnv)
-	assert.NoError(t, err)
-	assert.Equal(t, `{"test":"test"}`, decoded)
 }
 
 func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
@@ -65,18 +59,6 @@ pip: ["python-multipart==0.0.6"]
 
 	// Now compare the maps
 	assert.Equal(t, expectedMap, actualMap)
-}
-
-func TestGetRuntimeEnvJsonErrorWithBothFields(t *testing.T) {
-	rayJobWithBoth := &rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			RuntimeEnv:     "eyJ0ZXN0IjoidGVzdCJ9",
-			RuntimeEnvYAML: `pip: ["python-multipart==0.0.6"]`,
-		},
-	}
-	_, err := getRuntimeEnvJson(rayJobWithBoth)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Both runtimeEnv and RuntimeEnvYAML are specified. Please specify only one of the fields.")
 }
 
 func TestGetBaseRayJobCommand(t *testing.T) {
