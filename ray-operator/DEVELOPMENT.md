@@ -39,6 +39,22 @@ export PATH="$GOROOT/bin:$PATH"
 
 Setting up workspace configuration is required because KubeRay contains multiple Go modules. See the [VS Code Go documentation](https://github.com/golang/vscode-go/blob/master/README.md#setting-up-your-workspace) for details.
 
+### IMPORTANT: Change your working directory to `ray-operator`
+
+All the following guidance require you to switch your working directory to the `ray-operator`.
+
+```bash
+cd ray-operator
+```
+
+### Cleanup local binaries, such as controller-gen and kustomize
+
+To keep consistent results of code generation and testing, you need to remove outdated binaries installed by the Makefile.
+
+```bash
+rm -rf bin
+```
+
 ### End-to-end local development process on Kind
 
 ```bash
@@ -66,8 +82,8 @@ kind load docker-image kuberay/operator:nightly
 
 # Step 6: Install KubeRay operator with the custom image via local Helm chart
 # (Path: helm-chart/kuberay-operator)
-# Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} .
-helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly .
+# Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} ../helm-chart/kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 
 # Step 7: Check the log of KubeRay operator
 kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
@@ -83,7 +99,7 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 
 The unit tests can be run by executing the following command:
 
-```
+```bash
 make test
 ```
 
@@ -105,7 +121,9 @@ ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	covera
 
 The e2e tests can be run by executing the following command:
 
-```
+```bash
+# Reinstall the kuberay-operator to make sure it use the latest nightly image you just built.
+helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 make test-e2e
 ```
 
@@ -149,13 +167,13 @@ Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 ### Manually test new image in running cluster
 
 Build and apply the CRD:
-```
+```bash
 make install
 ```
 
 Deploy the manifests and controller
-```
-IMG=kuberay/operator:nightly make deploy
+```bash
+helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 ```
 
 > Note: remember to replace with your own image
