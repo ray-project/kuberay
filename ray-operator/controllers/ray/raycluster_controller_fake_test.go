@@ -2380,3 +2380,66 @@ func TestSumGPUs(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteAllPods(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(newScheme)
+	ns := "tmp-ns"
+	ts := metav1.Now()
+	filter := map[string]string{"app": "tmp"}
+
+	p1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "alive",
+			Namespace: ns,
+			Labels:    filter,
+		},
+	}
+	p2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "deleted",
+			Namespace:         ns,
+			Labels:            filter,
+			DeletionTimestamp: &ts,
+			Finalizers:        []string{"tmp"},
+		},
+	}
+	p3 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "other",
+			Namespace: ns,
+			Labels:    map[string]string{"app": "other"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(p1, p2, p3).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+		Log:      ctrl.Log.WithName("controllers"),
+	}
+	ctx := context.Background()
+	// The first `deleteAllPods` function call should delete the "alive" Pod.
+	active, pods, err := testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, active)
+	assert.Equal(t, 2, len(pods.Items))
+	assert.Subset(t, []string{"alive", "deleted"}, []string{pods.Items[0].Name, pods.Items[1].Name})
+	// The second `deleteAllPods` function call should delete no Pods because none are active.
+	active, pods, err = testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, active)
+	assert.Equal(t, 1, len(pods.Items))
+	assert.Equal(t, "deleted", pods.Items[0].Name)
+	// Make sure that the above `deleteAllPods` calls didn't remove other Pods.
+	pods = corev1.PodList{}
+	err = fakeClient.List(ctx, &pods, client.InNamespace(ns))
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(pods.Items))
+	assert.Subset(t, []string{"deleted", "other"}, []string{pods.Items[0].Name, pods.Items[1].Name})
+}
