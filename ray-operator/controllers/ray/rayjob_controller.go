@@ -415,8 +415,8 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 		}
 	}
 
-	// Since the name of the Kubernetes Job is the same as the RayJob, we need to set the TTL of the Kubernetes Job to clean
-	// up the Kubernetes Job and its Pods when suspending, and a new submitter Kubernetes Job must be created to resubmit the
+	// Since the name of the Kubernetes Job is the same as the RayJob, we need to delete the Kubernetes Job
+	// and its Pods when suspending. A new submitter Kubernetes Job must be created to resubmit the
 	// Ray job if the RayJob is resumed.
 	if isSuspend {
 		jobName := rayJobInstance.Name
@@ -424,14 +424,14 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 		if err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: jobName}, job); err != nil {
 			if errors.IsNotFound(err) {
 				r.Log.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+				return nil
 			} else {
 				r.Log.Error(err, "Failed to get Kubernetes Job")
 				return err
 			}
 		}
-		job.Spec.TTLSecondsAfterFinished = pointer.Int32(0)
-		if err := r.Client.Update(ctx, job); err != nil {
-			r.Log.Error(err, "Failed to update the TTL of the Kubernetes Job")
+		if err := r.Client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+			r.Log.Error(err, "Failed to delete the Kubernetes Job")
 			return err
 		}
 	}
