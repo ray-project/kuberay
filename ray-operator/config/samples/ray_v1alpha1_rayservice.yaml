@@ -8,7 +8,6 @@ metadata:
   name: rayservice-sample
 spec:
   # serveConfigV2 takes a yaml multi-line scalar, which should be a Ray Serve multi-application config. See https://docs.ray.io/en/latest/serve/multi-app.html.
-  # Only one of serveConfig and serveConfigV2 should be used.
   serveConfigV2: |
     applications:
       - name: fruit_app
