@@ -130,6 +130,58 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	case rayv1.JobDeploymentStatusInitializing:
+		var rayClusterInstance *rayv1.RayCluster
+		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		// If there is no cluster instance and no error, suspend the job deployment
+		if rayClusterInstance == nil {
+			// TODO (kevin85421): Note that if we suspend the RayJob in the `Initializing` status, the RayJob will not
+			// transition to the `Suspending` status. It will transition to the `Suspended` status directly. We should
+			// unify the code path.
+			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			r.Log.Info("RayJob suspended", "RayJob", rayJobInstance.Name)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Suspended", "Suspended RayJob %s", rayJobInstance.Name)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		// Check the current status of RayCluster before submitting.
+		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
+			if rayClusterInstance.Status.State != rayv1.Ready {
+				r.Log.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+
+			if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
+				r.Log.Error(err, "Failed to get the dashboard URL after the RayCluster is ready!", "RayCluster", rayClusterInstance.Name)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			rayJobInstance.Status.DashboardURL = clientURL
+
+			// TODO (kevin85421): The function `updateState` might skip the update if `JobStatus` and `JobDeploymentStatus`
+			// are already identical to the given values. Therefore, we use `r.Status().Update()` to directly update the status.
+			// However, neither `updateState` nor `r.Status().Update()` is an ideal solution. We should refactor the code.
+			if err := r.Status().Update(ctx, rayJobInstance); err != nil {
+				r.Log.Error(err, "Failed to update the dashboard URL to the RayJob status!", "RayJob", rayJobInstance.Name)
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		// Ensure k8s job has been created
+		if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		r.Log.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
+			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
+		if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusRunning); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusRunning:
 		// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
 		// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
@@ -216,51 +268,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	// If there is no cluster instance and no error suspend the job deployment
-	if rayClusterInstance == nil {
-		// TODO (kevin85421): Note that if we suspend the RayJob in the `Initializing` status, the RayJob will not
-		// transition to the `Suspending` status. It will transition to the `Suspended` status directly. We should
-		// unify the code path.
-		err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		r.Log.Info("rayJob suspended", "RayJob", rayJobInstance.Name)
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Suspended", "Suspended RayJob %s", rayJobInstance.Name)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
 
 	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
 	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 	rayDashboardClient := r.dashboardClientFunc()
-
-	// Check the current status of ray cluster before submitting.
-	if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
-		if rayClusterInstance.Status.State != rayv1.Ready {
-			r.Log.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-
-		if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
-			r.Log.Error(err, "Failed to get the dashboard URL after the RayCluster is ready!", "RayCluster", rayClusterInstance.Name)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		rayJobInstance.Status.DashboardURL = clientURL
-
-		// TODO (kevin85421): The function `updateState` might skip the update if `JobStatus` and `JobDeploymentStatus`
-		// are already identical to the given values. Therefore, we use `r.Status().Update()` to directly update the status.
-		// However, neither `updateState` nor `r.Status().Update()` is an ideal solution. We should refactor the code.
-		if err := r.Status().Update(ctx, rayJobInstance); err != nil {
-			r.Log.Error(err, "Failed to update the dashboard URL to the RayJob status!", "RayJob", rayJobInstance.Name)
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
 	rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
-
-	// Ensure k8s job has been created
-	if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
 
 	// Check the current status of ray jobs
 	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
@@ -272,7 +284,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	r.Log.Info("GetJobInfo", "Job Info", jobInfo)
 
-	err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayv1.JobDeploymentStatusRunning)
+	// Update JobStatus
+	err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayJobInstance.Status.JobDeploymentStatus)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
