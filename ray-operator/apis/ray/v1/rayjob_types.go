@@ -38,6 +38,7 @@ const (
 	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
 	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
+	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 )
 
