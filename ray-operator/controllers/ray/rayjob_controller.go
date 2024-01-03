@@ -152,9 +152,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
-		if err = r.releaseComputeResources(ctx, rayJobInstance, true); err != nil {
+		isReleaseComplete, err := r.releaseComputeResources(ctx, rayJobInstance, true)
+		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
+		if !isReleaseComplete {
+			r.Log.Info("The release of the compute resources has not been completed yet. " +
+				"Wait for the resources to be deleted before the status transitions to avoid a resource leak.")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+
 		// Reset the RayCluster and Ray job related status.
 		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
 		rayJobInstance.Status.RayClusterName = ""
@@ -196,7 +203,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				r.Log.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
-				if err = r.releaseComputeResources(ctx, rayJobInstance, false); err != nil {
+				if _, err = r.releaseComputeResources(ctx, rayJobInstance, false); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
@@ -391,26 +398,30 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 // In the future, we may also need to delete other Kubernetes resources. Note that
 // this function doesn't delete the Kubernetes Job. Instead, we use the built-in
 // TTL mechanism of the Kubernetes Job for deletion.
-func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob, isSuspend bool) error {
+func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob, isSuspend bool) (bool, error) {
 	namespace := rayJobInstance.Namespace
 	clusterIdentifier := types.NamespacedName{
 		Name:      rayJobInstance.Status.RayClusterName,
 		Namespace: namespace,
 	}
+	isClusterNotFound, isJobNotFound := false, !isSuspend
+
 	cluster := rayv1.RayCluster{}
 	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
+		if errors.IsNotFound(err) {
+			// If the cluster is not found, it means the cluster has been already deleted.
+			// Don't return error to make this function idempotent.
+			isClusterNotFound = true
+			r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
+		} else {
+			return false, err
 		}
-		// If the cluster is not found, it means the cluster has been already deleted.
-		// Don't return error to make this function idempotent.
-		r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
 	} else {
-		if cluster.DeletionTimestamp != nil {
+		if !cluster.DeletionTimestamp.IsZero() {
 			r.Log.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
 		} else {
 			if err := r.Delete(ctx, &cluster); err != nil {
-				return err
+				return false, err
 			}
 			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
@@ -425,19 +436,29 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 		job := &batchv1.Job{}
 		if err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: jobName}, job); err != nil {
 			if errors.IsNotFound(err) {
+				isJobNotFound = true
 				r.Log.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
-				return nil
 			} else {
 				r.Log.Error(err, "Failed to get Kubernetes Job")
-				return err
+				return false, err
+			}
+		} else {
+			if !job.DeletionTimestamp.IsZero() {
+				r.Log.Info("The Job deletion is ongoing.", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+			} else {
+				if err := r.Client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+					return false, err
+				}
+				r.Log.Info("The associated submitter Job is deleted", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted submitter K8s Job %s", job.Name)
 			}
 		}
-		if err := r.Client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			r.Log.Error(err, "Failed to delete the Kubernetes Job")
-			return err
-		}
 	}
-	return nil
+
+	isReleaseComplete := isClusterNotFound && isJobNotFound
+	r.Log.Info("releaseComputeResources", "isClusterNotFound", isClusterNotFound, "isJobNotFound", isJobNotFound, "isReleaseComplete", isReleaseComplete)
+
+	return isReleaseComplete, nil
 }
 
 // isJobSucceedOrFail indicates whether the job comes into end status.
