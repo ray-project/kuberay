@@ -23,16 +23,16 @@ spec:
     - jsonPath: .status.availableWorkerReplicas
       name: available workers
       type: integer
-    - jsonPath: .status.desiredCPUs
+    - jsonPath: .status.desiredCPU
       name: cpus
       type: string
     - jsonPath: .status.desiredMemory
       name: memory
       type: string
-    - jsonPath: .status.desiredGPUs
+    - jsonPath: .status.desiredGPU
       name: gpus
       type: string
-    - jsonPath: .status.desiredTPUs
+    - jsonPath: .status.desiredTPU
       name: tpus
       priority: 1
       type: string
@@ -7061,13 +7061,13 @@ spec:
               availableWorkerReplicas:
                 format: int32
                 type: integer
-              desiredCPUs:
+              desiredCPU:
                 anyOf:
                 - type: integer
                 - type: string
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
-              desiredGPUs:
+              desiredGPU:
                 anyOf:
                 - type: integer
                 - type: string
@@ -7079,7 +7079,7 @@ spec:
                 - type: string
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
-              desiredTPUs:
+              desiredTPU:
                 anyOf:
                 - type: integer
                 - type: string
@@ -7129,16 +7129,16 @@ spec:
     - jsonPath: .status.availableWorkerReplicas
       name: available workers
       type: integer
-    - jsonPath: .status.desiredCPUs
+    - jsonPath: .status.desiredCPU
       name: cpus
       type: string
     - jsonPath: .status.desiredMemory
       name: memory
       type: string
-    - jsonPath: .status.desiredGPUs
+    - jsonPath: .status.desiredGPU
       name: gpus
       type: string
-    - jsonPath: .status.desiredTPUs
+    - jsonPath: .status.desiredTPU
       name: tpus
       priority: 1
       type: string
@@ -14167,13 +14167,13 @@ spec:
               availableWorkerReplicas:
                 format: int32
                 type: integer
-              desiredCPUs:
+              desiredCPU:
                 anyOf:
                 - type: integer
                 - type: string
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
-              desiredGPUs:
+              desiredGPU:
                 anyOf:
                 - type: integer
                 - type: string
@@ -14185,7 +14185,7 @@ spec:
                 - type: string
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
-              desiredTPUs:
+              desiredTPU:
                 anyOf:
                 - type: integer
                 - type: string

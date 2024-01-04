@@ -1199,10 +1199,10 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 
 	totalResources := utils.CalculateDesiredResources(newInstance)
-	newInstance.Status.DesiredCPUs = totalResources[corev1.ResourceCPU]
+	newInstance.Status.DesiredCPU = totalResources[corev1.ResourceCPU]
 	newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
-	newInstance.Status.DesiredGPUs = sumGPUs(totalResources)
-	newInstance.Status.DesiredTPUs = totalResources[corev1.ResourceName("google.com/tpu")]
+	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
+	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
 	// validation for the RayStartParam for the state.
 	isValid, err := common.ValidateHeadRayStartParams(newInstance.Spec.HeadGroupSpec)

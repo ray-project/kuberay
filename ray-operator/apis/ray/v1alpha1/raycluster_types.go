@@ -127,14 +127,14 @@ type RayClusterStatus struct {
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
 	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
-	// DesiredCPUs indicates total desired CPUs for the cluster
-	DesiredCPUs resource.Quantity `json:"desiredCPUs,omitempty"`
+	// DesiredCPU indicates total desired CPUs for the cluster
+	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
 	// DesiredMemory indicates total desired memory for the cluster
 	DesiredMemory resource.Quantity `json:"desiredMemory,omitempty"`
-	// DesiredGPUs indicates total desired GPUs for the cluster
-	DesiredGPUs resource.Quantity `json:"desiredGPUs,omitempty"`
-	// DesiredTPUs indicates total desired TPUs for the cluster
-	DesiredTPUs resource.Quantity `json:"desiredTPUs,omitempty"`
+	// DesiredGPU indicates total desired GPUs for the cluster
+	DesiredGPU resource.Quantity `json:"desiredGPU,omitempty"`
+	// DesiredTPU indicates total desired TPUs for the cluster
+	DesiredTPU resource.Quantity `json:"desiredTPU,omitempty"`
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
@@ -173,10 +173,10 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0
 // +kubebuilder:printcolumn:name="available workers",type=integer,JSONPath=".status.availableWorkerReplicas",priority=0
-// +kubebuilder:printcolumn:name="cpus",type=string,JSONPath=".status.desiredCPUs",priority=0
+// +kubebuilder:printcolumn:name="cpus",type=string,JSONPath=".status.desiredCPU",priority=0
 // +kubebuilder:printcolumn:name="memory",type=string,JSONPath=".status.desiredMemory",priority=0
-// +kubebuilder:printcolumn:name="gpus",type=string,JSONPath=".status.desiredGPUs",priority=0
-// +kubebuilder:printcolumn:name="tpus",type=string,JSONPath=".status.desiredTPUs",priority=1
+// +kubebuilder:printcolumn:name="gpus",type=string,JSONPath=".status.desiredGPU",priority=0
+// +kubebuilder:printcolumn:name="tpus",type=string,JSONPath=".status.desiredTPU",priority=1
 // +kubebuilder:printcolumn:name="status",type="string",JSONPath=".status.state",priority=0
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 // +kubebuilder:printcolumn:name="head pod IP",type="string",JSONPath=".status.head.podIP",priority=1
