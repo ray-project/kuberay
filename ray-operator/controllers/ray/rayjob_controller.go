@@ -131,21 +131,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusInitializing:
-		var rayClusterInstance *rayv1.RayCluster
-		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
+		if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		// If there is no cluster instance and no error, suspend the job deployment
-		if rayClusterInstance == nil {
-			// TODO (kevin85421): Note that if we suspend the RayJob in the `Initializing` status, the RayJob will not
-			// transition to the `Suspending` status. It will transition to the `Suspended` status directly. We should
-			// unify the code path.
-			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspended)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			r.Log.Info("RayJob suspended", "RayJob", rayJobInstance.Name)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Suspended", "Suspended RayJob %s", rayJobInstance.Name)
+
+		var rayClusterInstance *rayv1.RayCluster
+		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
@@ -290,18 +281,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	// TODO (kevin85421): This is unnecessary because the status has to be Running if we have reached here.
-	if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
-		// If suspend flag is set AND
-		// the RayJob is submitted against the RayCluster created by THIS job, then
-		// try to gracefully stop the Ray job and delete (suspend) the cluster
-		if rayJobInstance.Spec.Suspend && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			r.Log.Info("Try to transition the status to `Suspending`", "RayJob", rayJobInstance.Name)
-			err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusSuspending)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
+	if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
@@ -588,11 +570,6 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 				return nil, err
 			}
 
-			// special case: don't create a cluster instance and don't return an error if the suspend flag of the job is true
-			if rayJobInstance.Spec.Suspend {
-				return nil, nil
-			}
-
 			r.Log.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
 			if err != nil {
@@ -637,4 +614,28 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	}
 
 	return rayCluster, nil
+}
+
+func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (bool, error) {
+	if !rayJob.Spec.Suspend {
+		return false, nil
+	}
+	if len(rayJob.Spec.ClusterSelector) != 0 {
+		r.Log.Info("The ClusterSelector mode doesn't support the suspend operation", "RayJob", rayJob.Name, "ClusterSelector", rayJob.Spec.ClusterSelector)
+		return false, nil
+	}
+	// In KubeRay, only `Running` and `Initializing` are allowed to transition to `Suspending`.
+	validTransitions := map[rayv1.JobDeploymentStatus]struct{}{
+		rayv1.JobDeploymentStatusRunning:      {},
+		rayv1.JobDeploymentStatusInitializing: {},
+	}
+	if _, ok := validTransitions[rayJob.Status.JobDeploymentStatus]; !ok {
+		r.Log.Info("The current status is not allowed to transition to `Suspending`", "RayJob", rayJob.Name, "JobDeploymentStatus", rayJob.Status.JobDeploymentStatus)
+		return false, nil
+	}
+	r.Log.Info(fmt.Sprintf("Try to transition the status from `%s` to `Suspending`", rayJob.Status.JobDeploymentStatus), "RayJob", rayJob.Name)
+	if err := r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusSuspending); err != nil {
+		return false, err
+	}
+	return true, nil
 }
