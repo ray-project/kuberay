@@ -130,6 +130,8 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 func (t *T) StreamKubeRayOperatorLogs() {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.T().Cleanup(cancel)
+	// By using `.Pods("")`, we list kuberay-operators from all namespaces
+	// because they may not always be installed in the "ray-system" namespace.
 	pods, err := t.Client().Core().CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/component=kuberay-operator",
 	})
