@@ -39,7 +39,7 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) ([]*routev1.Route, error
 		}
 
 		servicePorts := getServicePorts(cluster)
-		dashboardPort := DefaultDashboardPort
+		dashboardPort := utils.DefaultDashboardPort
 		if port, ok := servicePorts["dashboard"]; ok {
 			dashboardPort = int(port)
 		}
@@ -161,8 +161,8 @@ func BuildRouteForRayService(service rayv1.RayService, cluster rayv1.RayCluster)
 		}
 		routes[0].ObjectMeta.Name = serviceName
 		routes[0].ObjectMeta.Namespace = service.Namespace
-		routes[0].ObjectMeta.Labels[RayServiceLabelKey] = service.Name
-		routes[0].ObjectMeta.Labels[RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
+		routes[0].ObjectMeta.Labels[utils.RayServiceLabelKey] = service.Name
+		routes[0].ObjectMeta.Labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
 
 		return routes[0], nil
 	}

@@ -85,7 +85,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	assert.Nil(t, err)
 
 	// check ingress.class annotation
-	actualResult := ingress[0].Labels[RayClusterLabelKey]
+	actualResult := ingress[0].Labels[utils.RayClusterLabelKey]
 	expectedResult := instanceWithIngressEnabled.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)

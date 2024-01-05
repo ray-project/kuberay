@@ -46,7 +46,7 @@ func BuildIngressForHeadService(cluster rayv1.RayCluster) ([]*networkingv1.Ingre
 		}
 		pathType := networkingv1.PathTypeExact
 		servicePorts := getServicePorts(cluster)
-		dashboardPort := int32(DefaultDashboardPort)
+		dashboardPort := int32(utils.DefaultDashboardPort)
 		if port, ok := servicePorts["dashboard"]; ok {
 			dashboardPort = port
 		}
@@ -201,8 +201,8 @@ func BuildIngressForRayService(service rayv1.RayService, cluster rayv1.RayCluste
 		ingresses[0].ObjectMeta.Name = headSvcName
 		ingresses[0].ObjectMeta.Namespace = service.Namespace
 		ingresses[0].ObjectMeta.Labels = map[string]string{
-			RayServiceLabelKey: service.Name,
-			RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
+			utils.RayServiceLabelKey: service.Name,
+			utils.RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
 		}
 
 		return ingresses[0], nil
