@@ -139,18 +139,9 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should NOT create a raycluster object", func() {
-			// Ray Cluster name can be present on RayJob's CRD
-			Eventually(
+			Consistently(
 				getRayClusterNameForRayJob(ctx, mySuspendedRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
-			// However the actual cluster instance and underlying resources should not be created while suspend == true
-			Eventually(
-				// k8sClient client throws error if resource not found
-				func() bool {
-					err := getResourceFunc(ctx, client.ObjectKey{Name: mySuspendedRayJob.Status.RayClusterName, Namespace: "default"}, mySuspendedRayCluster)()
-					return errors.IsNotFound(err)
-				},
-				time.Second*10, time.Millisecond*500).Should(BeTrue())
+				time.Second*3, time.Millisecond*500).Should(BeEmpty())
 		})
 
 		It("should unsuspend a rayjob object", func() {

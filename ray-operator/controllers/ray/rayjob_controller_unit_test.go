@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -169,4 +170,92 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		}
 	}
 	assert.True(t, found)
+}
+
+func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	tests := map[string]struct {
+		suspend               bool
+		status                rayv1.JobDeploymentStatus
+		isClusterSelectorMode bool
+		expectedShouldUpdate  bool
+	}{
+		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
+		"Suspend is false": {
+			suspend:               false,
+			status:                rayv1.JobDeploymentStatusInitializing,
+			isClusterSelectorMode: false,
+			expectedShouldUpdate:  false,
+		},
+		"Suspend is true, but the RayJob is in ClusterSelector mode": {
+			suspend:               true,
+			status:                rayv1.JobDeploymentStatusInitializing,
+			isClusterSelectorMode: true,
+			expectedShouldUpdate:  false,
+		},
+		"Suspend is true, but the status is not allowed to transition to suspending": {
+			suspend:               true,
+			status:                rayv1.JobDeploymentStatusComplete,
+			isClusterSelectorMode: false,
+			expectedShouldUpdate:  false,
+		},
+		"Suspend is true, and the status is allowed to transition to suspending": {
+			suspend:               true,
+			status:                rayv1.JobDeploymentStatusInitializing,
+			isClusterSelectorMode: false,
+			expectedShouldUpdate:  true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			name := "test-rayjob"
+			namespace := "default"
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Spec: rayv1.RayJobSpec{
+					Suspend: tc.suspend,
+				},
+				Status: rayv1.RayJobStatus{
+					JobDeploymentStatus: tc.status,
+				},
+			}
+
+			if tc.isClusterSelectorMode {
+				rayJob.Spec.ClusterSelector = map[string]string{
+					"key": "value",
+				}
+			}
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob).
+				WithStatusSubresource(rayJob).Build()
+			ctx := context.Background()
+
+			// Initialize a new RayClusterReconciler.
+			testRayJobReconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+			shouldUpdate, err := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedShouldUpdate, shouldUpdate)
+
+			err = fakeClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, rayJob)
+			assert.NoError(t, err)
+			if tc.expectedShouldUpdate {
+				assert.Equal(t, rayv1.JobDeploymentStatusSuspending, rayJob.Status.JobDeploymentStatus)
+			} else {
+				assert.Equal(t, tc.status, rayJob.Status.JobDeploymentStatus)
+			}
+		})
+	}
 }
