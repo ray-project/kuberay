@@ -1125,6 +1125,7 @@ func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClu
 		if httpProxyClient.CheckHealth() == nil {
 			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 		} else {
+			time.Sleep(3 * time.Second)
 			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
 		}
 
