@@ -45,11 +45,10 @@ type RayJobReconciler struct {
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface) *RayJobReconciler {
 	return &RayJobReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Log:      ctrl.Log.WithName("controllers").WithName("RayJob"),
-		Recorder: mgr.GetEventRecorderFor("rayjob-controller"),
-
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("RayJob"),
+		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
 	}
 }
@@ -174,18 +173,42 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusRunning:
+		if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		var rayClusterInstance *rayv1.RayCluster
+		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
+		// before transitioning the status from `Initializing` to `Running`.
+		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		// Check the current status of ray jobs
+		rayDashboardClient := r.dashboardClientFunc()
+		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+		if err != nil {
+			r.Log.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		r.Log.Info("GetJobInfo", "Job Info", jobInfo)
+
 		// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
 		// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
 		// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
 		// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
 		// delete the RayCluster.
-		if isJobSucceedOrFail(rayJobInstance.Status.JobStatus) {
-			if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusComplete); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
+		if isJobSucceedOrFail(jobInfo.JobStatus) {
+			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 		}
-		// TODO (kevin85421): Don't return here; we still need to move some of the code below into this block.
+		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
+		rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
+		if err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, jobDeploymentStatus); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusSuspending:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -211,7 +234,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
-
+		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		if err = r.updateState(ctx, rayJobInstance, nil, rayv1.JobStatusNew, rayv1.JobDeploymentStatusSuspended); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
@@ -253,38 +276,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
+	default:
+		r.Log.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
-
-	var rayClusterInstance *rayv1.RayCluster
-	if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	// Always update RayClusterStatus along with jobStatus and jobDeploymentStatus updates.
-	rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-	rayDashboardClient := r.dashboardClientFunc()
-	rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
-
-	// Check the current status of ray jobs
-	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-	if err != nil {
-		r.Log.Error(err, "failed to get job info", "jobId", rayJobInstance.Status.JobId)
-		// Dashboard service in head pod takes time to start, it's possible we get connection refused error.
-		// Requeue after few seconds to avoid continuous connection errors.
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-	r.Log.Info("GetJobInfo", "Job Info", jobInfo)
-
-	// Update JobStatus
-	err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, rayJobInstance.Status.JobDeploymentStatus)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
