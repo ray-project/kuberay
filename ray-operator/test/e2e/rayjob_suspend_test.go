@@ -17,6 +17,7 @@ func TestRayJobSuspend(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
+	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
 	jobs := newConfigMap(namespace.Name, "jobs", files(test, "long_running.py"))
