@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/base32"
 	"fmt"
@@ -23,6 +24,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -522,4 +525,11 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 		}
 	}
 	return "", false
+}
+
+func AddFinalizer(w client.Writer, ctx context.Context, obj client.Object, finalizer string) (added bool, err error) {
+	if added = controllerutil.AddFinalizer(obj, finalizer); added {
+		err = w.Update(ctx, obj)
+	}
+	return
 }
