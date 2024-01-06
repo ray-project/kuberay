@@ -20,7 +20,7 @@ func TestRayJobSuspend(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobs := newConfigMap(namespace.Name, "jobs", files(test, "long_running.py"))
+	jobs := newConfigMap(namespace.Name, "jobs", files(test, "long_running.py", "counter.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Create(test.Ctx(), jobs, metav1.CreateOptions{})
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -124,6 +124,9 @@ env_vars:
 		test.T().Logf("Waiting for RayJob %s/%s to be 'Suspended'", rayJob.Namespace, rayJob.Name)
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusSuspended)))
+
+		// Refresh the RayJob statuzs
+		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 
 		test.T().Logf("Resume the RayJob by updating `suspend` to false.")
 		rayJob.Spec.Suspend = false
