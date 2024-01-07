@@ -136,7 +136,8 @@ const (
 
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
-	// we use the dashboard agent's API endpoint to check both of them.
+	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
+	// to check the health of the Raylet process.
 	// TODO (kevin85421): Should we take the dashboard process into account?
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
