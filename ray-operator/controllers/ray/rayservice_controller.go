@@ -204,7 +204,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if err := r.labelHealthyServePods(ctx, rayClusterInstance); err != nil {
+		if err := r.labelHeadPodForServeStatus(ctx, rayClusterInstance); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
@@ -1126,7 +1126,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, isReady, nil
 }
 
-func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
+func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
 	headPod, err := r.getHeadPod(ctx, rayClusterInstance)
 	if err != nil {
 		return err
