@@ -312,8 +312,6 @@ func initReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNod
 	} else {
 		commands = append(commands, rayAgentRayletHealthCommand)
 		if enableServeService {
-			// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
-			// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 			commands = append(commands, rayServeProxyHealthCommand)
 		}
 	}
