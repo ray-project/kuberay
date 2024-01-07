@@ -1127,40 +1127,37 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 }
 
 func (r *RayServiceReconciler) labelHealthyServePods(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
-	allPods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayClusterInstance.Name}
-
-	if err := r.List(ctx, &allPods, client.InNamespace(rayClusterInstance.Namespace), filterLabels); err != nil {
+	headPod, err := r.getHeadPod(ctx, rayClusterInstance)
+	if err != nil {
 		return err
 	}
 
 	httpProxyClient := r.httpProxyClientFunc()
 	httpProxyClient.InitClient()
-	for _, pod := range allPods.Items {
-		rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-		servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
-		httpProxyClient.SetHostIp(pod.Status.PodIP, servingPort)
-		if pod.Labels == nil {
-			pod.Labels = make(map[string]string)
-		}
 
-		// Make a copy of the labels for comparison later, to decide whether we need to push an update.
-		originalLabels := make(map[string]string, len(pod.Labels))
-		for key, value := range pod.Labels {
-			originalLabels[key] = value
-		}
+	rayContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
+	httpProxyClient.SetHostIp(headPod.Status.PodIP, servingPort)
+	if headPod.Labels == nil {
+		headPod.Labels = make(map[string]string)
+	}
 
-		if httpProxyClient.CheckHealth() == nil {
-			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
-		} else {
-			pod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
-		}
+	// Make a copy of the labels for comparison later, to decide whether we need to push an update.
+	originalLabels := make(map[string]string, len(headPod.Labels))
+	for key, value := range headPod.Labels {
+		originalLabels[key] = value
+	}
 
-		if !reflect.DeepEqual(originalLabels, pod.Labels) {
-			if updateErr := r.Update(ctx, &pod); updateErr != nil {
-				r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
-				return updateErr
-			}
+	if httpProxyClient.CheckHealth() == nil {
+		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
+	} else {
+		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
+	}
+
+	if !reflect.DeepEqual(originalLabels, headPod.Labels) {
+		if updateErr := r.Update(ctx, headPod); updateErr != nil {
+			r.Log.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
+			return updateErr
 		}
 	}
 
@@ -1228,21 +1225,28 @@ func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayCluste
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
 func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	podList := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
-
-	if err := r.List(ctx, &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		r.Log.Error(err, "Failed to list the head Pod of the RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
+	headPod, err := r.getHeadPod(ctx, instance)
+	if err != nil {
 		return false, err
 	}
-
-	if len(podList.Items) != 1 {
-		return false, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
-	}
-
-	return utils.IsRunningAndReady(&podList.Items[0]), nil
+	return utils.IsRunningAndReady(headPod), nil
 }
 
 func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
+}
+
+func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
+	podList := corev1.PodList{}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+
+	if err := r.List(ctx, &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		return nil, err
+	}
+
+	if len(podList.Items) != 1 {
+		return nil, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+	}
+
+	return &podList.Items[0], nil
 }
