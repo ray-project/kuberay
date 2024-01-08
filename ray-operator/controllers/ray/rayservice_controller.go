@@ -1236,6 +1236,7 @@ func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
 }
 
+// TODO: Move this function to util.go and refactor the code to always use this function for retrieving the head Pod.
 func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	podList := corev1.PodList{}
 	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}

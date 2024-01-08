@@ -243,7 +243,20 @@ func DefaultWorkerPodTemplate(instance rayv1.RayCluster, workerSpec rayv1.Worker
 	return podTemplate
 }
 
-func initLivenessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType) {
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, enableServeService bool) {
+	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
+	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
+
+	// Generally, the liveness and readiness probes perform the same checks.
+	// For head node => Check GCS and Raylet status.
+	// For worker node => Check Raylet status.
+	commands := []string{}
+	if rayNodeType == rayv1.HeadNode {
+		commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
+	} else {
+		commands = append(commands, rayAgentRayletHealthCommand)
+	}
+
 	if rayContainer.LivenessProbe == nil {
 		rayContainer.LivenessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultLivenessProbeInitialDelaySeconds,
@@ -252,71 +265,30 @@ func initLivenessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNode
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
 		}
+		rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 	}
 
-	if rayContainer.LivenessProbe.Exec != nil || rayContainer.LivenessProbe.HTTPGet != nil || rayContainer.LivenessProbe.TCPSocket != nil || rayContainer.LivenessProbe.GRPC != nil {
-		return
-	}
-
-	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
-
-	// Health check logic for the liveness probe:
-	// - Head Pod: Checks both GCS and Raylet statuses.
-	// - Worker Pod: Checks Raylet status.
-	commands := []string{}
-	if rayNodeType == rayv1.HeadNode {
-		commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
-	} else {
-		commands = append(commands, rayAgentRayletHealthCommand)
-	}
-
-	rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
-}
-
-func initReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, enableServeService bool) {
-	readinessProbeFailureThreshold := utils.DefaultReadinessProbeFailureThreshold
-	if enableServeService {
-		readinessProbeFailureThreshold = utils.ServeReadinessProbeFailureThreshold
-	}
 	if rayContainer.ReadinessProbe == nil {
 		rayContainer.ReadinessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultReadinessProbeInitialDelaySeconds,
 			TimeoutSeconds:      utils.DefaultReadinessProbeTimeoutSeconds,
 			PeriodSeconds:       utils.DefaultReadinessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
-			FailureThreshold:    int32(readinessProbeFailureThreshold),
+			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
 		}
+		rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 	}
 
-	if rayContainer.ReadinessProbe.Exec != nil || rayContainer.ReadinessProbe.HTTPGet != nil || rayContainer.ReadinessProbe.TCPSocket != nil || rayContainer.ReadinessProbe.GRPC != nil {
-		if rayNodeType == rayv1.WorkerNode && enableServeService {
-			log.Info("Custom ReadinessProbe detected; ensure the inclusion of serve health check for worker Pods to maintain RayService's high availability.")
-		}
-		return
-	}
-
-	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
-	rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
-		utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
-
-	// Health check logic for the readiness probe:
-	// - Head Pod: Checks both GCS and Raylet statuses.
-	// - Worker Pod: Checks Raylet status and, if it's for RayService, checks the HTTP proxy's health for serving traffic.
+	// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 	// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
 	// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
-	commands := []string{}
-	if rayNodeType == rayv1.HeadNode {
-		commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
-	} else {
-		commands = append(commands, rayAgentRayletHealthCommand)
-		if enableServeService {
-			commands = append(commands, rayServeProxyHealthCommand)
-		}
+	if enableServeService && rayNodeType == rayv1.WorkerNode {
+		rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
+		rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
+			utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
+		commands = append(commands, rayServeProxyHealthCommand)
+		rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 	}
-
-	rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 }
 
 // BuildPod a pod config
@@ -401,8 +373,7 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, enableServeService)
-		initLivenessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, enableServeService)
 	}
 
 	return pod

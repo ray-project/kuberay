@@ -1161,7 +1161,7 @@ func TestGetEnableProbesInjection(t *testing.T) {
 	assert.False(t, b)
 }
 
-func TestInitHealthProbe(t *testing.T) {
+func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	cluster := instance.DeepCopy()
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
@@ -1177,22 +1177,21 @@ func TestInitHealthProbe(t *testing.T) {
 			},
 		},
 	}
-	rayContainer.ReadinessProbe = &httpGetProbe
-	initReadinessProbe(rayContainer, rayv1.HeadNode, true)
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
 	rayContainer.LivenessProbe = &httpGetProbe
-	initLivenessProbe(rayContainer, rayv1.HeadNode)
+	rayContainer.ReadinessProbe = &httpGetProbe
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, false)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
+	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
-	// Test 2: User does not define a custom probe. KubeRay will inject a default Exec probe.
-	rayContainer.ReadinessProbe = &corev1.Probe{}
-	initReadinessProbe(rayContainer, rayv1.HeadNode, true)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-
-	rayContainer.LivenessProbe = &corev1.Probe{}
-	initLivenessProbe(rayContainer, rayv1.HeadNode)
+	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, true)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
 }
