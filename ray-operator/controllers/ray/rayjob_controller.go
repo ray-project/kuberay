@@ -110,10 +110,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	// Please do NOT modify `originalRayJobInstance` in the following code.
+	originalRayJobInstance := rayJobInstance.DeepCopy()
+
 	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
-		// TODO (kevin85421): Write a utility function to add finalizer for both RayJob and RayCluster.
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
 			r.Log.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
 			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
@@ -128,10 +130,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusInitializing:
-		if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		if shouldUpdate := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -151,14 +152,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			rayJobInstance.Status.DashboardURL = clientURL
-
-			// TODO (kevin85421): The function `updateState` might skip the update if `JobStatus` and `JobDeploymentStatus`
-			// are already identical to the given values. Therefore, we use `r.Status().Update()` to directly update the status.
-			// However, neither `updateState` nor `r.Status().Update()` is an ideal solution. We should refactor the code.
-			if err := r.Status().Update(ctx, rayJobInstance); err != nil {
-				r.Log.Error(err, "Failed to update the dashboard URL to the RayJob status!", "RayJob", rayJobInstance.Name)
-			}
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
 		// Ensure k8s job has been created
@@ -168,13 +161,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		r.Log.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
-		if err = r.updateState(ctx, rayJobInstance, nil, rayJobInstance.Status.JobStatus, rayv1.JobDeploymentStatusRunning); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusRunning:
-		if shouldUpdate, err := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		if shouldUpdate := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -205,10 +195,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
 		rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-		if err = r.updateState(ctx, rayJobInstance, jobInfo, jobInfo.JobStatus, jobDeploymentStatus); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		rayJobInstance.Status.JobStatus = jobInfo.JobStatus
+		rayJobInstance.Status.Message = jobInfo.Message
+		rayJobInstance.Status.StartTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.StartTime)
+		rayJobInstance.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
+		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 	case rayv1.JobDeploymentStatusSuspending:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -235,17 +226,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
-		if err = r.updateState(ctx, rayJobInstance, nil, rayv1.JobStatusNew, rayv1.JobDeploymentStatusSuspended); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
 	case rayv1.JobDeploymentStatusSuspended:
 		if !rayJobInstance.Spec.Suspend {
 			r.Log.Info("The status is 'Suspended', but the suspend flag is false. Transition the status to 'New'.")
-			if err = r.updateState(ctx, rayJobInstance, nil, rayv1.JobStatusNew, rayv1.JobDeploymentStatusNew); err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+			break
 		}
 		// TODO (kevin85421): We may not need to requeue the RayJob if it has already been suspended.
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -280,6 +268,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		r.Log.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
+
+	// This is the only place where we update the RayJob status. Please do NOT add any code
+	// between the above switch statement and the following code.
+	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
+		r.Log.Info("Failed to update RayJob status", "error", err)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
@@ -507,36 +503,24 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-
-	return r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusInitializing)
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	return nil
 }
 
-// make sure the priority is correct
-func (r *RayJobReconciler) updateState(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *utils.RayJobInfo, jobStatus rayv1.JobStatus, jobDeploymentStatus rayv1.JobDeploymentStatus) error {
-	r.Log.Info("UpdateState", "oldJobStatus", rayJob.Status.JobStatus, "newJobStatus", jobStatus, "oldJobDeploymentStatus", rayJob.Status.JobDeploymentStatus, "newJobDeploymentStatus", jobDeploymentStatus)
-
-	// Let's skip update the APIServer if it's synced.
-	if rayJob.Status.JobStatus == jobStatus && rayJob.Status.JobDeploymentStatus == jobDeploymentStatus {
-		return nil
-	}
-
-	rayJob.Status.JobStatus = jobStatus
-	rayJob.Status.JobDeploymentStatus = jobDeploymentStatus
-	if jobInfo != nil {
-		rayJob.Status.Message = jobInfo.Message
-		rayJob.Status.StartTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.StartTime)
-		if jobInfo.StartTime >= jobInfo.EndTime {
-			rayJob.Status.EndTime = nil
-		} else {
-			rayJob.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
+func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *rayv1.RayJob, newRayJob *rayv1.RayJob) error {
+	oldRayJobStatus := oldRayJob.Status
+	newRayJobStatus := newRayJob.Status
+	r.Log.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
+	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
+		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
+		oldRayJobStatus.JobId != newRayJobStatus.JobId ||
+		oldRayJobStatus.RayClusterName != newRayJobStatus.RayClusterName ||
+		oldRayJobStatus.DashboardURL != newRayJobStatus.DashboardURL {
+		r.Log.Info("updateRayJobStatus", "old JobStatus", oldRayJobStatus.JobStatus, "new JobStatus", newRayJobStatus.JobStatus,
+			"old JobDeploymentStatus", oldRayJobStatus.JobDeploymentStatus, "new JobDeploymentStatus", newRayJobStatus.JobDeploymentStatus)
+		if err := r.Status().Update(ctx, newRayJob); err != nil {
+			return err
 		}
-	}
-
-	// TODO (kevin85421): ObservedGeneration should be used to determine whether update this CR or not.
-	rayJob.Status.ObservedGeneration = rayJob.ObjectMeta.Generation
-
-	if err := r.Status().Update(ctx, rayJob); err != nil {
-		return err
 	}
 	return nil
 }
@@ -611,13 +595,13 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	return rayCluster, nil
 }
 
-func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (bool, error) {
+func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
 	if !rayJob.Spec.Suspend {
-		return false, nil
+		return false
 	}
 	if len(rayJob.Spec.ClusterSelector) != 0 {
 		r.Log.Info("The ClusterSelector mode doesn't support the suspend operation", "RayJob", rayJob.Name, "ClusterSelector", rayJob.Spec.ClusterSelector)
-		return false, nil
+		return false
 	}
 	// In KubeRay, only `Running` and `Initializing` are allowed to transition to `Suspending`.
 	validTransitions := map[rayv1.JobDeploymentStatus]struct{}{
@@ -626,11 +610,9 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 	}
 	if _, ok := validTransitions[rayJob.Status.JobDeploymentStatus]; !ok {
 		r.Log.Info("The current status is not allowed to transition to `Suspending`", "RayJob", rayJob.Name, "JobDeploymentStatus", rayJob.Status.JobDeploymentStatus)
-		return false, nil
+		return false
 	}
 	r.Log.Info(fmt.Sprintf("Try to transition the status from `%s` to `Suspending`", rayJob.Status.JobDeploymentStatus), "RayJob", rayJob.Name)
-	if err := r.updateState(ctx, rayJob, nil, rayJob.Status.JobStatus, rayv1.JobDeploymentStatusSuspending); err != nil {
-		return false, err
-	}
-	return true, nil
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
+	return true
 }

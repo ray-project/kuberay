@@ -11,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -245,12 +244,9 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				Scheme:   newScheme,
 				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
-			shouldUpdate, err := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
-			assert.NoError(t, err)
+			shouldUpdate := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
 			assert.Equal(t, tc.expectedShouldUpdate, shouldUpdate)
 
-			err = fakeClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, rayJob)
-			assert.NoError(t, err)
 			if tc.expectedShouldUpdate {
 				assert.Equal(t, rayv1.JobDeploymentStatusSuspending, rayJob.Status.JobDeploymentStatus)
 			} else {
