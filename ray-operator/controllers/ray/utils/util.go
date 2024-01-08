@@ -27,7 +27,6 @@ import (
 
 const (
 	RayClusterSuffix    = "-raycluster-"
-	DashboardName       = "dashboard"
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
@@ -113,15 +112,6 @@ func CheckLabel(s string) string {
 	}
 
 	return s
-}
-
-// Before Get substring before a string.
-func Before(value string, a string) string {
-	pos := strings.Index(value, a)
-	if pos == -1 {
-		return ""
-	}
-	return value[0:pos]
 }
 
 // FormatInt returns the string representation of i in the given base,
@@ -353,16 +343,6 @@ func Contains(elems []string, searchTerm string) bool {
 		}
 	}
 	return false
-}
-
-func FilterContainerByName(containers []corev1.Container, name string) (corev1.Container, error) {
-	for _, container := range containers {
-		if strings.Compare(container.Name, name) == 0 {
-			return container, nil
-		}
-	}
-
-	return corev1.Container{}, fmt.Errorf("can not find container %s", name)
 }
 
 // GetHeadGroupServiceAccountName returns the head group service account if it exists.
