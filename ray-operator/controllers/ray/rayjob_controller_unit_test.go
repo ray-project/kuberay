@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -252,6 +253,73 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 			} else {
 				assert.Equal(t, tc.status, rayJob.Status.JobDeploymentStatus)
 			}
+		})
+	}
+}
+
+func TestUpdateRayJobStatus(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	rayJobTemplate := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Status: rayv1.RayJobStatus{
+			JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			JobStatus:           rayv1.JobStatusRunning,
+			Message:             "old message",
+		},
+	}
+	newMessage := "new message"
+
+	tests := map[string]struct {
+		isJobDeploymentStatusChanged bool
+	}{
+		"JobDeploymentStatus is not changed": {
+			isJobDeploymentStatusChanged: false,
+		},
+		"JobDeploymentStatus is changed": {
+			isJobDeploymentStatusChanged: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			oldRayJob := rayJobTemplate.DeepCopy()
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(oldRayJob).
+				WithStatusSubresource(oldRayJob).Build()
+			ctx := context.Background()
+
+			newRayJob := &rayv1.RayJob{}
+			err := fakeClient.Get(ctx, types.NamespacedName{Namespace: oldRayJob.Namespace, Name: oldRayJob.Name}, newRayJob)
+			assert.NoError(t, err)
+
+			// Update the status
+			newRayJob.Status.Message = newMessage
+			if tc.isJobDeploymentStatusChanged {
+				newRayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
+			}
+
+			// Initialize a new RayClusterReconciler.
+			testRayJobReconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			err = testRayJobReconciler.updateRayJobStatus(ctx, oldRayJob, newRayJob)
+			assert.NoError(t, err)
+
+			err = fakeClient.Get(ctx, types.NamespacedName{Namespace: newRayJob.Namespace, Name: newRayJob.Name}, newRayJob)
+			assert.NoError(t, err)
+			assert.Equal(t, newRayJob.Status.Message == newMessage, tc.isJobDeploymentStatusChanged)
 		})
 	}
 }
