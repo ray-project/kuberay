@@ -52,8 +52,9 @@ var _ = Context("Inside the default namespace", func() {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayJobSpec{
-			Suspend:    true,
-			Entrypoint: "sleep 999",
+			ShutdownAfterJobFinishes: true,
+			Suspend:                  true,
+			Entrypoint:               "sleep 999",
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: "2.9.0",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
