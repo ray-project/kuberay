@@ -146,7 +146,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NotNil(t, actualJob, "A job is expected")
 	waitForRayJob(t, tCtx, create_actor_request.Job.Name, rayv1api.JobStatusSucceeded)
 
-	// worker pod should be deleted in 30 sec. In reality its larger
+	// Sleep for a while to ensure that the worker pod is deleted
 	time.Sleep(100 * time.Second)
 
 	// Get number of workers

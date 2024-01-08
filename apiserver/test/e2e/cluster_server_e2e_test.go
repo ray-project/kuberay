@@ -537,14 +537,14 @@ func TestGetAllClusters(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
-	got_cluster := false
+	gotCluster := false
 	for _, cluster := range response.Clusters {
 		if tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace {
-			got_cluster = true
+			gotCluster = true
 			break
 		}
 	}
-	if !got_cluster {
+	if !gotCluster {
 		t.Error("Getting all clusters did not return expected one")
 	}
 }
@@ -575,14 +575,14 @@ func TestGetClustersInNamespace(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of compute templates is required")
-	got_cluster := false
+	gotCluster := false
 	for _, cluster := range response.Clusters {
 		if tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace {
-			got_cluster = true
+			gotCluster = true
 			break
 		}
 	}
-	if !got_cluster {
+	if !gotCluster {
 		t.Error("Getting clusters din namespace did not return expected one")
 	}
 }
