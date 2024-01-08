@@ -20,7 +20,7 @@ func TestRayJobSuspend(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobs := newConfigMap(namespace.Name, "jobs", files(test, "long_running.py"))
+	jobs := newConfigMap(namespace.Name, "jobs", files(test, "long_running.py", "counter.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Create(test.Ctx(), jobs, metav1.CreateOptions{})
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -87,6 +87,60 @@ func TestRayJobSuspend(t *testing.T) {
 		test.Expect(err).NotTo(HaveOccurred())
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Create a suspended RayJob, and then resume it.", func(t *testing.T) {
+		// RayJob
+		rayJob := &rayv1.RayJob{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: rayv1.GroupVersion.String(),
+				Kind:       "RayJob",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "counter",
+				Namespace: namespace.Name,
+			},
+			Spec: rayv1.RayJobSpec{
+				Suspend:        true,
+				RayClusterSpec: newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				Entrypoint:     "python /home/ray/jobs/counter.py",
+				RuntimeEnvYAML: `
+env_vars:
+  counter_name: test_counter
+`,
+				ShutdownAfterJobFinishes: true,
+				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
+			},
+		}
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Create(test.Ctx(), rayJob, metav1.CreateOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		test.T().Logf("Waiting for RayJob %s/%s to be 'Suspended'", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusSuspended)))
+
+		// Refresh the RayJob statuzs
+		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+
+		test.T().Logf("Resume the RayJob by updating `suspend` to false.")
+		rayJob.Spec.Suspend = false
+		// TODO (kevin85421): We may need to retry `Update` if 409 conflict makes the test flaky.
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Update(test.Ctx(), rayJob, metav1.UpdateOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+
+		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Assert the RayJob has completed successfully
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
