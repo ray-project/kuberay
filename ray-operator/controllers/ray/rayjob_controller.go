@@ -511,11 +511,10 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	oldRayJobStatus := oldRayJob.Status
 	newRayJobStatus := newRayJob.Status
 	r.Log.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
+	// If a status field is crucial for the RayJob state machine, it MUST be
+	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
-		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
-		oldRayJobStatus.JobId != newRayJobStatus.JobId ||
-		oldRayJobStatus.RayClusterName != newRayJobStatus.RayClusterName ||
-		oldRayJobStatus.DashboardURL != newRayJobStatus.DashboardURL {
+		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
 		r.Log.Info("updateRayJobStatus", "old JobStatus", oldRayJobStatus.JobStatus, "new JobStatus", newRayJobStatus.JobStatus,
 			"old JobDeploymentStatus", oldRayJobStatus.JobDeploymentStatus, "new JobDeploymentStatus", newRayJobStatus.JobDeploymentStatus)
 		if err := r.Status().Update(ctx, newRayJob); err != nil {
