@@ -4,7 +4,7 @@ Ray Serve is a scalable model serving library for building online inference APIs
 
 ## Deploy KubeRay operator and API server
 
-Reffer to [readme](README.md) for setting up KubRay operator and API server.
+Refer to [readme](README.md) for setting up KubRay operator and API server.
 
 ```shell
 make operator-image docker-image cluster load-operator-image load-image  deploy-operator deploy
