@@ -85,24 +85,43 @@ func rayClusterSpecWith(spec *rayv1.RayClusterSpec, options ...option[rayv1.RayC
 	return apply(spec, options...)
 }
 
-func mountConfigMap(configMap *corev1.ConfigMap, mountPath string) option[rayv1.RayClusterSpec] {
-	return func(spec *rayv1.RayClusterSpec) *rayv1.RayClusterSpec {
-		mounts := spec.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts
-		spec.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = append(mounts, corev1.VolumeMount{
-			Name:      configMap.Name,
-			MountPath: mountPath,
-		})
-		spec.HeadGroupSpec.Template.Spec.Volumes = append(spec.HeadGroupSpec.Template.Spec.Volumes, corev1.Volume{
-			Name: configMap.Name,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMap.Name,
+func mountConfigMap[T rayv1.RayClusterSpec | corev1.PodTemplateSpec](configMap *corev1.ConfigMap, mountPath string) option[T] {
+	return func(t *T) *T {
+		switch obj := (interface{})(t).(type) {
+		case *rayv1.RayClusterSpec:
+			mounts := obj.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts
+			obj.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = append(mounts, corev1.VolumeMount{
+				Name:      configMap.Name,
+				MountPath: mountPath,
+			})
+			obj.HeadGroupSpec.Template.Spec.Volumes = append(obj.HeadGroupSpec.Template.Spec.Volumes, corev1.Volume{
+				Name: configMap.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: configMap.Name,
+						},
 					},
 				},
-			},
-		})
-		return spec
+			})
+		case *corev1.PodTemplateSpec:
+			mounts := obj.Spec.Containers[0].VolumeMounts
+			obj.Spec.Containers[0].VolumeMounts = append(mounts, corev1.VolumeMount{
+				Name:      configMap.Name,
+				MountPath: mountPath,
+			})
+			obj.Spec.Volumes = append(obj.Spec.Volumes, corev1.Volume{
+				Name: configMap.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: configMap.Name,
+						},
+					},
+				},
+			})
+		}
+		return t
 	}
 }
 
@@ -113,47 +132,7 @@ func rayClusterSpec() *rayv1.RayClusterSpec {
 			RayStartParams: map[string]string{
 				"dashboard-host": "0.0.0.0",
 			},
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "ray-head",
-							Image: GetRayImage(),
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 6379,
-									Name:          "gcs",
-								},
-								{
-									ContainerPort: 8265,
-									Name:          "dashboard",
-								},
-								{
-									ContainerPort: 10001,
-									Name:          "client",
-								},
-							},
-							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.LifecycleHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/sh", "-c", "ray stop"},
-									},
-								},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("300m"),
-									corev1.ResourceMemory: resource.MustParse("1G"),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
-									corev1.ResourceMemory: resource.MustParse("2G"),
-								},
-							},
-						},
-					},
-				},
-			},
+			Template: headPodTemplate(),
 		},
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
@@ -162,30 +141,82 @@ func rayClusterSpec() *rayv1.RayClusterSpec {
 				MaxReplicas:    Ptr(int32(1)),
 				GroupName:      "small-group",
 				RayStartParams: map[string]string{},
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  "ray-worker",
-								Image: GetRayImage(),
-								Lifecycle: &corev1.Lifecycle{
-									PreStop: &corev1.LifecycleHandler{
-										Exec: &corev1.ExecAction{
-											Command: []string{"/bin/sh", "-c", "ray stop"},
-										},
-									},
-								},
-								Resources: corev1.ResourceRequirements{
-									Requests: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("300m"),
-										corev1.ResourceMemory: resource.MustParse("1G"),
-									},
-									Limits: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("500m"),
-										corev1.ResourceMemory: resource.MustParse("1G"),
-									},
-								},
+				Template:       workerPodTemplate(),
+			},
+		},
+	}
+}
+
+func podTemplateSpec(template corev1.PodTemplateSpec, options ...option[corev1.PodTemplateSpec]) corev1.PodTemplateSpec {
+	return *apply(&template, options...)
+}
+
+func headPodTemplate() corev1.PodTemplateSpec {
+	return corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "ray-head",
+					Image: GetRayImage(),
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 6379,
+							Name:          "gcs",
+						},
+						{
+							ContainerPort: 8265,
+							Name:          "dashboard",
+						},
+						{
+							ContainerPort: 10001,
+							Name:          "client",
+						},
+					},
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.LifecycleHandler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"/bin/sh", "-c", "ray stop"},
 							},
+						},
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("300m"),
+							corev1.ResourceMemory: resource.MustParse("1G"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func workerPodTemplate() corev1.PodTemplateSpec {
+	return corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "ray-worker",
+					Image: GetRayImage(),
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.LifecycleHandler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"/bin/sh", "-c", "ray stop"},
+							},
+						},
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("300m"),
+							corev1.ResourceMemory: resource.MustParse("1G"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1G"),
 						},
 					},
 				},

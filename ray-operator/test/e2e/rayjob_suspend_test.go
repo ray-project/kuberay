@@ -5,10 +5,12 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -37,7 +39,7 @@ func TestRayJobSuspend(t *testing.T) {
 				Namespace: namespace.Name,
 			},
 			Spec: rayv1.RayJobSpec{
-				RayClusterSpec:           newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				RayClusterSpec:           newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 				Entrypoint:               "python /home/ray/jobs/long_running.py",
 				ShutdownAfterJobFinishes: true,
 				TTLSecondsAfterFinished:  600,
@@ -75,7 +77,7 @@ func TestRayJobSuspend(t *testing.T) {
 
 		// TODO (kevin85421): Check whether the Pods associated with the RayCluster and the submitter Job have been deleted.
 		// For Kubernetes Jobs, the default deletion behavior is "orphanDependents," which means the Pods will not be
-		// cascadingly deleted with the Kubernetes Job by default.
+		// cascade-deleted with the Kubernetes Job by default.
 
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
@@ -107,7 +109,7 @@ func TestRayJobSuspend(t *testing.T) {
 			},
 			Spec: rayv1.RayJobSpec{
 				Suspend:        true,
-				RayClusterSpec: newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				RayClusterSpec: newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 				Entrypoint:     "python /home/ray/jobs/counter.py",
 				RuntimeEnvYAML: `
 env_vars:
@@ -125,13 +127,65 @@ env_vars:
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusSuspended)))
 
-		// Refresh the RayJob statuzs
+		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 
 		test.T().Logf("Resume the RayJob by updating `suspend` to false.")
 		rayJob.Spec.Suspend = false
 		// TODO (kevin85421): We may need to retry `Update` if 409 conflict makes the test flaky.
 		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Update(test.Ctx(), rayJob, metav1.UpdateOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+
+		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Assert the RayJob has completed successfully
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Create a suspended RayJob, and then resume it, using SSA.", func(t *testing.T) {
+		// RayJob
+		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSuspend(true).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(*jobSubmitterPodTemplate()).
+				WithRayClusterSpec(rayv1ac.RayClusterSpec().
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithTemplate(podTemplateSpec(headPodTemplate(), mountConfigMap[corev1.PodTemplateSpec](jobs, "/home/ray/jobs")))).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithReplicas(1).
+						WithMinReplicas(1).
+						WithMaxReplicas(1).
+						WithGroupName("small-group").
+						WithRayStartParams(map[string]string{}).
+						WithTemplate(workerPodTemplate()))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		test.T().Logf("Waiting for RayJob %s/%s to be 'Suspended'", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusSuspended)))
+
+		test.T().Logf("Resume the RayJob by updating `suspend` to false.")
+		patch := rayv1ac.RayJob(rayJob.Name, rayJob.Namespace).
+			WithSpec(rayv1ac.RayJobSpec().WithSuspend(false))
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), patch, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 
 		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
