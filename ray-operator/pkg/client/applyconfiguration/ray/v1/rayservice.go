@@ -24,7 +24,7 @@ func RayService(name, namespace string) *RayServiceApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("RayService")
-	b.WithAPIVersion("ray/v1")
+	b.WithAPIVersion("ray.io/v1")
 	return b
 }
 

@@ -24,7 +24,7 @@ func RayCluster(name, namespace string) *RayClusterApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("RayCluster")
-	b.WithAPIVersion("ray/v1")
+	b.WithAPIVersion("ray.io/v1")
 	return b
 }
 

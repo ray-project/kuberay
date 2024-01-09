@@ -12,7 +12,7 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=ray, Version=v1
+	// Group=ray.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):

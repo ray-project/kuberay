@@ -24,7 +24,7 @@ func RayJob(name, namespace string) *RayJobApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("RayJob")
-	b.WithAPIVersion("ray/v1")
+	b.WithAPIVersion("ray.io/v1")
 	return b
 }
 
