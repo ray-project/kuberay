@@ -537,8 +537,16 @@ func TestGetAllClusters(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
-	require.Equal(t, tCtx.GetRayClusterName(), response.Clusters[0].Name)
-	require.Equal(t, tCtx.GetNamespaceName(), response.Clusters[0].Namespace)
+	gotCluster := false
+	for _, cluster := range response.Clusters {
+		if tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace {
+			gotCluster = true
+			break
+		}
+	}
+	if !gotCluster {
+		t.Error("Getting all clusters did not return expected one")
+	}
 }
 
 // TestGetClustersInNamespace validates t
@@ -567,8 +575,16 @@ func TestGetClustersInNamespace(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of compute templates is required")
-	require.Equal(t, tCtx.GetRayClusterName(), response.Clusters[0].Name)
-	require.Equal(t, tCtx.GetNamespaceName(), response.Clusters[0].Namespace)
+	gotCluster := false
+	for _, cluster := range response.Clusters {
+		if tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace {
+			gotCluster = true
+			break
+		}
+	}
+	if !gotCluster {
+		t.Error("Getting clusters din namespace did not return expected one")
+	}
 }
 
 // TestDeleteTemplate sequentially iterates over the delete compute template endpoint
