@@ -27,7 +27,7 @@ cd "${SCRIPT_ROOT}"
 
 # Migrate to using kube_codegen.sh once the following issue is fixed:
 # https://github.com/kubernetes/code-generator/issues/165
-"${CODEGEN_PKG}"/generate-groups.sh "client,informer,lister" \
+"${CODEGEN_PKG}"/generate-groups.sh "applyconfiguration,client,informer,lister" \
  github.com/ray-project/kuberay/ray-operator/pkg/client github.com/ray-project/kuberay/ray-operator/apis \
  ray:v1 \
  --output-base "${SCRIPT_ROOT}" \

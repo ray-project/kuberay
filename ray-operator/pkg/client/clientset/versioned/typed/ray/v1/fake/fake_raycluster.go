@@ -4,8 +4,11 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	types "k8s.io/apimachinery/pkg/types"
@@ -117,6 +120,51 @@ func (c *FakeRayClusters) DeleteCollection(ctx context.Context, opts metav1.Dele
 func (c *FakeRayClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayCluster, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(rayclustersResource, c.ns, name, pt, data, subresources...), &v1.RayCluster{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1.RayCluster), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied rayCluster.
+func (c *FakeRayClusters) Apply(ctx context.Context, rayCluster *rayv1.RayClusterApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayCluster, err error) {
+	if rayCluster == nil {
+		return nil, fmt.Errorf("rayCluster provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(rayCluster)
+	if err != nil {
+		return nil, err
+	}
+	name := rayCluster.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayCluster.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(rayclustersResource, c.ns, *name, types.ApplyPatchType, data), &v1.RayCluster{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1.RayCluster), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeRayClusters) ApplyStatus(ctx context.Context, rayCluster *rayv1.RayClusterApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayCluster, err error) {
+	if rayCluster == nil {
+		return nil, fmt.Errorf("rayCluster provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(rayCluster)
+	if err != nil {
+		return nil, err
+	}
+	name := rayCluster.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayCluster.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(rayclustersResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1.RayCluster{})
 
 	if obj == nil {
 		return nil, err
