@@ -53,6 +53,8 @@ To keep consistent results of code generation and testing, you need to remove ou
 
 ```bash
 rm -rf bin
+# or
+make clean
 ```
 
 ### End-to-end local development process on Kind
