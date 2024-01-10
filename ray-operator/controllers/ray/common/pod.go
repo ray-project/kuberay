@@ -283,10 +283,10 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		if enableServeService && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
-			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
-				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
-			commands = append(commands, rayServeProxyHealthCommand)
-			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+//			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
+//				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
+//			commands = append(commands, rayServeProxyHealthCommand)
+//			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 	}
 }
