@@ -59,15 +59,11 @@ func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
 
 func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayServiceSpec, error) {
 	// Ensure that at least one and only one serve config (V1 or V2) defined
-	if apiService.ServeConfig_V2 == "" && apiService.ServeDeploymentGraphSpec == nil {
+	if apiService.ServeConfig_V2 == "" {
 		// Serve configuration is not defined
 		return nil, errors.New("serve configuration is not defined")
 	}
 
-	if apiService.ServeDeploymentGraphSpec != nil && apiService.ServeConfig_V2 != "" {
-		// Serve configuration is not defined
-		return nil, errors.New("two serve configuration are defined, only one is allowed")
-	}
 	// generate Ray cluster spec and buid cluster
 	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap, true)
 	if err != nil {
