@@ -323,3 +323,25 @@ func TestUpdateRayJobStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRayJobSpec(t *testing.T) {
+	err := validateRayJobSpec(&rayv1.RayJob{})
+	assert.Error(t, err, "The RayJob is invalid because both `RayClusterSpec` and `ClusterSelector` are empty")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: false,
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err, "The RayJob is valid.")
+}

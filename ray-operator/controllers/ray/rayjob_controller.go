@@ -110,6 +110,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if err := validateRayJobSpec(rayJobInstance); err != nil {
+		r.Log.Error(err, "The RayJob spec is invalid")
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
@@ -536,13 +541,6 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
-			// TODO: If both ClusterSelector and RayClusterSpec are not set, we should avoid retrieving a RayCluster instance.
-			// Consider moving this logic to a more appropriate location.
-			if len(rayJobInstance.Spec.ClusterSelector) == 0 && rayJobInstance.Spec.RayClusterSpec == nil {
-				err := fmt.Errorf("one of ClusterSelector or RayClusterSpec must be set, but both are undefined, err: %v", err)
-				return nil, err
-			}
-
 			if len(rayJobInstance.Spec.ClusterSelector) != 0 {
 				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
 				return nil, err
@@ -614,4 +612,14 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 	r.Log.Info(fmt.Sprintf("Try to transition the status from `%s` to `Suspending`", rayJob.Status.JobDeploymentStatus), "RayJob", rayJob.Name)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
 	return true
+}
+
+func validateRayJobSpec(rayJob *rayv1.RayJob) error {
+	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
+		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
+	}
+	if rayJob.Spec.RayClusterSpec == nil && len(rayJob.Spec.ClusterSelector) == 0 {
+		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
+	}
+	return nil
 }
