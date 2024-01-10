@@ -4,7 +4,6 @@ import jsonpatch
 from typing import Dict, List, Optional
 import unittest
 import time
-from kubernetes import client
 
 from framework.utils import (
     create_custom_object,

@@ -5,7 +5,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: rayservice-sample
+  name: rayservice-autoscaler
 spec:
   # The workload consists of two applications. The first application checks on an event in the second application.
   # If the event isn't set, the first application will block on requests until the event is set. So, to test upscaling
@@ -28,9 +28,9 @@ spec:
               look_back_period_s: 2
               downscale_delay_s: 5
               upscale_delay_s: 2
+              target_num_ongoing_requests_per_replica: 1
             graceful_shutdown_timeout_s: 5
             max_concurrent_queries: 1000
-            max_replicas_per_node: 1
             ray_actor_options:
               num_cpus: 0.5
       - name: signal

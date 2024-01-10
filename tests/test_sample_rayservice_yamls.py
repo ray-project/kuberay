@@ -2,7 +2,6 @@
 from copy import deepcopy
 from kubernetes import client
 import logging
-import os
 import pytest
 import sys
 from tempfile import NamedTemporaryFile
@@ -187,7 +186,6 @@ class TestRayService:
         with open(self.sample_path, encoding="utf-8") as cr_yaml:
             self.cr = yaml.safe_load(cr_yaml)
 
-        self.rayservice_name = self.cr["metadata"]["name"]
         self.default_queries = [
             {"path": "/fruit", "json_args": ["MANGO", 2], "expected_output": "6"},
             {"path": "/calc", "json_args": ["MUL", 3], "expected_output": "15 pizzas please!"},
@@ -296,6 +294,21 @@ class TestRayService:
             for cr_event in cr_events:
                 cr_event.trigger()
 
+class TestRayServiceAutoscaling:
+    """Test RayService autoscaling"""
+    @pytest.fixture
+    def set_up_cluster(self):
+        """Set up a K8s cluster, deploy the KubeRay operator, and start a curl Pod"""
+        K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.initialize_cluster()
+        operator_manager = OperatorManager.instance()
+        operator_manager.prepare_operator()
+        start_curl_pod("curl", "default")
+
+        yield
+
+        K8S_CLUSTER_MANAGER.cleanup()
+
     def test_service_autoscaling(self, set_up_cluster):
         """This test uses a special workload that can allow us to
         reliably test autoscaling.
@@ -310,8 +323,10 @@ class TestRayService:
         the second application, releasing all blocked requests. Worker
         pods should scale down.
         """
-        filename = "ray-service.autoscaler.yaml"
-        path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath(filename)
+        dir_path = "ray-operator/config/samples/"
+        cr_yaml_path = CONST.REPO_ROOT.joinpath(dir_path).joinpath("ray-service.autoscaler.yaml")
+        with open(cr_yaml_path, encoding="utf-8") as cr_yaml:
+            cr = yaml.safe_load(cr_yaml)
 
         scale_up_rule = AutoscaleRule(
             query={"path": "/", "json_args": {}},
@@ -323,24 +338,23 @@ class TestRayService:
         scale_down_rule = AutoscaleRule(
             query={"path": "/signal", "json_args": {}},
             num_repeat=1,
-            expected_worker_pods=1,
+            expected_worker_pods=0,
             timeout=400,
             message="Releasing all blocked requests. Worker pods should start scaling down..."
         )
         cr_events: List[CREvent] = [
             RayServiceAddCREvent(
-                custom_resource_object=self.cr,
+                custom_resource_object=cr,
                 rulesets=[RuleSet([scale_up_rule, scale_down_rule])],
-                timeout=600,
+                timeout=120,
                 namespace=NAMESPACE,
-                filepath=path,
+                filepath=cr_yaml_path,
             ),
-            RayServiceDeleteCREvent(self.cr, [], 90, NAMESPACE, path),
+            RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, cr_yaml_path),
         ]
 
         for cr_event in cr_events:
             cr_event.trigger()
-
 
 if __name__ == "__main__":
     sys.exit(pytest.main(["-v", "-s", __file__]))
