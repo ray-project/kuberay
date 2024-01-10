@@ -125,6 +125,7 @@ const (
 	DefaultReadinessProbePeriodSeconds       = 5
 	DefaultReadinessProbeSuccessThreshold    = 1
 	DefaultReadinessProbeFailureThreshold    = 10
+	ServeReadinessProbeFailureThreshold      = 1
 
 	// Ray FT default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 30
@@ -134,8 +135,14 @@ const (
 	DefaultLivenessProbeFailureThreshold    = 120
 
 	// Ray health check related configurations
+	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
+	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
+	// to check the health of the Raylet process.
+	// TODO (kevin85421): Should we take the dashboard process into account?
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
+	RayServeProxyHealthPath   = "-/healthz"
+	BaseWgetHealthCommand     = "wget -T 2 -q -O- http://localhost:%d/%s | grep success"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"

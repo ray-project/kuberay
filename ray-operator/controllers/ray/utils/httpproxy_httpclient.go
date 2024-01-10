@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const healthCheckPath = "/-/healthz"
-
 type RayHttpProxyClientInterface interface {
 	InitClient()
 	CheckHealth() error
@@ -31,11 +29,11 @@ func (r *RayHttpProxyClient) InitClient() {
 }
 
 func (r *RayHttpProxyClient) SetHostIp(hostIp string, port int) {
-	r.httpProxyURL = fmt.Sprintf("http://%s:%d", hostIp, port)
+	r.httpProxyURL = fmt.Sprintf("http://%s:%d/", hostIp, port)
 }
 
 func (r *RayHttpProxyClient) CheckHealth() error {
-	req, err := http.NewRequest("GET", r.httpProxyURL+healthCheckPath, nil)
+	req, err := http.NewRequest("GET", r.httpProxyURL+RayServeProxyHealthPath, nil)
 	if err != nil {
 		return err
 	}
