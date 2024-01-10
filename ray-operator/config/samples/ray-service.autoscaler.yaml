@@ -30,6 +30,7 @@ spec:
               upscale_delay_s: 2
             graceful_shutdown_timeout_s: 5
             max_concurrent_queries: 1000
+            max_replicas_per_node: 1
             ray_actor_options:
               num_cpus: 0.5
       - name: signal
@@ -81,8 +82,8 @@ spec:
                   name: serve
     workerGroupSpecs:
       # the pod replicas in this group typed worker
-      - replicas: 1
-        minReplicas: 1
+      - replicas: 0
+        minReplicas: 0
         maxReplicas: 5
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
