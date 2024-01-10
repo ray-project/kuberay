@@ -166,6 +166,7 @@ func BuildIngressForHeadService(cluster rayv1.RayCluster) ([]*networkingv1.Ingre
 	}
 }
 
+// This function gathers the networkingv1 path type from the passed string
 func getPathType(pathType string) networkingv1.PathType {
 	var truePathType networkingv1.PathType
 	pathType = strings.ToLower(pathType)
