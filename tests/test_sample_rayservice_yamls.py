@@ -65,6 +65,9 @@ class RayServiceAddCREvent(CREvent):
                 namespace = self.namespace, label_selector =
                 f"ray.io/serve={self.custom_resource_object['metadata']['name']}-serve")
 
+            print(f"headpods: {len(headpods.items)}, expected_head_pods: {expected_head_pods}")
+            print(f"workerpods: {len(workerpods.items)}, expected_worker_pods: {expected_worker_pods}")
+            print(f"serve_services: {len(serve_services.items)}")
             if (len(serve_services.items) == 1 and len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):
@@ -73,12 +76,12 @@ class RayServiceAddCREvent(CREvent):
 
             time.sleep(1)
 
-        logger.info(f"RayServiceAddCREvent wait() failed to converge in {self.timeout}s.")
-        logger.info(
-            f"expected_head_pods: {expected_head_pods}, "
-            f"expected_worker_pods: {expected_worker_pods}"
-        )
-        show_cluster_info(self.namespace)
+        # logger.info(f"RayServiceAddCREvent wait() failed to converge in {self.timeout}s.")
+        # logger.info(
+        #     f"expected_head_pods: {expected_head_pods}, "
+        #     f"expected_worker_pods: {expected_worker_pods}"
+        # )
+        # show_cluster_info(self.namespace)
         raise TimeoutError(f"RayServiceAddCREvent didn't finish in {self.timeout}s")
 
 class RayServiceUpdateCREvent(CREvent):
