@@ -358,7 +358,9 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
 			Labels: map[string]string{
-				utils.KubernetesCreatedByLabelKey: utils.ComponentName,
+				utils.RayOriginatedFromNameLabelKey: rayJobInstance.Name,
+				utils.RayOriginatedFromTypeLabelKey: utils.RayJobCreatorLabelValue,
+				utils.KubernetesCreatedByLabelKey:   utils.ComponentName,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -572,9 +574,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+	labels := make(map[string]string, len(rayJobInstance.Labels))
+	for key, value := range rayJobInstance.Labels {
+		labels[key] = value
+	}
+	labels[utils.RayOriginatedFromNameLabelKey] = rayJobInstance.Name
+	labels[utils.RayOriginatedFromTypeLabelKey] = utils.RayJobCreatorLabelValue
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      rayJobInstance.Labels,
+			Labels:      labels,
 			Annotations: rayJobInstance.Annotations,
 			Name:        rayClusterName,
 			Namespace:   rayJobInstance.Namespace,

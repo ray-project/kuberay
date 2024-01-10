@@ -77,6 +77,15 @@ func TestCreateK8sJobIfNeed(t *testing.T) {
 
 	err = rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
 	assert.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{
+		Namespace: k8sJob.Namespace,
+		Name:      k8sJob.Name,
+	}, k8sJob, nil)
+	assert.NoError(t, err)
+
+	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromNameLabelKey], rayJob.Name)
+	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromTypeLabelKey], utils.RayJobCreatorLabelValue)
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {
