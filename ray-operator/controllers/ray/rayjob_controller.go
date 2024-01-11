@@ -363,12 +363,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		},
 	}
 
-	// Without TTLSecondsAfterFinished, the job has a default deletion policy of `orphanDependents` causing
-	// Pods created by an unmanaged Job to be left around after that Job is fully deleted.
-	if rayJobInstance.Spec.ShutdownAfterJobFinishes {
-		job.Spec.TTLSecondsAfterFinished = pointer.Int32(rayJobInstance.Spec.TTLSecondsAfterFinished)
-	}
-
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to set controller reference")
