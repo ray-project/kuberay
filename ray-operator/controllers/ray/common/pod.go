@@ -589,7 +589,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 		container.Env = append(container.Env, portEnv)
 	}
 
-	if strings.ToLower(creator) == utils.RayServiceCreatorLabelValue {
+	if strings.ToLower(creator) == utils.RayServiceOriginatedFromTypeLabelValue {
 		// Only add this env for Ray Service cluster to improve service SLA.
 		if !envVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
 			deathEnv := corev1.EnvVar{Name: utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}
