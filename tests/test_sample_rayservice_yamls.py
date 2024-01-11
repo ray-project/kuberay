@@ -322,6 +322,11 @@ class TestRayServiceAutoscaling:
         requests. Worker pods should scale up. Then we set the event in
         the second application, releasing all blocked requests. Worker
         pods should scale down.
+
+        TODO (kevin85421): Currently, we configure the RayService YAML to
+        ensure each Pod has at least 1 Ray Serve replica. Hence, all Pods
+        can pass the readiness check and become ready. Without this workaround,
+        the RayServiceAddCREvent will fail to converge.
         """
         dir_path = "ray-operator/config/samples/"
         cr_yaml_path = CONST.REPO_ROOT.joinpath(dir_path).joinpath("ray-service.autoscaler.yaml")
