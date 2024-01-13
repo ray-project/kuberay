@@ -152,7 +152,7 @@ env_vars:
 				Kind:       "RayJob",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "fail",
+				Name:      "fail-k8s-job",
 				Namespace: namespace.Name,
 			},
 			Spec: rayv1.RayJobSpec{
@@ -177,13 +177,13 @@ env_vars:
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
 
-		// Assert the RayCluster and the submitter Job have been deleted because ShutdownAfterJobFinishes is true.
-		test.Eventually(NotFound(RayClusterOrError(test, namespace.Name, rayJob.Status.RayClusterName))).
-			Should(BeTrue())
-		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
-
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+
+		// Assert the RayCluster and the submitter Job have been deleted because ShutdownAfterJobFinishes is true.
+		test.Eventually(NotFound(RayClusterOrError(test, namespace.Name, rayJob.Status.RayClusterName)), TestTimeoutMedium).
+			Should(BeTrue())
+		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
