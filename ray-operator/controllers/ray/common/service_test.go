@@ -435,8 +435,8 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayOriginatedFromNameLabelKey]
-	expectedLabel := string(serviceInstance.Name)
+	actualLabel := svc.Labels[utils.RayOriginatedFromLabelKey]
+	expectedLabel := utils.RayOriginatedFromServiceLabelValue(serviceInstance.Name)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
 	}
@@ -461,8 +461,8 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayOriginatedFromNameLabelKey]
-	expectedLabel := string(instanceForServeSvc.Name)
+	actualLabel := svc.Labels[utils.RayOriginatedFromLabelKey]
+	expectedLabel := utils.RayOriginatedFromServiceLabelValue(instanceForServeSvc.Name)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
 	}

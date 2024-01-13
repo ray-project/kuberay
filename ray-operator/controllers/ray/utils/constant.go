@@ -5,8 +5,7 @@ const (
 	// Default application name
 	DefaultServeAppName = "default"
 	// Belows used as label key
-	RayOriginatedFromNameLabelKey            = "ray.io/originated-from-name"
-	RayOriginatedFromTypeLabelKey            = "ray.io/originated-from-type"
+	RayOriginatedFromLabelKey                = "ray.io/originated-from"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
 	RayNodeGroupLabelKey                     = "ray.io/group"
@@ -76,10 +75,10 @@ const (
 	ComponentName = "kuberay-operator"
 
 	// The defaule RayService Identifier.
-	RayServiceOriginatedFromTypeLabelValue = "rayservice"
+	RayServiceOriginatedFromLabelValueType = "rayservice"
 
 	// The defaule RayJob Identifier.
-	RayJobOriginatedFromTypeLabelValue = "rayjob"
+	RayJobOriginatedFromLabelValueType = "rayjob"
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
@@ -158,3 +157,11 @@ const (
 	HeadService    ServiceType = "headService"
 	ServingService ServiceType = "serveService"
 )
+
+func RayOriginatedFromServiceLabelValue(name string) string {
+	return RayServiceOriginatedFromLabelValueType + "_" + name
+}
+
+func RayOriginatedFromJobLabelValue(name string) string {
+	return RayJobOriginatedFromLabelValueType + "_" + name
+}

@@ -84,8 +84,7 @@ func TestCreateK8sJobIfNeed(t *testing.T) {
 	}, k8sJob, nil)
 	assert.NoError(t, err)
 
-	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromNameLabelKey], rayJob.Name)
-	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromTypeLabelKey], utils.RayJobOriginatedFromTypeLabelValue)
+	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromLabelKey], utils.RayOriginatedFromJobLabelValue(rayJob.Name))
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {

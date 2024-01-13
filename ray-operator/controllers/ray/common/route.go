@@ -77,8 +77,7 @@ func BuildRouteForRayService(service rayv1.RayService, cluster rayv1.RayCluster)
 	}
 	route.ObjectMeta.Name = serviceName
 	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels[utils.RayOriginatedFromNameLabelKey] = service.Name
-	route.ObjectMeta.Labels[utils.RayOriginatedFromTypeLabelKey] = utils.RayServiceOriginatedFromTypeLabelValue
+	route.ObjectMeta.Labels[utils.RayOriginatedFromLabelKey] = utils.RayOriginatedFromServiceLabelValue(service.Name)
 	route.ObjectMeta.Labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
 
 	return route, nil

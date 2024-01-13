@@ -37,8 +37,7 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 
 func buildRayServiceLabels(apiService *api.RayService) map[string]string {
 	labels := map[string]string{}
-	labels[RayOriginatedFromNameLabelKey] = apiService.Name
-	labels[RayOriginatedFromTypeLabelKey] = RayServiceOriginatedFromTypeLabelValue
+	labels[RayOriginatedFromLabelKey] = RayOriginatedFromServiceLabelValue(apiService.Name)
 	labels[RayClusterUserLabelKey] = apiService.User
 	labels[KubernetesApplicationNameLabelKey] = ApplicationName
 	labels[KubernetesManagedByLabelKey] = ComponentName
