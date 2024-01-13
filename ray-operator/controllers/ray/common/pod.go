@@ -34,7 +34,7 @@ const (
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
 )
 
-var log = logf.Log.WithName("RayCluster-Controller")
+var log = logf.Log.WithName("controllers").WithName("RayCluster")
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.

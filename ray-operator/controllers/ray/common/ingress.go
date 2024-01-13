@@ -6,7 +6,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -87,7 +86,7 @@ func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
 	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
 	if !ok {
-		logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
+		log.Info(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
 	} else {
 		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
 		ingress.Spec.IngressClassName = &ingressClassName

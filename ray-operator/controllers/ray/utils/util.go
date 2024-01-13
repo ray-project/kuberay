@@ -17,9 +17,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	"github.com/sirupsen/logrus"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +30,8 @@ const (
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
 )
+
+var log = logf.Log.WithName("controllers").WithName("RayCluster")
 
 // TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
 type CRDType string
@@ -159,7 +160,7 @@ func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, 
 func GenerateFQDNServiceName(cluster rayv1.RayCluster, namespace string) string {
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
 	if err != nil {
-		logrus.Errorf("Failed to generate head service name: %v", err)
+		log.Error(err, "Failed to generate head service name")
 		return ""
 	}
 	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
@@ -210,9 +211,8 @@ func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		logrus.Warn(
-			fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
-				"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		log.Info(fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
+			"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
 		workerReplicas = *workerGroupSpec.MaxReplicas
 	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
@@ -363,12 +363,12 @@ func CheckAllPodsRunning(runningPods corev1.PodList) bool {
 	}
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
-			logrus.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+			log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
 			return false
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
-				logrus.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+				log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
 				return false
 			}
 		}
