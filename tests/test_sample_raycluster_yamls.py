@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run tests for specified YAML files.')
-    parser.add_argument('--yaml-file', nargs='*', help='Specify the YAML files to run tests for.')
+    parser.add_argument('--yaml-files', nargs='*', help='Use the filename under path `ray-operator/config/samples` to specify which YAML files should be tested.')
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -47,7 +47,7 @@ if __name__ == '__main__':
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
         # Skip files that don't match the specified YAML files
-        if args.yaml_file and file.name not in args.yaml_file:
+        if args.yaml_files and file.name not in args.yaml_files:
             continue
 
         with open(file, encoding="utf-8") as cr_yaml:
