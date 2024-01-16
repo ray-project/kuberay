@@ -172,6 +172,17 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		// If the Job reaches the backoff limit, transition the status to `Complete`.
+		job := &batchv1.Job{}
+		namespacedName := getK8sJobNamespacedName(rayJobInstance)
+		if err := r.Client.Get(ctx, namespacedName, job); err != nil {
+			r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
+			break
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
 		// before transitioning the status from `Initializing` to `Running`.
@@ -285,12 +296,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
 func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
-	jobName := rayJobInstance.Name
-	jobNamespace := rayJobInstance.Namespace
-
-	// Create a Job object with the specified name and namespace
 	job := &batchv1.Job{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: jobNamespace, Name: jobName}, job); err != nil {
+	namespacedName := getK8sJobNamespacedName(rayJobInstance)
+	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
 			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance, rayClusterInstance)
 			if err != nil {
@@ -414,9 +422,9 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 	// Since the name of the Kubernetes Job is the same as the RayJob, we need to delete the Kubernetes Job
 	// and its Pods when suspending. A new submitter Kubernetes Job must be created to resubmit the
 	// Ray job if the RayJob is resumed.
-	jobName := rayJobInstance.Name
 	job := &batchv1.Job{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: jobName}, job); err != nil {
+	namespacedName := getK8sJobNamespacedName(rayJobInstance)
+	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
 			isJobNotFound = true
 			r.Log.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
@@ -604,6 +612,19 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 	return true
 }
 
+func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, job *batchv1.Job) bool {
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
+			r.Log.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Complete`.", "RayJob", rayJob.Name, "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
+			rayJob.Status.Message = "The submitter Kubernetes Job is failed. Reason: " + cond.Reason + ". Message: " + cond.Message
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+			rayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
+			return true
+		}
+	}
+	return false
+}
+
 func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
@@ -612,4 +633,12 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
 	return nil
+}
+
+// getK8sJobNamespacedName is the only place to associate the RayJob with the submitter Kubernetes Job.
+func getK8sJobNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: rayJob.Namespace,
+		Name:      rayJob.Name,
+	}
 }

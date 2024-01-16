@@ -143,4 +143,51 @@ env_vars:
 		// Assert the submitter Job has been cascade deleted
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
+
+	test.T().Run("Failing submitter K8s Job", func(t *testing.T) {
+		// RayJob
+		rayJob := &rayv1.RayJob{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: rayv1.GroupVersion.String(),
+				Kind:       "RayJob",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "fail-k8s-job",
+				Namespace: namespace.Name,
+			},
+			Spec: rayv1.RayJobSpec{
+				RayClusterSpec:           newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				Entrypoint:               "The command will be overridden by the submitter Job",
+				ShutdownAfterJobFinishes: true,
+				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
+			},
+		}
+		// In this test, we try to simulate the case where the submitter Job can't connect to the RayCluster successfully.
+		// Hence, KubeRay can't get the Ray job information from the RayCluster. When the submitter Job reaches the backoff
+		// limit, it will be marked as failed. Then, the RayJob should transition to `Complete`.
+		rayJob.Spec.SubmitterPodTemplate.Spec.Containers[0].Command = []string{"ray", "job", "submit", "--address", "http://do-not-exist:8265", "--", "echo 123"}
+
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Create(test.Ctx(), rayJob, metav1.CreateOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
+
+		// Refresh the RayJob status
+		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+
+		// Assert the RayCluster and the submitter Job have been deleted because ShutdownAfterJobFinishes is true.
+		test.Eventually(NotFound(RayClusterOrError(test, namespace.Name, rayJob.Status.RayClusterName)), TestTimeoutMedium).
+			Should(BeTrue())
+		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
 }
