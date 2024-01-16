@@ -95,7 +95,7 @@ func getClusterType(logger logr.Logger) bool {
 }
 
 // NewReconciler returns a new reconcile.Reconciler
-func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
+func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
 		pod := rawObj.(*corev1.Pod)
 		return []string{string(pod.UID)}
@@ -113,6 +113,9 @@ func NewReconciler(mgr manager.Manager) *RayClusterReconciler {
 		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
 		BatchSchedulerMgr: batchscheduler.NewSchedulerManager(mgr.GetConfig()),
 		IsOpenShift:       isOpenShift,
+
+		headSidecarContainers:   options.HeadSidecarContainers,
+		workerSidecarContainers: options.WorkerSidecarContainers,
 	}
 }
 
@@ -126,6 +129,14 @@ type RayClusterReconciler struct {
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
 	IsOpenShift       bool
+
+	headSidecarContainers   []corev1.Container
+	workerSidecarContainers []corev1.Container
+}
+
+type RayClusterReconcilerOptions struct {
+	HeadSidecarContainers   []corev1.Container
+	WorkerSidecarContainers []corev1.Container
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -1035,6 +1046,9 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Po
 	}
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, headPort)
+	if len(r.headSidecarContainers) > 0 {
+		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
+	}
 	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
 	pod := common.BuildPod(podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
@@ -1069,6 +1083,9 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
 	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, fqdnRayIP, headPort)
+	if len(r.workerSidecarContainers) > 0 {
+		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
+	}
 	creatorName := getCreator(instance)
 	// Check whether serve is enabled and add serve label
 	serveLabel := false

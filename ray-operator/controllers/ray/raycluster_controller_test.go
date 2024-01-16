@@ -150,7 +150,7 @@ var _ = Context("Inside the default namespace", func() {
 			}
 		})
 
-		It("should create a head pod resource", func() {
+		It("should create a head pod resource with default sidecars", func() {
 			err := k8sClient.List(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
 			Expect(err).NotTo(HaveOccurred(), "failed list head pods")
 			Expect(len(headPods.Items)).Should(BeNumerically("==", 1), "My head pod list= %v", headPods.Items)
@@ -163,6 +163,8 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: pod.Name, Namespace: "default"}, pod),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My head pod = %v", pod)
 			Expect(pod.Status.Phase).Should(Or(Equal(corev1.PodPending), Equal(corev1.PodRunning)))
+			Expect(hasSidecarContainer(pod)).Should(BeTrue(), "fluentit sidecar exists")
+			Expect(len(pod.Spec.Containers)).Should(Equal(3), "num containers = 3")
 		})
 
 		It("should create the autoscaler K8s RoleBinding if it doesn't exist", func() {
@@ -454,4 +456,14 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, w
 		return k8sClient.Update(ctx, rayCluster)
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to clean up WorkersToDelete")
+}
+
+func hasSidecarContainer(pod *corev1.Pod) bool {
+	for _, container := range pod.Spec.Containers {
+		if container.Name == "fluentbit" {
+			return true
+		}
+	}
+
+	return false
 }
