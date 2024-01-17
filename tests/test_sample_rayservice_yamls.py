@@ -151,7 +151,6 @@ class RayServiceUpdateCREvent(CREvent):
             current_cluster_name = self.get_active_ray_cluster_name()
             assert current_cluster_name != self.old_cluster_name
             logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
-            time.sleep(20)
 
             # Wait 20 seconds for the serve service to update.
             # TODO (Yicheng-Lu-llll): This workaround should be removed after
