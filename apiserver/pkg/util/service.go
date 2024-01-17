@@ -6,6 +6,8 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type RayService struct {
@@ -37,7 +39,7 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 
 func buildRayServiceLabels(apiService *api.RayService) map[string]string {
 	labels := map[string]string{}
-	labels[RayOriginatedFromLabelKey] = RayOriginatedFromServiceLabelValue(apiService.Name)
+	labels[utils.RayOriginatedFromLabelKey] = utils.RayOriginatedFromServiceLabelValue(apiService.Name)
 	labels[RayClusterUserLabelKey] = apiService.User
 	labels[KubernetesApplicationNameLabelKey] = ApplicationName
 	labels[KubernetesManagedByLabelKey] = ComponentName

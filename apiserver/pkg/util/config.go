@@ -13,7 +13,6 @@ const (
 	RayClusterUserLabelKey            = "ray.io/user"
 	RayClusterVersionLabelKey         = "ray.io/version"
 	RayClusterEnvironmentLabelKey     = "ray.io/environment"
-	RayOriginatedFromLabelKey         = "ray.io/originated-from"
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
 
@@ -31,10 +30,4 @@ const (
 
 	// The component name for apiserver
 	ComponentName = "kuberay-apiserver"
-
-	RayServiceOriginatedFromLabelValueType = "rayservice"
 )
-
-func RayOriginatedFromServiceLabelValue(name string) string {
-	return RayServiceOriginatedFromLabelValueType + "_" + name
-}

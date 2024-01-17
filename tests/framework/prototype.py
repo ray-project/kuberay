@@ -470,7 +470,7 @@ class RayServiceFullCREvent(CREvent):
                 namespace = self.namespace, label_selector='ray.io/node-type=worker')
             head_services = k8s_v1_api.list_namespaced_service(
                 namespace = self.namespace, label_selector =
-                f"ray.io/originated-from=rayservice_{self.custom_resource_object['metadata']['name']}-serve")
+                f"ray.io/originated-from=RayService_{self.custom_resource_object['metadata']['name']}-serve")
             if (len(head_services.items) == 1 and len(headpods.items) == expected_head_pods
                     and len(workerpods.items) == expected_worker_pods
                     and check_pod_running(headpods.items) and check_pod_running(workerpods.items)):

@@ -5,6 +5,10 @@ const (
 	// Default application name
 	DefaultServeAppName = "default"
 	// Belows used as label key
+
+	// RayOriginatedFromLabelKey is the label used to associate the root KubeRay Custom Resource.
+	// For example, if a RayCluster is created by a RayJob named myjob, then the cluster will have
+	// a label ray.io/originated-from=RayJob_myjob. See RayOriginatedFromJobLabelValue for more details.
 	RayOriginatedFromLabelKey                = "ray.io/originated-from"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
@@ -73,12 +77,6 @@ const (
 
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
-
-	// The defaule RayService Identifier.
-	RayServiceOriginatedFromLabelValueType = "rayservice"
-
-	// The defaule RayJob Identifier.
-	RayJobOriginatedFromLabelValueType = "rayjob"
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
@@ -158,10 +156,15 @@ const (
 	ServingService ServiceType = "serveService"
 )
 
+// RayOriginatedFromServiceLabelValue generates a RayService value for the label RayOriginatedFromLabelKey
+// This is also the only function to construct label filter of resources originated from a given RayService.
 func RayOriginatedFromServiceLabelValue(name string) string {
-	return RayServiceOriginatedFromLabelValueType + "_" + name
+	// we choose the _ as the separator because it is the only choice. ref: https://github.com/ray-project/kuberay/pull/1830#discussion_r1452547074
+	return string(RayServiceCRD) + "_" + name
 }
 
+// RayOriginatedFromJobLabelValue generates a RayJob value for the label RayOriginatedFromLabelKey
+// This is also the only function to construct label filter of resources originated from a given RayJob.
 func RayOriginatedFromJobLabelValue(name string) string {
-	return RayJobOriginatedFromLabelValueType + "_" + name
+	return string(RayJobCRD) + "_" + name
 }
