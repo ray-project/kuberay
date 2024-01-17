@@ -4,16 +4,17 @@ package v1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
 // HeadGroupSpecApplyConfiguration represents an declarative configuration of the HeadGroupSpec type for use
 // with apply.
 type HeadGroupSpecApplyConfiguration struct {
-	ServiceType    *v1.ServiceType     `json:"serviceType,omitempty"`
-	HeadService    *v1.Service         `json:"headService,omitempty"`
-	EnableIngress  *bool               `json:"enableIngress,omitempty"`
-	RayStartParams map[string]string   `json:"rayStartParams,omitempty"`
-	Template       *v1.PodTemplateSpec `json:"template,omitempty"`
+	ServiceType    *v1.ServiceType                           `json:"serviceType,omitempty"`
+	HeadService    *v1.Service                               `json:"headService,omitempty"`
+	EnableIngress  *bool                                     `json:"enableIngress,omitempty"`
+	RayStartParams map[string]string                         `json:"rayStartParams,omitempty"`
+	Template       *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 }
 
 // HeadGroupSpecApplyConfiguration constructs an declarative configuration of the HeadGroupSpec type for use with
@@ -63,7 +64,7 @@ func (b *HeadGroupSpecApplyConfiguration) WithRayStartParams(entries map[string]
 // WithTemplate sets the Template field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Template field is set to the value of the last call.
-func (b *HeadGroupSpecApplyConfiguration) WithTemplate(value v1.PodTemplateSpec) *HeadGroupSpecApplyConfiguration {
-	b.Template = &value
+func (b *HeadGroupSpecApplyConfiguration) WithTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *HeadGroupSpecApplyConfiguration {
+	b.Template = value
 	return b
 }

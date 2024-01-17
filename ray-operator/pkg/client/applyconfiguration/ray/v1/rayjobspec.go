@@ -3,25 +3,25 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
 // RayJobSpecApplyConfiguration represents an declarative configuration of the RayJobSpec type for use
 // with apply.
 type RayJobSpecApplyConfiguration struct {
-	Entrypoint               *string                           `json:"entrypoint,omitempty"`
-	Metadata                 map[string]string                 `json:"metadata,omitempty"`
-	RuntimeEnvYAML           *string                           `json:"runtimeEnvYAML,omitempty"`
-	JobId                    *string                           `json:"jobId,omitempty"`
-	ShutdownAfterJobFinishes *bool                             `json:"shutdownAfterJobFinishes,omitempty"`
-	TTLSecondsAfterFinished  *int32                            `json:"ttlSecondsAfterFinished,omitempty"`
-	RayClusterSpec           *RayClusterSpecApplyConfiguration `json:"rayClusterSpec,omitempty"`
-	ClusterSelector          map[string]string                 `json:"clusterSelector,omitempty"`
-	Suspend                  *bool                             `json:"suspend,omitempty"`
-	SubmitterPodTemplate     *corev1.PodTemplateSpec           `json:"submitterPodTemplate,omitempty"`
-	EntrypointNumCpus        *float32                          `json:"entrypointNumCpus,omitempty"`
-	EntrypointNumGpus        *float32                          `json:"entrypointNumGpus,omitempty"`
-	EntrypointResources      *string                           `json:"entrypointResources,omitempty"`
+	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
+	Metadata                 map[string]string                         `json:"metadata,omitempty"`
+	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
+	JobId                    *string                                   `json:"jobId,omitempty"`
+	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
+	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
+	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
+	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
+	Suspend                  *bool                                     `json:"suspend,omitempty"`
+	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
+	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
+	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs an declarative configuration of the RayJobSpec type for use with
@@ -117,8 +117,8 @@ func (b *RayJobSpecApplyConfiguration) WithSuspend(value bool) *RayJobSpecApplyC
 // WithSubmitterPodTemplate sets the SubmitterPodTemplate field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the SubmitterPodTemplate field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value corev1.PodTemplateSpec) *RayJobSpecApplyConfiguration {
-	b.SubmitterPodTemplate = &value
+func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
+	b.SubmitterPodTemplate = value
 	return b
 }
 
