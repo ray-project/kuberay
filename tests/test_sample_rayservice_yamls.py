@@ -152,6 +152,13 @@ class RayServiceUpdateCREvent(CREvent):
             assert current_cluster_name != self.old_cluster_name
             logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
 
+            # Wait 20 seconds for the serve service to update.
+            # TODO (Yicheng-Lu-llll): This workaround should be removed after
+            # refactoring the way of rolling out and redefining service status.
+            # Currently, changing to 'running' status does not guarantee that
+            # the serve service will redirect traffic to the new Raycluster.
+            time.sleep(20)
+
 class RayServiceDeleteCREvent(CREvent):
     """CREvent for RayService deletion"""
     def exec(self):
