@@ -9,12 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	rayServiceDefaultVersion = "2.0.0"
-	defaultServePortName     = "serve"
-	defaultServePort         = 8000
-)
-
 type RayService struct {
 	*rayv1api.RayService
 }
@@ -65,7 +59,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 	}
 
 	// generate Ray cluster spec and buid cluster
-	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap, true)
+	newRayClusterSpec, err := buildRayClusterSpec(apiService.Version, nil, apiService.ClusterSpec, computeTemplateMap, true)
 	if err != nil {
 		return nil, err
 	}

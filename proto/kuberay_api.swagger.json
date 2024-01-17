@@ -1724,6 +1724,13 @@
             "user"
           ]
         },
+        "version": {
+          "type": "string",
+          "title": "Required field. This field indicates Ray version. Should be the same as image version",
+          "required": [
+            "version"
+          ]
+        },
         "entrypoint": {
           "type": "string",
           "title": "Required field. The entrypoint of the RayJob",
@@ -1817,6 +1824,7 @@
         "name",
         "namespace",
         "user",
+        "version",
         "entrypoint"
       ]
     },
@@ -1915,6 +1923,13 @@
             "user"
           ]
         },
+        "version": {
+          "type": "string",
+          "title": "Required field. This field indicates Ray version. Should be the same as image version",
+          "required": [
+            "version"
+          ]
+        },
         "serveConfigV2": {
           "type": "string",
           "title": "Config for serve deployment V2. Note that only one config V1 or V2 can be specified"
@@ -1953,7 +1968,8 @@
       "required": [
         "name",
         "namespace",
-        "user"
+        "user",
+        "version"
       ]
     },
     "protoRayServiceEvent": {
