@@ -7053,7 +7053,6 @@ spec:
                   - groupName
                   - maxReplicas
                   - minReplicas
-                  - numOfHosts
                   - rayStartParams
                   - template
                   type: object
