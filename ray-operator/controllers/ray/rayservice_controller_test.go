@@ -757,10 +757,6 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func(
 			return false, err
 		}
 
-		if !rayService.Status.ActiveServiceStatus.DashboardStatus.IsHealthy {
-			return false, nil
-		}
-
 		for _, appStatus := range rayService.Status.ActiveServiceStatus.Applications {
 			if appStatus.Status != rayv1.ApplicationStatusEnum.RUNNING {
 				return false, nil

@@ -236,11 +236,6 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1.RayS
 		return true
 	}
 
-	if oldStatus.DashboardStatus.IsHealthy != newStatus.DashboardStatus.IsHealthy {
-		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DashboardStatus changed from %v to %v", oldStatus.DashboardStatus, newStatus.DashboardStatus))
-		return true
-	}
-
 	if len(oldStatus.Applications) != len(newStatus.Applications) {
 		return true
 	}
@@ -882,14 +877,6 @@ func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1
 	return rayServiceInstance.Namespace + "/" + rayServiceInstance.Name + "/"
 }
 
-func updateDashboardStatus(rayServiceClusterStatus *rayv1.RayServiceStatus, isHealthy bool) {
-	timeNow := metav1.Now()
-	rayServiceClusterStatus.DashboardStatus.IsHealthy = isHealthy
-	if rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime.IsZero() || isHealthy {
-		rayServiceClusterStatus.DashboardStatus.HealthLastUpdateTime = &timeNow
-	}
-}
-
 func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(rayServiceInstance *rayv1.RayService) {
 	// Generate RayCluster name for pending cluster.
 	r.Log.V(1).Info("Current cluster is unhealthy, prepare to restart.", "Status", rayServiceInstance.Status)
@@ -1031,7 +1018,6 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
-		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
 
@@ -1040,11 +1026,8 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 
 	var isReady bool
 	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
-		updateDashboardStatus(rayServiceStatus, false)
 		return err
 	}
-
-	updateDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isReady", isReady)
 
@@ -1106,8 +1089,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
-
-	updateDashboardStatus(rayServiceStatus, true)
 
 	logger.Info("Check serve health", "isReady", isReady, "isActive", isActive)
 

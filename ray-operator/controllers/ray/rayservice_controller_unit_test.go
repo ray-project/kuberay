@@ -165,10 +165,6 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	oldStatus := rayv1.RayServiceStatuses{
 		ActiveServiceStatus: rayv1.RayServiceStatus{
 			RayClusterName: "new-cluster",
-			DashboardStatus: rayv1.DashboardStatus{
-				IsHealthy:            true,
-				HealthLastUpdateTime: &timeNow,
-			},
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.RUNNING,
@@ -186,10 +182,6 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 		},
 		PendingServiceStatus: rayv1.RayServiceStatus{
 			RayClusterName: "old-cluster",
-			DashboardStatus: rayv1.DashboardStatus{
-				IsHealthy:            true,
-				HealthLastUpdateTime: &timeNow,
-			},
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
 					Status:               rayv1.ApplicationStatusEnum.NOT_STARTED,
@@ -216,19 +208,12 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	// Test 2: Test RayServiceStatus
 	newStatus = oldStatus.DeepCopy()
 	assert.False(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
-
-	newStatus.ActiveServiceStatus.DashboardStatus.IsHealthy = !oldStatus.ActiveServiceStatus.DashboardStatus.IsHealthy
-	assert.True(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
 }
 
 func TestInconsistentRayServiceStatus(t *testing.T) {
 	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatus{
 		RayClusterName: "cluster-1",
-		DashboardStatus: rayv1.DashboardStatus{
-			IsHealthy:            true,
-			HealthLastUpdateTime: &timeNow,
-		},
 		Applications: map[string]rayv1.AppStatus{
 			"app1": {
 				Status:               rayv1.ApplicationStatusEnum.RUNNING,
@@ -268,11 +253,6 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		newStatus.Applications[appName] = application
 	}
 	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
-
-	// Test 2: Not only HealthLastUpdateTime is updated.
-	newStatus = oldStatus.DeepCopy()
-	newStatus.DashboardStatus.IsHealthy = !oldStatus.DashboardStatus.IsHealthy
-	assert.True(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -841,39 +821,6 @@ func TestReconcileRayCluster(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestUpdateAndCheckDashboardStatus(t *testing.T) {
-	timestamp := metav1.Now()
-	rayServiceStatus := rayv1.RayServiceStatus{
-		DashboardStatus: rayv1.DashboardStatus{
-			IsHealthy:            true,
-			HealthLastUpdateTime: &timestamp,
-		},
-	}
-
-	// Test 1: The dashboard agent was healthy, and the dashboard agent is still healthy.
-	svcStatusCopy := rayServiceStatus.DeepCopy()
-	updateDashboardStatus(svcStatusCopy, true)
-	assert.NotEqual(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
-
-	// Test 2: The dashboard agent was healthy, and the dashboard agent becomes unhealthy.
-	svcStatusCopy = rayServiceStatus.DeepCopy()
-	updateDashboardStatus(svcStatusCopy, false)
-	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
-
-	// Test 3: The dashboard agent was unhealthy, and the dashboard agent is still unhealthy.
-	svcStatusCopy = rayServiceStatus.DeepCopy()
-	svcStatusCopy.DashboardStatus.IsHealthy = false
-	updateDashboardStatus(svcStatusCopy, false)
-	// The `HealthLastUpdateTime` should not be updated.
-	assert.Equal(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
-
-	// Test 4: The dashboard agent was unhealthy, and the dashboard agent becomes healthy.
-	svcStatusCopy = rayServiceStatus.DeepCopy()
-	svcStatusCopy.DashboardStatus.IsHealthy = false
-	updateDashboardStatus(svcStatusCopy, true)
-	assert.NotEqual(t, *svcStatusCopy.DashboardStatus.HealthLastUpdateTime, timestamp)
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
