@@ -29,6 +29,21 @@ type RayClusterSpec struct {
 	Suspend *bool `json:"suspend,omitempty"`
 }
 
+type IngressConfig struct {
+	IngressName      string            `json:"ingressName"`
+	Port             int               `json:"port"`
+	Path             string            `json:"path,omitempty"`
+	PathType         string            `json:"pathType,omitempty"`
+	Host             string            `json:"host,omitempty"`
+	IngressClassName string            `json:"ingressClassName,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
+	TLSConfig        map[string]string `json:"tlsConfig,omitempty"`
+}
+
+type IngressOptionsStruct struct {
+	Ingresses []IngressConfig `json:"ingresses,omitempty"`
+}
+
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
@@ -39,6 +54,8 @@ type HeadGroupSpec struct {
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
+	// IngressOptions is a map containing options for the ingress created when EnableIngress = true
+	IngressOptions IngressOptionsStruct `json:"ingressOptions,omitempty"`
 	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
 	Template corev1.PodTemplateSpec `json:"template"`
 }

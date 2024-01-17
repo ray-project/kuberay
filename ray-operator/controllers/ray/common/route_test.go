@@ -47,25 +47,25 @@ func TestBuildRouteForHeadService(t *testing.T) {
 	var builder strings.Builder
 	builder.WriteString(instanceWithIngressEnabled.ObjectMeta.Name)
 	builder.WriteString("-head-route")
-	if builder.String() != route.Name {
-		t.Fatalf("Error generating Route name. Expected `%v` but got `%v`", builder.String(), route.Name)
+	if builder.String() != route[0].Name {
+		t.Fatalf("Error generating Route name. Expected `%v` but got `%v`", builder.String(), route[0].Name)
 	}
 	// Test To subject
 	expectedKind := "Service"
-	if expectedKind != route.Spec.To.Kind {
-		t.Fatalf("Error generating Route kind. Expected `%v` but got `%v`", expectedKind, route.Spec.To.Kind)
+	if expectedKind != route[0].Spec.To.Kind {
+		t.Fatalf("Error generating Route kind. Expected `%v` but got `%v`", expectedKind, route[0].Spec.To.Kind)
 	}
 	// Test Service name
 	builder.Reset()
 	builder.WriteString(instanceWithIngressEnabled.ObjectMeta.Name)
 	builder.WriteString("-head-svc")
-	if builder.String() != route.Spec.To.Name {
-		t.Fatalf("Error generating service name. Expected `%v` but got `%v`", builder.String(), route.Spec.To.Name)
+	if builder.String() != route[0].Spec.To.Name {
+		t.Fatalf("Error generating service name. Expected `%v` but got `%v`", builder.String(), route[0].Spec.To.Name)
 	}
 
 	// Test Service port
 	expectedPort := intstr.FromInt(8265)
-	if route.Spec.Port.TargetPort != expectedPort {
-		t.Fatalf("Error generating service port. Expected `%v` but got `%v`", expectedPort, route.Spec.Port.TargetPort)
+	if route[0].Spec.Port.TargetPort != expectedPort {
+		t.Fatalf("Error generating service port. Expected `%v` but got `%v`", expectedPort, route[0].Spec.Port.TargetPort)
 	}
 }

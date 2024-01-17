@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -15,107 +16,197 @@ const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
 // This is used to expose dashboard for external traffic.
-func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
+func BuildIngressForHeadService(cluster rayv1.RayCluster) ([]*networkingv1.Ingress, error) {
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                cluster.Name,
 		utils.RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
-
-	// Copy other ingress configurations from cluster annotations to provide a generic way
-	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
-	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
-	// at the same time.
-	exclude_set := map[string]struct{}{
-		IngressClassAnnotationKey: {},
-	}
-	annotation := map[string]string{}
-	for key, value := range cluster.Annotations {
-		if _, ok := exclude_set[key]; !ok {
-			annotation[key] = value
-		}
-	}
-
 	var paths []networkingv1.HTTPIngressPath
-	pathType := networkingv1.PathTypeExact
-	servicePorts := getServicePorts(cluster)
-	dashboardPort := int32(utils.DefaultDashboardPort)
-	if port, ok := servicePorts["dashboard"]; ok {
-		dashboardPort = port
-	}
+	var ingressList []*networkingv1.Ingress
+	if len(cluster.Spec.HeadGroupSpec.IngressOptions.Ingresses) == 0 {
+		// Copy other ingress configurations from cluster annotations to provide a generic way
+		// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+		// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
+		// at the same time.
+		exclude_set := map[string]struct{}{
+			IngressClassAnnotationKey: {},
+		}
+		annotation := map[string]string{}
+		for key, value := range cluster.Annotations {
+			if _, ok := exclude_set[key]; !ok {
+				annotation[key] = value
+			}
+		}
+		pathType := networkingv1.PathTypeExact
+		servicePorts := getServicePorts(cluster)
+		dashboardPort := int32(utils.DefaultDashboardPort)
+		if port, ok := servicePorts["dashboard"]; ok {
+			dashboardPort = port
+		}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
-	if err != nil {
-		return nil, err
-	}
-	paths = []networkingv1.HTTPIngressPath{
-		{
-			Path:     "/" + cluster.Name + "/(.*)",
-			PathType: &pathType,
-			Backend: networkingv1.IngressBackend{
-				Service: &networkingv1.IngressServiceBackend{
-					Name: headSvcName,
-					Port: networkingv1.ServiceBackendPort{
-						Number: dashboardPort,
-					},
-				},
-			},
-		},
-	}
-
-	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateIngressName(cluster.Name),
-			Namespace:   cluster.Namespace,
-			Labels:      labels,
-			Annotations: annotation,
-		},
-		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{
-				{
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: paths,
+		paths = []networkingv1.HTTPIngressPath{
+			{
+				Path:     "/" + cluster.Name + "/(.*)",
+				PathType: &pathType,
+				Backend: networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: headSvcName,
+						Port: networkingv1.ServiceBackendPort{
+							Number: dashboardPort,
 						},
 					},
 				},
 			},
-		},
-	}
+		}
 
-	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
-	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
-	if !ok {
-		logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        utils.GenerateIngressName(cluster.Name),
+				Namespace:   cluster.Namespace,
+				Labels:      labels,
+				Annotations: annotation,
+			},
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{
+					{
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: paths,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
+		ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
+		if !ok {
+			logrus.Warn(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
+		} else {
+			// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
+			ingress.Spec.IngressClassName = &ingressClassName
+		}
+		ingressList = append(ingressList, ingress)
+		return ingressList, nil
 	} else {
-		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
-		ingress.Spec.IngressClassName = &ingressClassName
+		ingresseOptionsList := cluster.Spec.HeadGroupSpec.IngressOptions.Ingresses
+		for _, ingressItem := range ingresseOptionsList {
+			ingressName := ingressItem.IngressName
+			port := int32(ingressItem.Port)
+			path := ingressItem.Path
+			host := ingressItem.Host
+			ingressClass := ingressItem.IngressClassName
+			truePathType := getPathType(ingressItem.PathType)
+			annotations := ingressItem.Annotations
+
+			exclude_set := map[string]struct{}{
+				IngressClassAnnotationKey: {},
+			}
+			annotation := map[string]string{}
+			for key, value := range annotations {
+				if _, ok := exclude_set[key]; !ok {
+					annotation[key] = value
+				}
+			}
+
+			paths = []networkingv1.HTTPIngressPath{
+				{
+					PathType: &truePathType,
+					Backend: networkingv1.IngressBackend{
+						Service: &networkingv1.IngressServiceBackend{
+							Name: headSvcName,
+							Port: networkingv1.ServiceBackendPort{
+								Number: port,
+							},
+						},
+					},
+				},
+			}
+			if path != "" {
+				paths[0].Path = path
+			}
+
+			ingress := &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ingressName,
+					Namespace:   cluster.Namespace,
+					Annotations: annotation,
+					Labels:      labels,
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: paths,
+								},
+							},
+						},
+					},
+				},
+			}
+			if ingressClass != "" {
+				ingress.Spec.IngressClassName = &ingressClass
+			}
+			if host != "" {
+				ingress.Spec.Rules[0].Host = host
+			}
+
+			ingressList = append(ingressList, ingress)
+		}
+		return ingressList, nil
+	}
+}
+
+// This function gathers the networkingv1 path type from the passed string
+func getPathType(pathType string) networkingv1.PathType {
+	var truePathType networkingv1.PathType
+	pathType = strings.ToLower(pathType)
+	switch pathType {
+	case "prefix":
+		truePathType = networkingv1.PathTypePrefix
+	case "exact":
+		truePathType = networkingv1.PathTypeExact
+	case "implementationspecific":
+		truePathType = networkingv1.PathTypeImplementationSpecific
+	default:
+		truePathType = networkingv1.PathTypeImplementationSpecific
 	}
 
-	return ingress, nil
+	return truePathType
 }
 
 // BuildIngressForRayService Builds the ingress for head service dashboard for RayService.
 // This is used to expose dashboard for external traffic.
 // RayService controller updates the ingress whenever a new RayCluster serves the traffic.
 func BuildIngressForRayService(service rayv1.RayService, cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
-	ingress, err := BuildIngressForHeadService(cluster)
-	if err != nil {
-		return nil, err
-	}
+	if len(cluster.Spec.HeadGroupSpec.IngressOptions.Ingresses) == 0 {
+		ingresses, err := BuildIngressForHeadService(cluster)
+		if err != nil {
+			return nil, err
+		}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, service.Spec.RayClusterSpec, service.Name)
-	if err != nil {
-		return nil, err
-	}
+		headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, service.Spec.RayClusterSpec, service.Name)
+		if err != nil {
+			return nil, err
+		}
 
-	ingress.ObjectMeta.Name = headSvcName
-	ingress.ObjectMeta.Namespace = service.Namespace
-	ingress.ObjectMeta.Labels = map[string]string{
-		utils.RayServiceLabelKey: service.Name,
-		utils.RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
-	}
+		ingresses[0].ObjectMeta.Name = headSvcName
+		ingresses[0].ObjectMeta.Namespace = service.Namespace
+		ingresses[0].ObjectMeta.Labels = map[string]string{
+			utils.RayServiceLabelKey: service.Name,
+			utils.RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
+		}
 
-	return ingress, nil
+		return ingresses[0], nil
+	}
+	return nil, nil
 }
