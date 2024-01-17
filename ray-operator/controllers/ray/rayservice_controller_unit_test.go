@@ -205,7 +205,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.WaitForDashboard,
+		ServiceStatus: rayv1.Restarting,
 	}
 
 	// Test 1: Update ServiceStatus only.

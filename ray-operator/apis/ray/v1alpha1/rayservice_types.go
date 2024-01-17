@@ -12,7 +12,6 @@ type ServiceStatus string
 
 const (
 	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
-	WaitForDashboard                 ServiceStatus = "WaitForDashboard"
 	WaitForServeDeploymentReady      ServiceStatus = "WaitForServeDeploymentReady"
 	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
 	Running                          ServiceStatus = "Running"
