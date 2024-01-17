@@ -17,7 +17,6 @@ const (
 	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
 	Running                          ServiceStatus = "Running"
 	Restarting                       ServiceStatus = "Restarting"
-	FailedToUpdateIngress            ServiceStatus = "FailedToUpdateIngress"
 	FailedToUpdateServingPodLabel    ServiceStatus = "FailedToUpdateServingPodLabel"
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )

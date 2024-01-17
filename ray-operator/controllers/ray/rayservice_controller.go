@@ -196,10 +196,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if rayClusterInstance != nil {
-		if err := r.reconcileIngress(ctx, rayServiceInstance, rayClusterInstance); err != nil {
-			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateIngress, err)
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
 		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -905,53 +901,6 @@ func (r *RayServiceReconciler) updateRayClusterInfo(rayServiceInstance *rayv1.Ra
 		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
-}
-
-// TODO: When start Ingress in RayService, we can disable the Ingress from RayCluster.
-func (r *RayServiceReconciler) reconcileIngress(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
-	if rayClusterInstance.Spec.HeadGroupSpec.EnableIngress == nil || !*rayClusterInstance.Spec.HeadGroupSpec.EnableIngress {
-		r.Log.Info("Ingress is disabled. Skipping ingress reconcilation. " +
-			"You can enable Ingress by setting enableIngress to true in HeadGroupSpec.")
-		return nil
-	}
-
-	// Creat Ingress Struct.
-	ingress, err := common.BuildIngressForRayService(*rayServiceInstance, *rayClusterInstance)
-	if err != nil {
-		return err
-	}
-	ingress.Name = utils.CheckName(ingress.Name)
-
-	// Get Ingress instance.
-	headIngress := &networkingv1.Ingress{}
-	err = r.Get(ctx, client.ObjectKey{Name: ingress.Name, Namespace: rayServiceInstance.Namespace}, headIngress)
-
-	if err == nil {
-		// Update Ingress
-		headIngress.Spec = ingress.Spec
-		if updateErr := r.Update(ctx, ingress); updateErr != nil {
-			r.Log.Error(updateErr, "Ingress Update error!", "Ingress.Error", updateErr)
-			return updateErr
-		}
-	} else if errors.IsNotFound(err) {
-		// Create Ingress
-		if err := ctrl.SetControllerReference(rayServiceInstance, ingress, r.Scheme); err != nil {
-			return err
-		}
-		if createErr := r.Create(ctx, ingress); createErr != nil {
-			if errors.IsAlreadyExists(createErr) {
-				r.Log.Info("Ingress already exists,no need to create")
-				return nil
-			}
-			r.Log.Error(createErr, "Ingress create error!", "Ingress.Error", createErr)
-			return createErr
-		}
-	} else {
-		r.Log.Error(err, "Ingress get error!")
-		return err
-	}
-
-	return nil
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
