@@ -30,7 +30,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -83,9 +83,9 @@ var _ = Context("Inside the default namespace", func() {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32(3),
-					MinReplicas: pointer.Int32(0),
-					MaxReplicas: pointer.Int32(4),
+					Replicas:    ptr.To(int32(3)),
+					MinReplicas: ptr.To(int32(0)),
+					MaxReplicas: ptr.To(int32(4)),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":     "6379",
@@ -215,7 +215,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod,
-				&client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
+				&client.DeleteOptions{GracePeriodSeconds: ptr.To(int64(0))})
 
 			Expect(err).NotTo(HaveOccurred(), "failed delete a pod")
 
@@ -232,7 +232,7 @@ var _ = Context("Inside the default namespace", func() {
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
 				podToDelete := workerPods.Items[0]
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To(int32(2))
 				myRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
 				return k8sClient.Update(ctx, myRayCluster)
 			})
@@ -254,7 +254,7 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: myRayCluster.Name, Namespace: "default"}, myRayCluster),
 					time.Second*9, time.Millisecond*500).Should(BeNil(), "My raycluster = %v", myRayCluster)
-				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(5)
+				myRayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To(int32(5))
 
 				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
 				// We need to handle conflict error and retry the update.

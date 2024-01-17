@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var instanceWithRouteEnabled = &rayv1.RayCluster{
@@ -22,7 +22,7 @@ var instanceWithRouteEnabled = &rayv1.RayCluster{
 	},
 	Spec: rayv1.RayClusterSpec{
 		HeadGroupSpec: rayv1.HeadGroupSpec{
-			EnableIngress: pointer.Bool(true),
+			EnableIngress: ptr.To(true),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{

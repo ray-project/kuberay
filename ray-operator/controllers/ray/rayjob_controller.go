@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -366,7 +366,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			// is attempted 3 times at the maximum, but still mitigates the case of unrecoverable
 			// application-level errors, where the maximum number of retries is reached, and the job
 			// completion time increases with no benefits, but wasted resource cycles.
-			BackoffLimit: pointer.Int32(2),
+			BackoffLimit: ptr.To(int32(2)),
 			Template:     submitterTemplate,
 		},
 	}

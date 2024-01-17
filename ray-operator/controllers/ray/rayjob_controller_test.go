@@ -30,7 +30,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -114,9 +114,9 @@ var myRayJob = &rayv1.RayJob{
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32(3),
-					MinReplicas: pointer.Int32(0),
-					MaxReplicas: pointer.Int32(10000),
+					Replicas:    ptr.To(int32(3)),
+					MinReplicas: ptr.To(int32(0)),
+					MaxReplicas: ptr.To(int32(10000)),
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":                        "6379",

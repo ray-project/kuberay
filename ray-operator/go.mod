@@ -24,7 +24,7 @@ require (
 	k8s.io/apiserver v0.28.4
 	k8s.io/client-go v0.28.4
 	k8s.io/code-generator v0.28.4
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/yaml v1.3.0
 	volcano.sh/apis v1.6.0-alpha.0.0.20221012070524-685db38b4fae

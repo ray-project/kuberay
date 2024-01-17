@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -254,11 +254,11 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
 			workerSpecTest,
 		},
-		EnableInTreeAutoscaling: pointer.Bool(true),
+		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: pointer.Int32(int32(60)),
-			UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
-			ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+			IdleTimeoutSeconds: ptr.To(int32(60)),
+			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
+			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -361,10 +361,10 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: pointer.Int32(int32(60)),
-	UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
-	Image:              pointer.String("Some Image"),
-	ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+	IdleTimeoutSeconds: ptr.To(int32(60)),
+	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
+	Image:              ptr.To("Some Image"),
+	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 	Env: []corev1.EnvVar{
 		{
 			Name:  "n1",
@@ -392,13 +392,13 @@ var autoscalerOptions = &rayv1api.AutoscalerOptions{
 			Name:             "vmount1",
 			MountPath:        "path1",
 			ReadOnly:         false,
-			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("None")),
+			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("None")),
 		},
 		{
 			Name:             "vmount2",
 			MountPath:        "path2",
 			ReadOnly:         true,
-			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("HostToContainer")),
+			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("HostToContainer")),
 		},
 	},
 	Resources: &corev1.ResourceRequirements{
