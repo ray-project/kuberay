@@ -3766,6 +3766,10 @@ spec:
                       default: 0
                       format: int32
                       type: integer
+                    numOfHosts:
+                      default: 1
+                      format: int32
+                      type: integer
                     rayStartParams:
                       additionalProperties:
                         type: string

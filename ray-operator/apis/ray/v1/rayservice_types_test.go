@@ -90,6 +90,7 @@ var myRayService = &RayService{
 					Replicas:    pointer.Int32(3),
 					MinReplicas: pointer.Int32(0),
 					MaxReplicas: pointer.Int32(10000),
+					NumOfHosts:  1,
 					GroupName:   "small-group",
 					RayStartParams: map[string]string{
 						"port":                        "6379",
@@ -211,7 +212,8 @@ var expected = `{
                "replicas":3,
                "minReplicas":0,
                "maxReplicas":10000,
-               "rayStartParams":{
+	       "numOfHosts":1,
+	       "rayStartParams":{
                   "dashboard-agent-listen-port":"52365",
                   "num-cpus":"1",
                   "port":"6379"
