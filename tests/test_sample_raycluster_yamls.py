@@ -4,6 +4,7 @@ import unittest
 import os
 import git
 import yaml
+import argparse
 
 from framework.prototype import (
     RuleSet,
@@ -20,6 +21,11 @@ from framework.utils import (
 
 logger = logging.getLogger(__name__)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run tests for specified YAML files.')
+    parser.add_argument('--yaml-files', nargs='*', help='Use the filename under path `ray-operator/config/samples` to specify which YAML files should be tested.')
+    return parser.parse_args()
+
 if __name__ == '__main__':
     NAMESPACE = 'default'
     SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
@@ -32,12 +38,18 @@ if __name__ == '__main__':
         git.Repo(CONST.REPO_ROOT).untracked_files
     )
 
+    args = parse_args()
+
     for file in os.scandir(SAMPLE_PATH):
         if not file.is_file():
             continue
         # For local development, skip untracked files.
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
             continue
+        # Skip files that don't match the specified YAML files
+        if args.yaml_files and file.name not in args.yaml_files:
+            continue
+
         with open(file, encoding="utf-8") as cr_yaml:
             for k8s_object in yaml.safe_load_all(cr_yaml):
                 if k8s_object['kind'] == 'RayCluster':
