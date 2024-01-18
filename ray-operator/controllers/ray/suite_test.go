@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
@@ -95,7 +96,15 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	fakeRayDashboardClient = prepareFakeRayDashboardClient()
 	fakeRayHttpProxyClient = &utils.FakeRayHttpProxyClient{}
 
-	err = NewReconciler(mgr).SetupWithManager(mgr, 1)
+	options := RayClusterReconcilerOptions{
+		HeadSidecarContainers: []corev1.Container{
+			{
+				Name:  "fluentbit",
+				Image: "fluent/fluent-bit:1.9.6",
+			},
+		},
+	}
+	err = NewReconciler(mgr, options).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	err = NewRayServiceReconciler(mgr, func() utils.RayDashboardClientInterface {
