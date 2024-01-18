@@ -163,7 +163,7 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: pod.Name, Namespace: "default"}, pod),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My head pod = %v", pod)
 			Expect(pod.Status.Phase).Should(Or(Equal(corev1.PodPending), Equal(corev1.PodRunning)))
-			Expect(hasSidecarContainer(pod)).Should(BeTrue(), "fluentit sidecar exists")
+			Expect(pod.Spec.Containers[len(pod.Spec.Containers)-1].Name).Should(Equal("fluentbit"), "fluentbit sidecar exists")
 			Expect(len(pod.Spec.Containers)).Should(Equal(3), "num containers = 3")
 		})
 
@@ -456,14 +456,4 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, w
 		return k8sClient.Update(ctx, rayCluster)
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to clean up WorkersToDelete")
-}
-
-func hasSidecarContainer(pod *corev1.Pod) bool {
-	for _, container := range pod.Spec.Containers {
-		if container.Name == "fluentbit" {
-			return true
-		}
-	}
-
-	return false
 }

@@ -67,13 +67,13 @@ func main() {
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.BoolVar(&version, "version", false, "Show the version information.")
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
+	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", configapi.DefaultProbeAddr, "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", configapi.DefaultEnableLeaderElection,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
 		"Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
-	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
+	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", configapi.DefaultReconcileConcurrency, "max concurrency for reconciling")
 	flag.StringVar(
 		&watchNamespace,
 		"watch-namespace",
@@ -104,16 +104,10 @@ func main() {
 	if configFile != "" {
 		var err error
 		configData, err := os.ReadFile(configFile)
-		if err != nil {
-			fmt.Printf("Failed to read config file: %q\n", err.Error())
-			os.Exit(1)
-		}
+		exitOnError(err, "failed to read config file")
 
 		config, err = decodeConfig(configData, scheme)
-		if err != nil {
-			fmt.Printf("Failed to decode config file: %q\n", err.Error())
-			os.Exit(1)
-		}
+		exitOnError(err, "failed to decode config file")
 
 		// TODO: remove globally-scoped variables
 		ray.ForcedClusterUpgrade = config.ForcedClusterUpgrade
@@ -255,8 +249,6 @@ func decodeConfig(configData []byte, scheme *runtime.Scheme) (configapi.Configur
 	cfg := configapi.Configuration{}
 	codecs := serializer.NewCodecFactory(scheme)
 
-	// Regardless of if the bytes are of any external version,
-	// it will be read successfully and converted into the internal version
 	if err := runtime.DecodeInto(codecs.UniversalDecoder(), configData, &cfg); err != nil {
 		return cfg, err
 	}
