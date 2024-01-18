@@ -17,8 +17,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("DashboardStatus"):
-		return &rayv1.DashboardStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):

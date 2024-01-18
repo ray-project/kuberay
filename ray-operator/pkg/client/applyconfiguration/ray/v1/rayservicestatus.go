@@ -6,7 +6,6 @@ package v1
 // with apply.
 type RayServiceStatusApplyConfiguration struct {
 	Applications     map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
-	DashboardStatus  *DashboardStatusApplyConfiguration     `json:"dashboardStatus,omitempty"`
 	RayClusterName   *string                                `json:"rayClusterName,omitempty"`
 	RayClusterStatus *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
 }
@@ -28,14 +27,6 @@ func (b *RayServiceStatusApplyConfiguration) WithApplications(entries map[string
 	for k, v := range entries {
 		b.Applications[k] = v
 	}
-	return b
-}
-
-// WithDashboardStatus sets the DashboardStatus field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the DashboardStatus field is set to the value of the last call.
-func (b *RayServiceStatusApplyConfiguration) WithDashboardStatus(value *DashboardStatusApplyConfiguration) *RayServiceStatusApplyConfiguration {
-	b.DashboardStatus = value
 	return b
 }
 
