@@ -86,7 +86,7 @@ class EnvironmentVariables:
 
 
 def envvarfrom_decoder(dct: dict[str, any]) -> EnvVarFrom:
-    return EnvVarFrom(name=dct.get("name", ""), source=EnvarSource(int(dct.get("source", ""))), key=dct.get("key", ""))
+    return EnvVarFrom(name=dct.get("name", ""), source=EnvarSource(int(dct.get("source", 0))), key=dct.get("key", ""))
 
 
 def environmentvariables_decoder(dst: dict[str, any]) -> EnvironmentVariables:
