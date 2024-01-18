@@ -533,6 +533,27 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy, "Always")
 	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Cpu, "500m")
 	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Memory, "512Mi")
+	assert.Equal(t, len(cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom), 4)
+	for name, value := range cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom {
+		switch name {
+		case "REDIS_PASSWORD":
+			assert.Equal(t, value.Source.String(), "SECRET")
+			assert.Equal(t, value.Name, "redis-password-secret")
+			assert.Equal(t, value.Key, "password")
+		case "CONFIGMAP":
+			assert.Equal(t, value.Source.String(), "CONFIGMAP")
+			assert.Equal(t, value.Name, "special-config")
+			assert.Equal(t, value.Key, "special.how")
+		case "ResourceFieldRef":
+			assert.Equal(t, value.Source.String(), "RESOURCEFIELD")
+			assert.Equal(t, value.Name, "my-container")
+			assert.Equal(t, value.Key, "resource")
+		default:
+			assert.Equal(t, value.Source.String(), "FIELD")
+			assert.Equal(t, value.Name, "")
+			assert.Equal(t, value.Key, "path")
+		}
+	}
 }
 
 func TestPopulateTemplate(t *testing.T) {
