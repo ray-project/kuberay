@@ -7,8 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCreateClusterAutoscalerEndpoint sequentially iterates over the create cluster endpoint
-// with valid and invalid requests
 func TestCreateJobSubmission(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
