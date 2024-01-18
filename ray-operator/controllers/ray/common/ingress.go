@@ -95,27 +95,3 @@ func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress
 
 	return ingress, nil
 }
-
-// BuildIngressForRayService Builds the ingress for head service dashboard for RayService.
-// This is used to expose dashboard for external traffic.
-// RayService controller updates the ingress whenever a new RayCluster serves the traffic.
-func BuildIngressForRayService(service rayv1.RayService, cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
-	ingress, err := BuildIngressForHeadService(cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, service.Spec.RayClusterSpec, service.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	ingress.ObjectMeta.Name = headSvcName
-	ingress.ObjectMeta.Namespace = service.Namespace
-	ingress.ObjectMeta.Labels = map[string]string{
-		utils.RayServiceLabelKey: service.Name,
-		utils.RayIDLabelKey:      utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode)),
-	}
-
-	return ingress, nil
-}
