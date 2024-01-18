@@ -15,17 +15,6 @@ var apiServiceNoServe = &api.RayService{
 	ClusterSpec: rayCluster.ClusterSpec,
 }
 
-var apiService2Serve = &api.RayService{
-	Name:           "test",
-	Namespace:      "test",
-	User:           "test",
-	ClusterSpec:    rayCluster.ClusterSpec,
-	ServeConfig_V2: "Fake Yaml file",
-	ServeDeploymentGraphSpec: &api.ServeDeploymentGraphSpec{
-		ImportPath: "Some path",
-	},
-}
-
 var apiServiceV2 = &api.RayService{
 	Name:                            "test",
 	Namespace:                       "test",
@@ -39,11 +28,6 @@ func TestBuildService(t *testing.T) {
 	_, err := NewRayService(apiServiceNoServe, map[string]*api.ComputeTemplate{"foo": &template})
 	assert.NotNil(t, err)
 	if err.Error() != "serve configuration is not defined" {
-		t.Errorf("wrong error returned")
-	}
-	_, err = NewRayService(apiService2Serve, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NotNil(t, err)
-	if err.Error() != "two serve configuration are defined, only one is allowed" {
 		t.Errorf("wrong error returned")
 	}
 	got, err := NewRayService(apiServiceV2, map[string]*api.ComputeTemplate{"foo": &template})

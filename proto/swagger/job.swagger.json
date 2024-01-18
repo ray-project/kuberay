@@ -479,6 +479,13 @@
             "user"
           ]
         },
+        "version": {
+          "type": "string",
+          "title": "Required field. This field indicates Ray version. Should be the same as image version",
+          "required": [
+            "version"
+          ]
+        },
         "entrypoint": {
           "type": "string",
           "title": "Required field. The entrypoint of the RayJob",
@@ -572,6 +579,7 @@
         "name",
         "namespace",
         "user",
+        "version",
         "entrypoint"
       ]
     },

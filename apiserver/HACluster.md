@@ -52,7 +52,7 @@ kubectl apply -f <your location>/kuberay/apiserver/test/cluster/code_configmap.y
 To create a Ray cluster we can use the following curl command:
 
 ```sh
-curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "ha-cluster",
