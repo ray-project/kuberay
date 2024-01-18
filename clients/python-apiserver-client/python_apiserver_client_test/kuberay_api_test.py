@@ -1,9 +1,14 @@
 import time
 
 from python_apiserver_client import *
+from configmaps import ConfigmapsManager
 
 def test_templates():
-    apis = KubeRayAPIs(token="12345")
+    # Cleanup
+    cm_manager = ConfigmapsManager()
+    cm_manager.cleanup()
+    #    apis = KubeRayAPIs(token="12345")
+    apis = KubeRayAPIs()
     # create
     toleration = Toleration(key="blah1", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute)
     template = Template(name="test-template", namespace="default", cpu=2, memory=8, tolerations=[toleration])
@@ -42,7 +47,12 @@ def test_templates():
 
 
 def test_cluster():
-    apis = KubeRayAPIs(token="12345")
+    # Cleanup
+    cm_manager = ConfigmapsManager()
+    cm_manager.cleanup()
+    cm_manager.create_code_map()
+    #    apis = KubeRayAPIs(token="12345")
+    apis = KubeRayAPIs()
     # Create template first
     template = Template(name="default-template", namespace="default", cpu=2, memory=4)
     status, error = apis.create_compute_template(template)
@@ -106,6 +116,11 @@ def test_cluster():
     assert error is None
 
 def test_job_submission():
+    # Cleanup
+    cm_manager = ConfigmapsManager()
+    cm_manager.cleanup()
+    cm_manager.create_code_map()
+    #    apis = KubeRayAPIs(token="12345")
     apis = KubeRayAPIs()
     # Create template first
     template = Template(name="default-template", namespace="default", cpu=2, memory=4)
@@ -182,6 +197,11 @@ def test_job_submission():
     assert error is None
 
 def test_serve_submission():
+    # Cleanup
+    cm_manager = ConfigmapsManager()
+    cm_manager.cleanup()
+    cm_manager.create_code_map()
+    #    apis = KubeRayAPIs(token="12345")
     apis = KubeRayAPIs()
     # Create template first
     template = Template(name="default-template", namespace="default", cpu=2, memory=4)
