@@ -7,7 +7,7 @@ Ray Serve is a scalable model serving library for building online inference APIs
 Refer to [readme](README.md) for setting up KubRay operator and API server.
 
 ```shell
-make operator-image docker-image cluster load-operator-image load-image  deploy-operator deploy
+make operator-image cluster load-operator-image deploy-operator install
 ```
 
 Once they are set up, you first need to create a Ray cluster
@@ -110,7 +110,7 @@ Once the cluster is up and running, you can submit an application to the cluster
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/serveapplication/test-cluster' \
 --header 'Content-Type: application/json' \
 --data '{
-  "configyaml": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n"
+  "configyaml": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n"
 }'
 ```
 
@@ -140,11 +140,11 @@ This should return JSON similar to the one below:
    "deployMode":"MULTI_APP",
    "proxyLocation":"EveryNode",
    "controllerInfo":{
-      "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-      "nodeIp":"10.244.1.2",
-      "actorId":"ceac9504c1ce994f152afcbe01000000",
+      "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+      "nodeIp":"10.244.3.2",
+      "actorId":"1a7dcb5f48bb6dff6dcd0fb601000000",
       "actorName":"SERVE_CONTROLLER_ACTOR",
-      "logFilePath":"/serve/controller_451.log"
+      "logFilePath":"/serve/controller_1111.log"
    },
    "httpOptions":{
       "host":"0.0.0.0",
@@ -159,42 +159,8 @@ This should return JSON similar to the one below:
          "name":"fruit_app",
          "status":"RUNNING",
          "routePrefix":"/fruit",
-         "lastDeployedTimeS":1702216400,
+         "lastDeployedTimeS":1705573500,
          "deployments":{
-            "DAGDriver":{
-               "name":"DAGDriver",
-               "status":"HEALTHY",
-               "deploymentConfig":{
-                  "name":"DAGDriver",
-                  "numReplicas":1,
-                  "maxConcurrentQueries":100,
-                  "gracefulShutdownWaitLoopS":2,
-                  "gracefulShutdownTimeoutS":20,
-                  "healthCheckPeriodS":10,
-                  "healthCheckTimeoutS":30,
-                  "rayActorOptions":{
-                     "runtimeEnv":{
-                        "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-                     },
-                     "numCpus":0.1
-                  }
-               },
-               "replicas":[
-                  {
-                     "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-                     "nodeIp":"10.244.2.3",
-                     "actorId":"b9ea9613d134735b1a42f5bb01000000",
-                     "actorName":"SERVE_REPLICA::fruit_app#DAGDriver#HhnVXp",
-                     "workerId":"bc1aa743dc38799fe5314192c4b82efcbf6b3dd2473b062ac15cc376",
-                     "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_DAGDriver_fruit_app#DAGDriver#HhnVXp.log",
-                     "replicaId":"fruit_app#DAGDriver#HhnVXp",
-                     "pid":249,
-                     "startTimeS":1702216400
-                  }
-               ]
-            },
             "FruitMarket":{
                "name":"FruitMarket",
                "status":"HEALTHY",
@@ -209,23 +175,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-                     "nodeIp":"10.244.1.2",
-                     "actorId":"95e00bd164c069eaced206c801000000",
-                     "actorName":"SERVE_REPLICA::fruit_app#FruitMarket#vMilEM",
-                     "workerId":"6eb5f8ead62db87f088a7e3c13211c442c5344e431905a556052ebc7",
+                     "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+                     "nodeIp":"10.244.3.2",
+                     "actorId":"ddff7b1174e60ce343fceba901000000",
+                     "actorName":"SERVE_REPLICA::fruit_app#FruitMarket#HUTrZX",
+                     "workerId":"2b2c95ba76e4d4d2ee4fd48e6e4172cc341f83c77d164899318cbd7f",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_FruitMarket_fruit_app#FruitMarket#vMilEM.log",
-                     "replicaId":"fruit_app#FruitMarket#vMilEM",
-                     "pid":613,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_FruitMarket_fruit_app#FruitMarket#HUTrZX.log",
+                     "replicaId":"fruit_app#FruitMarket#HUTrZX",
+                     "pid":1302,
+                     "startTimeS":1705573500
                   }
                ]
             },
@@ -234,7 +200,7 @@ This should return JSON similar to the one below:
                "status":"HEALTHY",
                "deploymentConfig":{
                   "name":"MangoStand",
-                  "numReplicas":1,
+                  "numReplicas":2,
                   "maxConcurrentQueries":100,
                   "userConfig":{
                      "price":"3"
@@ -246,23 +212,35 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-                     "nodeIp":"10.244.2.3",
-                     "actorId":"d80b934549a6155716d706d701000000",
-                     "actorName":"SERVE_REPLICA::fruit_app#MangoStand#MbsqaU",
-                     "workerId":"af8dbb9355cf00e52212dfc8309f240dd0147119319829ea2801eeb5",
+                     "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+                     "nodeIp":"10.244.3.2",
+                     "actorId":"82db549c9d78ef2814ea3ac101000000",
+                     "actorName":"SERVE_REPLICA::fruit_app#MangoStand#YDMOaG",
+                     "workerId":"e756b692b56008da7e2499c7a15806b88db90da16ebd37bf6dba791a",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_MangoStand_fruit_app#MangoStand#MbsqaU.log",
-                     "replicaId":"fruit_app#MangoStand#MbsqaU",
-                     "pid":199,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_MangoStand_fruit_app#MangoStand#YDMOaG.log",
+                     "replicaId":"fruit_app#MangoStand#YDMOaG",
+                     "pid":1256,
+                     "startTimeS":1705573500
+                  },
+                  {
+                     "nodeId":"12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+                     "nodeIp":"10.244.1.3",
+                     "actorId":"d0261419969c3e7abbe3767d01000000",
+                     "actorName":"SERVE_REPLICA::fruit_app#MangoStand#kpIBiU",
+                     "workerId":"a717086f84ea4cb0ca05ea2a9442ca32a06ca6009a42c21af0e0ea22",
+                     "state":"RUNNING",
+                     "logFilePath":"/serve/deployment_MangoStand_fruit_app#MangoStand#kpIBiU.log",
+                     "replicaId":"fruit_app#MangoStand#kpIBiU",
+                     "pid":713,
+                     "startTimeS":1705573500
                   }
                ]
             },
@@ -283,23 +261,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-                     "nodeIp":"10.244.1.2",
-                     "actorId":"b3fe6a18933f73bab4028f8801000000",
-                     "actorName":"SERVE_REPLICA::fruit_app#OrangeStand#duLXfz",
-                     "workerId":"ca5859275605da35ee5b4aea595a05b3311e75a71abb99923bb8831b",
+                     "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+                     "nodeIp":"10.244.3.2",
+                     "actorId":"bba7e0c617469b59ec2cd4a801000000",
+                     "actorName":"SERVE_REPLICA::fruit_app#OrangeStand#CFkCCJ",
+                     "workerId":"18a08186aaec24bde29f88f307548ec37491d47eacf1592cc0235039",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_OrangeStand_fruit_app#OrangeStand#duLXfz.log",
-                     "replicaId":"fruit_app#OrangeStand#duLXfz",
-                     "pid":612,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_OrangeStand_fruit_app#OrangeStand#CFkCCJ.log",
+                     "replicaId":"fruit_app#OrangeStand#CFkCCJ",
+                     "pid":1257,
+                     "startTimeS":1705573500
                   }
                ]
             },
@@ -320,23 +298,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-                     "nodeIp":"10.244.2.3",
-                     "actorId":"f36536b0dca1fe7cc6ecc6de01000000",
-                     "actorName":"SERVE_REPLICA::fruit_app#PearStand#MdjHOm",
-                     "workerId":"fd0519e76dc5728c8a9b6f940fe59eaba2dc634d17b700de2166110b",
+                     "nodeId":"12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+                     "nodeIp":"10.244.1.3",
+                     "actorId":"218ddd8886a11964535e34ab01000000",
+                     "actorName":"SERVE_REPLICA::fruit_app#PearStand#mFuMsA",
+                     "workerId":"49fad5d40ef7e1b0aeb1ac319f263b18b991eff20bdefc6c234328cc",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_PearStand_fruit_app#PearStand#MdjHOm.log",
-                     "replicaId":"fruit_app#PearStand#MdjHOm",
-                     "pid":200,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_PearStand_fruit_app#PearStand#mFuMsA.log",
+                     "replicaId":"fruit_app#PearStand#mFuMsA",
+                     "pid":714,
+                     "startTimeS":1705573500
                   }
                ]
             }
@@ -346,12 +324,13 @@ This should return JSON similar to the one below:
             "routePrefix":"/fruit",
             "importPath":"fruit.deployment_graph",
             "runtimeEnv":{
-               "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+               "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
             },
             "deployments":[
                {
                   "name":"MangoStand",
-                  "numReplicas":1,
+                  "numReplicas":2,
+                  "maxReplicasPerNode":1,
                   "userConfig":{
                      "price":"3"
                   },
@@ -385,13 +364,6 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "numCpus":0.1
                   }
-               },
-               {
-                  "name":"DAGDriver",
-                  "numReplicas":1,
-                  "rayActorOptions":{
-                     "numCpus":0.1
-                  }
                }
             ]
          }
@@ -400,7 +372,7 @@ This should return JSON similar to the one below:
          "name":"math_app",
          "status":"RUNNING",
          "routePrefix":"/calc",
-         "lastDeployedTimeS":1702216400,
+         "lastDeployedTimeS":1705573500,
          "deployments":{
             "Adder":{
                "name":"Adder",
@@ -419,57 +391,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-                     "nodeIp":"10.244.2.3",
-                     "actorId":"6838547ea22fbcf566d2057201000000",
-                     "actorName":"SERVE_REPLICA::math_app#Adder#ZtvAeP",
-                     "workerId":"e1b2d156136dec836ae78935043e8e9aa0d175b2ea5ddd2ac4839a2c",
+                     "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+                     "nodeIp":"10.244.3.2",
+                     "actorId":"e298385c0866a18893aabfba01000000",
+                     "actorName":"SERVE_REPLICA::math_app#Adder#rQsBou",
+                     "workerId":"de18047878c29bf5ac74a6d5d57a4985012e8b5a5348f95075430da7",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_Adder_math_app#Adder#ZtvAeP.log",
-                     "replicaId":"math_app#Adder#ZtvAeP",
-                     "pid":250,
-                     "startTimeS":1702216400
-                  }
-               ]
-            },
-            "DAGDriver":{
-               "name":"DAGDriver",
-               "status":"HEALTHY",
-               "deploymentConfig":{
-                  "name":"DAGDriver",
-                  "numReplicas":1,
-                  "maxConcurrentQueries":100,
-                  "gracefulShutdownWaitLoopS":2,
-                  "gracefulShutdownTimeoutS":20,
-                  "healthCheckPeriodS":10,
-                  "healthCheckTimeoutS":30,
-                  "rayActorOptions":{
-                     "runtimeEnv":{
-                        "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-                     },
-                     "numCpus":1
-                  }
-               },
-               "replicas":[
-                  {
-                     "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-                     "nodeIp":"10.244.1.2",
-                     "actorId":"7149d5935b9088cb030fb3ba01000000",
-                     "actorName":"SERVE_REPLICA::math_app#DAGDriver#LBkgea",
-                     "workerId":"ddc782bd94d10608b59bc31f12240a01df29c0b5814ca6499010de7c",
-                     "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_DAGDriver_math_app#DAGDriver#LBkgea.log",
-                     "replicaId":"math_app#DAGDriver#LBkgea",
-                     "pid":718,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_Adder_math_app#Adder#rQsBou.log",
+                     "replicaId":"math_app#Adder#rQsBou",
+                     "pid":1327,
+                     "startTimeS":1705573500
                   }
                ]
             },
@@ -490,23 +428,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-                     "nodeIp":"10.244.1.2",
-                     "actorId":"303757bcd36f8dae1c6bbc8701000000",
-                     "actorName":"SERVE_REPLICA::math_app#Multiplier#MCQNmH",
-                     "workerId":"184f5a9d39e19e001a27818f7b4e31645c094066dfbb2aa0d4d34171",
+                     "nodeId":"12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+                     "nodeIp":"10.244.1.3",
+                     "actorId":"ceefb38fcfcaec9aed02ff8701000000",
+                     "actorName":"SERVE_REPLICA::math_app#Multiplier#YAwdhS",
+                     "workerId":"390f78c6a0293b5c988fb961c660f591bdc0d962131a8becc56c0a27",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_Multiplier_math_app#Multiplier#MCQNmH.log",
-                     "replicaId":"math_app#Multiplier#MCQNmH",
-                     "pid":638,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_Multiplier_math_app#Multiplier#YAwdhS.log",
+                     "replicaId":"math_app#Multiplier#YAwdhS",
+                     "pid":742,
+                     "startTimeS":1705573500
                   }
                ]
             },
@@ -524,57 +462,23 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      "runtimeEnv":{
                         "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+                        "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
                      },
                      "numCpus":0.1
                   }
                },
                "replicas":[
                   {
-                     "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-                     "nodeIp":"10.244.1.2",
-                     "actorId":"54724715f2e3ee487b42852401000000",
-                     "actorName":"SERVE_REPLICA::math_app#Router#uezNSp",
-                     "workerId":"9bc286583533cd9f1bc429067a3a130ee810bedbb913ac62d0b1a102",
+                     "nodeId":"12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+                     "nodeIp":"10.244.1.3",
+                     "actorId":"fb2209a2b08c874f26bb047101000000",
+                     "actorName":"SERVE_REPLICA::math_app#Router#ajQmlX",
+                     "workerId":"2df7677d14bcb8de4b1e9e2846c212862a2d9270f2a8729aafeb2dcb",
                      "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_Router_math_app#Router#uezNSp.log",
-                     "replicaId":"math_app#Router#uezNSp",
-                     "pid":663,
-                     "startTimeS":1702216400
-                  }
-               ]
-            },
-            "create_order":{
-               "name":"create_order",
-               "status":"HEALTHY",
-               "deploymentConfig":{
-                  "name":"create_order",
-                  "numReplicas":1,
-                  "maxConcurrentQueries":100,
-                  "gracefulShutdownWaitLoopS":2,
-                  "gracefulShutdownTimeoutS":20,
-                  "healthCheckPeriodS":10,
-                  "healthCheckTimeoutS":30,
-                  "rayActorOptions":{
-                     "runtimeEnv":{
-                        "env_vars":"map[]",
-                        "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-                     },
-                     "numCpus":0.1
-                  }
-               },
-               "replicas":[
-                  {
-                     "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-                     "nodeIp":"10.244.2.3",
-                     "actorId":"0a29af7ba1777655ed63d6b701000000",
-                     "actorName":"SERVE_REPLICA::math_app#create_order#IadAbU",
-                     "workerId":"9c452e868e05f16ad10d71b92d76f1285efaccb6bf902238c7e4fc9f",
-                     "state":"RUNNING",
-                     "logFilePath":"/serve/deployment_create_order_math_app#create_order#IadAbU.log",
-                     "replicaId":"math_app#create_order#IadAbU",
-                     "pid":328,
-                     "startTimeS":1702216400
+                     "logFilePath":"/serve/deployment_Router_math_app#Router#ajQmlX.log",
+                     "replicaId":"math_app#Router#ajQmlX",
+                     "pid":765,
+                     "startTimeS":1705573500
                   }
                ]
             }
@@ -584,7 +488,7 @@ This should return JSON similar to the one below:
             "routePrefix":"/calc",
             "importPath":"conditional_dag.serve_dag",
             "runtimeEnv":{
-               "working_dir":"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+               "working_dir":"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
             },
             "deployments":[
                {
@@ -613,43 +517,29 @@ This should return JSON similar to the one below:
                   "rayActorOptions":{
                      
                   }
-               },
-               {
-                  "name":"create_order",
-                  "numReplicas":1,
-                  "rayActorOptions":{
-                     
-                  }
-               },
-               {
-                  "name":"DAGDriver",
-                  "numReplicas":1,
-                  "rayActorOptions":{
-                     
-                  }
                }
             ]
          }
       }
    },
    "proxies":{
-      "4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba":{
-         "nodeId":"4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-         "nodeIp":"10.244.2.3",
-         "actorId":"985d4e1b1115bfd8aadfcd5201000000",
-         "actorName":"SERVE_CONTROLLER_ACTOR:SERVE_PROXY_ACTOR-4def7ebc8f2307aeb166f3a9585c7d7ed0d974506cc6d764d812b2ba",
-         "workerId":"3ca22e41adcba21db3f155c344945306c600a0db994f3e8d9349c523",
+      "12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d":{
+         "nodeId":"12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+         "nodeIp":"10.244.1.3",
+         "actorId":"0af2772b7fea74a14dd7304b01000000",
+         "actorName":"SERVE_CONTROLLER_ACTOR:SERVE_PROXY_ACTOR-12d09d1146b4c2d03a01de826c5601487c33224b50e80d1f2c25906d",
+         "workerId":"678f17e6f183c80228b4e645f1075cf436ad53cb1e7e5bf06ca5b151",
          "status":"HEALTHY",
-         "logFilePath":"/serve/proxy_10.244.2.3.log"
+         "logFilePath":"/serve/proxy_10.244.1.3.log"
       },
-      "e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26":{
-         "nodeId":"e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-         "nodeIp":"10.244.1.2",
-         "actorId":"a6a37816bca13d25d88a900201000000",
-         "actorName":"SERVE_CONTROLLER_ACTOR:SERVE_PROXY_ACTOR-e986907a0656721d0870c9797ac752edf97ea401599e76ababa68e26",
-         "workerId":"d8ea829af0423c1dcf640d4531c284ab5b2f74b6ec764a6e75d64f98",
+      "836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6":{
+         "nodeId":"836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+         "nodeIp":"10.244.3.2",
+         "actorId":"69d4ba541cba316c67a1e0cc01000000",
+         "actorName":"SERVE_CONTROLLER_ACTOR:SERVE_PROXY_ACTOR-836e497ae6b3a1bf1e775689634807b2176ef57d6817b8a82b3511d6",
+         "workerId":"716dd9498012f37791ee0418b33b4ecce682642ec7e131d6bacfbc60",
          "status":"HEALTHY",
-         "logFilePath":"/serve/proxy_10.244.1.2.log"
+         "logFilePath":"/serve/proxy_10.244.3.2.log"
       }
    }
 }

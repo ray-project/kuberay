@@ -585,7 +585,7 @@ func TestBuildRayCluster(t *testing.T) {
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &template, true)
 	assert.Nil(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
@@ -609,6 +609,12 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
 		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
+	}
+	if podSpec.Spec.Containers[0].LivenessProbe == nil {
+		t.Errorf("failed to crerate liveness probe")
+	}
+	if podSpec.Spec.Containers[0].ReadinessProbe == nil {
+		t.Errorf("failed to crerate readyness probe")
 	}
 }
 

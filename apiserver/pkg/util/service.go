@@ -57,7 +57,7 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 	}
 
 	// generate Ray cluster spec and buid cluster
-	newRayClusterSpec, err := buildRayClusterSpec(apiService.Version, nil, apiService.ClusterSpec, computeTemplateMap, true)
+	newRayClusterSpec, err := buildRayClusterSpec(apiService.Version, nil, apiService.ClusterSpec, computeTemplateMap, true, false)
 	if err != nil {
 		return nil, err
 	}
