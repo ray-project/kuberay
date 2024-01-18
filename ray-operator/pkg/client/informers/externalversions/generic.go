@@ -36,7 +36,7 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=ray, Version=v1
+	// Group=ray.io, Version=v1
 	case v1.SchemeGroupVersion.WithResource("rayclusters"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Ray().V1().RayClusters().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("rayjobs"):

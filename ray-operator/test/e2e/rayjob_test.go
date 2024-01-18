@@ -37,7 +37,7 @@ func TestRayJob(t *testing.T) {
 				Namespace: namespace.Name,
 			},
 			Spec: rayv1.RayJobSpec{
-				RayClusterSpec: newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				RayClusterSpec: newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 				Entrypoint:     "python /home/ray/jobs/counter.py",
 				RuntimeEnvYAML: `
 env_vars:
@@ -104,7 +104,7 @@ env_vars:
 				Namespace: namespace.Name,
 			},
 			Spec: rayv1.RayJobSpec{
-				RayClusterSpec:           newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				RayClusterSpec:           newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 				Entrypoint:               "python /home/ray/jobs/fail.py",
 				ShutdownAfterJobFinishes: false,
 				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
@@ -156,7 +156,7 @@ env_vars:
 				Namespace: namespace.Name,
 			},
 			Spec: rayv1.RayJobSpec{
-				RayClusterSpec:           newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+				RayClusterSpec:           newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 				Entrypoint:               "The command will be overridden by the submitter Job",
 				ShutdownAfterJobFinishes: true,
 				SubmitterPodTemplate:     jobSubmitterPodTemplate(),

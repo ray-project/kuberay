@@ -9,6 +9,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func(g gomega.Gomega) []corev1.Pod {
+	return func(g gomega.Gomega) []corev1.Pod {
+		listOptions := &metav1.ListOptions{}
+
+		for _, option := range options {
+			t.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
+		}
+
+		pods, err := t.Client().Core().CoreV1().Pods(namespace).List(t.Ctx(), *listOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return pods.Items
+	}
+}
+
 func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
