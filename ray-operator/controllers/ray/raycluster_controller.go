@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"math/rand"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
@@ -702,6 +704,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
 			r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
+			// If one pod in a multi-host worker fails, all of the pods should be deleted
 			if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
 				deletedWorkers[workerPod.Name] = deleted
@@ -746,7 +749,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
-		diff := workerReplicas - int32(len(runningPods.Items))
+		runningReplicas := int32(len(runningPods.Items))
+		if worker.NumOfHosts > 1 {
+			// Running pods should always be divisible by the number of hosts per worker
+			runningReplicas = runningReplicas / worker.NumOfHosts
+		}
+
+		diff := workerReplicas - runningReplicas
 		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
@@ -756,8 +765,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			var i int32
 			for i = 0; i < diff; i++ {
 				r.Log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
-					return err
+				// Due to pods being scaled down, we are not guaranteed that the multihost group name will always be
+				// incremental. So we just need to use some random integer here.
+				group := rand.Uint32()
+				var j uint32
+				for j = 0; j < uint32(worker.NumOfHosts); j++ {
+					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), group, j); err != nil {
+						return err
+					}
 				}
 			}
 		} else if diff == 0 {
@@ -984,9 +999,9 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	return nil
 }
 
-func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) error {
+func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, multihostGroup uint32, hostIndex uint32) error {
 	// build the pod then create it
-	pod := r.buildWorkerPod(instance, worker)
+	pod := r.buildWorkerPod(instance, worker, multihostGroup, hostIndex)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -1060,7 +1075,8 @@ func getCreator(instance rayv1.RayCluster) string {
 }
 
 // Build worker instance pods.
-func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
+func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, multihostGroup uint32, hostIndex uint32) corev1.Pod {
+	// Do something here
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol)
 	podName = utils.CheckName(podName)                                       // making sure the name is valid
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
@@ -1076,6 +1092,11 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 		serveLabel = true
 	}
 	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
+
+	// Set multihost pod labels
+	podTemplateSpec.Labels[utils.RayNodeMultihostGroupKey] = strconv.FormatUint(uint64(multihostGroup), 10)
+	podTemplateSpec.Labels[utils.RayNodeHostIndexKey] = strconv.FormatUint(uint64(hostIndex), 10)
+
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
