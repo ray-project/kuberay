@@ -594,10 +594,6 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 	if !rayJob.Spec.Suspend {
 		return false
 	}
-	if len(rayJob.Spec.ClusterSelector) != 0 {
-		r.Log.Info("The ClusterSelector mode doesn't support the suspend operation", "RayJob", rayJob.Name, "ClusterSelector", rayJob.Spec.ClusterSelector)
-		return false
-	}
 	// In KubeRay, only `Running` and `Initializing` are allowed to transition to `Suspending`.
 	validTransitions := map[rayv1.JobDeploymentStatus]struct{}{
 		rayv1.JobDeploymentStatusRunning:      {},
@@ -626,8 +622,14 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 }
 
 func validateRayJobSpec(rayJob *rayv1.RayJob) error {
+	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
+	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
+	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
+	}
+	if rayJob.Spec.Suspend && len(rayJob.Spec.ClusterSelector) != 0 {
+		return fmt.Errorf("the ClusterSelector mode doesn't support the suspend operation")
 	}
 	if rayJob.Spec.RayClusterSpec == nil && len(rayJob.Spec.ClusterSelector) == 0 {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
