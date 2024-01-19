@@ -328,4 +328,14 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err, "The RayJob is valid.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend: true,
+			ClusterSelector: map[string]string{
+				"key": "value",
+			},
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
 }
