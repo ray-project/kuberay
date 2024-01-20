@@ -1,6 +1,7 @@
 package volcano
 
 import (
+	"context"
 	"testing"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -76,7 +77,7 @@ func TestCreatePodGroup(t *testing.T) {
 		},
 	}
 
-	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 

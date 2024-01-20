@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -8,13 +9,16 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
 // This is used to expose dashboard for external traffic.
-func BuildIngressForHeadService(cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
+func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                cluster.Name,
 		utils.RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),

@@ -102,6 +102,8 @@ func NewRayServiceReconciler(mgr manager.Manager, dashboardClientFunc func() uti
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := r.Log.WithValues("ServiceName", request.NamespacedName)
+	ctx = ctrl.LoggerInto(ctx, logger)
+
 	var isReady bool = false
 
 	var rayServiceInstance *rayv1.RayService
@@ -904,9 +906,9 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 	switch serviceType {
 	case utils.HeadService:
-		newSvc, err = common.BuildHeadServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+		newSvc, err = common.BuildHeadServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
 	case utils.ServingService:
-		newSvc, err = common.BuildServeServiceForRayService(*rayServiceInstance, *rayClusterInstance)
+		newSvc, err = common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
 	default:
 		return fmt.Errorf("unknown service type %v", serviceType)
 	}
