@@ -407,12 +407,6 @@ func TestBuildPod(t *testing.T) {
 	// Check Envs
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
-
-	// Try to build pod for serve
-	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
-	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
-	assert.True(t, ok, "Expected serve label is not present")
-	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 }
 
 func TestBuildPod_WithOverwriteCommand(t *testing.T) {

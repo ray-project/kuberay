@@ -174,9 +174,12 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 		utils.RayServiceLabelKey:               name,
 		utils.RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(name),
 	}
+
 	selectorLabels := map[string]string{
-		utils.RayClusterLabelKey:               rayCluster.Name,
-		utils.RayClusterServingServiceLabelKey: utils.EnableRayClusterServingServiceTrue,
+		utils.RayClusterLabelKey: rayCluster.Name,
+	}
+	if isRayService {
+		selectorLabels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	}
 
 	default_name := utils.GenerateServeServiceName(name)
