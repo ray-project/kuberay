@@ -607,7 +607,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Pod restart policy", headPod.Spec.RestartPolicy,
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
-		shouldDelete, reason := shouldDeletePod(headPod, rayv1.HeadNode)
+		podList := corev1.PodList{}
+		podList.Items = append(podList.Items, headPod)
+		shouldDelete, reason := shouldDeletePods(podList, rayv1.HeadNode)
 		r.Log.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
@@ -696,24 +698,43 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// Delete unhealthy worker Pods
+		// Construct a map of multihost group ids to pods.
+		workerMap := make(map[string]corev1.PodList)
+		for _, workerPod := range workerPods.Items {
+			groupKey := workerPod.Labels[utils.RayNodeMultihostGroupKey]
+			if pods, ok := workerMap[groupKey]; ok {
+				pods.Items = append(pods.Items, workerPod)
+			} else {
+				pods = corev1.PodList{}
+				pods.Items = append(pods.Items, workerPod)
+				workerMap[groupKey] = pods
+			}
+		}
+
+		// Delete unhealthy worker Pods. Multihost grouped pods are deleted together.
 		deletedWorkers := make(map[string]struct{})
 		deleted := struct{}{}
+		deletedMultihostGroups := make(map[string]struct{})
 		numDeletedUnhealthyWorkerPods := 0
-		for _, workerPod := range workerPods.Items {
-			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
-			r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
-			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
-			// If one pod in a multi-host worker fails, all of the pods should be deleted
+		for groupKey, workerPodList := range workerMap {
+			r.Log.Info("reconcilePods", "multihost group", groupKey)
+			// Check deletion reasons for pods in a multihost group together. If one of them needs to be deleted, all others need to be deleted.
+			shouldDelete, reason := shouldDeletePods(workerPodList, rayv1.WorkerNode)
 			if shouldDelete {
-				numDeletedUnhealthyWorkerPods++
-				deletedWorkers[workerPod.Name] = deleted
-				if err := r.Delete(ctx, &workerPod); err != nil {
-					return err
+				deletedMultihostGroups[groupKey] = deleted
+				for _, workerPod := range workerPodList.Items {
+					r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
+					// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
+					// If one pod in a multi-host worker fails, all of the pods should be deleted
+					numDeletedUnhealthyWorkerPods++
+					deletedWorkers[workerPod.Name] = deleted
+					if err := r.Delete(ctx, &workerPod); err != nil {
+						return err
+					}
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
+						"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
+						workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
 				}
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
-					"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
-					workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
 			}
 		}
 
@@ -743,6 +764,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		worker.ScaleStrategy.WorkersToDelete = []string{}
 
+		// Add MultihostGroupsToDelete here.
+
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {
 			if _, ok := deletedWorkers[pod.Name]; !ok {
@@ -751,7 +774,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		runningReplicas := int32(len(runningPods.Items))
 		if worker.NumOfHosts > 1 {
-			// Running pods should always be divisible by the number of hosts per worker
+			// A replica can contain multiple hosts, so we need to calculate this based on the number of hosts per replica.
 			runningReplicas = runningReplicas / worker.NumOfHosts
 		}
 
@@ -798,18 +821,31 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// is not set, we will disable random Pod deletion by default.
 			if !enableInTreeAutoscaling || enableRandomPodDelete {
 				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
-				randomlyRemovedWorkers := -diff
-				r.Log.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
-				for i := 0; i < int(randomlyRemovedWorkers); i++ {
-					randomPodToDelete := runningPods.Items[i]
-					r.Log.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
-					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
-						if !errors.IsNotFound(err) {
-							return err
-						}
-						r.Log.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+				randomlyRemovedReplicas := -diff
+				r.Log.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedReplicas, "Worker group", worker.GroupName)
+				replicasRemoved := 0
+				for groupKey, workerPodList := range workerMap {
+					if _, ok := deletedMultihostGroups[groupKey]; ok {
+						// Skip this multihost group if it has already been deleted earlier.
+						continue
 					}
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
+					podsToRemove := randomlyRemovedReplicas * int32(len(workerPodList.Items))
+					podsRemoved := 0
+					for _, randomPodToDelete := range workerPodList.Items {
+						r.Log.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", podsRemoved, podsToRemove), "with name", randomPodToDelete.Name)
+						if err := r.Delete(ctx, &randomPodToDelete); err != nil {
+							if !errors.IsNotFound(err) {
+								return err
+							}
+							r.Log.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+						}
+						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
+						podsRemoved = podsRemoved + 1
+					}
+					replicasRemoved = replicasRemoved + 1
+					if int32(replicasRemoved) == randomlyRemovedReplicas {
+						break
+					}
 				}
 			} else {
 				r.Log.Info(fmt.Sprintf("Random Pod deletion is disabled for cluster %s. The only decision-maker for Pod deletions is Autoscaler.", instance.Name))
@@ -819,73 +855,80 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	return nil
 }
 
-// shouldDeletePod returns whether the Pod should be deleted and the reason
+// shouldDeletePod returns whether the Pod in a multihost group should be deleted and the reason.
+// Note that if one pod in a multihost group needs to be deleted, then all other pods in the
+// same group have to be deleted as well. By default most of these groups have only one pod.
 //
-// @param pod: The Pod to be checked.
+// @param podList: The Pods to be checked.
 // @param nodeType: The type of the node that the Pod belongs to (head or worker).
 //
 // @return: shouldDelete (bool), reason (string)
 // (1) shouldDelete: Whether the Pod should be deleted.
 // (2) reason: The reason why the Pod should or should not be deleted.
-func shouldDeletePod(pod corev1.Pod, nodeType rayv1.RayNodeType) (bool, string) {
-	// If a Pod's restart policy is set to `Always`, KubeRay will not delete
-	// the Pod and rely on the Pod's restart policy to restart the Pod.
-	isRestartPolicyAlways := pod.Spec.RestartPolicy == corev1.RestartPolicyAlways
+func shouldDeletePods(podList corev1.PodList, nodeType rayv1.RayNodeType) (bool, string) {
+	var reason string
+	for _, pod := range podList.Items {
+		// If a Pod's restart policy is set to `Always`, KubeRay will not delete
+		// the Pod and rely on the Pod's restart policy to restart the Pod.
+		isRestartPolicyAlways := pod.Spec.RestartPolicy == corev1.RestartPolicyAlways
 
-	// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
-	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-		if isRestartPolicyAlways {
-			// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
-			// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
-			// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
-			// in the head Pod. Therefore, I've added this check as a safeguard.
-			reason := fmt.Sprintf(
-				"The status of the %s Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
-					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase)
-			return false, reason
+		// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
+		if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
+			if isRestartPolicyAlways {
+				// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
+				// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
+				// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
+				// in the head Pod. Therefore, I've added this check as a safeguard.
+				reason = fmt.Sprintf(
+					"The status of the %s Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+						"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase)
+				continue
+			}
+
+			reason = fmt.Sprintf(
+				"The %s Pod %s status is %s which is a terminal state and it will not restart. "+
+					"KubeRay will delete the Pod and create new Pods in the next reconciliation if necessary.", nodeType, pod.Name, pod.Status.Phase)
+			return true, reason
 		}
 
-		reason := fmt.Sprintf(
-			"The %s Pod %s status is %s which is a terminal state and it will not restart. "+
-				"KubeRay will delete the Pod and create new Pods in the next reconciliation if necessary.", nodeType, pod.Name, pod.Status.Phase)
-		return true, reason
-	}
-
-	rayContainerTerminated := getRayContainerStateTerminated(pod)
-	if pod.Status.Phase == corev1.PodRunning && rayContainerTerminated != nil {
-		if isRestartPolicyAlways {
-			// If restart policy is set to `Always`, KubeRay will not delete the Pod.
-			reason := fmt.Sprintf(
-				"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
-					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
-			return false, reason
+		rayContainerTerminated := getRayContainerStateTerminated(pod)
+		if pod.Status.Phase == corev1.PodRunning && rayContainerTerminated != nil {
+			if isRestartPolicyAlways {
+				// If restart policy is set to `Always`, KubeRay will not delete the Pod.
+				reason = fmt.Sprintf(
+					"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
+						"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
+				continue
+			}
+			reason = fmt.Sprintf(
+				"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. "+
+					"The container is unable to restart due to its restart policy %s, so KubeRay will delete it.",
+				nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated, pod.Spec.RestartPolicy)
+			return true, reason
 		}
-		reason := fmt.Sprintf(
-			"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. "+
-				"The container is unable to restart due to its restart policy %s, so KubeRay will delete it.",
-			nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated, pod.Spec.RestartPolicy)
-		return true, reason
+
+		// TODO (kevin85421): Consider deleting a Pod if its Ray container restarts excessively, as this might
+		// suggest an unhealthy Kubernetes node. Deleting and then recreating the Pod might allow it to be
+		// scheduled on a different node.
+		//
+		// (1) Head Pod:
+		// It's aggressive to delete a head Pod that is not in a terminated state (i.e., `Failed` or `Succeeded`).
+		// We should only delete a head Pod when GCS fault tolerance is enabled, and drain the head Pod before
+		// deleting it.
+		//
+		// (2) Worker Pod:
+		// Compared to deleting a head Pod, removing a worker Pod is less aggressive and aligns more closely with
+		// the behavior of the Ray Autoscaler. Nevertheless, we should still carefully drain the node before deleting
+		// the worker Pod. Enabling GCS fault tolerance might not be necessary when deleting worker Pods. Note that
+		// the Ray Autoscaler will not delete any worker Pods that have never been registered with the Ray cluster.
+		// Therefore, we may need to address the Ray Autoscaler's blind spots.
+
+		reason = fmt.Sprintf(
+			"KubeRay does not need to delete the %s Pod %s. The Pod status is %s, and the Ray container terminated status is %v.",
+			nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
+		continue
 	}
-
-	// TODO (kevin85421): Consider deleting a Pod if its Ray container restarts excessively, as this might
-	// suggest an unhealthy Kubernetes node. Deleting and then recreating the Pod might allow it to be
-	// scheduled on a different node.
-	//
-	// (1) Head Pod:
-	// It's aggressive to delete a head Pod that is not in a terminated state (i.e., `Failed` or `Succeeded`).
-	// We should only delete a head Pod when GCS fault tolerance is enabled, and drain the head Pod before
-	// deleting it.
-	//
-	// (2) Worker Pod:
-	// Compared to deleting a head Pod, removing a worker Pod is less aggressive and aligns more closely with
-	// the behavior of the Ray Autoscaler. Nevertheless, we should still carefully drain the node before deleting
-	// the worker Pod. Enabling GCS fault tolerance might not be necessary when deleting worker Pods. Note that
-	// the Ray Autoscaler will not delete any worker Pods that have never been registered with the Ray cluster.
-	// Therefore, we may need to address the Ray Autoscaler's blind spots.
-
-	reason := fmt.Sprintf(
-		"KubeRay does not need to delete the %s Pod %s. The Pod status is %s, and the Ray container terminated status is %v.",
-		nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
+	// Return false after all pods in the group have been checked.
 	return false, reason
 }
 
@@ -1076,7 +1119,6 @@ func getCreator(instance rayv1.RayCluster) string {
 
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, multihostGroup uint32, hostIndex uint32) corev1.Pod {
-	// Do something here
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol)
 	podName = utils.CheckName(podName)                                       // making sure the name is valid
 	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
