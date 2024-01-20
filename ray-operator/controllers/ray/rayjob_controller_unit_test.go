@@ -176,35 +176,25 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	tests := map[string]struct {
-		suspend               bool
-		status                rayv1.JobDeploymentStatus
-		isClusterSelectorMode bool
-		expectedShouldUpdate  bool
+		suspend              bool
+		status               rayv1.JobDeploymentStatus
+		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
 		"Suspend is false": {
-			suspend:               false,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  false,
-		},
-		"Suspend is true, but the RayJob is in ClusterSelector mode": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: true,
-			expectedShouldUpdate:  false,
+			suspend:              false,
+			status:               rayv1.JobDeploymentStatusInitializing,
+			expectedShouldUpdate: false,
 		},
 		"Suspend is true, but the status is not allowed to transition to suspending": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusComplete,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  false,
+			suspend:              true,
+			status:               rayv1.JobDeploymentStatusComplete,
+			expectedShouldUpdate: false,
 		},
 		"Suspend is true, and the status is allowed to transition to suspending": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  true,
+			suspend:              true,
+			status:               rayv1.JobDeploymentStatusInitializing,
+			expectedShouldUpdate: true,
 		},
 	}
 
@@ -223,12 +213,6 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				Status: rayv1.RayJobStatus{
 					JobDeploymentStatus: tc.status,
 				},
-			}
-
-			if tc.isClusterSelectorMode {
-				rayJob.Spec.ClusterSelector = map[string]string{
-					"key": "value",
-				}
 			}
 
 			// Initialize a fake client with newScheme and runtimeObjects.
@@ -344,4 +328,14 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err, "The RayJob is valid.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend: true,
+			ClusterSelector: map[string]string{
+				"key": "value",
+			},
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
 }
