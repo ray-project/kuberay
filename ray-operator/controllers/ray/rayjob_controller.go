@@ -91,7 +91,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
-		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
+		// the case where JobStatus is JobStatusNew.
+		if !rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
@@ -446,11 +448,6 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 	r.Log.Info("releaseComputeResources", "isClusterNotFound", isClusterNotFound, "isJobNotFound", isJobNotFound, "isReleaseComplete", isReleaseComplete)
 
 	return isReleaseComplete, nil
-}
-
-// isJobPendingOrRunning indicates whether the job is running.
-func isJobPendingOrRunning(status rayv1.JobStatus) bool {
-	return (status == rayv1.JobStatusPending) || (status == rayv1.JobStatusRunning)
 }
 
 // SetupWithManager sets up the controller with the Manager.
