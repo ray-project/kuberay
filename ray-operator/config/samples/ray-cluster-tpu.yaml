@@ -23,7 +23,7 @@ spec:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-head
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.9.1
             imagePullPolicy: IfNotPresent
             ports:
             - containerPort: 6379
@@ -80,7 +80,7 @@ spec:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-worker
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.9.1
             imagePullPolicy: IfNotPresent
             resources:
               limits:

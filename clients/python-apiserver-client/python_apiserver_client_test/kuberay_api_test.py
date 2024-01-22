@@ -54,12 +54,12 @@ def test_cluster():
     environment = EnvironmentVariables(keyvalue={"key": "value"})
     head = HeadNodeSpec(compute_template="default-template",
                         ray_start_params={"metrics-export-port": "8080", "num-cpus": "0"},
-                        image="rayproject/ray:2.9.0-py310", service_type=ServiceType.ClusterIP,
+                        image="rayproject/ray:2.9.1-py310", service_type=ServiceType.ClusterIP,
                         volumes=[volume], environment=environment)
     worker = WorkerNodeSpec(group_name="small", compute_template="default-template", replicas=1,
                             min_replicas=1, max_replicas=1, ray_start_params=DEFAULT_WORKER_START_PARAMS,
-                            image="rayproject/ray:2.9.0-py310", volumes=[volume], environment=environment)
-    cluster = Cluster(name="test", namespace="default", user="boris", version="2.9.0",
+                            image="rayproject/ray:2.9.1-py310", volumes=[volume], environment=environment)
+    cluster = Cluster(name="test", namespace="default", user="boris", version="2.9.1",
                       cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker]))
     # create
     status, error = apis.create_cluster(cluster)
@@ -118,12 +118,12 @@ def test_job_submission():
     environment = EnvironmentVariables(keyvalue={"key": "value"})
     head = HeadNodeSpec(compute_template="default-template",
                         ray_start_params={"metrics-export-port": "8080", "num-cpus": "0"},
-                        image="rayproject/ray:2.9.0-py310", service_type=ServiceType.ClusterIP,
+                        image="rayproject/ray:2.9.1-py310", service_type=ServiceType.ClusterIP,
                         volumes=[volume], environment=environment)
     worker = WorkerNodeSpec(group_name="small", compute_template="default-template", replicas=1,
                             min_replicas=1, max_replicas=1, ray_start_params=DEFAULT_WORKER_START_PARAMS,
-                            image="rayproject/ray:2.9.0-py310", volumes=[volume], environment=environment)
-    cluster = Cluster(name="test-job", namespace="default", user="boris", version="2.9.0",
+                            image="rayproject/ray:2.9.1-py310", volumes=[volume], environment=environment)
+    cluster = Cluster(name="test-job", namespace="default", user="boris", version="2.9.1",
                       cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker]))
     # create
     status, error = apis.create_cluster(cluster)

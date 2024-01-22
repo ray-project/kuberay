@@ -48,7 +48,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 			Name:        tCtx.GetNextName(),
 			Namespace:   tCtx.GetNamespaceName(),
 			User:        "boris",
-			Version:     "2.9.0",
+			Version:     "2.9.1",
 			Environment: api.Cluster_DEV,
 			ClusterSpec: &api.ClusterSpec{
 				EnableInTreeAutoscaling: true,

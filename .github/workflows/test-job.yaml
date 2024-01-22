@@ -443,7 +443,7 @@ jobs:
       - build_apiserver
       - lint
     runs-on: ubuntu-latest
-    name: Compatibility Test - 2.9.0
+    name: Compatibility Test - 2.9.1
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -455,7 +455,7 @@ jobs:
 
       - uses: ./.github/workflows/actions/compatibility
         with:
-          ray_version: 2.9.0
+          ray_version: 2.9.1
 
   test-compatibility-nightly:
     needs:

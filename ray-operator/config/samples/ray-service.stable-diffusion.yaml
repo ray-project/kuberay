@@ -11,7 +11,7 @@ spec:
           working_dir: "https://github.com/ray-project/serve_config_examples/archive/d6acf9b99ef076a1848f506670e1290a11654ec2.zip"
           pip: ["diffusers==0.12.1"]
   rayClusterConfig:
-    rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
+    rayVersion: '2.9.1' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -25,7 +25,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-ml:2.9.0
+            image: rayproject/ray-ml:2.9.1
             ports:
             - containerPort: 6379
               name: gcs
@@ -60,7 +60,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-ml:2.9.0
+            image: rayproject/ray-ml:2.9.1
             resources:
               limits:
                 cpu: 4

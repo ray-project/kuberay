@@ -10,7 +10,7 @@ metadata:
     # An unique identifier for the head node and workers of this cluster.
   name: raycluster-mini
 spec:
-  rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.9.1' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
@@ -23,7 +23,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.9.1
           resources:
             limits:
               cpu: 1

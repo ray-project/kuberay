@@ -190,7 +190,7 @@ def test_cluster():
                                                      min_replicas=2, max_replicas=2,
                                                      ray_start_params=DEFAULT_WORKER_START_PARAMS, volumes=volumes,
                                                      environment=env_s, labels={"key": "value"})])
-    cluster = Cluster(name="test", namespace="default", user="boris", version="2.9.0", cluster_spec=spec,
+    cluster = Cluster(name="test", namespace="default", user="boris", version="2.9.1", cluster_spec=spec,
                       deployment_environment=Environment.DEV, cluster_environment=env_s)
     print(f"cluster: {cluster.to_string()}")
     cluster_json = json.dumps(cluster.to_dict())

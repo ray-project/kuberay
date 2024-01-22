@@ -29,7 +29,7 @@ logging.basicConfig(
 )
 
 # parse global variables from env
-ray_image = os.getenv('RAY_IMAGE', 'rayproject/ray:2.9.0')
+ray_image = os.getenv('RAY_IMAGE', 'rayproject/ray:2.9.1')
 ray_version = ray_image.split(':')[-1]
 kuberay_operator_image = os.getenv('OPERATOR_IMAGE')
 
@@ -157,7 +157,7 @@ class RayFTTestCase(unittest.TestCase):
         ray_version == '2.8.0',
         'test_detached_actor is too flaky with Ray 2.8.0 due to '
         'https://github.com/ray-project/ray/issues/41343. '
-        'It is fixed in Ray 2.9.0 and the nightly.'
+        'It is fixed in Ray 2.9.1 and the nightly.'
     )
     def test_detached_actor(self):
         """Kill GCS process on the head Pod and then test a detached actor."""

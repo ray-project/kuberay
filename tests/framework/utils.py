@@ -232,7 +232,7 @@ class OperatorManager(ABC):
             if namespace == None:
                 namespace = "default"
             DEFAULT_IMAGE_DICT = {
-               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.9.0'),
+               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.9.1'),
                 CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
             }
             default_operator_manager = DefaultOperatorManager(DEFAULT_IMAGE_DICT, namespace, patch, cluster_manager)
