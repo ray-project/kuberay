@@ -287,6 +287,7 @@ class DefaultOperatorManager(OperatorManager):
             """Download Docker images from DockerHub"""
             logger.info("Download Docker images: %s", self.docker_image_dict)
             for key in self.docker_image_dict:
+                image = self.docker_image_dict[key]
                 # If the image exists locally, `docker pull` will not download it again.
                 shell_subprocess_run(f"docker pull {image}")
 
