@@ -186,7 +186,7 @@ class RayServiceDeleteCREvent(CREvent):
 
 
 class TestRayService:
-    sample_path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath('ray_v1alpha1_rayservice.yaml')
+    sample_path = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/").joinpath('ray-service.sample.yaml')
 
     @pytest.fixture
     def set_up_cluster(self):
