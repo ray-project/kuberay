@@ -195,7 +195,8 @@ class KindClusterManager(ClusterManager):
         )
 
     def upload_image(self, image):
-        shell_subprocess_run(f"kind load docker-image {image}")
+        # shell_subprocess_run(f"kind load docker-image {image}")
+        pass
 
     def check_cluster_exist(self) -> bool:
         """Check whether KinD cluster exists or not"""
