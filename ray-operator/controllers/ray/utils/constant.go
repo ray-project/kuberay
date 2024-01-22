@@ -8,7 +8,12 @@ const (
 
 	// RayOriginatedFromLabelKey is the label used to associate the root KubeRay Custom Resource.
 	// For example, if a RayCluster is created by a RayJob named myjob, then the cluster will have
-	// a label ray.io/originated-from=RayJob_myjob. See RayOriginatedFromJobLabelValue for more details.
+	// A ray.io/originated-from=RayService_mysvc label will be added to the following resources if they are originated from a RayService mysvc.
+	//   * Kubernetes Services
+	//   * RayClusters
+	// A ray.io/originated-from=RayJob_myjob label will be added to the following resources if they are originated from a RayJob myjob.
+	//   * Kubernetes Jobs
+	//   * RayClusters
 	RayOriginatedFromLabelKey                = "ray.io/originated-from"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
@@ -156,15 +161,9 @@ const (
 	ServingService ServiceType = "serveService"
 )
 
-// RayOriginatedFromServiceLabelValue generates a RayService value for the label RayOriginatedFromLabelKey
-// This is also the only function to construct label filter of resources originated from a given RayService.
-func RayOriginatedFromServiceLabelValue(name string) string {
+// RayOriginatedFromLabelValue generates a value for the label RayOriginatedFromLabelKey
+// This is also the only function to construct label filter of resources originated from a given CRDType.
+func RayOriginatedFromLabelValue(kind CRDType, name string) string {
 	// we choose the _ as the separator because it is the only choice. ref: https://github.com/ray-project/kuberay/pull/1830#discussion_r1452547074
-	return string(RayServiceCRD) + "_" + name
-}
-
-// RayOriginatedFromJobLabelValue generates a RayJob value for the label RayOriginatedFromLabelKey
-// This is also the only function to construct label filter of resources originated from a given RayJob.
-func RayOriginatedFromJobLabelValue(name string) string {
-	return string(RayJobCRD) + "_" + name
+	return string(kind) + "_" + name
 }

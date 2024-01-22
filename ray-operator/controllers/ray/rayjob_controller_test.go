@@ -192,7 +192,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-			Expect(myRayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromLabelKey, utils.RayOriginatedFromJobLabelValue(myRayJob.Name)))
+			Expect(myRayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromLabelKey, utils.RayOriginatedFromLabelValue(utils.RayJobCRD, myRayJob.Name)))
 		})
 
 		It("Should create a number of workers equal to the replica setting", func() {

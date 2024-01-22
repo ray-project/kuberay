@@ -143,7 +143,7 @@ func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1
 	service.ObjectMeta.Name = headSvcName
 	service.ObjectMeta.Namespace = rayService.Namespace
 	service.ObjectMeta.Labels = map[string]string{
-		utils.RayOriginatedFromLabelKey: utils.RayOriginatedFromServiceLabelValue(rayService.Name),
+		utils.RayOriginatedFromLabelKey: utils.RayOriginatedFromLabelValue(utils.RayServiceCRD, rayService.Name),
 		utils.RayNodeTypeLabelKey:       string(rayv1.HeadNode),
 		utils.RayIDLabelKey:             utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
 	}
@@ -171,7 +171,7 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 	}
 
 	labels := map[string]string{
-		utils.RayOriginatedFromLabelKey:        utils.RayOriginatedFromServiceLabelValue(name),
+		utils.RayOriginatedFromLabelKey:        utils.RayOriginatedFromLabelValue(utils.RayServiceCRD, name),
 		utils.RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(name),
 	}
 	selectorLabels := map[string]string{
