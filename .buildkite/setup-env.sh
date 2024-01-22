@@ -9,7 +9,7 @@ chmod +x ./kind
 mv ./kind /usr/local/bin/kind
 
 # Install Docker
-bash scripts/install-docker.sh
+sudo bash scripts/install-docker.sh --version 24.0
 
 # Delete dangling clusters
 kind delete clusters --all
