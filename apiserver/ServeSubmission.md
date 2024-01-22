@@ -30,9 +30,9 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 Up until recently the only way to create a Ray cluster supporting RayServe was by using `Create ray service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so that you can experiment with serve APIs directly. Now it is possible by adding the following annotation to the cluster:
 
 ```json
-"annotations" : {
-    "ray.io/enable-serve-service": "true"
-  },
+"annotations": {
+   "ray.io/enable-serve-service": "true"
+},
 ```
 
 the complete curl command to creation such cluster is as follows:
@@ -55,7 +55,8 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
       "rayStartParams": {
          "dashboard-host": "0.0.0.0",
          "metrics-export-port": "8080",
-         "dashboard-agent-listen-port": "52365"
+         "dashboard-agent-listen-port": "52365",
+         "num-cpus": "0"
        }
     },
     "workerGroupSpec": [
@@ -110,7 +111,7 @@ Once the cluster is up and running, you can submit an application to the cluster
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/serveapplication/test-cluster' \
 --header 'Content-Type: application/json' \
 --data '{
-  "configyaml": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n"
+  "configyaml": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n"
 }'
 ```
 
@@ -123,6 +124,20 @@ kubectl port-forward svc/test-cluster-head-svc 8265
 ```
 
 and then connecting to `localhost:8265`
+
+Note that create serve applications command can be submitted any number of times. On any new submission Ray Serve will compare a new submission to a current state and modify only affected applications. So in effect, all of the consequent submits are acting as updates.
+
+One important consideration for create serve applications is where the HTTP proxies are deployed. As defined in the [Ray Service documentation](https://docs.ray.io/en/latest/serve/production-guide/config.html#serve-in-production-config-file):
+
+```doc
+The proxy_location field in the deployment yaml configures where to run proxies to handle traffic to the cluster. You can set proxy_location to the following values:
+
+  - EveryNode (default): Run a proxy on every node in the cluster that has at least one replica actor.
+  - HeadOnly: Only run a single proxy on the head node.
+  - Disabled: Don’t run proxies at all. Set this value if you are only making calls to your applications using deployment handles.
+```
+
+In the case of `EveryNode` proxy location, proxy is started on the head node, regardless of whether any replicas are running there or not and runs on the worker nodes only if it has at least one replica actor. This means that in order to use serve service correctly, you need to ensure that the cluster size is picked correctly - every node has at least one replica actor.
 
 ### Get Serve applications
 
