@@ -287,18 +287,8 @@ class DefaultOperatorManager(OperatorManager):
             """Download Docker images from DockerHub"""
             logger.info("Download Docker images: %s", self.docker_image_dict)
             for key in self.docker_image_dict:
-                # Only pull the image from DockerHub when the image does not
-                # exist in the local docker registry.
-                image = self.docker_image_dict[key]
-                if (
-                    shell_subprocess_run(
-                        f"docker image inspect {image} > /dev/null", check=False
-                    )
-                    != 0
-                ):
-                    shell_subprocess_run(f"docker pull {image}")
-                else:
-                    logger.info("Image %s exists", image)
+                # If the image exists locally, `docker pull` will not download it again.
+                shell_subprocess_run(f"docker pull {image}")
 
         download_images()
         logger.info("Load images into KinD cluster")
