@@ -56,7 +56,7 @@ var _ = Context("Inside the default namespace", func() {
 			Suspend:                  true,
 			Entrypoint:               "sleep 999",
 			RayClusterSpec: &rayv1.RayClusterSpec{
-				RayVersion: "2.9.0",
+				RayVersion: "2.9.1",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
