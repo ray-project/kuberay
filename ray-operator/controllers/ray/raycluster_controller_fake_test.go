@@ -1894,9 +1894,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			Phase: corev1.PodFailed,
 		},
 	}
-	pods := corev1.PodList{}
-	pods.Items = append(pods.Items, pod)
-	shouldDelete, _ := shouldDeletePods(pods, rayv1.HeadNode)
+	shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
 	assert.False(t, shouldDelete)
 
 	// [Case 2]: The restart policy is `Always`, the Pod is not in a terminate state,
