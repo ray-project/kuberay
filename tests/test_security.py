@@ -55,7 +55,6 @@ class PodSecurityTestCase(unittest.TestCase):
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
         # Install the KubeRay operator in the namespace pod-security.
         image_dict = {
-            CONST.RAY_IMAGE_KEY: 'rayproject/ray-ml:2.9.0',
             CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
         }
         logger.info(image_dict)
