@@ -1064,7 +1064,7 @@ func getCreator(instance rayv1.RayCluster) string {
 	if instance.Labels == nil {
 		return ""
 	}
-	creatorName, exist := instance.Labels[utils.KubernetesCreatedByLabelKey]
+	creatorName, exist := instance.Labels[utils.RayOriginatedFromCRDLabelKey]
 
 	if !exist {
 		return ""

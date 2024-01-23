@@ -14,7 +14,8 @@ const (
 	// A ray.io/originated-from=RayJob_myjob label will be added to the following resources if they are originated from a RayJob myjob.
 	//   * Kubernetes Jobs
 	//   * RayClusters
-	RayOriginatedFromLabelKey                = "ray.io/originated-from"
+	RayOriginatedFromCRNameLabelKey          = "ray.io/originated-from-cr-name"
+	RayOriginatedFromCRDLabelKey             = "ray.io/originated-from-crd"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
 	RayNodeGroupLabelKey                     = "ray.io/group"
@@ -161,9 +162,8 @@ const (
 	ServingService ServiceType = "serveService"
 )
 
-// RayOriginatedFromLabelValue generates a value for the label RayOriginatedFromLabelKey
+// RayOriginatedFromCRDLabelValue generates a value for the label RayOriginatedFromCRDLabelKey
 // This is also the only function to construct label filter of resources originated from a given CRDType.
-func RayOriginatedFromLabelValue(kind CRDType, name string) string {
-	// we choose the _ as the separator because it is the only choice. ref: https://github.com/ray-project/kuberay/pull/1830#discussion_r1452547074
-	return string(kind) + "_" + name
+func RayOriginatedFromCRDLabelValue(crdType CRDType) string {
+	return string(crdType)
 }

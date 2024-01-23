@@ -539,6 +539,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 }
 
 func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creator string) {
+	log.Info("setContainerEnvVars", "rayNodeType", rayNodeType, "rayStartParams", rayStartParams, "fqdnRayIP", fqdnRayIP, "headPort", headPort, "rayStartCmd", rayStartCmd, "creator", creator)
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
@@ -602,10 +603,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 		if !envVarExists(utils.RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := corev1.EnvVar{Name: utils.RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
-		}
-		if !envVarExists(utils.SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
-			servePinOnNode := corev1.EnvVar{Name: utils.SERVE_CONTROLLER_PIN_ON_NODE, Value: "0"}
-			container.Env = append(container.Env, servePinOnNode)
 		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
