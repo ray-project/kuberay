@@ -435,8 +435,14 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayServiceLabelKey]
-	expectedLabel := string(serviceInstance.Name)
+	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
+	expectedLabel := serviceInstance.Name
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
+	expectedLabel = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
 	}
@@ -461,11 +467,13 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayServiceLabelKey]
-	expectedLabel := string(instanceForServeSvc.Name)
-	if !reflect.DeepEqual(expectedLabel, actualLabel) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
-	}
+	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
+	expectedLabel := instanceForServeSvc.Name
+	assert.Equal(t, expectedLabel, actualLabel)
+
+	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
+	expectedLabel = utils.RayOriginatedFromCRDLabelValue(utils.RayClusterCRD)
+	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualType := svc.Spec.Type
 	expectedType := instanceForServeSvc.Spec.HeadGroupSpec.ServiceType

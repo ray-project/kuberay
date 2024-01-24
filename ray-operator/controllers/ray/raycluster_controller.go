@@ -1060,11 +1060,12 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Po
 	return pod
 }
 
+// TODO (kevin85421): It is better to use `CRDType` as the return type.
 func getCreator(instance rayv1.RayCluster) string {
 	if instance.Labels == nil {
 		return ""
 	}
-	creatorName, exist := instance.Labels[utils.KubernetesCreatedByLabelKey]
+	creatorName, exist := instance.Labels[utils.RayOriginatedFromCRDLabelKey]
 
 	if !exist {
 		return ""

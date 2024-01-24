@@ -498,7 +498,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.RayServiceCreatorLabelValue, "", false)
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, string(utils.RayServiceCRD), "", false)
 
 	hasCorrectDeathEnv := false
 	for _, container := range pod.Spec.Containers {
@@ -535,7 +535,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
 
 	// "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" should not be set on the head Pod by default
-	assert.True(t, !envVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
+	assert.True(t, !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
 
 	// Test 2
 	cluster = instance.DeepCopy()

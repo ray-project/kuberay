@@ -91,7 +91,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
-		if isJobPendingOrRunning(rayJobInstance.Status.JobStatus) {
+		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
+		// the case where JobStatus is JobStatusNew.
+		if !rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
@@ -200,13 +202,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		r.Log.Info("GetJobInfo", "Job Info", jobInfo)
 
-		// If the JobStatus is in the SUCCEEDED or FAILED, it is impossible for the Ray job to transition to any other status
-		// because both of them are terminal status. Additionally, RayJob does not currently support retries. Hence, we can
-		// mark the RayJob as "Complete" to avoid unnecessary reconciliation. Note that the definition of "Complete" does not
-		// include STOPPED which is also a terminal status because `suspend` requires to stop the Ray job gracefully before
-		// delete the RayCluster.
+		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
+		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
+		// as "Complete" to avoid unnecessary reconciliation.
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
-		if isJobSucceedOrFail(jobInfo.JobStatus) {
+		if rayv1.IsJobTerminal(jobInfo.JobStatus) {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 		}
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
@@ -358,7 +358,9 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			Name:      rayJobInstance.Name,
 			Namespace: rayJobInstance.Namespace,
 			Labels: map[string]string{
-				utils.KubernetesCreatedByLabelKey: utils.ComponentName,
+				utils.RayOriginatedFromCRNameLabelKey: rayJobInstance.Name,
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+				utils.KubernetesCreatedByLabelKey:     utils.ComponentName,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -448,16 +450,6 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 	r.Log.Info("releaseComputeResources", "isClusterNotFound", isClusterNotFound, "isJobNotFound", isJobNotFound, "isReleaseComplete", isReleaseComplete)
 
 	return isReleaseComplete, nil
-}
-
-// isJobSucceedOrFail indicates whether the job comes into end status.
-func isJobSucceedOrFail(status rayv1.JobStatus) bool {
-	return (status == rayv1.JobStatusSucceeded) || (status == rayv1.JobStatusFailed)
-}
-
-// isJobPendingOrRunning indicates whether the job is running.
-func isJobPendingOrRunning(status rayv1.JobStatus) bool {
-	return (status == rayv1.JobStatusPending) || (status == rayv1.JobStatusRunning)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -572,9 +564,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+	labels := make(map[string]string, len(rayJobInstance.Labels))
+	for key, value := range rayJobInstance.Labels {
+		labels[key] = value
+	}
+	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
+	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      rayJobInstance.Labels,
+			Labels:      labels,
 			Annotations: rayJobInstance.Annotations,
 			Name:        rayClusterName,
 			Namespace:   rayJobInstance.Namespace,
