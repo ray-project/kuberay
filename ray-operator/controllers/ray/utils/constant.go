@@ -6,14 +6,12 @@ const (
 	DefaultServeAppName = "default"
 	// Belows used as label key
 
-	// RayOriginatedFromLabelKey is the label used to associate the root KubeRay Custom Resource.
-	// For example, if a RayCluster is created by a RayJob named myjob, then the cluster will have
-	// A ray.io/originated-from=RayService_mysvc label will be added to the following resources if they are originated from a RayService mysvc.
-	//   * Kubernetes Services
-	//   * RayClusters
-	// A ray.io/originated-from=RayJob_myjob label will be added to the following resources if they are originated from a RayJob myjob.
-	//   * Kubernetes Jobs
-	//   * RayClusters
+	// RayOriginatedFromCRNameLabelKey and RayOriginatedFromCRDLabelKey are the labels used to associate the root KubeRay Custom Resource.
+	// [Example 1] If we create a RayJob named `myjob`, then (1) the RayCluster and (2) the submitter K8s Job will have a
+	// `ray.io/originated-from-cr-name=myjob` and a `ray.io/originated-from-crd=RayJob` label.
+	//
+	// [Example 2] If we create a RayService named `mysvc`, then (1) the RayCluster and (2) the Kubernetes services managed by the RayService
+	// will have a `ray.io/originated-from-cr-name=mysvc` and a `ray.io/originated-from-crd=RayService` label.
 	RayOriginatedFromCRNameLabelKey          = "ray.io/originated-from-cr-name"
 	RayOriginatedFromCRDLabelKey             = "ray.io/originated-from-crd"
 	RayClusterLabelKey                       = "ray.io/cluster"
