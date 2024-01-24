@@ -503,3 +503,12 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 	}
 	return "", false
 }
+
+func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
+	for _, env := range envVars {
+		if env.Name == envName {
+			return true
+		}
+	}
+	return false
+}

@@ -257,6 +257,7 @@ var _ = Context("Inside the default namespace", func() {
 				for _, pod := range workerPods.Items {
 					// Worker Pod should have only one container.
 					Expect(len(pod.Spec.Containers)).Should(Equal(1))
+					Expect(utils.EnvVarExists(utils.RAY_SERVE_KV_TIMEOUT_S, pod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 				}
 			}
 		})

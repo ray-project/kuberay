@@ -6,15 +6,14 @@ const (
 	DefaultServeAppName = "default"
 	// Belows used as label key
 
-	// RayOriginatedFromLabelKey is the label used to associate the root KubeRay Custom Resource.
-	// For example, if a RayCluster is created by a RayJob named myjob, then the cluster will have
-	// A ray.io/originated-from=RayService_mysvc label will be added to the following resources if they are originated from a RayService mysvc.
-	//   * Kubernetes Services
-	//   * RayClusters
-	// A ray.io/originated-from=RayJob_myjob label will be added to the following resources if they are originated from a RayJob myjob.
-	//   * Kubernetes Jobs
-	//   * RayClusters
-	RayOriginatedFromLabelKey                = "ray.io/originated-from"
+	// RayOriginatedFromCRNameLabelKey and RayOriginatedFromCRDLabelKey are the labels used to associate the root KubeRay Custom Resource.
+	// [Example 1] If we create a RayJob named `myjob`, then (1) the RayCluster and (2) the submitter K8s Job will have a
+	// `ray.io/originated-from-cr-name=myjob` and a `ray.io/originated-from-crd=RayJob` label.
+	//
+	// [Example 2] If we create a RayService named `mysvc`, then (1) the RayCluster and (2) the Kubernetes services managed by the RayService
+	// will have a `ray.io/originated-from-cr-name=mysvc` and a `ray.io/originated-from-crd=RayService` label.
+	RayOriginatedFromCRNameLabelKey          = "ray.io/originated-from-cr-name"
+	RayOriginatedFromCRDLabelKey             = "ray.io/originated-from-crd"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
 	RayNodeGroupLabelKey                     = "ray.io/group"
@@ -96,7 +95,6 @@ const (
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
-	SERVE_CONTROLLER_PIN_ON_NODE            = "RAY_INTERNAL_SERVE_CONTROLLER_PIN_ON_NODE"
 	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
@@ -161,9 +159,8 @@ const (
 	ServingService ServiceType = "serveService"
 )
 
-// RayOriginatedFromLabelValue generates a value for the label RayOriginatedFromLabelKey
+// RayOriginatedFromCRDLabelValue generates a value for the label RayOriginatedFromCRDLabelKey
 // This is also the only function to construct label filter of resources originated from a given CRDType.
-func RayOriginatedFromLabelValue(kind CRDType, name string) string {
-	// we choose the _ as the separator because it is the only choice. ref: https://github.com/ray-project/kuberay/pull/1830#discussion_r1452547074
-	return string(kind) + "_" + name
+func RayOriginatedFromCRDLabelValue(crdType CRDType) string {
+	return string(crdType)
 }

@@ -6,10 +6,7 @@ import time
 import tempfile
 import yaml
 
-from framework.prototype import (
-    RayClusterAddCREvent,
-    RayServiceFullCREvent
-)
+from framework.prototype import RayClusterAddCREvent
 
 from framework.utils import (
     get_head_pod,
@@ -65,35 +62,6 @@ def create_ray_cluster(template_name, ray_version, ray_image):
         )
         ray_cluster_add_event.trigger()
         return ray_cluster_add_event
-
-def create_ray_service(template_name, ray_version, ray_image):
-    """Create a RayService without a NodePort service."""
-    context = {}
-    with open(template_name, encoding="utf-8") as ray_service_template:
-        template = Template(ray_service_template.read())
-        yamlfile = template.substitute(
-            {'ray_image': ray_image, 'ray_version': ray_version}
-        )
-    with tempfile.NamedTemporaryFile('w', suffix = '_ray_service_yaml') as ray_service_yaml:
-        ray_service_yaml.write(yamlfile)
-        ray_service_yaml.flush()
-        context['filepath'] = ray_service_yaml.name
-
-        for k8s_object in yaml.safe_load_all(yamlfile):
-            if k8s_object['kind'] == 'RayService':
-                context['cr'] = k8s_object
-                break
-
-        # Create a RayService
-        ray_service_add_event = RayServiceFullCREvent(
-            custom_resource_object = context['cr'],
-            rulesets = [],
-            timeout = 90,
-            namespace='default',
-            filepath = context['filepath']
-        )
-        ray_service_add_event.trigger()
-        return ray_service_add_event
 
 def wait_for_condition(
         condition_predictor, timeout=10, retry_interval_ms=100, **kwargs

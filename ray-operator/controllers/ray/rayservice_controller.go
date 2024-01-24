@@ -391,7 +391,10 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 // cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that are owned by the RayService instance.
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	rayClusterList := rayv1.RayClusterList{}
-	filterLabels := client.MatchingLabels{utils.RayOriginatedFromLabelKey: utils.RayOriginatedFromLabelValue(utils.RayServiceCRD, rayServiceInstance.Name)}
+	filterLabels := client.MatchingLabels{
+		utils.RayOriginatedFromCRNameLabelKey: rayServiceInstance.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+	}
 	var err error
 	if err = r.List(ctx, &rayClusterList, client.InNamespace(rayServiceInstance.Namespace), filterLabels); err != nil {
 		r.Log.Error(err, "Fail to list RayCluster for "+rayServiceInstance.Name)
@@ -671,7 +674,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
 	}
-	rayClusterLabel[utils.RayOriginatedFromLabelKey] = utils.RayOriginatedFromLabelValue(utils.RayServiceCRD, rayService.Name)
+	rayClusterLabel[utils.RayOriginatedFromCRNameLabelKey] = rayService.Name
+	rayClusterLabel[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 
 	rayClusterAnnotations := make(map[string]string)
 	for k, v := range rayService.Annotations {
