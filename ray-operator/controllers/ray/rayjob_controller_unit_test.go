@@ -179,6 +179,19 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		}
 	}
 	assert.True(t, found)
+
+	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
+	assert.NoError(t, err)
+	found = false
+	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
+		if envVar.Name == utils.RAY_DASHBOARD_ADDRESS {
+			assert.Equal(t, "test-url", envVar.Value)
+			found = true
+		}
+	}
+
+	assert.True(t, found)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {

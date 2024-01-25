@@ -102,7 +102,7 @@ spec:
   #         image: rayproject/ray:2.9.0
   #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
   #         # Specifying Command is not recommended.
-  #         # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
+  #         command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS -- echo hello world"]
 
 
 ######################Ray code sample#################################

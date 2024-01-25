@@ -348,6 +348,12 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 		Value: "1",
 	})
 
+	// Set RAY_DASHBOARD_ADDRESS so that the Ray address can be discovered at runtime
+	submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_DASHBOARD_ADDRESS,
+		Value: rayJobInstance.Status.DashboardURL,
+	})
+
 	return submitterTemplate, nil
 }
 

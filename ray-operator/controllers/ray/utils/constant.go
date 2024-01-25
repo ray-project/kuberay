@@ -86,6 +86,7 @@ const (
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
 	RAY_IP                                  = "RAY_IP"
 	FQ_RAY_IP                               = "FQ_RAY_IP"
+	RAY_DASHBOARD_ADDRESS                   = "RAY_DASHBOARD_ADDRESS"
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"
