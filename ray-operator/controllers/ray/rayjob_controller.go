@@ -348,10 +348,16 @@ func (r *RayJobReconciler) getSubmitterTemplate(rayJobInstance *rayv1.RayJob, ra
 		Value: "1",
 	})
 
-	// Set RAY_DASHBOARD_ADDRESS so that the Ray address can be discovered at runtime
+	// Users can use `RAY_DASHBOARD_ADDRESS` to specify the dashboard address and `RAY_JOB_SUBMISSION_ID` to specify the job id to avoid
+	// double submission in the `ray job submit` command. For example:
+	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  utils.RAY_DASHBOARD_ADDRESS,
 		Value: rayJobInstance.Status.DashboardURL,
+	})
+	submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_JOB_SUBMISSION_ID,
+		Value: rayJobInstance.Status.JobId,
 	})
 
 	return submitterTemplate, nil

@@ -105,6 +105,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
+			JobId:        "test-job-id",
 		},
 	}
 
@@ -129,6 +130,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
+			JobId:        "test-job-id",
 		},
 	}
 	rayClusterInstance := &rayv1.RayCluster{
@@ -160,12 +162,12 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
@@ -190,7 +192,16 @@ func TestGetSubmitterTemplate(t *testing.T) {
 			found = true
 		}
 	}
+	assert.True(t, found)
 
+	// Test 6: Check default RAY_JOB_SUBMISSION_ID env var
+	found = false
+	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
+		if envVar.Name == utils.RAY_JOB_SUBMISSION_ID {
+			assert.Equal(t, "test-job-id", envVar.Value)
+			found = true
+		}
+	}
 	assert.True(t, found)
 }
 
