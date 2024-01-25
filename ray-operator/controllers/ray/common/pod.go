@@ -293,6 +293,17 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 
 // BuildPod a pod config
 func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableServeService bool) (aPod corev1.Pod) {
+	// For Worker Pod: Traffic readiness is determined by the readiness probe.
+	// Therefore, the RayClusterServingServiceLabelKey label is not utilized and should always be set to true.
+	// For Head Pod: Traffic readiness is determined by the value of the RayClusterServingServiceLabelKey label.
+	// Initially, set the label to false and allow the rayservice controller to manage its value.
+	if enableServeService {
+		podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
+		if rayNodeType == rayv1.HeadNode {
+			podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
+		}
+	}
+
 	pod := corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
