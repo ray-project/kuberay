@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberay-view-role
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+- apiGroups:
+  - ray.io
+  resources:
+  - rayjobs
+  - rayclusters
+  - rayservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ray.io
+  resources:
+  - rayservices/finalizers
+  - rayclusters/finalizers
+  - rayjobs/finalizers
+  - rayservices/status
+  - rayclusters/status
+  - rayjobs/status
+  verbs:
+  - get
