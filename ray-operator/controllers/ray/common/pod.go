@@ -296,7 +296,7 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
 	// Therefore, the RayClusterServingServiceLabelKey label is not utilized and should always be set to true.
 	// For Head Pod: Traffic readiness is determined by the value of the RayClusterServingServiceLabelKey label.
-	// Initially, set the label to false and allow the rayservice controller to manage its value.
+	// Initially, set the label to false and let the rayservice controller to manage its value.
 	if enableServeService {
 		podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 		if rayNodeType == rayv1.HeadNode {
