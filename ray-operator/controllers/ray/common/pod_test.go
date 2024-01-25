@@ -333,7 +333,11 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
+
+	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
+	assert.True(t, ok, "Expected serve label is not present")
+	assert.Equal(t, utils.EnableRayClusterServingServiceFalse, val, "Wrong serve label value")
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
@@ -386,7 +390,11 @@ func TestBuildPod(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
+	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, true)
+
+	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
+	assert.True(t, ok, "Expected serve label is not present")
+	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -407,12 +415,6 @@ func TestBuildPod(t *testing.T) {
 	// Check Envs
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
-
-	// Try to build pod for serve
-	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
-	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
-	assert.True(t, ok, "Expected serve label is not present")
-	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 }
 
 func TestBuildPod_WithOverwriteCommand(t *testing.T) {
