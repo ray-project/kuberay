@@ -194,6 +194,8 @@ env_vars:
 	})
 
 	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(t *testing.T) {
+		// `stop.py` will sleep for 20 seconds so that the RayJob has enough time to transition to `RUNNING`
+		// and then stop the Ray job. If the Ray job is stopped, the RayJob should transition to `Complete`.
 		rayJobAC := rayv1ac.RayJob("stop", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/stop.py").
