@@ -274,6 +274,21 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
 				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
 		})
+
+		It("job reached terminal state, deployment status should be Completed with EndTime set", func() {
+			now := time.Now()
+			// update fake dashboard client to return job info with "Succeeded status"
+			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) {
+				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded}, nil
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Eventually(
+				getRayJobDeploymentStatus(ctx, myRayJob),
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", myRayJob.Status.JobDeploymentStatus)
+			Expect(myRayJob.Status.EndTime.After(now)).Should(BeTrue(), "EndTime = %v, Now = %v", myRayJob.Status.EndTime, now)
+		})
 	})
 })
 

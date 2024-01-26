@@ -95,7 +95,9 @@ type RayJobStatus struct {
 	// It is not guaranteed to be set in happens-before order across separate operations.
 	// It is represented in RFC3339 form
 	StartTime *metav1.Time `json:"startTime,omitempty"`
-	// Represents time when the job was ended.
+	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
+	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
+	// or the submitter Job has failed.
 	EndTime          *metav1.Time     `json:"endTime,omitempty"`
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the

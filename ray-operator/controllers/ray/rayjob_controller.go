@@ -214,7 +214,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobStatus = jobInfo.JobStatus
 		rayJobInstance.Status.Message = jobInfo.Message
 		rayJobInstance.Status.StartTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.StartTime)
-		rayJobInstance.Status.EndTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.EndTime)
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 	case rayv1.JobDeploymentStatusSuspending:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
@@ -522,6 +521,11 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
+
+		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
+		}
+
 		r.Log.Info("updateRayJobStatus", "old JobStatus", oldRayJobStatus.JobStatus, "new JobStatus", newRayJobStatus.JobStatus,
 			"old JobDeploymentStatus", oldRayJobStatus.JobDeploymentStatus, "new JobDeploymentStatus", newRayJobStatus.JobDeploymentStatus)
 		if err := r.Status().Update(ctx, newRayJob); err != nil {
@@ -624,7 +628,6 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 			r.Log.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Complete`.", "RayJob", rayJob.Name, "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
 			rayJob.Status.Message = "The submitter Kubernetes Job is failed. Reason: " + cond.Reason + ". Message: " + cond.Message
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
-			rayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 			return true
 		}
 	}
