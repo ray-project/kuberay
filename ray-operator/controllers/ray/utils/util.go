@@ -513,3 +513,14 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	}
 	return false
 }
+
+// EnvVarByName returns an entry in []corev1.EnvVar that matches a name.
+// Also returns a bool for whether the env var exists.
+func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool) {
+	for _, env := range envVars {
+		if env.Name == envName {
+			return env, true
+		}
+	}
+	return corev1.EnvVar{}, false
+}
