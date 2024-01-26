@@ -573,6 +573,7 @@ class GeneralTestCase(unittest.TestCase):
         super().__init__(methodName)
         self.cr_event = cr_event
         self.operator_manager = OperatorManager.instance()
+        self.passed = False
 
     @classmethod
     def setUpClass(cls):
@@ -586,10 +587,15 @@ class GeneralTestCase(unittest.TestCase):
     def runtest(self):
         """Run a configuration test"""
         self.cr_event.trigger()
+        self.passed = True
 
     def tearDown(self) -> None:
-        try:
-            self.cr_event.clean_up()
-        except Exception as ex:
-            logger.error(str(ex))
-            K8S_CLUSTER_MANAGER.cleanup()
+        if self.passed:
+            try:
+                self.cr_event.clean_up()
+            except Exception as ex:
+                logger.error(str(ex))
+                K8S_CLUSTER_MANAGER.cleanup()
+        else:
+            namespace = self.cr_event.namespace
+            logger.error("Preserving CR in namespace %s for debugging", namespace)
