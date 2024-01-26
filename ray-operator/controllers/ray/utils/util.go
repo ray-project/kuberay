@@ -94,7 +94,7 @@ func CheckName(s string) string {
 	return CheckNameWithLength(s, MaxNameLength)
 }
 
-// CheckName makes sure the name does not start with a numeric value and the total length is < MaxGenerateNameLength char
+// CheckGenerateName makes sure the name does not start with a numeric value and the total length is < MaxGenerateNameLength char
 func CheckGenerateName(s string) string {
 	return CheckNameWithLength(s, MaxGenerateNameLength)
 }
