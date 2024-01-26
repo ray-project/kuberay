@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/base32"
 	"fmt"
@@ -17,12 +18,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	"github.com/sirupsen/logrus"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -156,10 +155,11 @@ func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, 
 }
 
 // GenerateFQDNServiceName generates a Fully Qualified Domain Name.
-func GenerateFQDNServiceName(cluster rayv1.RayCluster, namespace string) string {
+func GenerateFQDNServiceName(ctx context.Context, cluster rayv1.RayCluster, namespace string) string {
+	log := ctrl.LoggerFrom(ctx)
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, cluster.Spec, cluster.Name)
 	if err != nil {
-		logrus.Errorf("Failed to generate head service name: %v", err)
+		log.Error(err, "Failed to generate head service name")
 		return ""
 	}
 	return fmt.Sprintf("%s.%s.svc.%s", headSvcName, namespace, GetClusterDomainName())
@@ -206,13 +206,13 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
+func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.WorkerGroupSpec) int32 {
+	log := ctrl.LoggerFrom(ctx)
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		logrus.Warn(
-			fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
-				"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		log.Info(fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
+			"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
 		workerReplicas = *workerGroupSpec.MaxReplicas
 	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
@@ -227,10 +227,10 @@ func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
-func CalculateDesiredReplicas(cluster *rayv1.RayCluster) int32 {
+func CalculateDesiredReplicas(ctx context.Context, cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += GetWorkerGroupDesiredReplicas(nodeGroup)
+		count += GetWorkerGroupDesiredReplicas(ctx, nodeGroup)
 	}
 
 	return count
@@ -356,19 +356,20 @@ func GetHeadGroupServiceAccountName(cluster *rayv1.RayCluster) string {
 }
 
 // CheckAllPodsRunning check if all pod in a list is running
-func CheckAllPodsRunning(runningPods corev1.PodList) bool {
+func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
+	log := ctrl.LoggerFrom(ctx)
 	// check if there is no pods.
 	if len(runningPods.Items) == 0 {
 		return false
 	}
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
-			logrus.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+			log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
 			return false
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
-				logrus.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+				log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
 				return false
 			}
 		}

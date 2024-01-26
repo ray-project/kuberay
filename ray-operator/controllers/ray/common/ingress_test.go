@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -75,13 +76,13 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1.RayCluster{
 
 // only throw warning message and rely on Kubernetes to assign default ingress class
 func TestBuildIngressForHeadServiceWithoutIngressClass(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(*instanceWithIngressEnabledWithoutIngressClass)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass)
 	assert.NotNil(t, ingress)
 	assert.Nil(t, err)
 }
 
 func TestBuildIngressForHeadService(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(*instanceWithIngressEnabled)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled)
 	assert.Nil(t, err)
 
 	// check ingress.class annotation

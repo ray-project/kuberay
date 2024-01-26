@@ -359,7 +359,7 @@ func setupTest(t *testing.T) {
 		},
 	}
 
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
@@ -1312,7 +1312,7 @@ func TestGetHeadServiceIP(t *testing.T) {
 	setupTest(t)
 
 	headServiceIP := "1.2.3.4"
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
@@ -1386,7 +1386,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	// To update the status of RayCluster with `r.Status().Update()`,
 	// initialize the runtimeObjects with appropriate context. In KubeRay, the `ClusterIP`
 	// and `TargetPort` fields are typically set by the cluster's control plane.
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	assert.Nil(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headNodeIP
 	for i, port := range headService.Spec.Ports {
@@ -1567,7 +1567,7 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
-	headService, err := common.BuildServiceForHeadPod(*testRayCluster, nil, nil)
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	assert.Nil(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	headPod := &corev1.Pod{

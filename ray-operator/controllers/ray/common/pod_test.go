@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
@@ -275,10 +276,10 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 	}
 	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 1)
 	assert.Equal(t, len(testPod.Spec.Volumes), 1)
-	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
+	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
 	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
 	assert.Equal(t, len(testPod.Spec.Volumes), 2)
-	addEmptyDir(&testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
+	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
 	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
 	assert.Equal(t, len(testPod.Spec.Volumes), 2)
 }
@@ -329,11 +330,12 @@ func checkContainerEnv(t *testing.T, container corev1.Container, envName string,
 
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
+	ctx := context.Background()
 
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", true)
 
 	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
@@ -388,9 +390,9 @@ func TestBuildPod(t *testing.T) {
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, true)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, true)
 
 	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
@@ -418,6 +420,8 @@ func TestBuildPod(t *testing.T) {
 }
 
 func TestBuildPod_WithOverwriteCommand(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Annotations = map[string]string{
 		// When the value of the annotation is "true", KubeRay will not generate the command and args for the container.
@@ -430,28 +434,29 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Args = []string{"I am worker again"}
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	headPod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, headContainer.Command, []string{"I am head"})
 	assert.Equal(t, headContainer.Args, []string{"I am head again"})
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	workerPod := BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
 	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
+	ctx := context.Background()
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 
 	actualResult := pod.Labels[utils.RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -505,8 +510,8 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, string(utils.RayServiceCRD), "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(context.Background(), podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, string(utils.RayServiceCRD), "", false)
 
 	hasCorrectDeathEnv := false
 	for _, container := range pod.Spec.Containers {
@@ -528,6 +533,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 }
 
 func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
+	ctx := context.Background()
 	// Test 1
 	cluster := instance.DeepCopy()
 	cluster.Annotations = map[string]string{
@@ -536,8 +542,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 
 	// Build a head Pod.
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
@@ -554,8 +560,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the head group spec.
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env,
 		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
-	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 
 	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
@@ -570,9 +576,9 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	// Build a worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -588,8 +594,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env,
 		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
 	worker = cluster.Spec.WorkerGroupSpecs[0]
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, "", fqdnRayIP, false)
 
 	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -598,6 +604,8 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 
 // Check that autoscaler container overrides work as expected.
 func TestBuildPodWithAutoscalerOptions(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
@@ -657,8 +665,8 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		VolumeMounts:       customVolumeMounts,
 		SecurityContext:    &customSecurityContext,
 	}
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, "", "", false)
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
@@ -675,10 +683,12 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 }
 
 func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 	// autoscaler container is injected into head pod
 	actualContainerCount := len(podTemplateSpec.Spec.Containers)
@@ -696,7 +706,7 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 	// Repeat ServiceAccountName check with long cluster name.
 	cluster.Name = longString(t) // 200 chars long
-	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	actualResult = podTemplateSpec.Spec.ServiceAccountName
 	expectedResult = shortString(t) // 50 chars long, truncated by utils.CheckName
 	if !reflect.DeepEqual(expectedResult, actualResult) {
@@ -705,6 +715,8 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 }
 
 func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	cluster.Spec.AutoscalerOptions = nil
@@ -712,7 +724,7 @@ func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
 
 	// Case 1: If `AutoscalerOptions.Image` is not set, the Autoscaler container should use the Ray head container's image by default.
 	expectedAutoscalerImage := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := corev1.Pod{
 		Spec: podTemplateSpec.Spec,
 	}
@@ -726,7 +738,7 @@ func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
 	cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Image: &customAutoscalerImage,
 	}
-	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod.Spec = podTemplateSpec.Spec
 	autoscalerContainerIndex = getAutoscalerContainerIndex(pod)
 	assert.Equal(t, customAutoscalerImage, podTemplateSpec.Spec.Containers[autoscalerContainerIndex].Image)
@@ -737,7 +749,7 @@ func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
 func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 	cluster := instance.DeepCopy()
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := ""
@@ -753,7 +765,7 @@ func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
 	serviceAccount := "head-service-account"
 	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := serviceAccount
@@ -770,7 +782,7 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName = serviceAccount
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	pod := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 	actualResult := pod.Spec.ServiceAccountName
 	expectedResult := serviceAccount
@@ -781,7 +793,7 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 
 func TestValidateHeadRayStartParams_OK(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	isValid, err := ValidateHeadRayStartParams(*input)
+	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
 	assert.Equal(t, true, isValid)
 	assert.Nil(t, err)
 	command := convertParamMap(input.RayStartParams)
@@ -796,7 +808,7 @@ func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T
 		Name:  AllowSlowStorageEnvVar,
 		Value: "1",
 	})
-	isValid, err := ValidateHeadRayStartParams(*input)
+	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
 	assert.Equal(t, true, isValid)
 	assert.True(t, errors.IsBadRequest(err))
 }
@@ -804,7 +816,7 @@ func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T
 func TestValidateHeadRayStartParams_InvalidObjectStoreMemory(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
 	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
-	isValid, err := ValidateHeadRayStartParams(*input)
+	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
 	assert.Equal(t, false, isValid)
 	assert.True(t, errors.IsBadRequest(err))
 }
@@ -822,12 +834,13 @@ func splitAndSort(s string) []string {
 }
 
 func TestCleanupInvalidVolumeMounts(t *testing.T) {
+	ctx := context.Background()
 	cluster := instance.DeepCopy()
 
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, "", "", false)
 
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, []corev1.VolumeMount{
 		{
@@ -847,15 +860,17 @@ func TestCleanupInvalidVolumeMounts(t *testing.T) {
 }
 
 func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	worker.Template.ObjectMeta.Name = "ray-worker-test"
 	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	expectedWorker := *worker.DeepCopy()
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
-	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
 	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
 	assert.Equal(t, worker, expectedWorker)
 }
@@ -873,10 +888,12 @@ func containerPortExists(ports []corev1.ContainerPort, name string, containerPor
 }
 
 func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, int32(utils.DefaultMetricsPort)); err != nil {
@@ -888,7 +905,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
-	podTemplateSpec = DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// Verify the custom metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, customMetricsPort); err != nil {
 		t.Fatal(err)
@@ -896,12 +913,14 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 }
 
 func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
-	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, int32(utils.DefaultMetricsPort)); err != nil {
@@ -913,7 +932,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
-	podTemplateSpec = DefaultWorkerPodTemplate(*cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// Verify the custom metrics port exists.
 	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, customMetricsPort); err != nil {
 		t.Fatal(err)
@@ -921,15 +940,16 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 }
 
 func TestDefaultInitContainer(t *testing.T) {
+	ctx := context.Background()
 	// A default init container to check the health of GCS is expected to be added.
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	expectedResult := len(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.InitContainers) + 1
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
-	podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
 	numInitContainers := len(podTemplateSpec.Spec.InitContainers)
 	assert.Equal(t, expectedResult, numInitContainers, "A default init container is expected to be added.")
 
@@ -954,8 +974,10 @@ func TestDefaultInitContainer(t *testing.T) {
 }
 
 func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
+	ctx := context.Background()
+
 	cluster := instance.DeepCopy()
-	fqdnRayIP := utils.GenerateFQDNServiceName(*cluster, cluster.Namespace)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 
@@ -986,7 +1008,7 @@ func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
 			// set ray container imagePullPolicy
 			worker.Template.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy = tc.imagePullPolicy
 
-			podTemplateSpec := DefaultWorkerPodTemplate(*cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
 
 			healthCheckContainer := podTemplateSpec.Spec.InitContainers[len(podTemplateSpec.Spec.InitContainers)-1]
 			assert.Equal(t, tc.expectedPullPolicy, healthCheckContainer.ImagePullPolicy, "The ImagePullPolicy of the init container should be the same as the Ray container.")
@@ -995,6 +1017,7 @@ func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
 }
 
 func TestSetMissingRayStartParamsAddress(t *testing.T) {
+	ctx := context.Background()
 	// The address option is automatically injected into RayStartParams with a default value of <Fully Qualified Domain Name (FQDN)>:<headPort> for workers only, which is used to connect to the Ray cluster.
 	// The head should not include the address option in RayStartParams, as it can access the GCS server, which also runs on the head, via localhost.
 	// Although not recommended, users can manually set the address option for both head and workers.
@@ -1005,27 +1028,29 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 
 	// Case 1: Head node with no address option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.NotContains(t, rayStartParams, "address", "Head node should not have an address option set by default.")
 
 	// Case 2: Head node with custom address option set.
 	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
 
 	// Case 3: Worker node with no address option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 	assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
 
 	// Case 4: Worker node with custom address option set.
 	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
 }
 
 func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
+	ctx := context.Background()
+
 	// The metrics-export-port option is automatically injected into RayStartParams with a default value of DefaultMetricsPort for both head and workers.
 	// Users can manually set the metrics-export-port option to customize the metrics export port and scrape Ray’s metrics using Prometheus via <ip>:<custom metrics export port>.
 	// See https://github.com/ray-project/kuberay/pull/954 for more details.
@@ -1036,26 +1061,28 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 
 	// Case 1: Head node with no metrics-export-port option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 2: Head node with custom metrics-export-port option set.
 	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 3: Worker node with no metrics-export-port option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
 
 	// Case 4: Worker node with custom metrics-export-port option set.
 	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
 }
 
 func TestSetMissingRayStartParamsBlock(t *testing.T) {
+	ctx := context.Background()
+
 	// The --block option is automatically injected into RayStartParams with a default value of true for both head and workers.
 	// Although not recommended, users can manually set the --block option.
 	// See https://github.com/ray-project/kuberay/pull/675 for more details.
@@ -1065,26 +1092,28 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 
 	// Case 1: Head node with no --block option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
 
 	// Case 2: Head node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 
 	// Case 3: Worker node with no --block option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
 
 	// Case 4: Worker node with --block option set to false.
 	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
 }
 
 func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
+	ctx := context.Background()
+
 	// The dashboard-host option is automatically injected into RayStartParams with a default value of "0.0.0.0" for head only as workers do not have dashborad server.
 	// Users can manually set the dashboard-host option to customize the host the dashboard server binds to, either "localhost" (127.0.0.1) or "0.0.0.0" (available from all interfaces).
 	headPort := "6379"
@@ -1092,23 +1121,23 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 
 	// Case 1: Head node with no dashboard-host option set.
 	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
 
 	// Case 2: Head node with dashboard-host option set.
 	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.HeadNode, headPort, "", nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "", nil)
 	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
 
 	// Case 3: Worker node with no dashboard-host option set.
 	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.NotContains(t, rayStartParams, "dashboard-host", "workers should not have an dashboard-host option set.")
 
 	// Case 4: Worker node with dashboard-host option set.
 	// To maximize user empowerment, this option can be enabled. However, it is important to note that the dashboard is not available on worker nodes.
 	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
+	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, nil)
 	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
 }
 
@@ -1166,7 +1195,7 @@ func TestGetEnableProbesInjection(t *testing.T) {
 func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	cluster := instance.DeepCopy()
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(*cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	rayContainer := &podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
 
 	// Test 1: User defines a custom HTTPGet probe.

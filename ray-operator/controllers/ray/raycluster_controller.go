@@ -164,6 +164,7 @@ type RayClusterReconcilerOptions struct {
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var err error
+	ctx = ctrl.LoggerInto(ctx, r.Log) // TODO: add request namespace here
 
 	// Try to fetch the RayCluster instance
 	instance := &rayv1.RayCluster{}
@@ -290,7 +291,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
 			} else {
-				redisCleanupJob := r.buildRedisCleanupJob(*instance)
+				redisCleanupJob := r.buildRedisCleanupJob(ctx, *instance)
 				if err := r.Create(ctx, &redisCleanupJob); err != nil {
 					if errors.IsAlreadyExists(err) {
 						r.Log.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
@@ -482,7 +483,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(*instance)
+		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
 		if err != nil {
 			return err
 		}
@@ -532,7 +533,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		for k, v := range instance.Spec.HeadServiceAnnotations {
 			annotations[k] = v
 		}
-		headSvc, err := common.BuildServiceForHeadPod(*instance, labels, annotations)
+		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			r.Log.Info("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
@@ -561,7 +562,7 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 		return nil
 	} else if errors.IsNotFound(err) {
 		// Service does not exist, create it
-		svc, err = common.BuildServeServiceForRayCluster(*instance)
+		svc, err = common.BuildServeServiceForRayCluster(ctx, *instance)
 		if err != nil {
 			return err
 		}
@@ -601,7 +602,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	}
 	if EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
-			if err := scheduler.DoBatchSchedulingOnSubmission(instance); err != nil {
+			if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
 				return err
 			}
 		} else {
@@ -696,7 +697,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		// workerReplicas will store the target number of pods for this worker group.
-		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(worker)
+		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
 		r.Log.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
@@ -962,7 +963,7 @@ func (r *RayClusterReconciler) createService(ctx context.Context, raySvc *corev1
 
 func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster) error {
 	// build the pod then create it
-	pod := r.buildHeadPod(instance)
+	pod := r.buildHeadPod(ctx, instance)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -997,7 +998,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) error {
 	// build the pod then create it
-	pod := r.buildWorkerPod(instance, worker)
+	pod := r.buildWorkerPod(ctx, instance, worker)
 	podIdentifier := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
@@ -1033,10 +1034,10 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 }
 
 // Build head instance pod(s).
-func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Pod {
+func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol)
-	podName = utils.CheckName(podName)                                       // making sure the name is valid
-	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
+	podName = utils.CheckName(podName)                                            // making sure the name is valid
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	// Check whether serve is enabled and add serve label
@@ -1045,13 +1046,13 @@ func (r *RayClusterReconciler) buildHeadPod(instance rayv1.RayCluster) corev1.Po
 		serveLabel = true
 	}
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
-	podConf := common.DefaultHeadPodTemplate(instance, instance.Spec.HeadGroupSpec, podName, headPort)
+	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	if len(r.headSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
 	}
 	r.Log.Info("head pod labels", "labels", podConf.Labels)
 	creatorName := getCreator(instance)
-	pod := common.BuildPod(podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
+	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1075,15 +1076,15 @@ func getCreator(instance rayv1.RayCluster) string {
 }
 
 // Build worker instance pods.
-func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
+func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol)
-	podName = utils.CheckName(podName)                                       // making sure the name is valid
-	fqdnRayIP := utils.GenerateFQDNServiceName(instance, instance.Namespace) // Fully Qualified Domain Name
+	podName = utils.CheckName(podName)                                            // making sure the name is valid
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
-	podTemplateSpec := common.DefaultWorkerPodTemplate(instance, worker, podName, fqdnRayIP, headPort)
+	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
@@ -1093,7 +1094,7 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
 		serveLabel = true
 	}
-	pod := common.BuildPod(podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
+	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorName, fqdnRayIP, serveLabel)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1102,8 +1103,8 @@ func (r *RayClusterReconciler) buildWorkerPod(instance rayv1.RayCluster, worker 
 	return pod
 }
 
-func (r *RayClusterReconciler) buildRedisCleanupJob(instance rayv1.RayCluster) batchv1.Job {
-	pod := r.buildHeadPod(instance)
+func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instance rayv1.RayCluster) batchv1.Job {
+	pod := r.buildHeadPod(ctx, instance)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
 	// Only keep the Ray container in the Redis cleanup Job.
@@ -1212,7 +1213,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
-	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(newInstance)
+	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
 	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
 	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 
@@ -1223,7 +1224,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
 	// validation for the RayStartParam for the state.
-	isValid, err := common.ValidateHeadRayStartParams(newInstance.Spec.HeadGroupSpec)
+	isValid, err := common.ValidateHeadRayStartParams(ctx, newInstance.Spec.HeadGroupSpec)
 	if err != nil {
 		r.Recorder.Event(newInstance, corev1.EventTypeWarning, string(rayv1.RayConfigError), err.Error())
 	}
@@ -1231,7 +1232,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	if !isValid {
 		newInstance.Status.State = rayv1.Unhealthy
 	} else {
-		if utils.CheckAllPodsRunning(runtimePods) {
+		if utils.CheckAllPodsRunning(ctx, runtimePods) {
 			newInstance.Status.State = rayv1.Ready
 		}
 	}
