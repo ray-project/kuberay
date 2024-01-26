@@ -43,6 +43,8 @@ const (
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
+	// EnableServeServiceKey is exclusively utilized to indicate if a Raycluster is directly used for serving.
+	// See https://github.com/ray-project/kuberay/pull/1672 for more details.
 	EnableServeServiceKey  = "ray.io/enable-serve-service"
 	EnableServeServiceTrue = "true"
 
