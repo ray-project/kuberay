@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/base32"
 	"fmt"
-	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -68,13 +67,10 @@ func IsRunningAndReady(pod *corev1.Pod) bool {
 	return false
 }
 
-// CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
-func CheckName(s string) string {
-	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
-
+func CheckNameWithLength(s string, maxLength int) string {
 	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
+		offset := len(s) - maxLength
 		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}
@@ -93,13 +89,21 @@ func CheckName(s string) string {
 	return s
 }
 
-// CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
-func CheckLabel(s string) string {
-	maxLenght := 63
+// CheckName makes sure the name does not start with a numeric value and the total length is < MaxNameLength char
+func CheckName(s string) string {
+	return CheckNameWithLength(s, MaxNameLength)
+}
 
-	if len(s) > maxLenght {
+// CheckName makes sure the name does not start with a numeric value and the total length is < MaxGenerateNameLength char
+func CheckGenerateName(s string) string {
+	return CheckNameWithLength(s, MaxGenerateNameLength)
+}
+
+// CheckLabel makes sure the label value does not start with a punctuation and the total length is < MaxLabelLength char
+func CheckLabel(s string) string {
+	if len(s) > MaxLabelLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := len(s) - MaxLabelLength
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}

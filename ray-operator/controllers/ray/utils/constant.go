@@ -156,6 +156,13 @@ const (
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/names/ for naming rules.
+	MaxNameLength  = 63
+	MaxLabelLength = 63
+	// 5 is the length of the random string appended to the name
+	// See https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/storage/names/generate.go
+	MaxGenerateNameLength = MaxNameLength - 5
 )
 
 type ServiceType string

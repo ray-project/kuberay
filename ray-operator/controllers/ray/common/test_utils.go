@@ -25,6 +25,6 @@ func longString(t *testing.T) string {
 func shortString(t *testing.T) string {
 	result := utils.CheckName(longString(t))
 	// Confirm length.
-	assert.Equal(t, len(result), 50)
+	assert.Equal(t, len(result), utils.MaxNameLength)
 	return result
 }

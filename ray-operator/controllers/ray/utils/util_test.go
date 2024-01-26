@@ -71,20 +71,20 @@ func TestCheckAllPodsRunning(t *testing.T) {
 func TestCheckName(t *testing.T) {
 	// test 1 -> change
 	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
-	str = CheckName(str)
-	if str != "rca41-e903-fc3ae634b18e-lazer090scholar-director-s" {
+	str = CheckNameWithLength(str, MaxNameLength)
+	if str != "re-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s" {
 		t.Fail()
 	}
 	// test 2 -> change
 	str = "--------566666--------444433-----------222222----------4444"
-	str = CheckName(str)
-	if str != "r6666--------444433-----------222222----------4444" {
+	str = CheckNameWithLength(str, MaxNameLength)
+	if str != "r-------566666--------444433-----------222222----------4444" {
 		t.Fail()
 	}
 
 	// test 3 -> keep
 	str = "acceptable-name-head-12345"
-	str = CheckName(str)
+	str = CheckNameWithLength(str, MaxNameLength)
 	if str != "acceptable-name-head-12345" {
 		t.Fail()
 	}
