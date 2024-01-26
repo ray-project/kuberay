@@ -64,12 +64,12 @@ fumpt: gofumpt
 
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
 test: ENVTEST_K8S_VERSION ?= 1.24.2
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out
 
 # You can use `go test -timeout 30m -v ./test/e2e/rayjob_test.go ./test/e2e/support.go` if you only want to run tests in `rayjob_test.go`.
 test-e2e: WHAT ?= ./test/e2e
-test-e2e: manifests generate fmt vet ## Run e2e tests.
+test-e2e: manifests fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
 sync: helm api-docs
@@ -77,7 +77,7 @@ sync: helm api-docs
 
 ##@ Build
 
-build: generate fmt vet ## Build manager binary.
+build: fmt vet ## Build manager binary.
 	go build                                    \
     -ldflags                                    \
     "                                           \
@@ -86,7 +86,7 @@ build: generate fmt vet ## Build manager binary.
     "                                           \
     -o bin/manager main.go
 
-# run: manifests generate fmt vet
+# run: manifests fmt vet
 # Running the controller from your host may fail to reconcile resources. For example, when creating a RayService
 # KubeRay sends HTTP requests to the Ray head using ${HEAD_SVC_FQDN}:52365 which is not reachable from outside of a K8s cluster.
 # For detail, see https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#issue-5-fail-to-create-update-serve-applications
