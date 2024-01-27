@@ -46,7 +46,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Test
-      run: go test ./...
+      run: go test ./pkg/... ./cmd/... -race -parallel 4
       working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
