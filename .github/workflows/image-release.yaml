@@ -246,7 +246,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
         context: ${{env.working-directory}}
         file: ${{env.working-directory}}/Dockerfile.buildx
-        push: ${{PUSH}}
+        push: ${{env.PUSH}}
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
