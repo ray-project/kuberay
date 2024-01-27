@@ -128,6 +128,7 @@ jobs:
         run: |
           docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} -f experimental/Dockerfile .
           docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
+        working-directory: ${{env.working-directory}}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
