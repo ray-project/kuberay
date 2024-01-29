@@ -90,6 +90,29 @@ func TestCheckName(t *testing.T) {
 	}
 }
 
+func TestCheckRouteName(t *testing.T) {
+	// test 1 -> change
+	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
+	ns := "my-test-namespace"
+	str = CheckRouteName(str, ns)
+	if str != "rb18e-lazer090scholar-director-s" {
+		t.Fail()
+	}
+	// test 2 -> change
+	str = "--------566666--------444433-----------222222----------4444"
+	str = CheckRouteName(str, ns)
+	if str != "r-----------222222----------4444" {
+		t.Fail()
+	}
+
+	// test 3 -> keep
+	str = "acceptable-name-head-12345"
+	str = CheckRouteName(str, ns)
+	if str != "acceptable-name-head-12345" {
+		t.Fail()
+	}
+}
+
 func createSomePod() (pod *corev1.Pod) {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
