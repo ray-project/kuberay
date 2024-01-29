@@ -224,11 +224,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
-		isReleaseComplete, err := r.releaseComputeResources(ctx, rayJobInstance)
+		isClusterDeleted, err := r.deleteClusterResources(ctx, rayJobInstance)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		if !isReleaseComplete {
+		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		if !isClusterDeleted || !isJobDeleted {
 			r.Log.Info("The release of the compute resources has not been completed yet. " +
 				"Wait for the resources to be deleted before the status transitions to avoid a resource leak.")
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -272,7 +276,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				r.Log.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
-				if _, err = r.releaseComputeResources(ctx, rayJobInstance); err != nil {
+				if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
@@ -400,37 +404,9 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	return nil
 }
 
-// Delete the RayCluster and K8s Job associated with the RayJob to release the compute resources.
-// In the future, we may also need to delete other Kubernetes resources.
-func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	namespace := rayJobInstance.Namespace
-	clusterIdentifier := types.NamespacedName{
-		Name:      rayJobInstance.Status.RayClusterName,
-		Namespace: namespace,
-	}
-	isClusterNotFound, isJobNotFound := false, false
-
-	cluster := rayv1.RayCluster{}
-	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
-		if errors.IsNotFound(err) {
-			// If the cluster is not found, it means the cluster has been already deleted.
-			// Don't return error to make this function idempotent.
-			isClusterNotFound = true
-			r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
-		} else {
-			return false, err
-		}
-	} else {
-		if !cluster.DeletionTimestamp.IsZero() {
-			r.Log.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
-		} else {
-			if err := r.Delete(ctx, &cluster); err != nil {
-				return false, err
-			}
-			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
-		}
-	}
+// deleteSubmitterJob deletes the submitter Job associated with the RayJob.
+func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
+	var isJobDeleted bool
 
 	// Since the name of the Kubernetes Job is the same as the RayJob, we need to delete the Kubernetes Job
 	// and its Pods when suspending. A new submitter Kubernetes Job must be created to resubmit the
@@ -439,7 +415,7 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 	namespacedName := getK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
-			isJobNotFound = true
+			isJobDeleted = true
 			r.Log.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
 		} else {
 			r.Log.Error(err, "Failed to get Kubernetes Job")
@@ -457,10 +433,43 @@ func (r *RayJobReconciler) releaseComputeResources(ctx context.Context, rayJobIn
 		}
 	}
 
-	isReleaseComplete := isClusterNotFound && isJobNotFound
-	r.Log.Info("releaseComputeResources", "isClusterNotFound", isClusterNotFound, "isJobNotFound", isJobNotFound, "isReleaseComplete", isReleaseComplete)
+	r.Log.Info("deleteSubmitterJob", "isJobDeleted", isJobDeleted)
+	return isJobDeleted, nil
+}
 
-	return isReleaseComplete, nil
+// deleteClusterResources deletes the RayCluster associated with the RayJob to release the compute resources.
+func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
+	namespace := rayJobInstance.Namespace
+	clusterIdentifier := types.NamespacedName{
+		Name:      rayJobInstance.Status.RayClusterName,
+		Namespace: namespace,
+	}
+
+	var isClusterDeleted bool
+	cluster := rayv1.RayCluster{}
+	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
+		if errors.IsNotFound(err) {
+			// If the cluster is not found, it means the cluster has been already deleted.
+			// Don't return error to make this function idempotent.
+			isClusterDeleted = true
+			r.Log.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
+		} else {
+			return false, err
+		}
+	} else {
+		if !cluster.DeletionTimestamp.IsZero() {
+			r.Log.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
+		} else {
+			if err := r.Delete(ctx, &cluster); err != nil {
+				return false, err
+			}
+			r.Log.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Deleted", "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
+		}
+	}
+
+	r.Log.Info("deleteClusterResources", "isClusterDeleted", isClusterDeleted)
+	return isClusterDeleted, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

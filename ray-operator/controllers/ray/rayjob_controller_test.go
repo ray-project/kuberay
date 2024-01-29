@@ -29,9 +29,11 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
@@ -43,7 +45,8 @@ var myRayJob = &rayv1.RayJob{
 		Namespace: "default",
 	},
 	Spec: rayv1.RayJobSpec{
-		Entrypoint: "sleep 999",
+		Entrypoint:               "sleep 999",
+		ShutdownAfterJobFinishes: true,
 		RayClusterSpec: &rayv1.RayClusterSpec{
 			RayVersion: "1.12.1",
 			HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -288,6 +291,22 @@ var _ = Context("Inside the default namespace", func() {
 				getRayJobDeploymentStatus(ctx, myRayJob),
 				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", myRayJob.Status.JobDeploymentStatus)
 			Expect(myRayJob.Status.EndTime.After(now)).Should(BeTrue(), "EndTime = %v, Now = %v", myRayJob.Status.EndTime, now)
+		})
+
+		It("job completed with ShutdownAfterJobFinishes=true, RayCluster should be deleted but not the submitter Job", func() {
+			myRayCluster := &rayv1.RayCluster{}
+			Eventually(
+				func() bool {
+					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster)())
+				},
+				time.Second*15, time.Millisecond*500).Should(BeTrue(), "My myRayJob  = %v", myRayJob.Name)
+
+			submitterJob := &batchv1.Job{}
+			Eventually(
+				func() error {
+					return getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, submitterJob)()
+				},
+				time.Second*5, time.Millisecond*500).Should(BeNil(), "Expected Kubernetes job to be present")
 		})
 	})
 })
