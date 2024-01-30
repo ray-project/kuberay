@@ -173,36 +173,23 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// Test 4: Check default PYTHONUNBUFFERED setting
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	found := false
-	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if envVar.Name == PythonUnbufferedEnvVarName {
-			assert.Equal(t, "1", envVar.Value)
-			found = true
-		}
-	}
+
+	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
+	assert.Equal(t, "1", envVar.Value)
 
 	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
-	found = false
-	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if envVar.Name == utils.RAY_DASHBOARD_ADDRESS {
-			assert.Equal(t, "test-url", envVar.Value)
-			found = true
-		}
-	}
+
+	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
+	assert.Equal(t, "test-url", envVar.Value)
 
 	// Test 6: Check default RAY_JOB_SUBMISSION_ID env var
-	found = false
-	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if envVar.Name == utils.RAY_JOB_SUBMISSION_ID {
-			assert.Equal(t, "test-job-id", envVar.Value)
-			found = true
-		}
-	}
+	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
+	assert.Equal(t, "test-job-id", envVar.Value)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
