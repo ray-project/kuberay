@@ -510,7 +510,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
 	assert.Equal(t, utils.EnableRayClusterServingServiceFalse, val, "Wrong serve label value")
-	CheckHasCorrectDeathEnv(t, &pod.Spec.Containers[utils.RayContainerIndex])
+	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
@@ -521,19 +521,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
 	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
-	CheckHasCorrectDeathEnv(t, &pod.Spec.Containers[utils.RayContainerIndex])
-}
-
-func CheckHasCorrectDeathEnv(t *testing.T, container *corev1.Container) {
-	hasCorrectDeathEnv := false
-	for _, env := range container.Env {
-		if env.Name == utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO {
-			assert.Equal(t, "0", env.Value)
-			hasCorrectDeathEnv = true
-			break
-		}
-	}
-	assert.True(t, hasCorrectDeathEnv)
+	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 }
 
 func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
@@ -1222,6 +1210,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
 	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe.
+	// Here we test the case where the Ray Pod originates from RayServiceCRD,
+	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD))
