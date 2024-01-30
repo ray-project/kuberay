@@ -243,7 +243,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, enableServeService bool) {
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creator string) {
 	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
 	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
 
@@ -281,7 +281,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
-		if enableServeService && rayNodeType == rayv1.WorkerNode {
+		if strings.EqualFold(creator, string(utils.RayServiceCRD)) && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
 			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
 				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
@@ -292,14 +292,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableServeService bool) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string) (aPod corev1.Pod) {
+	log := ctrl.LoggerFrom(ctx)
+
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
 	// Therefore, the RayClusterServingServiceLabelKey label is not utilized and should always be set to true.
 	// For Head Pod: Traffic readiness is determined by the value of the RayClusterServingServiceLabelKey label.
 	// Initially, set the label to false and let the rayservice controller to manage its value.
-	log := ctrl.LoggerFrom(ctx)
-
-	if enableServeService {
+	if strings.EqualFold(creator, string(utils.RayServiceCRD)) {
 		podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 		if rayNodeType == rayv1.HeadNode {
 			podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
@@ -380,7 +380,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, enableServeService)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creator)
 	}
 
 	return pod

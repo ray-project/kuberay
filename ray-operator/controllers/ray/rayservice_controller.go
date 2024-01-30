@@ -683,7 +683,6 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(rayService *rayv
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	rayClusterAnnotations[utils.EnableServeServiceKey] = utils.EnableServeServiceTrue
 	errContext := "Failed to serialize RayCluster config. " +
 		"Manual config updates will NOT be tracked accurately. " +
 		"Please tear down the cluster and apply a new config."
