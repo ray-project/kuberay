@@ -702,6 +702,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			groupKey := workerPod.Labels[utils.RayNodeMultihostGroupKey]
 			if pods, ok := workerMap[groupKey]; ok {
 				pods.Items = append(pods.Items, workerPod)
+				workerMap[groupKey] = pods
 			} else {
 				pods = corev1.PodList{}
 				pods.Items = append(pods.Items, workerPod)
@@ -714,16 +715,32 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		deleted := struct{}{}
 		deletedMultihostGroups := make(map[string]struct{})
 		numDeletedUnhealthyWorkerPods := 0
-		for groupKey, workerPodList := range workerMap {
-			r.Log.Info("reconcilePods", "multihost group", groupKey)
-			// Check deletion reasons for pods in a multihost group together. If one of them needs to be deleted, all others need to be deleted.
-			shouldDelete, reason := shouldDeleteMultihostPods(workerPodList, rayv1.WorkerNode)
-			if shouldDelete {
-				deletedMultihostGroups[groupKey] = deleted
-				for _, workerPod := range workerPodList.Items {
-					r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
-					// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
-					// If one pod in a multi-host worker fails, all of the pods should be deleted
+		if worker.NumOfHosts > 1 {
+			for groupKey, workerPodList := range workerMap {
+				// Check deletion reasons for pods in a multihost group together. If one of them needs to be deleted, all others need to be deleted.
+				shouldDelete, reason := shouldDeleteMultihostPods(workerPodList, rayv1.WorkerNode)
+				if shouldDelete {
+					deletedMultihostGroups[groupKey] = deleted
+					for _, workerPod := range workerPodList.Items {
+						r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
+						// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
+						// If one pod in a multi-host worker fails, all of the pods should be deleted
+						numDeletedUnhealthyWorkerPods++
+						deletedWorkers[workerPod.Name] = deleted
+						if err := r.Delete(ctx, &workerPod); err != nil {
+							return err
+						}
+						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
+							"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
+							workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
+					}
+				}
+			}
+		} else {
+			for _, workerPod := range workerPods.Items {
+				shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
+				r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
+				if shouldDelete {
 					numDeletedUnhealthyWorkerPods++
 					deletedWorkers[workerPod.Name] = deleted
 					if err := r.Delete(ctx, &workerPod); err != nil {
@@ -791,6 +808,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				group := rand.Uint32()
 				var j uint32
 				for j = 0; j < uint32(worker.NumOfHosts); j++ {
+					r.Log.Info("reconcilePods", "creating worker: ", j)
 					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), group, j); err != nil {
 						return err
 					}
@@ -827,7 +845,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 						// Skip this multihost group if it has already been deleted earlier.
 						continue
 					}
-					podsToRemove := randomlyRemovedReplicas * int32(len(workerPodList.Items))
+					var podsToRemove int32
+					if worker.NumOfHosts > 1 {
+						podsToRemove = randomlyRemovedReplicas * int32(len(workerPodList.Items))
+					} else {
+						podsToRemove = randomlyRemovedReplicas
+					}
 					podsRemoved := 0
 					for _, randomPodToDelete := range workerPodList.Items {
 						r.Log.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", podsRemoved, podsToRemove), "with name", randomPodToDelete.Name)
@@ -836,9 +859,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 								return err
 							}
 							r.Log.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+						} else {
+							r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
+							podsRemoved = podsRemoved + 1
+							if int32(podsRemoved) == podsToRemove {
+								break
+							}
 						}
-						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
-						podsRemoved = podsRemoved + 1
 					}
 					replicasRemoved = replicasRemoved + 1
 					if int32(replicasRemoved) == randomlyRemovedReplicas {

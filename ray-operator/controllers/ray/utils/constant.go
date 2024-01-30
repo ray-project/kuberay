@@ -76,7 +76,7 @@ const (
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
 
-	// The defaule RayService Identifier.
+	// The default RayService Identifier.
 	RayServiceCreatorLabelValue = "rayservice"
 
 	// Use as container env variable
