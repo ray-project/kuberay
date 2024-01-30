@@ -73,8 +73,8 @@ env_vars:
 		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayJob.Status.RayClusterName, metav1.GetOptions{})
 		test.Expect(err).To(MatchError(k8serrors.NewNotFound(rayv1.Resource("rayclusters"), rayJob.Status.RayClusterName)))
 
-		// Assert the submitter Job has been cascade deleted
-		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+		// Assert the submitter Job has not been deleted
+		test.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())
 
 		// TODO (kevin85421): Check whether the Pods associated with the RayCluster and the submitter Job have been deleted.
 		// For Kubernetes Jobs, the default deletion behavior is "orphanDependents," which means the Pods will not be
@@ -182,10 +182,11 @@ env_vars:
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 
-		// Assert the RayCluster and the submitter Job have been deleted because ShutdownAfterJobFinishes is true.
+		// Assert the RayCluster has been deleted because ShutdownAfterJobFinishes is true.
 		test.Eventually(NotFound(RayClusterOrError(test, namespace.Name, rayJob.Status.RayClusterName)), TestTimeoutMedium).
 			Should(BeTrue())
-		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+		// Asset submitter Job is not deleted yet
+		test.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
