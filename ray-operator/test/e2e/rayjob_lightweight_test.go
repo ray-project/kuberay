@@ -33,9 +33,9 @@ func TestRayJobLightWeightMode(t *testing.T) {
 				WithLightWeightSubmissionMode(true).
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRuntimeEnvYAML(`
-	env_vars:
-	  counter_name: test_counter
-	`).
+env_vars:
+  counter_name: test_counter
+`).
 				WithShutdownAfterJobFinishes(true).
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
 					WithRayVersion(GetRayVersion()).
