@@ -120,7 +120,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
-	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
+	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "LightWeightSubmissionMode", rayJobInstance.Spec.LightWeightSubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
@@ -175,6 +175,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		// TODO (kevin85421): For light-weight mode, calculate the number of failed retries and transition
+		// the status to `Complete` if the number of failed retries exceeds the threshold.
 		if !rayJobInstance.Spec.LightWeightSubmissionMode {
 			// If the Job reaches the backoff limit, transition the status to `Complete`.
 			job := &batchv1.Job{}
@@ -184,7 +186,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
-				// TODO: where does it break to?
 				break
 			}
 		}

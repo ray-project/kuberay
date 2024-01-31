@@ -182,8 +182,9 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 }
 
 // RayJobInfo is the response of "ray job status" api.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobInfo struct {
+	// TODO (kevin85421): Double check whether the types are correct or not.
 	JobStatus    rayv1.JobStatus        `json:"status,omitempty"`
 	Entrypoint   string                 `json:"entrypoint,omitempty"`
 	JobId        string                 `json:"job_id,omitempty"`
@@ -197,8 +198,9 @@ type RayJobInfo struct {
 }
 
 // RayJobRequest is the request body to submit.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobRequest struct {
+	// TODO (kevin85421): Double check whether the types are correct or not.
 	Entrypoint   string                 `json:"entrypoint"`
 	SubmissionId string                 `json:"submission_id,omitempty"`
 	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
