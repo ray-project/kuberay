@@ -201,17 +201,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
-			if errors.IsBadRequest(err) {
+			if rayJobInstance.Spec.LightWeightSubmissionMode && errors.IsBadRequest(err) {
 				r.Log.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
 				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log); err != nil {
 					r.Log.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-			} else {
-				r.Log.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
+			r.Log.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		r.Log.Info("GetJobInfo", "Job Info", jobInfo)
 
