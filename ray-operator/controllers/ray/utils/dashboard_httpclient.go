@@ -205,7 +205,7 @@ type RayJobRequest struct {
 	Metadata     map[string]string      `json:"metadata,omitempty"`
 	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
 	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
-	Resources    map[string]interface{} `json:"entrypoint_resources,omitempty"`
+	Resources    map[string]string      `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
