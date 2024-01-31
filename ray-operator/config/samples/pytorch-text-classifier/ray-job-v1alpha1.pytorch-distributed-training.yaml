@@ -1,0 +1,41 @@
+# This RayJob is based on the "Fine-tune a PyTorch Lightning Text Classifier with Ray Data" example in the Ray documentation.
+# See https://docs.ray.io/en/master/train/examples/lightning/lightning_cola_advanced.html for more details.
+apiVersion: ray.io/v1alpha1
+kind: RayJob
+metadata:
+  generateName: pytorch-text-classifier-
+spec:
+  shutdownAfterJobFinishes: true
+  entrypoint: python ray-operator/config/samples/pytorch-text-classifier/fine-tune-pytorch-text-classifier.py
+  runtimeEnv: eyJwaXAiOlsibnVtcHkiLCAiZGF0YXNldHMiLCAidHJhbnNmb3JtZXJzPj00LjE5LjEiLCAicHl0b3JjaC1saWdodG5pbmc9PTEuNi41Il0sICJ3b3JraW5nX2RpciI6Imh0dHBzOi8vZ2l0aHViLmNvbS9yYXktcHJvamVjdC9rdWJlcmF5L2FyY2hpdmUvbWFzdGVyLnppcCJ9Cg==
+  rayClusterSpec:
+    rayVersion: '2.9.0'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray-ml:2.9.0-gpu
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                limits:
+                  memory: "8G"
+                  nvidia.com/gpu: "1"
+                requests:
+                  cpu: "2"
+                  memory: "8G"
+                  nvidia.com/gpu: "1"
+              volumeMounts:
+                - mountPath: /tmp/ray
+                  name: ray-logs
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
