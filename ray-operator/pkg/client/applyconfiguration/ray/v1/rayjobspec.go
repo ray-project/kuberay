@@ -9,19 +9,20 @@ import (
 // RayJobSpecApplyConfiguration represents an declarative configuration of the RayJobSpec type for use
 // with apply.
 type RayJobSpecApplyConfiguration struct {
-	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
-	Metadata                 map[string]string                         `json:"metadata,omitempty"`
-	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
-	JobId                    *string                                   `json:"jobId,omitempty"`
-	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
-	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
-	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
-	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
-	Suspend                  *bool                                     `json:"suspend,omitempty"`
-	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
-	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
-	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
-	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
+	Entrypoint                *string                                   `json:"entrypoint,omitempty"`
+	Metadata                  map[string]string                         `json:"metadata,omitempty"`
+	RuntimeEnvYAML            *string                                   `json:"runtimeEnvYAML,omitempty"`
+	JobId                     *string                                   `json:"jobId,omitempty"`
+	ShutdownAfterJobFinishes  *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
+	TTLSecondsAfterFinished   *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
+	RayClusterSpec            *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
+	ClusterSelector           map[string]string                         `json:"clusterSelector,omitempty"`
+	LightWeightSubmissionMode *bool                                     `json:"lightWeightSubmissionMode,omitempty"`
+	Suspend                   *bool                                     `json:"suspend,omitempty"`
+	SubmitterPodTemplate      *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	EntrypointNumCpus         *float32                                  `json:"entrypointNumCpus,omitempty"`
+	EntrypointNumGpus         *float32                                  `json:"entrypointNumGpus,omitempty"`
+	EntrypointResources       *string                                   `json:"entrypointResources,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs an declarative configuration of the RayJobSpec type for use with
@@ -103,6 +104,14 @@ func (b *RayJobSpecApplyConfiguration) WithClusterSelector(entries map[string]st
 	for k, v := range entries {
 		b.ClusterSelector[k] = v
 	}
+	return b
+}
+
+// WithLightWeightSubmissionMode sets the LightWeightSubmissionMode field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LightWeightSubmissionMode field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithLightWeightSubmissionMode(value bool) *RayJobSpecApplyConfiguration {
+	b.LightWeightSubmissionMode = &value
 	return b
 }
 

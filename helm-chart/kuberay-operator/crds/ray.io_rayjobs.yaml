@@ -42,6 +42,9 @@ spec:
                 type: string
               jobId:
                 type: string
+              lightWeightSubmissionMode:
+                default: false
+                type: boolean
               metadata:
                 additionalProperties:
                   type: string

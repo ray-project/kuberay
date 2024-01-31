@@ -161,9 +161,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.DashboardURL = clientURL
 		}
 
-		// Ensure k8s job has been created
-		if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		if !rayJobInstance.Spec.LightWeightSubmissionMode {
+			if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 		}
 
 		r.Log.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
@@ -174,15 +175,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		// If the Job reaches the backoff limit, transition the status to `Complete`.
-		job := &batchv1.Job{}
-		namespacedName := getK8sJobNamespacedName(rayJobInstance)
-		if err := r.Client.Get(ctx, namespacedName, job); err != nil {
-			r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-		if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
-			break
+		if !rayJobInstance.Spec.LightWeightSubmissionMode {
+			// If the Job reaches the backoff limit, transition the status to `Complete`.
+			job := &batchv1.Job{}
+			namespacedName := getK8sJobNamespacedName(rayJobInstance)
+			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
+				r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
+				// TODO: where does it break to?
+				break
+			}
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -197,8 +201,17 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
-			r.Log.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			if errors.IsBadRequest(err) {
+				r.Log.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
+				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log); err != nil {
+					r.Log.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			} else {
+				r.Log.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 		}
 		r.Log.Info("GetJobInfo", "Job Info", jobInfo)
 
@@ -260,7 +273,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		r.Log.Info("JobDeploymentStatusComplete", "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
 		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			// TODO (kevin85421): Revisit EndTime and ensure it will always be set after the job is completed.
 			ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
 			nowTime := time.Now()
 			shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
@@ -276,6 +288,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				r.Log.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			} else {
+				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
+				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
 				if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
@@ -406,6 +420,9 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
+	if rayJobInstance.Spec.LightWeightSubmissionMode {
+		return true, nil
+	}
 	var isJobDeleted bool
 
 	// Since the name of the Kubernetes Job is the same as the RayJob, we need to delete the Kubernetes Job

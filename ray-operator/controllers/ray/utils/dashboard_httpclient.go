@@ -200,13 +200,12 @@ type RayJobInfo struct {
 // Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
 type RayJobRequest struct {
 	Entrypoint   string                 `json:"entrypoint"`
-	JobId        string                 `json:"job_id,omitempty"`
 	SubmissionId string                 `json:"submission_id,omitempty"`
 	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
 	Metadata     map[string]string      `json:"metadata,omitempty"`
 	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
 	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
-	Resources    map[string]string      `json:"entrypoint_resources,omitempty"`
+	Resources    map[string]interface{} `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -411,18 +410,18 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string, log 
 
 func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	req := &RayJobRequest{
-		Entrypoint: rayJob.Spec.Entrypoint,
-		Metadata:   rayJob.Spec.Metadata,
-		JobId:      rayJob.Status.JobId,
+		Entrypoint:   rayJob.Spec.Entrypoint,
+		SubmissionId: rayJob.Status.JobId,
+		Metadata:     rayJob.Spec.Metadata,
 	}
-	if len(rayJob.Spec.RuntimeEnvYAML) == 0 {
-		return req, nil
+	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
+		var runtimeEnv map[string]interface{}
+		err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
+		}
+		req.RuntimeEnv = runtimeEnv
 	}
-	var runtimeEnv map[string]interface{}
-	err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
-	}
-	req.RuntimeEnv = runtimeEnv
+	// TODO (kevin85421): Support entrypointNumCpus, entrypointNumGpus, entrypointResources
 	return req, nil
 }
