@@ -122,6 +122,11 @@ type RayJobStatus struct {
 // +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="job status",type=string,JSONPath=".status.jobStatus",priority=0
+// +kubebuilder:printcolumn:name="deployment status",type=string,JSONPath=".status.jobDeploymentStatus",priority=0
+// +kubebuilder:printcolumn:name="start time",type=string,JSONPath=".status.startTime",priority=0
+// +kubebuilder:printcolumn:name="end time",type=string,JSONPath=".status.endTime",priority=0
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 // +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
