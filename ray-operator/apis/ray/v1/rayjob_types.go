@@ -71,8 +71,9 @@ type RayJobSpec struct {
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
-	// If LightWeightSubmissionMode is true, KubeRay operator sends a request to the RayCluster to create a
-	// Ray job. Otherwise, the operator creates a submitter Kubernetes Job to submit the Ray job.
+	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
+	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
+	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
 	// +kubebuilder:default:=K8sJobMode
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
