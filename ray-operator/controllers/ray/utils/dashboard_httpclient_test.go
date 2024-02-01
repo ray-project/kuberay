@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -90,7 +89,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
 			})
 
-		jobId, err := rayDashboardClient.SubmitJob(context.TODO(), rayJob, &ctrl.Log)
+		jobId, err := rayDashboardClient.SubmitJob(context.TODO(), rayJob)
 		Expect(err).To(BeNil())
 		Expect(jobId).To(Equal(expectJobId))
 
@@ -117,7 +116,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 
-		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1", &ctrl.Log)
+		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
 		Expect(err).To(BeNil())
 	})
 
@@ -144,7 +143,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 
-		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1", &ctrl.Log)
+		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
 		Expect(err).To(BeNil())
 	})
 })

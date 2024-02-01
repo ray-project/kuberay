@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/go-logr/logr"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -61,23 +59,23 @@ func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, e
 	return nil, nil
 }
 
-func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, rayJob *rayv1.RayJob) (jobId string, err error) {
 	return "", nil
 }
 
-func (r *FakeRayDashboardClient) SubmitJobReq(_ context.Context, request *RayJobRequest, name *string, log *logr.Logger) (string, error) {
+func (r *FakeRayDashboardClient) SubmitJobReq(_ context.Context, request *RayJobRequest, name *string) (string, error) {
 	return "", nil
 }
 
-func (r *FakeRayDashboardClient) GetJobLog(_ context.Context, jobName string, log *logr.Logger) (*string, error) {
+func (r *FakeRayDashboardClient) GetJobLog(_ context.Context, jobName string) (*string, error) {
 	lg := "log"
 	return &lg, nil
 }
 
-func (r *FakeRayDashboardClient) StopJob(_ context.Context, jobName string, log *logr.Logger) (err error) {
+func (r *FakeRayDashboardClient) StopJob(_ context.Context, jobName string) (err error) {
 	return nil
 }
 
-func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, jobName string, log *logr.Logger) error {
+func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, jobName string) error {
 	return nil
 }

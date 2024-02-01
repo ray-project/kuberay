@@ -469,7 +469,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
-	url, err := utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, &cluster, utils.DashboardPortName)
+	url, err := utils.FetchHeadServiceURL(ctx, r.Client, &cluster, utils.DashboardPortName)
 	assert.Nil(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }

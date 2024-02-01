@@ -79,7 +79,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		request.Resources = req.Jobsubmission.EntrypointResources
 	}
 
-	sid, err := rayDashboardClient.SubmitJobReq(ctx, request, nil, &s.log)
+	sid, err := rayDashboardClient.SubmitJobReq(ctx, request, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (s *RayJobSubmissionServiceServer) GetJobLog(ctx context.Context, req *api.
 	}
 	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
-	jlog, err := rayDashboardClient.GetJobLog(ctx, req.Submissionid, &s.log)
+	jlog, err := rayDashboardClient.GetJobLog(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (s *RayJobSubmissionServiceServer) StopRayJob(ctx context.Context, req *api
 	}
 	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
-	err = rayDashboardClient.StopJob(ctx, req.Submissionid, &s.log)
+	err = rayDashboardClient.StopJob(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (s *RayJobSubmissionServiceServer) DeleteRayJob(ctx context.Context, req *a
 	}
 	rayDashboardClient := s.dashboardClientFunc()
 	rayDashboardClient.InitClient(*url)
-	err = rayDashboardClient.DeleteJob(ctx, req.Submissionid, &s.log)
+	err = rayDashboardClient.DeleteJob(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
 	}
