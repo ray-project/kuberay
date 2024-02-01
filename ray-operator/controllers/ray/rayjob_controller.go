@@ -120,7 +120,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
-	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "LightWeightSubmissionMode", rayJobInstance.Spec.LightWeightSubmissionMode)
+	r.Log.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
@@ -161,7 +161,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.DashboardURL = clientURL
 		}
 
-		if !rayJobInstance.Spec.LightWeightSubmissionMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
@@ -177,7 +177,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// TODO (kevin85421): For light-weight mode, calculate the number of failed retries and transition
 		// the status to `Complete` if the number of failed retries exceeds the threshold.
-		if !rayJobInstance.Spec.LightWeightSubmissionMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			// If the Job reaches the backoff limit, transition the status to `Complete`.
 			job := &batchv1.Job{}
 			namespacedName := getK8sJobNamespacedName(rayJobInstance)
@@ -203,7 +203,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
-			if rayJobInstance.Spec.LightWeightSubmissionMode && errors.IsBadRequest(err) {
+			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
 				r.Log.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
 				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log); err != nil {
 					r.Log.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
@@ -421,7 +421,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	if rayJobInstance.Spec.LightWeightSubmissionMode {
+	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
 		return true, nil
 	}
 	var isJobDeleted bool

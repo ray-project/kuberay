@@ -42,6 +42,13 @@ const (
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 )
 
+type JobSubmissionMode string
+
+const (
+	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
+	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
+)
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -66,8 +73,8 @@ type RayJobSpec struct {
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
 	// If LightWeightSubmissionMode is true, KubeRay operator sends a request to the RayCluster to create a
 	// Ray job. Otherwise, the operator creates a submitter Kubernetes Job to submit the Ray job.
-	// +kubebuilder:default:=false
-	LightWeightSubmissionMode bool `json:"lightWeightSubmissionMode,omitempty"`
+	// +kubebuilder:default:=K8sJobMode
+	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
 	// If a job is applied with the suspend field set to true,
 	// the RayCluster will not be created and will wait for the transition to false.

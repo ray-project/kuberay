@@ -30,7 +30,7 @@ func TestRayJobLightWeightMode(t *testing.T) {
 	test.T().Run("Successful RayJob", func(t *testing.T) {
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithLightWeightSubmissionMode(true).
+				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRuntimeEnvYAML(`
 env_vars:
@@ -74,7 +74,7 @@ env_vars:
 	test.T().Run("Failing RayJob without cluster shutdown after finished", func(t *testing.T) {
 		rayJobAC := rayv1ac.RayJob("fail", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithLightWeightSubmissionMode(true).
+				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
@@ -110,7 +110,7 @@ env_vars:
 		// and then stop the Ray job. If the Ray job is stopped, the RayJob should transition to `Complete`.
 		rayJobAC := rayv1ac.RayJob("stop", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithLightWeightSubmissionMode(true).
+				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/stop.py").
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
 					WithRayVersion(GetRayVersion()).
