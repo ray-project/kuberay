@@ -202,6 +202,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
+			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if rayJobInstance.Spec.LightWeightSubmissionMode && errors.IsBadRequest(err) {
 				r.Log.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
 				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log); err != nil {
