@@ -58,6 +58,17 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s depoyments, statefulsets, etc. |
 
 
+#### JobSubmissionMode
+
+_Underlying type:_ _string_
+
+
+
+_Appears in:_
+- [RayJobSpec](#rayjobspec)
+
+
+
 #### RayCluster
 
 
@@ -131,6 +142,7 @@ _Appears in:_
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster. It's only working when ShutdownAfterJobFinishes set to true. |
 | `rayClusterSpec` _[RayClusterSpec](#rayclusterspec)_ | RayClusterSpec is the cluster template to run the job |
 | `clusterSelector` _object (keys:string, values:string)_ | clusterSelector is used to select running rayclusters by labels |
+| `submissionMode` _[JobSubmissionMode](#jobsubmissionmode)_ | SubmissionMode specifies how RayJob submits the Ray job to the RayCluster. In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job. In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job. |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance If a job is applied with the suspend field set to true, the RayCluster will not be created and will wait for the transition to false. If the RayCluster is already created, it will be deleted. In case of transition to false a new RayCluster will be created. |
 | `submitterPodTemplate` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | SubmitterPodTemplate is the template for the pod that will run `ray job submit`. |
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |

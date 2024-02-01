@@ -182,8 +182,9 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 }
 
 // RayJobInfo is the response of "ray job status" api.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobInfo struct {
+	// TODO (kevin85421): Double check whether the types are correct or not.
 	JobStatus    rayv1.JobStatus        `json:"status,omitempty"`
 	Entrypoint   string                 `json:"entrypoint,omitempty"`
 	JobId        string                 `json:"job_id,omitempty"`
@@ -197,10 +198,10 @@ type RayJobInfo struct {
 }
 
 // RayJobRequest is the request body to submit.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobRequest struct {
+	// TODO (kevin85421): Double check whether the types are correct or not.
 	Entrypoint   string                 `json:"entrypoint"`
-	JobId        string                 `json:"job_id,omitempty"`
 	SubmissionId string                 `json:"submission_id,omitempty"`
 	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
 	Metadata     map[string]string      `json:"metadata,omitempty"`
@@ -222,6 +223,7 @@ type RayJobLogsResponse struct {
 }
 
 // Note that RayJobInfo and error can't be nil at the same time.
+// Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
@@ -411,18 +413,18 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string, log 
 
 func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	req := &RayJobRequest{
-		Entrypoint: rayJob.Spec.Entrypoint,
-		Metadata:   rayJob.Spec.Metadata,
-		JobId:      rayJob.Status.JobId,
+		Entrypoint:   rayJob.Spec.Entrypoint,
+		SubmissionId: rayJob.Status.JobId,
+		Metadata:     rayJob.Spec.Metadata,
 	}
-	if len(rayJob.Spec.RuntimeEnvYAML) == 0 {
-		return req, nil
+	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
+		var runtimeEnv map[string]interface{}
+		err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
+		}
+		req.RuntimeEnv = runtimeEnv
 	}
-	var runtimeEnv map[string]interface{}
-	err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
-	}
-	req.RuntimeEnv = runtimeEnv
+	// TODO (kevin85421): Support entrypointNumCpus, entrypointNumGpus, entrypointResources
 	return req, nil
 }

@@ -3,6 +3,7 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
@@ -17,6 +18,7 @@ type RayJobSpecApplyConfiguration struct {
 	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
 	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
+	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
 	Suspend                  *bool                                     `json:"suspend,omitempty"`
 	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
 	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
@@ -103,6 +105,14 @@ func (b *RayJobSpecApplyConfiguration) WithClusterSelector(entries map[string]st
 	for k, v := range entries {
 		b.ClusterSelector[k] = v
 	}
+	return b
+}
+
+// WithSubmissionMode sets the SubmissionMode field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmissionMode field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSubmissionMode(value rayv1.JobSubmissionMode) *RayJobSpecApplyConfiguration {
+	b.SubmissionMode = &value
 	return b
 }
 
