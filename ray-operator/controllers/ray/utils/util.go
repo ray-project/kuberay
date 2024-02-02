@@ -68,7 +68,9 @@ func IsRunningAndReady(pod *corev1.Pod) bool {
 	return false
 }
 
-func CheckRouteName(s string, n string) string {
+func CheckRouteName(ctx context.Context, s string, n string) string {
+	log := ctrl.LoggerFrom(ctx)
+
 	// 63 - (max(8,6) + 5 ) - (length of namespace name + 1) => 51 - namespace name
 	// 6 to 8 char are consumed at the end with "-head-" + 5 generated.
 	// Namespace name will be appended to form: {name}-{namespace} for first host
@@ -78,7 +80,7 @@ func CheckRouteName(s string, n string) string {
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("route name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
+		log.Info(fmt.Sprintf("route name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset))
 		s = s[offset:]
 	}
 
