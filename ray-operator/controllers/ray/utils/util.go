@@ -69,11 +69,11 @@ func IsRunningAndReady(pod *corev1.Pod) bool {
 }
 
 func CheckRouteName(s string, n string) string {
-	// 63 - (max(8,6) + 5 ) - length of namespace name + 1 => 49 - namespace name
-	// 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+	// 63 - (max(8,6) + 5 ) - (length of namespace name + 1) => 51 - namespace name
+	// 6 to 8 char are consumed at the end with "-head-" + 5 generated.
 	// Namespace name will be appended to form: {name}-{namespace} for first host
 	//   segment within route
-	maxLength := 49 - len(n)
+	maxLength := 51 - len(n)
 
 	if len(s) > maxLength {
 		// shorten the name
