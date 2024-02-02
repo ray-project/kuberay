@@ -550,3 +550,37 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 		})
 	}
 }
+
+func TestUnmarshalRuntimeEnv(t *testing.T) {
+	tests := map[string]struct {
+		runtimeEnvYAML string
+		isErrorNil     bool
+	}{
+		"Empty runtimeEnvYAML": {
+			runtimeEnvYAML: "",
+			isErrorNil:     true,
+		},
+		"Valid runtimeEnvYAML": {
+			runtimeEnvYAML: `
+env_vars:
+  counter_name: test_counter
+`,
+			isErrorNil: true,
+		},
+		"Invalid runtimeEnvYAML": {
+			runtimeEnvYAML: `invalid_yaml_str`,
+			isErrorNil:     false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
+			if tc.isErrorNil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+			}
+		})
+	}
+}
