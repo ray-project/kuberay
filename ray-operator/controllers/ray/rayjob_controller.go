@@ -205,7 +205,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
 				r.Log.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance, &r.Log); err != nil {
+				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
 					r.Log.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
