@@ -182,33 +182,35 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
+type RuntimeEnvType map[string]interface{}
+
 // RayJobInfo is the response of "ray job status" api.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobInfo struct {
 	// TODO (kevin85421): Double check whether the types are correct or not.
-	JobStatus    rayv1.JobStatus        `json:"status,omitempty"`
-	Entrypoint   string                 `json:"entrypoint,omitempty"`
-	JobId        string                 `json:"job_id,omitempty"`
-	SubmissionId string                 `json:"submission_id,omitempty"`
-	Message      string                 `json:"message,omitempty"`
-	ErrorType    *string                `json:"error_type,omitempty"`
-	StartTime    uint64                 `json:"start_time,omitempty"`
-	EndTime      uint64                 `json:"end_time,omitempty"`
-	Metadata     map[string]string      `json:"metadata,omitempty"`
-	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
+	JobStatus    rayv1.JobStatus   `json:"status,omitempty"`
+	Entrypoint   string            `json:"entrypoint,omitempty"`
+	JobId        string            `json:"job_id,omitempty"`
+	SubmissionId string            `json:"submission_id,omitempty"`
+	Message      string            `json:"message,omitempty"`
+	ErrorType    *string           `json:"error_type,omitempty"`
+	StartTime    uint64            `json:"start_time,omitempty"`
+	EndTime      uint64            `json:"end_time,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
 }
 
 // RayJobRequest is the request body to submit.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobRequest struct {
 	// TODO (kevin85421): Double check whether the types are correct or not.
-	Entrypoint   string                 `json:"entrypoint"`
-	SubmissionId string                 `json:"submission_id,omitempty"`
-	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
-	Metadata     map[string]string      `json:"metadata,omitempty"`
-	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
-	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
-	Resources    map[string]string      `json:"entrypoint_resources,omitempty"`
+	Entrypoint   string            `json:"entrypoint"`
+	SubmissionId string            `json:"submission_id,omitempty"`
+	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	NumCpus      float32           `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32           `json:"entrypoint_num_gpus,omitempty"`
+	Resources    map[string]string `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -423,13 +425,21 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 		Metadata:     rayJob.Spec.Metadata,
 	}
 	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
-		var runtimeEnv map[string]interface{}
-		err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
+		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
+			return nil, err
 		}
 		req.RuntimeEnv = runtimeEnv
 	}
 	// TODO (kevin85421): Support entrypointNumCpus, entrypointNumGpus, entrypointResources
 	return req, nil
+}
+
+func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
+	var runtimeEnv RuntimeEnvType
+	err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", runtimeEnvYAML, err)
+	}
+	return runtimeEnv, nil
 }

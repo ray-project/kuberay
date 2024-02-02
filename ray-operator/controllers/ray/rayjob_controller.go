@@ -674,6 +674,11 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && len(rayJob.Spec.ClusterSelector) == 0 {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
+	// as a YAML string, not its adherence to the runtime environment schema.
+	if _, err := utils.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
+		return err
+	}
 	return nil
 }
 

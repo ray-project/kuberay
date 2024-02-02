@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -230,5 +231,28 @@ env_vars:
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("RuntimeEnvYAML is not a valid YAML string", func(t *testing.T) {
+		rayJobAC := rayv1ac.RayJob("invalid-yamlstr", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`invalid_yaml_string`).
+				WithRayClusterSpec(rayv1ac.RayClusterSpec().
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{
+							"dashboard-host": "0.0.0.0",
+						}).
+						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
+							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller will not do anything with the CR.
+		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 5*time.Second).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
 	})
 }
