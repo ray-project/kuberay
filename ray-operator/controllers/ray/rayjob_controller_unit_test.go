@@ -358,4 +358,11 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RuntimeEnvYAML: "invalid_yaml_str",
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
 }
