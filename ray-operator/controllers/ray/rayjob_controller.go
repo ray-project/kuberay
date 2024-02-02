@@ -96,7 +96,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if !rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
-			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId, &r.Log)
+			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId)
 			if err != nil {
 				r.Log.Info("Failed to stop job for RayJob", "error", err)
 			}
@@ -154,7 +154,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 
-			if clientURL, err = utils.FetchHeadServiceURL(ctx, &r.Log, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
+			if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 				r.Log.Error(err, "Failed to get the dashboard URL after the RayCluster is ready!", "RayCluster", rayClusterInstance.Name)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
