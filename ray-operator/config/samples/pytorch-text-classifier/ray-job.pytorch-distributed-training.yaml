@@ -33,6 +33,7 @@ spec:
                   name: client
               resources:
                 limits:
+                  cpu: "2"
                   memory: "8G"
                   nvidia.com/gpu: "1"
                 requests:
