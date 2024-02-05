@@ -32,6 +32,9 @@ func TestRayJobLightWeightMode(t *testing.T) {
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithEntrypointNumCpus(2).
+				WithEntrypointNumGpus(2).
+				WithEntrypointResources(`{"R1": 2}`).
 				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
@@ -42,6 +45,9 @@ env_vars:
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 						WithRayStartParams(map[string]string{
 							"dashboard-host": "0.0.0.0",
+							"num-gpus":       "4",
+							"num-cpus":       "4",
+							"resources":      `'{"R1": 4}'`,
 						}).
 						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
 							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
@@ -76,12 +82,18 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
+				WithEntrypointNumCpus(2).
+				WithEntrypointNumGpus(2).
+				WithEntrypointResources(`{"R1": 2}`).
 				WithShutdownAfterJobFinishes(false).
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
 					WithRayVersion(GetRayVersion()).
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 						WithRayStartParams(map[string]string{
 							"dashboard-host": "0.0.0.0",
+							"num-gpus":       "4",
+							"num-cpus":       "4",
+							"resources":      `'{"R1": 4}'`,
 						}).
 						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
 							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
@@ -112,11 +124,17 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/stop.py").
+				WithEntrypointNumCpus(2).
+				WithEntrypointNumGpus(2).
+				WithEntrypointResources(`{"R1": 2}`).
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
 					WithRayVersion(GetRayVersion()).
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 						WithRayStartParams(map[string]string{
 							"dashboard-host": "0.0.0.0",
+							"num-gpus":       "4",
+							"num-cpus":       "4",
+							"resources":      `'{"R1": 4}'`,
 						}).
 						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
 							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
