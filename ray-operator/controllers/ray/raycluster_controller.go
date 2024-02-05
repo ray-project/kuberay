@@ -163,8 +163,8 @@ type RayClusterReconcilerOptions struct {
 
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	var err error
 	ctx = ctrl.LoggerInto(ctx, r.Log) // TODO: add request namespace here
+	var err error
 
 	// Try to fetch the RayCluster instance
 	instance := &rayv1.RayCluster{}

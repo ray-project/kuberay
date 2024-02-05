@@ -73,6 +73,7 @@ func NewRayJobReconciler(mgr manager.Manager, dashboardClientFunc func() utils.R
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
 // Reconcile used to bridge the desired state with the current state
 func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	ctx = ctrl.LoggerInto(ctx, r.Log)
 	r.Log.Info("reconciling RayJob", "NamespacedName", request.NamespacedName)
 
 	// Get RayJob instance
