@@ -103,7 +103,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 
 func (r *RayDashboardClient) InitClient(url string) {
 	r.client = http.Client{
-		Timeout: 120 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
 }
