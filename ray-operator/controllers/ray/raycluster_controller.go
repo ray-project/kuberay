@@ -779,7 +779,26 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		worker.ScaleStrategy.WorkersToDelete = []string{}
 
-		// Add MultihostGroupsToDelete here.
+		// Remove entire worker groups specified by MultihostGroupsToDelete to meet the expectations of the Autoscaler.
+		r.Log.Info("reconcilePods", "removing worker groups in the scaleStrategy of", worker.GroupName)
+		for _, groupToDelete := range worker.ScaleStrategy.MultihostGroupsToDelete {
+			for _, pod := range workerPods.Items {
+				if pod.Labels[utils.RayNodeGroupLabelKey] == groupToDelete {
+					r.Log.Info("Deleting pod", "namespace", pod.Namespace, "name", pod.Name)
+					if err := r.Delete(ctx, &pod); err != nil {
+						if !errors.IsNotFound(err) {
+							r.Log.Info("reconcilePods", "Fail to delete Pod", pod.Name, "error", err)
+							return err
+						}
+						r.Log.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
+					} else {
+						deletedWorkers[pod.Name] = deleted
+						r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
+					}
+				}
+			}
+		}
+		worker.ScaleStrategy.MultihostGroupsToDelete = []string{}
 
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {

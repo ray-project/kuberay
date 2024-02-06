@@ -3751,6 +3751,10 @@ spec:
                           type: integer
                         scaleStrategy:
                           properties:
+                            multihostGroupsToDelete:
+                              items:
+                                type: string
+                              type: array
                             workersToDelete:
                               items:
                                 type: string
