@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -76,7 +77,13 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		request.NumGpus = req.Jobsubmission.EntrypointNumGpus
 	}
 	if len(req.Jobsubmission.EntrypointResources) > 0 {
-		request.Resources = req.Jobsubmission.EntrypointResources
+		for k, v := range req.Jobsubmission.EntrypointResources {
+			f, err := strconv.ParseFloat(v, 32)
+			if err != nil {
+				return nil, err
+			}
+			request.Resources[k] = float32(f)
+		}
 	}
 
 	sid, err := rayDashboardClient.SubmitJobReq(ctx, request, nil)
