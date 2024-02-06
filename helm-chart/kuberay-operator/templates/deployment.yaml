@@ -34,7 +34,11 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ .Values.serviceAccount.name  }}
-      volumes: []
+      {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+      volumes:
+        - name: kuberay-logs
+          emptyDir: {}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -43,7 +47,11 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          volumeMounts: []
+          {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+          volumeMounts:
+            - name: kuberay-logs
+              mountPath: "{{ .Values.logging.baseDir }}"
+          {{- end }}
           command:
             - /manager
           args:
@@ -60,6 +68,18 @@ spec:
             {{- if $watchNamespace -}}
             {{- $argList = append $argList "--watch-namespace" -}}
             {{- $argList = append $argList $watchNamespace -}}
+            {{- end -}}
+            {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) -}}
+            {{- $argList = append $argList "--log-file-path" -}}
+            {{- $argList = append $argList (printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName) -}}
+            {{- end -}}
+            {{- if .Values.logging.stdoutEncoder -}}
+            {{- $argList = append $argList "--log-stdout-encoder" -}}
+            {{- $argList = append $argList .Values.logging.stdoutEncoder -}}
+            {{- end -}}
+            {{- if .Values.logging.fileEncoder -}}
+            {{- $argList = append $argList "--log-file-encoder" -}}
+            {{- $argList = append $argList .Values.logging.fileEncoder -}}
             {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
