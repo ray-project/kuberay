@@ -1,7 +1,7 @@
 name: KubeRay feature request
 description: Suggest an idea for KubeRay project
 title: "[Feature] "
-labels: [enhancement]
+labels: enhancement, triage
 body:
   - type: markdown
     attributes:
