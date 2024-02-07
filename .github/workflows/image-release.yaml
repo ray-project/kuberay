@@ -46,7 +46,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Test
-      run: go test ./...
+      run: go test ./pkg/... ./cmd/... -race -parallel 4
       working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
@@ -82,78 +82,6 @@ jobs:
         docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ github.event.inputs.tag }};
         docker push quay.io/kuberay/apiserver:${{ github.event.inputs.tag }}
-
-  release_security_proxy_image:
-    env:
-      working-directory: ./experimental
-    name: Release security proxy Docker Image
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.20'
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.inputs.commit }}
-
-      - name: install kubebuilder
-        run: |
-          wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
-          sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
-
-      - name: Get revision SHA
-        id: vars
-        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-
-      - name: Get dependencies
-        run: go mod download
-        working-directory: ${{env.working-directory}}
-
-      - name: Build
-        run: go build ./...
-        working-directory: ${{env.working-directory}}
-
-      - name: Test
-        run: go test ./...
-        working-directory: ${{env.working-directory}}
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
-      - name: Build Docker Image - security proxy
-        run: |
-          docker build -t kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} -f experimental/Dockerfile .
-          docker save -o /tmp/security-proxy.tar kuberay/security-proxy:${{ steps.vars.outputs.sha_short }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push security proxy to DockerHub
-        run: |
-          docker push kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} kuberay/security-proxy:${{ github.event.inputs.tag }};
-          docker push kuberay/security-proxy:${{ github.event.inputs.tag }}
-
-      - name: Log in to Quay.io
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
-
-      - name: Push Apiserver proxy to Quay.io
-        run: |
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker push quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:${{ github.event.inputs.tag }};
-          docker push quay.io/kuberay/security-proxy:${{ github.event.inputs.tag }}
 
   release_operator_image:
     env:
@@ -246,7 +174,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
         context: ${{env.working-directory}}
         file: ${{env.working-directory}}/Dockerfile.buildx
-        push: ${{PUSH}}
+        push: ${{env.PUSH}}
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}

@@ -1,6 +1,8 @@
 package schedulerinterface
 
 import (
+	"context"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,7 +18,7 @@ type BatchScheduler interface {
 
 	// DoBatchSchedulingOnSubmission handles submitting the RayCluster to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
-	DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error
+	DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error
 
 	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
@@ -49,7 +51,7 @@ func (d *DefaultBatchScheduler) Name() string {
 	return GetDefaultPluginName()
 }
 
-func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error {
+func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
 	return nil
 }
 

@@ -8,9 +8,12 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
+	TestApplyOptions = metav1.ApplyOptions{FieldManager: "kuberay-test", Force: true}
+
 	TestTimeoutShort  = 1 * time.Minute
 	TestTimeoutMedium = 2 * time.Minute
 	TestTimeoutLong   = 5 * time.Minute

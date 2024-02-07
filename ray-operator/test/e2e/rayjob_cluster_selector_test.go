@@ -35,7 +35,7 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 			Name:      "raycluster",
 			Namespace: namespace.Name,
 		},
-		Spec: *newRayClusterSpec(mountConfigMap(jobs, "/home/ray/jobs")),
+		Spec: *newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
 	}
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Create(test.Ctx(), rayCluster, metav1.CreateOptions{})
 	test.Expect(err).NotTo(HaveOccurred())

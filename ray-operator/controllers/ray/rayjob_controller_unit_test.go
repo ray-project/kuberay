@@ -77,6 +77,15 @@ func TestCreateK8sJobIfNeed(t *testing.T) {
 
 	err = rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
 	assert.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{
+		Namespace: k8sJob.Namespace,
+		Name:      k8sJob.Name,
+	}, k8sJob, nil)
+	assert.NoError(t, err)
+
+	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromCRNameLabelKey], rayJob.Name)
+	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromCRDLabelKey], utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD))
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {
@@ -96,6 +105,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
+			JobId:        "test-job-id",
 		},
 	}
 
@@ -120,6 +130,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 		Status: rayv1.RayJobStatus{
 			DashboardURL: "test-url",
+			JobId:        "test-job-id",
 		},
 	}
 	rayClusterInstance := &rayv1.RayCluster{
@@ -151,60 +162,59 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
 	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	found := false
-	for _, envVar := range submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if envVar.Name == PythonUnbufferedEnvVarName {
-			assert.Equal(t, "1", envVar.Value)
-			found = true
-		}
-	}
+
+	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
+	assert.Equal(t, "1", envVar.Value)
+
+	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
+	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
+	assert.NoError(t, err)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-url", envVar.Value)
+
+	// Test 6: Check default RAY_JOB_SUBMISSION_ID env var
+	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-job-id", envVar.Value)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	tests := map[string]struct {
-		suspend               bool
-		status                rayv1.JobDeploymentStatus
-		isClusterSelectorMode bool
-		expectedShouldUpdate  bool
+		suspend              bool
+		status               rayv1.JobDeploymentStatus
+		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
 		"Suspend is false": {
-			suspend:               false,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  false,
-		},
-		"Suspend is true, but the RayJob is in ClusterSelector mode": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: true,
-			expectedShouldUpdate:  false,
+			suspend:              false,
+			status:               rayv1.JobDeploymentStatusInitializing,
+			expectedShouldUpdate: false,
 		},
 		"Suspend is true, but the status is not allowed to transition to suspending": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusComplete,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  false,
+			suspend:              true,
+			status:               rayv1.JobDeploymentStatusComplete,
+			expectedShouldUpdate: false,
 		},
 		"Suspend is true, and the status is allowed to transition to suspending": {
-			suspend:               true,
-			status:                rayv1.JobDeploymentStatusInitializing,
-			isClusterSelectorMode: false,
-			expectedShouldUpdate:  true,
+			suspend:              true,
+			status:               rayv1.JobDeploymentStatusInitializing,
+			expectedShouldUpdate: true,
 		},
 	}
 
@@ -223,12 +233,6 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				Status: rayv1.RayJobStatus{
 					JobDeploymentStatus: tc.status,
 				},
-			}
-
-			if tc.isClusterSelectorMode {
-				rayJob.Spec.ClusterSelector = map[string]string{
-					"key": "value",
-				}
 			}
 
 			// Initialize a fake client with newScheme and runtimeObjects.
@@ -344,4 +348,21 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err, "The RayJob is valid.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend: true,
+			ClusterSelector: map[string]string{
+				"key": "value",
+			},
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RuntimeEnvYAML: "invalid_yaml_str",
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
 }

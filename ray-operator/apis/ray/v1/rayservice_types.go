@@ -12,12 +12,10 @@ type ServiceStatus string
 
 const (
 	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
-	WaitForDashboard                 ServiceStatus = "WaitForDashboard"
 	WaitForServeDeploymentReady      ServiceStatus = "WaitForServeDeploymentReady"
 	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
 	Running                          ServiceStatus = "Running"
 	Restarting                       ServiceStatus = "Restarting"
-	FailedToUpdateIngress            ServiceStatus = "FailedToUpdateIngress"
 	FailedToUpdateServingPodLabel    ServiceStatus = "FailedToUpdateServingPodLabel"
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
@@ -84,17 +82,8 @@ type RayServiceStatuses struct {
 type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Applications     map[string]AppStatus `json:"applicationStatuses,omitempty"`
-	DashboardStatus  DashboardStatus      `json:"dashboardStatus,omitempty"`
 	RayClusterName   string               `json:"rayClusterName,omitempty"`
 	RayClusterStatus RayClusterStatus     `json:"rayClusterStatus,omitempty"`
-}
-
-// DashboardStatus defines the current states of Ray Dashboard
-type DashboardStatus struct {
-	IsHealthy bool `json:"isHealthy,omitempty"`
-	// Keep track of how long the dashboard is healthy.
-	// Update when Dashboard is responsive or first time convert to non-responsive from responsive.
-	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
 }
 
 type AppStatus struct {

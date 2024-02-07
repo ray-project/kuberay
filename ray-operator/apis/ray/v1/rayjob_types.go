@@ -42,6 +42,13 @@ const (
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 )
 
+type JobSubmissionMode string
+
+const (
+	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
+	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
+)
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -64,6 +71,11 @@ type RayJobSpec struct {
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
+	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
+	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
+	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
+	// +kubebuilder:default:=K8sJobMode
+	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
 	// If a job is applied with the suspend field set to true,
 	// the RayCluster will not be created and will wait for the transition to false.
@@ -95,7 +107,9 @@ type RayJobStatus struct {
 	// It is not guaranteed to be set in happens-before order across separate operations.
 	// It is represented in RFC3339 form
 	StartTime *metav1.Time `json:"startTime,omitempty"`
-	// Represents time when the job was ended.
+	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
+	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
+	// or the submitter Job has failed.
 	EndTime          *metav1.Time     `json:"endTime,omitempty"`
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
@@ -108,6 +122,11 @@ type RayJobStatus struct {
 // +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="job status",type=string,JSONPath=".status.jobStatus",priority=0
+// +kubebuilder:printcolumn:name="deployment status",type=string,JSONPath=".status.jobDeploymentStatus",priority=0
+// +kubebuilder:printcolumn:name="start time",type=string,JSONPath=".status.startTime",priority=0
+// +kubebuilder:printcolumn:name="end time",type=string,JSONPath=".status.endTime",priority=0
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 // +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {

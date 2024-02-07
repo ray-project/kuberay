@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -125,7 +126,7 @@ var (
 )
 
 func TestBuildServiceForHeadPod(t *testing.T) {
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
@@ -159,7 +160,7 @@ func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	labels := make(map[string]string)
 	labels[utils.KubernetesApplicationNameLabelKey] = "testname"
 
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, labels, nil)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, labels, nil)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey]
@@ -181,7 +182,7 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 	annotations := make(map[string]string)
 	annotations["key1"] = "testvalue1"
 	annotations["key2"] = "testvalue2"
-	svc, err := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, annotations)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, annotations)
 	assert.Nil(t, err)
 
 	if !reflect.DeepEqual(svc.ObjectMeta.Annotations, annotations) {
@@ -285,7 +286,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
 	userTemplateClusterName := "userTemplateClusterName"
 	template_labels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
-	headService, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, template_labels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
+	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, template_labels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
@@ -402,15 +403,16 @@ func TestNilMapDoesntErrorInUserSpecifiedHeadService(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{},
 	}
 
-	_, err := BuildServiceForHeadPod(*testRayClusterWithHeadService, nil, nil)
+	_, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, nil, nil)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
 }
 
 func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
-	svc1, err1 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
-	svc2, err2 := BuildServiceForHeadPod(*instanceWithWrongSvc, nil, nil)
+	ctx := context.Background()
+	svc1, err1 := BuildServiceForHeadPod(ctx, *instanceWithWrongSvc, nil, nil)
+	svc2, err2 := BuildServiceForHeadPod(ctx, *instanceWithWrongSvc, nil, nil)
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)
 
@@ -426,7 +428,7 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 }
 
 func TestBuildServeServiceForRayService(t *testing.T) {
-	svc, err := BuildServeServiceForRayService(*serviceInstance, *instanceWithWrongSvc)
+	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
@@ -435,8 +437,14 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayServiceLabelKey]
-	expectedLabel := string(serviceInstance.Name)
+	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
+	expectedLabel := serviceInstance.Name
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
+	expectedLabel = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 	if !reflect.DeepEqual(expectedLabel, actualLabel) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
 	}
@@ -452,7 +460,7 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 }
 
 func TestBuildServeServiceForRayCluster(t *testing.T) {
-	svc, err := BuildServeServiceForRayCluster(*instanceForServeSvc)
+	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForServeSvc)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
@@ -461,11 +469,13 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	actualLabel := svc.Labels[utils.RayServiceLabelKey]
-	expectedLabel := string(instanceForServeSvc.Name)
-	if !reflect.DeepEqual(expectedLabel, actualLabel) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
-	}
+	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
+	expectedLabel := instanceForServeSvc.Name
+	assert.Equal(t, expectedLabel, actualLabel)
+
+	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
+	expectedLabel = utils.RayOriginatedFromCRDLabelValue(utils.RayClusterCRD)
+	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualType := svc.Spec.Type
 	expectedType := instanceForServeSvc.Spec.HeadGroupSpec.ServiceType
@@ -501,7 +511,7 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 			},
 		},
 	}
-	svc, err := BuildServeServiceForRayService(*serviceInstance, cluster)
+	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
 	assert.NotNil(t, err)
 	assert.Nil(t, svc)
 }
@@ -535,7 +545,7 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		},
 	}
 
-	svc, err := BuildServeServiceForRayService(*testRayServiceWithServeService, *instanceWithWrongSvc)
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithWrongSvc)
 	if err != nil {
 		t.Errorf("failed to build serve service: %v", err)
 	}

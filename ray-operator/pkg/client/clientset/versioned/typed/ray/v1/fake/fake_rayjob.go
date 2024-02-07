@@ -4,8 +4,11 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	types "k8s.io/apimachinery/pkg/types"
@@ -117,6 +120,51 @@ func (c *FakeRayJobs) DeleteCollection(ctx context.Context, opts metav1.DeleteOp
 func (c *FakeRayJobs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayJob, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(rayjobsResource, c.ns, name, pt, data, subresources...), &v1.RayJob{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1.RayJob), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied rayJob.
+func (c *FakeRayJobs) Apply(ctx context.Context, rayJob *rayv1.RayJobApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayJob, err error) {
+	if rayJob == nil {
+		return nil, fmt.Errorf("rayJob provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(rayJob)
+	if err != nil {
+		return nil, err
+	}
+	name := rayJob.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayJob.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(rayjobsResource, c.ns, *name, types.ApplyPatchType, data), &v1.RayJob{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1.RayJob), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeRayJobs) ApplyStatus(ctx context.Context, rayJob *rayv1.RayJobApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayJob, err error) {
+	if rayJob == nil {
+		return nil, fmt.Errorf("rayJob provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(rayJob)
+	if err != nil {
+		return nil, err
+	}
+	name := rayJob.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayJob.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(rayjobsResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1.RayJob{})
 
 	if obj == nil {
 		return nil, err

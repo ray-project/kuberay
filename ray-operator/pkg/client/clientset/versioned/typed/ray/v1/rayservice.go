@@ -4,9 +4,12 @@ package v1
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 	"time"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	scheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,6 +34,8 @@ type RayServiceInterface interface {
 	List(ctx context.Context, opts metav1.ListOptions) (*v1.RayServiceList, error)
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayService, err error)
+	Apply(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error)
+	ApplyStatus(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error)
 	RayServiceExpansion
 }
 
@@ -172,6 +177,62 @@ func (c *rayServices) Patch(ctx context.Context, name string, pt types.PatchType
 		Name(name).
 		SubResource(subresources...).
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Body(data).
+		Do(ctx).
+		Into(result)
+	return
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied rayService.
+func (c *rayServices) Apply(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error) {
+	if rayService == nil {
+		return nil, fmt.Errorf("rayService provided to Apply must not be nil")
+	}
+	patchOpts := opts.ToPatchOptions()
+	data, err := json.Marshal(rayService)
+	if err != nil {
+		return nil, err
+	}
+	name := rayService.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayService.Name must be provided to Apply")
+	}
+	result = &v1.RayService{}
+	err = c.client.Patch(types.ApplyPatchType).
+		Namespace(c.ns).
+		Resource("rayservices").
+		Name(*name).
+		VersionedParams(&patchOpts, scheme.ParameterCodec).
+		Body(data).
+		Do(ctx).
+		Into(result)
+	return
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *rayServices) ApplyStatus(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error) {
+	if rayService == nil {
+		return nil, fmt.Errorf("rayService provided to Apply must not be nil")
+	}
+	patchOpts := opts.ToPatchOptions()
+	data, err := json.Marshal(rayService)
+	if err != nil {
+		return nil, err
+	}
+
+	name := rayService.Name
+	if name == nil {
+		return nil, fmt.Errorf("rayService.Name must be provided to Apply")
+	}
+
+	result = &v1.RayService{}
+	err = c.client.Patch(types.ApplyPatchType).
+		Namespace(c.ns).
+		Resource("rayservices").
+		Name(*name).
+		SubResource("status").
+		VersionedParams(&patchOpts, scheme.ParameterCodec).
 		Body(data).
 		Do(ctx).
 		Into(result)

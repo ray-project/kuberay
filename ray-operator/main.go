@@ -16,6 +16,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,6 +28,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
@@ -47,6 +49,7 @@ func init() {
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
+	utilruntime.Must(configapi.AddToScheme(scheme))
 	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
@@ -60,14 +63,17 @@ func main() {
 	var reconcileConcurrency int
 	var watchNamespace string
 	var logFile string
+	var configFile string
+
+	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.BoolVar(&version, "version", false, "Show the version information.")
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
+	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", configapi.DefaultProbeAddr, "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", configapi.DefaultEnableLeaderElection,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
 		"Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
-	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", 1, "max concurrency for reconciling")
+	flag.IntVar(&reconcileConcurrency, "reconcile-concurrency", configapi.DefaultReconcileConcurrency, "max concurrency for reconciling")
 	flag.StringVar(
 		&watchNamespace,
 		"watch-namespace",
@@ -79,6 +85,7 @@ func main() {
 		"Synchronize logs to local file")
 	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
 		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
+	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 
 	opts := k8szap.Options{
 		Development: true,
@@ -93,9 +100,33 @@ func main() {
 		os.Exit(0)
 	}
 
-	if logFile != "" {
+	var config configapi.Configuration
+	if configFile != "" {
+		var err error
+		configData, err := os.ReadFile(configFile)
+		exitOnError(err, "failed to read config file")
+
+		config, err = decodeConfig(configData, scheme)
+		exitOnError(err, "failed to decode config file")
+
+		// TODO: remove globally-scoped variables
+		ray.ForcedClusterUpgrade = config.ForcedClusterUpgrade
+		ray.EnableBatchScheduler = config.EnableBatchScheduler
+	} else {
+		config.MetricsAddr = metricsAddr
+		config.ProbeAddr = probeAddr
+		config.EnableLeaderElection = &enableLeaderElection
+		config.LeaderElectionNamespace = leaderElectionNamespace
+		config.ReconcileConcurrency = reconcileConcurrency
+		config.WatchNamespace = watchNamespace
+		config.ForcedClusterUpgrade = ray.ForcedClusterUpgrade
+		config.LogFile = logFile
+		config.EnableBatchScheduler = ray.EnableBatchScheduler
+	}
+
+	if config.LogFile != "" {
 		fileWriter := &lumberjack.Logger{
-			Filename:   logFile,
+			Filename:   config.LogFile,
 			MaxSize:    500, // megabytes
 			MaxBackups: 10,  // files
 			MaxAge:     30,  // days
@@ -133,12 +164,12 @@ func main() {
 		},
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
+			BindAddress: config.MetricsAddr,
 		},
-		HealthProbeBindAddress:  probeAddr,
-		LeaderElection:          enableLeaderElection,
+		HealthProbeBindAddress:  config.ProbeAddr,
+		LeaderElection:          *config.EnableLeaderElection,
 		LeaderElectionID:        "ray-operator-leader",
-		LeaderElectionNamespace: leaderElectionNamespace,
+		LeaderElectionNamespace: config.LeaderElectionNamespace,
 	}
 
 	// Manager Cache
@@ -152,7 +183,7 @@ func main() {
 	exitOnError(err, "unable to create cache selectors")
 	options.Cache.ByObject = selectorsByObject
 
-	if watchNamespaces := strings.Split(watchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
+	if watchNamespaces := strings.Split(config.WatchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
 		} else {
@@ -170,7 +201,11 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	exitOnError(err, "unable to start manager")
 
-	exitOnError(ray.NewReconciler(mgr).SetupWithManager(mgr, reconcileConcurrency),
+	rayClusterOptions := ray.RayClusterReconcilerOptions{
+		HeadSidecarContainers:   config.HeadSidecarContainers,
+		WorkerSidecarContainers: config.WorkerSidecarContainers,
+	}
+	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 	exitOnError(ray.NewRayServiceReconciler(mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
@@ -207,4 +242,17 @@ func exitOnError(err error, msg string, keysAndValues ...interface{}) {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
 	}
+}
+
+// decodeConfig decodes raw config data and returns the Configuration type.
+func decodeConfig(configData []byte, scheme *runtime.Scheme) (configapi.Configuration, error) {
+	cfg := configapi.Configuration{}
+	codecs := serializer.NewCodecFactory(scheme)
+
+	if err := runtime.DecodeInto(codecs.UniversalDecoder(), configData, &cfg); err != nil {
+		return cfg, err
+	}
+
+	scheme.Default(&cfg)
+	return cfg, nil
 }

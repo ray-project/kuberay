@@ -11,7 +11,7 @@ Up until rescently the only way to create a Ray cluster supporting RayServe was 
 the complete curl command to creation such cluster is as follows:
 
 ```shell
-curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
 --data '{
   "name": "test-cluster",

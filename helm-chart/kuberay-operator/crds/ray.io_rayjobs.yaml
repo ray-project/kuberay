@@ -16,7 +16,23 @@ spec:
     singular: rayjob
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.jobStatus
+      name: job status
+      type: string
+    - jsonPath: .status.jobDeploymentStatus
+      name: deployment status
+      type: string
+    - jsonPath: .status.startTime
+      name: start time
+      type: string
+    - jsonPath: .status.endTime
+      name: end time
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: age
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
@@ -7050,6 +7066,9 @@ spec:
                 type: string
               shutdownAfterJobFinishes:
                 type: boolean
+              submissionMode:
+                default: K8sJobMode
+                type: string
               submitterPodTemplate:
                 properties:
                   metadata:

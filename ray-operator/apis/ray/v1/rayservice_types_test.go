@@ -263,9 +263,6 @@ var expected = `{
    },
    "status":{
       "activeServiceStatus":{
-         "dashboardStatus":{
-
-         },
          "rayClusterStatus":{
             "desiredCPU": "0",
             "desiredMemory": "0",
@@ -275,9 +272,6 @@ var expected = `{
          }
       },
       "pendingServiceStatus":{
-         "dashboardStatus":{
-
-         },
          "rayClusterStatus":{
             "desiredCPU": "0",
             "desiredMemory": "0",

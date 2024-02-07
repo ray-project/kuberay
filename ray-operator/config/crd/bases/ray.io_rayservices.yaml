@@ -7257,14 +7257,6 @@ spec:
                           type: string
                       type: object
                     type: object
-                  dashboardStatus:
-                    properties:
-                      healthLastUpdateTime:
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
-                    type: object
                   rayClusterName:
                     type: string
                   rayClusterStatus:
@@ -7360,14 +7352,6 @@ spec:
                         status:
                           type: string
                       type: object
-                    type: object
-                  dashboardStatus:
-                    properties:
-                      healthLastUpdateTime:
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
                     type: object
                   rayClusterName:
                     type: string
@@ -14674,14 +14658,6 @@ spec:
                           type: string
                       type: object
                     type: object
-                  dashboardStatus:
-                    properties:
-                      healthLastUpdateTime:
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
-                    type: object
                   rayClusterName:
                     type: string
                   rayClusterStatus:
@@ -14777,14 +14753,6 @@ spec:
                         status:
                           type: string
                       type: object
-                    type: object
-                  dashboardStatus:
-                    properties:
-                      healthLastUpdateTime:
-                        format: date-time
-                        type: string
-                      isHealthy:
-                        type: boolean
                     type: object
                   rayClusterName:
                     type: string

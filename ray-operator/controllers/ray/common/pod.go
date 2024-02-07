@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,10 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -33,8 +33,6 @@ const (
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
 )
-
-var log = logf.Log.WithName("RayCluster-Controller")
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
@@ -90,7 +88,8 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+	log := ctrl.LoggerFrom(ctx)
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -105,7 +104,7 @@ func DefaultHeadPodTemplate(instance rayv1.RayCluster, headSpec rayv1.HeadGroupS
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(headSpec.RayStartParams, rayv1.HeadNode, headPort, "", instance.Annotations)
+	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "", instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -154,7 +153,8 @@ func getEnableProbesInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
+	log := ctrl.LoggerFrom(ctx)
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	if podTemplate.ObjectMeta.Namespace == "" {
@@ -226,7 +226,7 @@ func DefaultWorkerPodTemplate(instance rayv1.RayCluster, workerSpec rayv1.Worker
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, instance.Annotations)
+	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -243,7 +243,7 @@ func DefaultWorkerPodTemplate(instance rayv1.RayCluster, workerSpec rayv1.Worker
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, enableServeService bool) {
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
 	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
 	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
 
@@ -281,7 +281,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
-		if enableServeService && rayNodeType == rayv1.WorkerNode {
+		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
 			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
 				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
@@ -292,13 +292,20 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creator string, fqdnRayIP string, enableServeService bool) (aPod corev1.Pod) {
-	if enableServeService {
-		// TODO (kevin85421): In the current RayService implementation, we only add this label to a Pod after
-		// it passes the health check. The other option is to use the readiness probe to control it. This
-		// logic always add the label to the Pod no matter whether it is ready or not.
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+	log := ctrl.LoggerFrom(ctx)
+
+	// For Worker Pod: Traffic readiness is determined by the readiness probe.
+	// Therefore, the RayClusterServingServiceLabelKey label is not utilized and should always be set to true.
+	// For Head Pod: Traffic readiness is determined by the value of the RayClusterServingServiceLabelKey label.
+	// Initially, set the label to false and let the rayservice controller to manage its value.
+	if creatorCRDType == utils.RayServiceCRD {
 		podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
+		if rayNodeType == rayv1.HeadNode {
+			podTemplateSpec.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
+		}
 	}
+
 	pod := corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -309,15 +316,15 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 	}
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(&pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
 	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
 		// introduced in https://github.com/ray-project/ray/pull/13434.
 		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
-		addEmptyDir(&pod.Spec.Containers[utils.RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
-		addEmptyDir(&pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+		addEmptyDir(ctx, &pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
 	}
 	cleanupInvalidVolumeMounts(&pod.Spec.Containers[utils.RayContainerIndex], &pod)
 	if len(pod.Spec.InitContainers) > utils.RayContainerIndex {
@@ -335,7 +342,7 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
 	ulimitCmd := "ulimit -n 65536"
 	// Generate the `ray start` command.
-	rayStartCmd := generateRayStartCommand(rayNodeType, rayStartParams, pod.Spec.Containers[utils.RayContainerIndex].Resources)
+	rayStartCmd := generateRayStartCommand(ctx, rayNodeType, rayStartParams, pod.Spec.Containers[utils.RayContainerIndex].Resources)
 
 	// Check if overwrites the generated container command or not.
 	isOverwriteRayContainerCmd := false
@@ -363,7 +370,7 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creator)
+	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -373,7 +380,7 @@ func BuildPod(podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeT
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, enableServeService)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType)
 	}
 
 	return pod
@@ -538,7 +545,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creator string) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if container.Env == nil || len(container.Env) == 0 {
@@ -584,42 +591,38 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 	generatedRayStartCmdEnv := corev1.EnvVar{Name: utils.KUBERAY_GEN_RAY_START_CMD, Value: rayStartCmd}
 	container.Env = append(container.Env, generatedRayStartCmdEnv)
 
-	if !envVarExists(utils.RAY_PORT, container.Env) {
+	if !utils.EnvVarExists(utils.RAY_PORT, container.Env) {
 		portEnv := corev1.EnvVar{Name: utils.RAY_PORT, Value: headPort}
 		container.Env = append(container.Env, portEnv)
 	}
 
-	if strings.ToLower(creator) == utils.RayServiceCreatorLabelValue {
+	if creatorCRDType == utils.RayServiceCRD {
 		// Only add this env for Ray Service cluster to improve service SLA.
-		if !envVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
+		if !utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, container.Env) {
 			deathEnv := corev1.EnvVar{Name: utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, Value: "0"}
 			container.Env = append(container.Env, deathEnv)
 		}
-		if !envVarExists(utils.RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
+		if !utils.EnvVarExists(utils.RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, container.Env) {
 			gcsTimeoutEnv := corev1.EnvVar{Name: utils.RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS, Value: "5"}
 			container.Env = append(container.Env, gcsTimeoutEnv)
 		}
-		if !envVarExists(utils.RAY_SERVE_KV_TIMEOUT_S, container.Env) {
+		if !utils.EnvVarExists(utils.RAY_SERVE_KV_TIMEOUT_S, container.Env) {
 			serveKvTimeoutEnv := corev1.EnvVar{Name: utils.RAY_SERVE_KV_TIMEOUT_S, Value: "5"}
 			container.Env = append(container.Env, serveKvTimeoutEnv)
-		}
-		if !envVarExists(utils.SERVE_CONTROLLER_PIN_ON_NODE, container.Env) {
-			servePinOnNode := corev1.EnvVar{Name: utils.SERVE_CONTROLLER_PIN_ON_NODE, Value: "0"}
-			container.Env = append(container.Env, servePinOnNode)
 		}
 	}
 	// Setting the RAY_ADDRESS env allows connecting to Ray using ray.init() when connecting
 	// from within the cluster.
-	if !envVarExists(utils.RAY_ADDRESS, container.Env) {
+	if !utils.EnvVarExists(utils.RAY_ADDRESS, container.Env) {
 		rayAddress := fmt.Sprintf("%s:%s", ip, headPort)
 		addressEnv := corev1.EnvVar{Name: utils.RAY_ADDRESS, Value: rayAddress}
 		container.Env = append(container.Env, addressEnv)
 	}
-	if !envVarExists(utils.RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
+	if !utils.EnvVarExists(utils.RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
 		usageEnv := corev1.EnvVar{Name: utils.RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
 		container.Env = append(container.Env, usageEnv)
 	}
-	if !envVarExists(utils.REDIS_PASSWORD, container.Env) {
+	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
 		redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
 		if value, ok := rayStartParams["redis-password"]; ok {
@@ -627,7 +630,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 		}
 		container.Env = append(container.Env, redisPasswordEnv)
 	}
-	if !envVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
+	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
 		if pod.Annotations != nil {
 			if v, ok := pod.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
@@ -636,7 +639,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 			}
 		}
 	}
-	if !envVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
+	if !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
 		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
 		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
 		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
@@ -647,22 +650,14 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 			container.Env = append(container.Env, gcsTimeout)
 		}
 	}
-	if !envVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
+	if !utils.EnvVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
 		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
 		container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})
 	}
 }
 
-func envVarExists(envName string, envVars []corev1.EnvVar) bool {
-	for _, env := range envVars {
-		if env.Name == envName {
-			return true
-		}
-	}
-	return false
-}
-
-func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
+	log := ctrl.LoggerFrom(ctx)
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
@@ -706,7 +701,9 @@ func setMissingRayStartParams(rayStartParams map[string]string, nodeType rayv1.R
 	return rayStartParams
 }
 
-func generateRayStartCommand(nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource corev1.ResourceRequirements) string {
+func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource corev1.ResourceRequirements) string {
+	log := ctrl.LoggerFrom(ctx)
+
 	log.Info("generateRayStartCommand", "nodeType", nodeType, "rayStartParams", rayStartParams, "Ray container resource", resource)
 	if _, ok := rayStartParams["num-cpus"]; !ok {
 		cpu := resource.Limits[corev1.ResourceCPU]
@@ -767,7 +764,9 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 
 // addEmptyDir adds an emptyDir volume to the pod and a corresponding volume mount to the container
 // Used for a /dev/shm memory mount for object store and for a /tmp/ray disk mount for autoscaler logs.
-func addEmptyDir(container *corev1.Container, pod *corev1.Pod, volumeName string, volumeMountPath string, storageMedium corev1.StorageMedium) {
+func addEmptyDir(ctx context.Context, container *corev1.Container, pod *corev1.Pod, volumeName string, volumeMountPath string, storageMedium corev1.StorageMedium) {
+	log := ctrl.LoggerFrom(ctx)
+
 	if checkIfVolumeMounted(container, pod, volumeMountPath) {
 		log.Info("volume already mounted", "volume", volumeName, "path", volumeMountPath)
 		return
@@ -867,7 +866,9 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 // Return a bool indicating the validity of RayStartParams and an err with additional information.
 // If isValid is true, RayStartParams are valid. Any errors will only affect performance.
 // If isValid is false, RayStartParams are invalid will result in an unhealthy or failed Ray cluster.
-func ValidateHeadRayStartParams(rayHeadGroupSpec rayv1.HeadGroupSpec) (isValid bool, err error) {
+func ValidateHeadRayStartParams(ctx context.Context, rayHeadGroupSpec rayv1.HeadGroupSpec) (isValid bool, err error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	// TODO (dxia): if you add more validation, please split checks into separate subroutines.
 	var objectStoreMemory int64
 	rayStartParams := rayHeadGroupSpec.RayStartParams
@@ -883,7 +884,7 @@ func ValidateHeadRayStartParams(rayHeadGroupSpec rayv1.HeadGroupSpec) (isValid b
 			// find the ray container.
 			if container.Name == RayHeadContainer {
 				if shmSize, ok := container.Resources.Requests.Memory().AsInt64(); ok && objectStoreMemory > shmSize {
-					if envVarExists(AllowSlowStorageEnvVar, container.Env) {
+					if utils.EnvVarExists(AllowSlowStorageEnvVar, container.Env) {
 						// in ray if this env var is set, it will only affect the performance.
 						isValid = true
 						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+

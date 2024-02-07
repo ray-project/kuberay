@@ -37,7 +37,6 @@ type ResourceManagerInterface interface {
 	DeleteJob(ctx context.Context, jobName string, namespace string) error
 	CreateService(ctx context.Context, apiService *api.RayService) (*rayv1api.RayService, error)
 	UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*rayv1api.RayService, error)
-	UpdateRayServiceConfigs(ctx context.Context, request *api.UpdateRayServiceConfigsRequest) (*rayv1api.RayService, error)
 	GetService(ctx context.Context, serviceName, namespace string) error
 	ListServices(ctx context.Context, namespace string) ([]*rayv1api.RayService, error)
 	ListAllServices(ctx context.Context) ([]*rayv1api.RayService, error)
@@ -348,30 +347,6 @@ func (r *ResourceManager) UpdateRayService(ctx context.Context, apiService *api.
 		return nil, util.NewInternalServerError(err, "Failed to update service for (%s/%s)", rayService.Namespace, rayService.Name)
 	}
 	return newRayService, nil
-}
-
-func (r *ResourceManager) UpdateRayServiceConfigs(ctx context.Context, request *api.UpdateRayServiceConfigsRequest) (*rayv1api.RayService, error) {
-	serviceName := request.Name
-	namespace := request.Namespace
-
-	client := r.getRayServiceClient(namespace)
-	service, err := getServiceByName(ctx, client, serviceName)
-	if err != nil {
-		return nil, util.Wrap(err, fmt.Sprintf("Update service fail, no service named: %s ", serviceName))
-	}
-	updateService := request.GetUpdateService()
-	// if workerGroupSpec is not nil, update worker group
-	if updateService.WorkerGroupUpdateSpec != nil {
-		oldWorkerGroups := service.Spec.RayClusterSpec.WorkerGroupSpecs
-		newWorkerGroups := util.UpdateRayServiceWorkerGroupSpecs(updateService.WorkerGroupUpdateSpec, oldWorkerGroups)
-		service.Spec.RayClusterSpec.WorkerGroupSpecs = newWorkerGroups
-	}
-	service.Annotations["ray.io/update-timestamp"] = r.clientManager.Time().Now().String()
-	newService, err := client.Update(ctx, service, metav1.UpdateOptions{})
-	if err != nil {
-		return nil, util.NewInternalServerError(err, "Failed to update service for (%s/%s)", service.Namespace, service.Name)
-	}
-	return newService, nil
 }
 
 func (r *ResourceManager) GetService(ctx context.Context, serviceName, namespace string) (*rayv1api.RayService, error) {

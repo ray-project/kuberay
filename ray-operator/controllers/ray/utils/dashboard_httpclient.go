@@ -10,9 +10,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/go-logr/logr"
 	fmtErrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -38,11 +38,11 @@ type RayDashboardClientInterface interface {
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
-	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (string, error)
-	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string, log *logr.Logger) (string, error)
-	GetJobLog(ctx context.Context, jobName string, log *logr.Logger) (*string, error)
-	StopJob(ctx context.Context, jobName string, log *logr.Logger) error
-	DeleteJob(ctx context.Context, jobName string, log *logr.Logger) error
+	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
+	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (string, error)
+	GetJobLog(ctx context.Context, jobName string) (*string, error)
+	StopJob(ctx context.Context, jobName string) error
+	DeleteJob(ctx context.Context, jobName string) error
 }
 
 type BaseDashboardClient struct {
@@ -60,7 +60,8 @@ type RayDashboardClient struct {
 
 // FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
 // and the port with the given port name (defaultPortName).
-func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
+func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
+	log := ctrl.LoggerFrom(ctx)
 	headSvc := &corev1.Service{}
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
 	if err != nil {
@@ -102,7 +103,7 @@ func FetchHeadServiceURL(ctx context.Context, log *logr.Logger, cli client.Clien
 
 func (r *RayDashboardClient) InitClient(url string) {
 	r.client = http.Client{
-		Timeout: 120 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
 }
@@ -181,32 +182,35 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
+type RuntimeEnvType map[string]interface{}
+
 // RayJobInfo is the response of "ray job status" api.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 type RayJobInfo struct {
-	JobStatus    rayv1.JobStatus        `json:"status,omitempty"`
-	Entrypoint   string                 `json:"entrypoint,omitempty"`
-	JobId        string                 `json:"job_id,omitempty"`
-	SubmissionId string                 `json:"submission_id,omitempty"`
-	Message      string                 `json:"message,omitempty"`
-	ErrorType    *string                `json:"error_type,omitempty"`
-	StartTime    uint64                 `json:"start_time,omitempty"`
-	EndTime      uint64                 `json:"end_time,omitempty"`
-	Metadata     map[string]string      `json:"metadata,omitempty"`
-	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
+	// TODO (kevin85421): Double check whether the types are correct or not.
+	JobStatus    rayv1.JobStatus   `json:"status,omitempty"`
+	Entrypoint   string            `json:"entrypoint,omitempty"`
+	JobId        string            `json:"job_id,omitempty"`
+	SubmissionId string            `json:"submission_id,omitempty"`
+	Message      string            `json:"message,omitempty"`
+	ErrorType    *string           `json:"error_type,omitempty"`
+	StartTime    uint64            `json:"start_time,omitempty"`
+	EndTime      uint64            `json:"end_time,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
 }
 
 // RayJobRequest is the request body to submit.
-// Reference to https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobsubmissionclient.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
+// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/common.py#L325-L353
 type RayJobRequest struct {
-	Entrypoint   string                 `json:"entrypoint"`
-	JobId        string                 `json:"job_id,omitempty"`
-	SubmissionId string                 `json:"submission_id,omitempty"`
-	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
-	Metadata     map[string]string      `json:"metadata,omitempty"`
-	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
-	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
-	Resources    map[string]string      `json:"entrypoint_resources,omitempty"`
+	Entrypoint   string             `json:"entrypoint"`
+	SubmissionId string             `json:"submission_id,omitempty"`
+	RuntimeEnv   RuntimeEnvType     `json:"runtime_env,omitempty"`
+	Metadata     map[string]string  `json:"metadata,omitempty"`
+	NumCpus      float32            `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32            `json:"entrypoint_num_gpus,omitempty"`
+	Resources    map[string]float32 `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -222,6 +226,7 @@ type RayJobLogsResponse struct {
 }
 
 // Note that RayJobInfo and error can't be nil at the same time.
+// Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
@@ -282,15 +287,16 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob, log *logr.Logger) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (jobId string, err error) {
 	request, err := ConvertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
 	}
-	return r.SubmitJobReq(ctx, request, &rayJob.Name, log)
+	return r.SubmitJobReq(ctx, request, &rayJob.Name)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string, log *logr.Logger) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (jobId string, err error) {
+	log := ctrl.LoggerFrom(ctx)
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
@@ -323,7 +329,8 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 }
 
 // Get Job Log
-func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string, log *logr.Logger) (*string, error) {
+func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
+	log := ctrl.LoggerFrom(ctx)
 	log.Info("Get ray job log", "rayJob", jobName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
@@ -356,7 +363,8 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string, log 
 	return &jobLog.Logs, nil
 }
 
-func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *logr.Logger) (err error) {
+func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
+	log := ctrl.LoggerFrom(ctx)
 	log.Info("Stop a ray job", "rayJob", jobName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
@@ -391,7 +399,8 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 	return nil
 }
 
-func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string, log *logr.Logger) error {
+func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
+	log := ctrl.LoggerFrom(ctx)
 	log.Info("Delete a ray job", "rayJob", jobName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
@@ -411,18 +420,32 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string, log 
 
 func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	req := &RayJobRequest{
-		Entrypoint: rayJob.Spec.Entrypoint,
-		Metadata:   rayJob.Spec.Metadata,
-		JobId:      rayJob.Status.JobId,
+		Entrypoint:   rayJob.Spec.Entrypoint,
+		SubmissionId: rayJob.Status.JobId,
+		Metadata:     rayJob.Spec.Metadata,
 	}
-	if len(rayJob.Spec.RuntimeEnvYAML) == 0 {
-		return req, nil
+	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
+		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
+		if err != nil {
+			return nil, err
+		}
+		req.RuntimeEnv = runtimeEnv
 	}
-	var runtimeEnv map[string]interface{}
-	err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal runtimeEnv: %v: %v", rayJob.Spec.RuntimeEnvYAML, err)
+	req.NumCpus = rayJob.Spec.EntrypointNumCpus
+	req.NumGpus = rayJob.Spec.EntrypointNumGpus
+	if rayJob.Spec.EntrypointResources != "" {
+		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
+			return nil, err
+		}
 	}
-	req.RuntimeEnv = runtimeEnv
 	return req, nil
+}
+
+func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
+	var runtimeEnv RuntimeEnvType
+	err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", runtimeEnvYAML, err)
+	}
+	return runtimeEnv, nil
 }

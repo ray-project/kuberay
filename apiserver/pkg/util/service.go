@@ -5,14 +5,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-const (
-	rayServiceDefaultVersion = "2.0.0"
-	defaultServePortName     = "serve"
-	defaultServePort         = 8000
 )
 
 type RayService struct {
@@ -44,7 +37,6 @@ func NewRayService(apiService *api.RayService, computeTemplateMap map[string]*ap
 
 func buildRayServiceLabels(apiService *api.RayService) map[string]string {
 	labels := map[string]string{}
-	labels[RayServiceLabelKey] = apiService.Name
 	labels[RayClusterUserLabelKey] = apiService.User
 	labels[KubernetesApplicationNameLabelKey] = ApplicationName
 	labels[KubernetesManagedByLabelKey] = ComponentName
@@ -59,17 +51,13 @@ func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
 
 func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[string]*api.ComputeTemplate) (*rayv1api.RayServiceSpec, error) {
 	// Ensure that at least one and only one serve config (V1 or V2) defined
-	if apiService.ServeConfig_V2 == "" && apiService.ServeDeploymentGraphSpec == nil {
+	if apiService.ServeConfig_V2 == "" {
 		// Serve configuration is not defined
 		return nil, errors.New("serve configuration is not defined")
 	}
 
-	if apiService.ServeDeploymentGraphSpec != nil && apiService.ServeConfig_V2 != "" {
-		// Serve configuration is not defined
-		return nil, errors.New("two serve configuration are defined, only one is allowed")
-	}
 	// generate Ray cluster spec and buid cluster
-	newRayClusterSpec, err := buildRayClusterSpec(rayServiceDefaultVersion, nil, apiService.ClusterSpec, computeTemplateMap, true)
+	newRayClusterSpec, err := buildRayClusterSpec(apiService.Version, nil, apiService.ClusterSpec, computeTemplateMap, true)
 	if err != nil {
 		return nil, err
 	}

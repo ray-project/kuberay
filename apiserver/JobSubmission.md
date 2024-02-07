@@ -62,8 +62,8 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
         "computeTemplate": "default-template",
         "image": "rayproject/ray:2.9.0-py310",
         "replicas": 1,
-        "minReplicas": 0,
-        "maxReplicas": 5,
+        "minReplicas": 1,
+        "maxReplicas": 1,
         "rayStartParams": {
            "node-ip-address": "$MY_POD_IP"
          },

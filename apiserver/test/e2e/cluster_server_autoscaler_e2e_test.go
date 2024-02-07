@@ -42,13 +42,13 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 		},
 	}
 
-	cluster_req := api.CreateClusterRequest{
+	clusterReq := api.CreateClusterRequest{
 		Namespace: tCtx.GetNamespaceName(),
 		Cluster: &api.Cluster{
 			Name:        tCtx.GetNextName(),
 			Namespace:   tCtx.GetNamespaceName(),
 			User:        "boris",
-			Version:     "2.8.0",
+			Version:     "2.9.0",
 			Environment: api.Cluster_DEV,
 			ClusterSpec: &api.ClusterSpec{
 				EnableInTreeAutoscaling: true,
@@ -88,7 +88,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	}
 
 	// Create cluster
-	actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&cluster_req)
+	actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&clusterReq)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
@@ -100,7 +100,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.Equal(t, int32(0), rayCluster.Status.AvailableWorkerReplicas)
 
 	// Create actor
-	create_actor_request := api.CreateRayJobRequest{
+	createActorRequest := api.CreateRayJobRequest{
 		Namespace: tCtx.GetNamespaceName(),
 		Job: &api.RayJob{
 			Name:       tCtx.GetNextName(),
@@ -113,14 +113,14 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 		},
 	}
 
-	actualJob, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(&create_actor_request)
+	actualJob, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(&createActorRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, create_actor_request.Job.Name, rayv1api.JobStatusSucceeded)
+	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
 
 	// worker pod should be created as part of job execution
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// Get number of workers
 	rayCluster, err = tCtx.GetRayClusterByName(actualCluster.Name)
@@ -128,7 +128,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.Equal(t, int32(1), rayCluster.Status.AvailableWorkerReplicas)
 
 	// Delete actor
-	delete_actor_request := api.CreateRayJobRequest{
+	deleteActorRequest := api.CreateRayJobRequest{
 		Namespace: tCtx.GetNamespaceName(),
 		Job: &api.RayJob{
 			Name:       tCtx.GetNextName(),
@@ -140,11 +140,11 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 			},
 		},
 	}
-	actualJob, actualRpcStatus, err = tCtx.GetRayApiServerClient().CreateRayJob(&delete_actor_request)
+	actualJob, actualRpcStatus, err = tCtx.GetRayApiServerClient().CreateRayJob(&deleteActorRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, create_actor_request.Job.Name, rayv1api.JobStatusSucceeded)
+	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
 
 	// Sleep for a while to ensure that the worker pod is deleted
 	time.Sleep(100 * time.Second)

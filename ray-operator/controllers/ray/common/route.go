@@ -61,24 +61,3 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) 
 
 	return route, nil
 }
-
-// BuildRouteForRayService Builds the route for head service dashboard for RayService.
-// This is used to expose dashboard for external traffic.
-// RayService controller updates the ingress whenever a new RayCluster serves the traffic.
-func BuildRouteForRayService(service rayv1.RayService, cluster rayv1.RayCluster) (*routev1.Route, error) {
-	route, err := BuildRouteForHeadService(cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	serviceName, err := utils.GenerateHeadServiceName("RayService", cluster.Spec, cluster.Name)
-	if err != nil {
-		return nil, err
-	}
-	route.ObjectMeta.Name = serviceName
-	route.ObjectMeta.Namespace = service.Namespace
-	route.ObjectMeta.Labels[utils.RayServiceLabelKey] = service.Name
-	route.ObjectMeta.Labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(service.Name, rayv1.HeadNode))
-
-	return route, nil
-}

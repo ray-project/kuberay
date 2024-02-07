@@ -185,108 +185,7 @@ The following steps allow you to validate that the KubeRay API Server components
     }
     ```
 
-4. You can create `RayCluster`, `RayJobs` or `RayService` by dialing the endpoints. The following is a simple example for creating the `RayService` object, follow [swagger support](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
-
-    Please note that:
-
-    * The following examples use the `ray-system` namespace. If not already created by using the helm install steps above, you can create it prior to executing the curl examples by running `kubectl create namespace ray-system`
-    * The examples assume that the cluster has at least 2 CPUs available and 4 GB of free memory. You can either increase the CPUs available to your cluster (docker settings) or reduce the CPU request in the `compute_templates` request.
-    * If you are running the service and the kuberay operator on Apple Silicon Machine, you might want to use the `rayproject/ray:2.9.0-aarch64`image.
-
-    ```sh
-    # Create a template
-    curl --silent -X POST 'localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
-    --header 'Content-Type: application/json' \
-    --data '{
-      "name": "default-template",
-      "namespace": "ray-system",
-      "cpu": 2,
-      "memory": 4
-    }'
-
-    # Create the "Fruit Stand" Ray Serve example (V1 Config spec)
-    curl --silent -X POST 'localhost:31888/apis/v1/namespaces/ray-system/services' \
-    --header 'Content-Type: application/json' \
-    --data '{
-      "name": "test-v1",
-      "namespace": "ray-system",
-      "user": "user",
-      "serveDeploymentGraphSpec": {
-        "importPath": "fruit.deployment_graph",
-        "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
-        "serveConfigs": [
-          {
-            "deploymentName": "OrangeStand",
-            "replicas": 1,
-            "userConfig": "price: 2",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "PearStand",
-            "replicas": 1,
-            "userConfig": "price: 1",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "FruitMarket",
-            "replicas": 1,
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "DAGDriver",
-            "replicas": 1,
-            "routePrefix": "/",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          }
-        ]
-      },
-      "clusterSpec": {
-        "headGroupSpec": {
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "serviceType": "NodePort",
-          "rayStartParams": {
-            "dashboard-host": "0.0.0.0",
-            "metrics-export-port": "8080"
-          },
-          "volumes": []
-        },
-        "workerGroupSpec": [
-          {
-            "groupName": "small-wg",
-            "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.9.0-py310",
-            "replicas": 1,
-            "minReplicas": 0,
-            "maxReplicas": 5,
-            "rayStartParams": {
-              "node-ip-address": "$MY_POD_IP"
-            }
-          }
-        ]
-      }
-    }'
-
-    # Get the pods running in the namespace
-    kubectl get pods -n ray-system
-    # NAME                                             READY   STATUS    RESTARTS   AGE
-    # kuberay-apiserver-5dd7c9b4c8-rnrcq               1/1     Running   0          17m
-    # test-v1-raycluster-42vss-head-m4qj2              1/1     Running   0          91s
-    # test-v1-raycluster-42vss-worker-small-wg-svr79   1/1     Running   0          90s
-
-    # Delete the RayService in the namespace
-    curl --silent -X 'DELETE' \
-    'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
-    -H 'accept: application/json'
-    ```
+4. You can create `RayCluster`, `RayJobs` or `RayService` by dialing the endpoints.
 
 ## Swagger Support
 
@@ -1019,6 +918,7 @@ Examples:
       "name": "rayjob-test",
       "namespace": "ray-system",
       "user": "3cp0",
+      "version": "2.9.0",
       "entrypoint": "python -V",
       "clusterSpec": {
         "headGroupSpec": {
@@ -1221,6 +1121,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "name": "job-test",
   "namespace": "default",
   "user": "boris",
+  "version": "2.9.0",  
   "entrypoint": "python /home/ray/samples/sample_code.py",
   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
   "jobSubmitter": {
@@ -1307,6 +1208,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "name": "job-test",
   "namespace": "default",
   "user": "boris",
+  "version": "2.9.0",
   "entrypoint": "python /home/ray/samples/sample_code.py",
    "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
   "clusterSelector": {
@@ -1544,169 +1446,19 @@ POST {{baseUrl}}/apis/v1/namespaces/<namespace>/services
 
 Examples:
 
-* Request (V1)
-  
-  ```sh
-  curl --silent -X 'POST' \
-  'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-      "name": "test-v1",
-      "namespace": "ray-system",
-      "user": "user",
-      "serveDeploymentGraphSpec": {
-        "importPath": "fruit.deployment_graph",
-        "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
-        "serveConfigs": [
-          {
-            "deploymentName": "OrangeStand",
-            "replicas": 1,
-            "userConfig": "price: 2",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "PearStand",
-            "replicas": 1,
-            "userConfig": "price: 1",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "FruitMarket",
-            "replicas": 1,
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          },
-          {
-            "deploymentName": "DAGDriver",
-            "replicas": 1,
-            "routePrefix": "/",
-            "actorOptions": {
-              "cpusPerActor": 0.1
-            }
-          }
-        ]
-      },
-      "clusterSpec": {
-        "headGroupSpec": {
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "serviceType": "NodePort",
-          "rayStartParams": {
-            "dashboard-host": "0.0.0.0",
-            "metrics-export-port": "8080"
-          },
-          "volumes": []
-        },
-        "workerGroupSpec": [
-          {
-            "groupName": "small-wg",
-            "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.9.0-py310",
-            "replicas": 1,
-            "minReplicas": 0,
-            "maxReplicas": 5,
-            "rayStartParams": {
-              "node-ip-address": "$MY_POD_IP"
-            }
-          }
-        ]
-      }
-    }'
-  ```
+* Request
 
-* Response (V1)
-
-  ```json
-  {
-    "name": "test-v1",
-    "namespace": "ray-system",
-    "user": "user",
-    "serveDeploymentGraphSpec": {
-      "importPath": "fruit.deployment_graph",
-      "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
-      "serveConfigs": [
-        {
-          "deploymentName": "OrangeStand",
-          "replicas": 1,
-          "userConfig": "price: 2",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "PearStand",
-          "replicas": 1,
-          "userConfig": "price: 1",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "FruitMarket",
-          "replicas": 1,
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "DAGDriver",
-          "replicas": 1,
-          "routePrefix": "/",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        }
-      ]
-    },
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "NodePort",
-        "rayStartParams": {
-          "dashboard-host": "0.0.0.0",
-          "metrics-export-port": "8080"
-        }
-      },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 5,
-          "maxReplicas": 1,
-          "rayStartParams": {
-            "node-ip-address": "$MY_POD_IP"
-          }
-        }
-      ]
-    },
-    "rayServiceStatus": {},
-    "createdAt": "2023-09-25T11:42:11Z",
-    "deleteAt": "1969-12-31T23:59:59Z"
-  }
-  ```
-
-* Request (V2)  
-
-  ```sh
-  curl --silent -X 'POST' \
-    'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
+```sh
+ curl -X 'POST' 'http://localhost:31888/apis/v1/namespaces/default/services' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '
   {
     "name": "test-v2",
-    "namespace": "ray-system",
+    "namespace": "default",
     "user": "user",
-    "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
+    "version": "2.9.0",
+    "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n",
     "clusterSpec": {
       "headGroupSpec": {
         "computeTemplate": "default-template",
@@ -1733,45 +1485,153 @@ Examples:
       ]
     }
   }'
-  ```
+```
 
-* Response (V2)
+* Response
 
-  ```json
-  {
-    "name": "test-v2",
-    "namespace": "ray-system",
-    "user": "user",
-    "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "NodePort",
-        "rayStartParams": {
-          "dashboard-host": "0.0.0.0",
-          "metrics-export-port": "8080"
-        }
+```json
+{
+   "name":"test-v2",
+   "namespace":"default",
+   "user":"user",
+   "serveConfigV2":"applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n",
+   "clusterSpec":{
+      "headGroupSpec":{
+         "computeTemplate":"default-template",
+         "image":"rayproject/ray:2.9.0-py310",
+         "serviceType":"NodePort",
+         "rayStartParams":{
+            "dashboard-host":"0.0.0.0",
+            "metrics-export-port":"8080"
+         },
+         "environment":{
+            
+         }
       },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 5,
-          "maxReplicas": 1,
-          "rayStartParams": {
-            "node-ip-address": "$MY_POD_IP"
-          }
-        }
+      "workerGroupSpec":[
+         {
+            "groupName":"small-wg",
+            "computeTemplate":"default-template",
+            "image":"rayproject/ray:2.9.0-py310",
+            "replicas":1,
+            "minReplicas":1,
+            "maxReplicas":5,
+            "rayStartParams":{
+               "node-ip-address":"$MY_POD_IP"
+            },
+            "environment":{
+               
+            }
+         }
       ]
-    },
-    "rayServiceStatus": {},
-    "createdAt": "2023-09-25T11:44:41Z",
-    "deleteAt": "1969-12-31T23:59:59Z"
-  }
-  ```
+   },
+   "rayServiceStatus":{
+      "rayServiceEvents":[
+         {
+            "id":"test-v2.17ab175ec787d26e",
+            "name":"test-v2-test-v2.17ab175ec787d26e",
+            "createdAt":"2024-01-17T09:09:39Z",
+            "firstTimestamp":"2024-01-17T09:09:39Z",
+            "lastTimestamp":"2024-01-17T09:10:04Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":13
+         },
+         {
+            "id":"test-v2.17ab176292337141",
+            "name":"test-v2-test-v2.17ab176292337141",
+            "createdAt":"2024-01-17T09:09:56Z",
+            "firstTimestamp":"2024-01-17T09:09:56Z",
+            "lastTimestamp":"2024-01-17T09:09:56Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lmk5c",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab1764fe827fe3",
+            "name":"test-v2-test-v2.17ab1764fe827fe3",
+            "createdAt":"2024-01-17T09:10:06Z",
+            "firstTimestamp":"2024-01-17T09:10:06Z",
+            "lastTimestamp":"2024-01-17T09:14:41Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":139
+         },
+         {
+            "id":"test-v2.17ab1815ce6a98da",
+            "name":"test-v2-test-v2.17ab1815ce6a98da",
+            "createdAt":"2024-01-17T09:22:45Z",
+            "firstTimestamp":"2024-01-17T09:22:45Z",
+            "lastTimestamp":"2024-01-17T09:23:16Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":16
+         },
+         {
+            "id":"test-v2.17ab181a8576812d",
+            "name":"test-v2-test-v2.17ab181a8576812d",
+            "createdAt":"2024-01-17T09:23:06Z",
+            "firstTimestamp":"2024-01-17T09:23:06Z",
+            "lastTimestamp":"2024-01-17T09:23:06Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-b85bj",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab181d64327965",
+            "name":"test-v2-test-v2.17ab181d64327965",
+            "createdAt":"2024-01-17T09:23:18Z",
+            "firstTimestamp":"2024-01-17T09:23:18Z",
+            "lastTimestamp":"2024-01-17T09:23:26Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":8
+         },
+         {
+            "id":"test-v2.17ab1857fcf7e3a4",
+            "name":"test-v2-test-v2.17ab1857fcf7e3a4",
+            "createdAt":"2024-01-17T09:27:30Z",
+            "firstTimestamp":"2024-01-17T09:27:30Z",
+            "lastTimestamp":"2024-01-17T09:27:58Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":15
+         },
+         {
+            "id":"test-v2.17ab185bc523559a",
+            "name":"test-v2-test-v2.17ab185bc523559a",
+            "createdAt":"2024-01-17T09:27:46Z",
+            "firstTimestamp":"2024-01-17T09:27:46Z",
+            "lastTimestamp":"2024-01-17T09:27:46Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lbl9x",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab185f245800ff",
+            "name":"test-v2-test-v2.17ab185f245800ff",
+            "createdAt":"2024-01-17T09:28:00Z",
+            "firstTimestamp":"2024-01-17T09:28:00Z",
+            "lastTimestamp":"2024-01-17T09:28:11Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":9
+         }
+      ]
+   },
+   "createdAt":"2024-01-17T09:31:34Z",
+   "deleteAt":"1969-12-31T23:59:59Z"
+}  
+```
 
 #### List all services in a given namespace
 
@@ -1785,108 +1645,268 @@ Examples
 
   ```sh
   curl --silent -X 'GET' \
-  'http://localhost:31888/apis/v1/namespaces/ray-system/services' \
+  'http://localhost:31888/apis/v1/namespaces/default/services' \
   -H 'accept: application/json'
   ```
 
 * Response:
 
-  ```json
+```json
   {
-    "services": [
+   "services":[
       {
-        "name": "test-v2",
-        "namespace": "ray-system",
-        "user": "user",
-        "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
-        "clusterSpec": {
-          "headGroupSpec": {
-            "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.9.0-py310",
-            "serviceType": "NodePort",
-            "rayStartParams": {
-              "dashboard-host": "0.0.0.0",
-              "metrics-export-port": "8080"
-            }
-          },
-          "workerGroupSpec": [
-            {
-              "groupName": "small-wg",
-              "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.9.0-py310",
-              "replicas": 1,
-              "minReplicas": 5,
-              "maxReplicas": 1,
-              "rayStartParams": {
-                "node-ip-address": "$MY_POD_IP"
-              }
-            }
-          ]
-        },
-        "rayServiceStatus": {
-          "rayServiceEvents": [
-            {
-              "id": "test-v2.178821ac4b15c743",
-              "name": "test-v2-test-v2.178821ac4b15c743",
-              "createdAt": "2023-09-25T11:44:43Z",
-              "firstTimestamp": "2023-09-25T11:44:43Z",
-              "lastTimestamp": "2023-09-25T11:46:15Z",
-              "reason": "ServiceUnhealthy",
-              "message": "The service is in an unhealthy state. Controller will perform a round of actions in 10s.",
-              "type": "Normal",
-              "count": 11
-            }
-          ]
-        },
-        "createdAt": "2023-09-25T11:44:41Z",
-        "deleteAt": "1969-12-31T23:59:59Z"
-      },
-      {
-        "name": "test-v2",
-        "namespace": "ray-system",
-        "user": "user",
-        "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
-        "clusterSpec": {
-          "headGroupSpec": {
-            "serviceType": "NodePort",
-            "rayStartParams": {
-              "dashboard-host": "0.0.0.0",
-              "metrics-export-port": "8080"
-            }
-          },
-          "workerGroupSpec": [
-            {
-              "groupName": "small-wg",
-              "replicas": 1,
-              "minReplicas": 5,
-              "maxReplicas": 1,
-              "rayStartParams": {
-                "node-ip-address": "$MY_POD_IP"
-              }
-            }
-          ]
-        },
-        "rayServiceStatus": {
-          "rayServiceEvents": [
-            {
-              "id": "test-v2.178821ac4b15c743",
-              "name": "test-v2-test-v2.178821ac4b15c743",
-              "createdAt": "2023-09-25T11:44:43Z",
-              "firstTimestamp": "2023-09-25T11:44:43Z",
-              "lastTimestamp": "2023-09-25T11:46:15Z",
-              "reason": "ServiceUnhealthy",
-              "message": "The service is in an unhealthy state. Controller will perform a round of actions in 10s.",
-              "type": "Normal",
-              "count": 11
-            }
-          ]
-        },
-        "createdAt": "2023-09-25T11:44:41Z",
-        "deleteAt": "1969-12-31T23:59:59Z"
+         "name":"test-v2",
+         "namespace":"default",
+         "user":"user",
+         "serveConfigV2":"applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n",
+         "clusterSpec":{
+            "headGroupSpec":{
+               "computeTemplate":"default-template",
+               "image":"rayproject/ray:2.9.0-py310",
+               "serviceType":"NodePort",
+               "rayStartParams":{
+                  "dashboard-host":"0.0.0.0",
+                  "metrics-export-port":"8080"
+               },
+               "environment":{
+                  
+               }
+            },
+            "workerGroupSpec":[
+               {
+                  "groupName":"small-wg",
+                  "computeTemplate":"default-template",
+                  "image":"rayproject/ray:2.9.0-py310",
+                  "replicas":1,
+                  "minReplicas":1,
+                  "maxReplicas":5,
+                  "rayStartParams":{
+                     "node-ip-address":"$MY_POD_IP"
+                  },
+                  "environment":{
+                     
+                  }
+               }
+            ]
+         },
+         "rayServiceStatus":{
+            "rayServiceEvents":[
+               {
+                  "id":"test-v2.17ab175ec787d26e",
+                  "name":"test-v2-test-v2.17ab175ec787d26e",
+                  "createdAt":"2024-01-17T09:09:39Z",
+                  "firstTimestamp":"2024-01-17T09:09:39Z",
+                  "lastTimestamp":"2024-01-17T09:10:04Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":13
+               },
+               {
+                  "id":"test-v2.17ab176292337141",
+                  "name":"test-v2-test-v2.17ab176292337141",
+                  "createdAt":"2024-01-17T09:09:56Z",
+                  "firstTimestamp":"2024-01-17T09:09:56Z",
+                  "lastTimestamp":"2024-01-17T09:09:56Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lmk5c",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab1764fe827fe3",
+                  "name":"test-v2-test-v2.17ab1764fe827fe3",
+                  "createdAt":"2024-01-17T09:10:06Z",
+                  "firstTimestamp":"2024-01-17T09:10:06Z",
+                  "lastTimestamp":"2024-01-17T09:14:41Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":139
+               },
+               {
+                  "id":"test-v2.17ab1815ce6a98da",
+                  "name":"test-v2-test-v2.17ab1815ce6a98da",
+                  "createdAt":"2024-01-17T09:22:45Z",
+                  "firstTimestamp":"2024-01-17T09:22:45Z",
+                  "lastTimestamp":"2024-01-17T09:23:16Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":16
+               },
+               {
+                  "id":"test-v2.17ab181a8576812d",
+                  "name":"test-v2-test-v2.17ab181a8576812d",
+                  "createdAt":"2024-01-17T09:23:06Z",
+                  "firstTimestamp":"2024-01-17T09:23:06Z",
+                  "lastTimestamp":"2024-01-17T09:23:06Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-b85bj",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab181d64327965",
+                  "name":"test-v2-test-v2.17ab181d64327965",
+                  "createdAt":"2024-01-17T09:23:18Z",
+                  "firstTimestamp":"2024-01-17T09:23:18Z",
+                  "lastTimestamp":"2024-01-17T09:23:26Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":8
+               },
+               {
+                  "id":"test-v2.17ab1857fcf7e3a4",
+                  "name":"test-v2-test-v2.17ab1857fcf7e3a4",
+                  "createdAt":"2024-01-17T09:27:30Z",
+                  "firstTimestamp":"2024-01-17T09:27:30Z",
+                  "lastTimestamp":"2024-01-17T09:27:58Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":15
+               },
+               {
+                  "id":"test-v2.17ab185bc523559a",
+                  "name":"test-v2-test-v2.17ab185bc523559a",
+                  "createdAt":"2024-01-17T09:27:46Z",
+                  "firstTimestamp":"2024-01-17T09:27:46Z",
+                  "lastTimestamp":"2024-01-17T09:27:46Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lbl9x",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab185f245800ff",
+                  "name":"test-v2-test-v2.17ab185f245800ff",
+                  "createdAt":"2024-01-17T09:28:00Z",
+                  "firstTimestamp":"2024-01-17T09:28:00Z",
+                  "lastTimestamp":"2024-01-17T09:28:11Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":9
+               },
+               {
+                  "id":"test-v2.17ab189170a9c462",
+                  "name":"test-v2-test-v2.17ab189170a9c462",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:32:08Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":16
+               },
+               {
+                  "id":"test-v2.17ab18965aab5e92",
+                  "name":"test-v2-test-v2.17ab18965aab5e92",
+                  "createdAt":"2024-01-17T09:31:57Z",
+                  "firstTimestamp":"2024-01-17T09:31:57Z",
+                  "lastTimestamp":"2024-01-17T09:31:57Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-qhrmk",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab18993b7ef94e",
+                  "name":"test-v2-test-v2.17ab18993b7ef94e",
+                  "createdAt":"2024-01-17T09:32:10Z",
+                  "firstTimestamp":"2024-01-17T09:32:10Z",
+                  "lastTimestamp":"2024-01-17T09:36:36Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":135
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab1891669f9337",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891669f9337",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created service test-v2-raycluster-qhrmk-head-svc",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab1891683f5579",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891683f5579",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created head pod test-v2-raycluster-qhrmk-head-8kptm",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created worker pod ",
+                  "type":"Normal",
+                  "count":1
+               }
+            ],
+            "rayClusterName":"test-v2-raycluster-qhrmk",
+            "serveApplicationStatus":[
+               {
+                  "name":"fruit_app",
+                  "status":"RUNNING",
+                  "serveDeploymentStatus":[
+                     {
+                        "deploymentName":"PearStand",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"FruitMarket",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"MangoStand",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"OrangeStand",
+                        "status":"HEALTHY"
+                     }
+                  ]
+               },
+               {
+                  "name":"math_app",
+                  "status":"RUNNING",
+                  "serveDeploymentStatus":[
+                     {
+                        "deploymentName":"Adder",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"Multiplier",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"Router",
+                        "status":"HEALTHY"
+                     }
+                  ]
+               }
+            ]
+         },
+         "createdAt":"2024-01-17T09:31:34Z",
+         "deleteAt":"1969-12-31T23:59:59Z"
       }
-    ]
-  }
-  ```
+   ]
+}
+```
 
 #### List all services in all namespaces
 
@@ -1906,102 +1926,262 @@ Examples:
 
 * Response:
 
-  ```json
-  {
-    "services": [
+```json
+{
+   "services":[
       {
-        "name": "test-v2",
-        "namespace": "ray-system",
-        "user": "user",
-        "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
-        "clusterSpec": {
-          "headGroupSpec": {
-            "computeTemplate": "default-template",
-            "image": "rayproject/ray:2.9.0-py310",
-            "serviceType": "NodePort",
-            "rayStartParams": {
-              "dashboard-host": "0.0.0.0",
-              "metrics-export-port": "8080"
-            }
-          },
-          "workerGroupSpec": [
-            {
-              "groupName": "small-wg",
-              "computeTemplate": "default-template",
-              "image": "rayproject/ray:2.9.0-py310",
-              "replicas": 1,
-              "minReplicas": 5,
-              "maxReplicas": 1,
-              "rayStartParams": {
-                "node-ip-address": "$MY_POD_IP"
-              }
-            }
-          ]
-        },
-        "rayServiceStatus": {
-          "rayServiceEvents": [
-            {
-              "id": "test-v2.178821ac4b15c743",
-              "name": "test-v2-test-v2.178821ac4b15c743",
-              "createdAt": "2023-09-25T11:44:43Z",
-              "firstTimestamp": "2023-09-25T11:44:43Z",
-              "lastTimestamp": "2023-09-25T11:47:55Z",
-              "reason": "ServiceUnhealthy",
-              "message": "The service is in an unhealthy state. Controller will perform a round of actions in 10s.",
-              "type": "Normal",
-              "count": 21
-            }
-          ]
-        },
-        "createdAt": "2023-09-25T11:44:41Z",
-        "deleteAt": "1969-12-31T23:59:59Z"
-      },
-      {
-        "name": "test-v2",
-        "namespace": "ray-system",
-        "user": "user",
-        "serveConfigV2": "applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: DAGDriver\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n      - name: create_order\n        num_replicas: 1\n      - name: DAGDriver\n        num_replicas: 1\n",
-        "clusterSpec": {
-          "headGroupSpec": {
-            "serviceType": "NodePort",
-            "rayStartParams": {
-              "dashboard-host": "0.0.0.0",
-              "metrics-export-port": "8080"
-            }
-          },
-          "workerGroupSpec": [
-            {
-              "groupName": "small-wg",
-              "replicas": 1,
-              "minReplicas": 5,
-              "maxReplicas": 1,
-              "rayStartParams": {
-                "node-ip-address": "$MY_POD_IP"
-              }
-            }
-          ]
-        },
-        "rayServiceStatus": {
-          "rayServiceEvents": [
-            {
-              "id": "test-v2.178821ac4b15c743",
-              "name": "test-v2-test-v2.178821ac4b15c743",
-              "createdAt": "2023-09-25T11:44:43Z",
-              "firstTimestamp": "2023-09-25T11:44:43Z",
-              "lastTimestamp": "2023-09-25T11:47:55Z",
-              "reason": "ServiceUnhealthy",
-              "message": "The service is in an unhealthy state. Controller will perform a round of actions in 10s.",
-              "type": "Normal",
-              "count": 21
-            }
-          ]
-        },
-        "createdAt": "2023-09-25T11:44:41Z",
-        "deleteAt": "1969-12-31T23:59:59Z"
+         "name":"test-v2",
+         "namespace":"default",
+         "user":"user",
+         "serveConfigV2":"applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n",
+         "clusterSpec":{
+            "headGroupSpec":{
+               "computeTemplate":"default-template",
+               "image":"rayproject/ray:2.9.0-py310",
+               "serviceType":"NodePort",
+               "rayStartParams":{
+                  "dashboard-host":"0.0.0.0",
+                  "metrics-export-port":"8080"
+               },
+               "environment":{
+                  
+               }
+            },
+            "workerGroupSpec":[
+               {
+                  "groupName":"small-wg",
+                  "computeTemplate":"default-template",
+                  "image":"rayproject/ray:2.9.0-py310",
+                  "replicas":1,
+                  "minReplicas":1,
+                  "maxReplicas":5,
+                  "rayStartParams":{
+                     "node-ip-address":"$MY_POD_IP"
+                  },
+                  "environment":{
+                     
+                  }
+               }
+            ]
+         },
+         "rayServiceStatus":{
+            "rayServiceEvents":[
+               {
+                  "id":"test-v2.17ab175ec787d26e",
+                  "name":"test-v2-test-v2.17ab175ec787d26e",
+                  "createdAt":"2024-01-17T09:09:39Z",
+                  "firstTimestamp":"2024-01-17T09:09:39Z",
+                  "lastTimestamp":"2024-01-17T09:10:04Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":13
+               },
+               {
+                  "id":"test-v2.17ab176292337141",
+                  "name":"test-v2-test-v2.17ab176292337141",
+                  "createdAt":"2024-01-17T09:09:56Z",
+                  "firstTimestamp":"2024-01-17T09:09:56Z",
+                  "lastTimestamp":"2024-01-17T09:09:56Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lmk5c",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab1764fe827fe3",
+                  "name":"test-v2-test-v2.17ab1764fe827fe3",
+                  "createdAt":"2024-01-17T09:10:06Z",
+                  "firstTimestamp":"2024-01-17T09:10:06Z",
+                  "lastTimestamp":"2024-01-17T09:14:41Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":139
+               },
+               {
+                  "id":"test-v2.17ab1815ce6a98da",
+                  "name":"test-v2-test-v2.17ab1815ce6a98da",
+                  "createdAt":"2024-01-17T09:22:45Z",
+                  "firstTimestamp":"2024-01-17T09:22:45Z",
+                  "lastTimestamp":"2024-01-17T09:23:16Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":16
+               },
+               {
+                  "id":"test-v2.17ab181a8576812d",
+                  "name":"test-v2-test-v2.17ab181a8576812d",
+                  "createdAt":"2024-01-17T09:23:06Z",
+                  "firstTimestamp":"2024-01-17T09:23:06Z",
+                  "lastTimestamp":"2024-01-17T09:23:06Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-b85bj",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab181d64327965",
+                  "name":"test-v2-test-v2.17ab181d64327965",
+                  "createdAt":"2024-01-17T09:23:18Z",
+                  "firstTimestamp":"2024-01-17T09:23:18Z",
+                  "lastTimestamp":"2024-01-17T09:23:26Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":8
+               },
+               {
+                  "id":"test-v2.17ab1857fcf7e3a4",
+                  "name":"test-v2-test-v2.17ab1857fcf7e3a4",
+                  "createdAt":"2024-01-17T09:27:30Z",
+                  "firstTimestamp":"2024-01-17T09:27:30Z",
+                  "lastTimestamp":"2024-01-17T09:27:58Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":15
+               },
+               {
+                  "id":"test-v2.17ab185bc523559a",
+                  "name":"test-v2-test-v2.17ab185bc523559a",
+                  "createdAt":"2024-01-17T09:27:46Z",
+                  "firstTimestamp":"2024-01-17T09:27:46Z",
+                  "lastTimestamp":"2024-01-17T09:27:46Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lbl9x",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab185f245800ff",
+                  "name":"test-v2-test-v2.17ab185f245800ff",
+                  "createdAt":"2024-01-17T09:28:00Z",
+                  "firstTimestamp":"2024-01-17T09:28:00Z",
+                  "lastTimestamp":"2024-01-17T09:28:11Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":9
+               },
+               {
+                  "id":"test-v2.17ab189170a9c462",
+                  "name":"test-v2-test-v2.17ab189170a9c462",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:32:08Z",
+                  "reason":"ServiceNotReady",
+                  "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+                  "type":"Normal",
+                  "count":16
+               },
+               {
+                  "id":"test-v2.17ab18965aab5e92",
+                  "name":"test-v2-test-v2.17ab18965aab5e92",
+                  "createdAt":"2024-01-17T09:31:57Z",
+                  "firstTimestamp":"2024-01-17T09:31:57Z",
+                  "lastTimestamp":"2024-01-17T09:31:57Z",
+                  "reason":"SubmittedServeDeployment",
+                  "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-qhrmk",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2.17ab18993b7ef94e",
+                  "name":"test-v2-test-v2.17ab18993b7ef94e",
+                  "createdAt":"2024-01-17T09:32:10Z",
+                  "firstTimestamp":"2024-01-17T09:32:10Z",
+                  "lastTimestamp":"2024-01-17T09:41:37Z",
+                  "reason":"Running",
+                  "message":"The Serve applicaton is now running and healthy.",
+                  "type":"Normal",
+                  "count":284
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab1891669f9337",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891669f9337",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created service test-v2-raycluster-qhrmk-head-svc",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab1891683f5579",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891683f5579",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created head pod test-v2-raycluster-qhrmk-head-8kptm",
+                  "type":"Normal",
+                  "count":1
+               },
+               {
+                  "id":"test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+                  "name":"test-v2-test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+                  "createdAt":"2024-01-17T09:31:36Z",
+                  "firstTimestamp":"2024-01-17T09:31:36Z",
+                  "lastTimestamp":"2024-01-17T09:31:36Z",
+                  "reason":"Created",
+                  "message":"Created worker pod ",
+                  "type":"Normal",
+                  "count":1
+               }
+            ],
+            "rayClusterName":"test-v2-raycluster-qhrmk",
+            "serveApplicationStatus":[
+               {
+                  "name":"fruit_app",
+                  "status":"RUNNING",
+                  "serveDeploymentStatus":[
+                     {
+                        "deploymentName":"FruitMarket",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"MangoStand",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"OrangeStand",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"PearStand",
+                        "status":"HEALTHY"
+                     }
+                  ]
+               },
+               {
+                  "name":"math_app",
+                  "status":"RUNNING",
+                  "serveDeploymentStatus":[
+                     {
+                        "deploymentName":"Adder",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"Multiplier",
+                        "status":"HEALTHY"
+                     },
+                     {
+                        "deploymentName":"Router",
+                        "status":"HEALTHY"
+                     }
+                  ]
+               }
+            ]
+         },
+         "createdAt":"2024-01-17T09:31:34Z",
+         "deleteAt":"1969-12-31T23:59:59Z"
       }
-    ]
-  }
-  ```
+   ]
+}
+```
 
 #### Get service by its name and namespace
 
@@ -2015,203 +2195,264 @@ Examples:
 
   ```sh
   curl --silent -X 'GET' \
-    'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
+    'http://localhost:31888/apis/v1/namespaces/default/services/test-v2' \
     -H 'accept: application/json'  
   ```
 
 * Response:
 
-  ```json
-  {
-    "name": "test-v1",
-    "namespace": "ray-system",
-    "user": "user",
-    "serveDeploymentGraphSpec": {
-      "importPath": "fruit.deployment_graph",
-      "runtimeEnv": "working_dir: \"https://github.com/ray-project/test_dag/archive/c620251044717ace0a4c19d766d43c5099af8a77.zip\"\n",
-      "serveConfigs": [
-        {
-          "deploymentName": "OrangeStand",
-          "replicas": 1,
-          "userConfig": "price: 2",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "PearStand",
-          "replicas": 1,
-          "userConfig": "price: 1",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "FruitMarket",
-          "replicas": 1,
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        },
-        {
-          "deploymentName": "DAGDriver",
-          "replicas": 1,
-          "routePrefix": "/",
-          "actorOptions": {
-            "cpusPerActor": 0.1
-          }
-        }
-      ]
-    },
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "NodePort",
-        "rayStartParams": {
-          "dashboard-host": "0.0.0.0",
-          "metrics-export-port": "8080"
-        }
+```json
+{
+   "name":"test-v2",
+   "namespace":"default",
+   "user":"user",
+   "serveConfigV2":"applications:\n  - name: fruit_app\n    import_path: fruit.deployment_graph\n    route_prefix: /fruit\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: MangoStand\n        num_replicas: 2\n        max_replicas_per_node: 1\n        user_config:\n          price: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: OrangeStand\n        num_replicas: 1\n        user_config:\n          price: 2\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: PearStand\n        num_replicas: 1\n        user_config:\n          price: 1\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: FruitMarket\n        num_replicas: 1\n        ray_actor_options:\n          num_cpus: 0.1\n  - name: math_app\n    import_path: conditional_dag.serve_dag\n    route_prefix: /calc\n    runtime_env:\n      working_dir: \"https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip\"\n    deployments:\n      - name: Adder\n        num_replicas: 1\n        user_config:\n          increment: 3\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Multiplier\n        num_replicas: 1\n        user_config:\n          factor: 5\n        ray_actor_options:\n          num_cpus: 0.1\n      - name: Router\n        num_replicas: 1\n",
+   "clusterSpec":{
+      "headGroupSpec":{
+         "computeTemplate":"default-template",
+         "image":"rayproject/ray:2.9.0-py310",
+         "serviceType":"NodePort",
+         "rayStartParams":{
+            "dashboard-host":"0.0.0.0",
+            "metrics-export-port":"8080"
+         },
+         "environment":{
+            
+         }
       },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 5,
-          "maxReplicas": 1,
-          "rayStartParams": {
-            "node-ip-address": "$MY_POD_IP"
-          }
-        }
-      ]
-    },
-    "rayServiceStatus": {
-      "rayServiceEvents": [
-        {
-          "id": "test-v1.1788218987842e1a",
-          "name": "test-v1-test-v1.1788218987842e1a",
-          "createdAt": "2023-09-25T11:42:14Z",
-          "firstTimestamp": "2023-09-25T11:42:14Z",
-          "lastTimestamp": "2023-09-25T11:42:15Z",
-          "reason": "ServiceUnhealthy",
-          "message": "The service is in an unhealthy state. Controller will perform a round of actions in 10s.",
-          "type": "Normal",
-          "count": 2
-        },
-        {
-          "id": "test-v1.1788218a0a86434b",
-          "name": "test-v1-test-v1.1788218a0a86434b",
-          "createdAt": "2023-09-25T11:42:16Z",
-          "firstTimestamp": "2023-09-25T11:42:16Z",
-          "lastTimestamp": "2023-09-25T11:42:24Z",
-          "reason": "WaitForServeDeploymentReady",
-          "message": "Fail to create / update Serve deployments. If you observe this error consistently, please check \"Issue 5: Fail to create / update Serve applications.\" in https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. err: Put \"http://test-v1-raycluster-7grg7-head-svc.ray-system.svc.cluster.local:52365/api/serve/deployments/\": dial tcp 10.96.69.78:52365: connect: connection refused",
-          "type": "Normal",
-          "count": 6
-        },
-        {
-          "id": "test-v1.1788218cf7437d6f",
-          "name": "test-v1-test-v1.1788218cf7437d6f",
-          "createdAt": "2023-09-25T11:42:29Z",
-          "firstTimestamp": "2023-09-25T11:42:29Z",
-          "lastTimestamp": "2023-09-25T11:42:29Z",
-          "reason": "SubmittedServeDeployment",
-          "message": "Controller sent API request to update Serve deployments on cluster test-v1-raycluster-7grg7",
-          "type": "Normal",
-          "count": 1
-        },
-        {
-          "id": "test-v1.1788218cf9823bdf",
-          "name": "test-v1-test-v1.1788218cf9823bdf",
-          "createdAt": "2023-09-25T11:42:29Z",
-          "firstTimestamp": "2023-09-25T11:42:29Z",
-          "lastTimestamp": "2023-09-25T11:42:35Z",
-          "reason": "ServiceNotReady",
-          "message": "The service is not ready yet. Controller will perform a round of actions in 2s.",
-          "type": "Normal",
-          "count": 4
-        },
-        {
-          "id": "test-v1.1788218ee2f173bc",
-          "name": "test-v1-test-v1.1788218ee2f173bc",
-          "createdAt": "2023-09-25T11:42:37Z",
-          "firstTimestamp": "2023-09-25T11:42:37Z",
-          "lastTimestamp": "2023-09-25T11:47:16Z",
-          "reason": "Running",
-          "message": "The Serve applicaton is now running and healthy.",
-          "type": "Normal",
-          "count": 140
-        },
-        {
-          "id": "test-v1-raycluster-7grg7.1788218976cd5268",
-          "name": "test-v1-test-v1-raycluster-7grg7.1788218976cd5268",
-          "createdAt": "2023-09-25T11:42:13Z",
-          "firstTimestamp": "2023-09-25T11:42:13Z",
-          "lastTimestamp": "2023-09-25T11:42:13Z",
-          "reason": "Created",
-          "message": "Created service test-v1-raycluster-7grg7-head-svc",
-          "type": "Normal",
-          "count": 1
-        },
-        {
-          "id": "test-v1-raycluster-7grg7.178821897b8cddee",
-          "name": "test-v1-test-v1-raycluster-7grg7.178821897b8cddee",
-          "createdAt": "2023-09-25T11:42:14Z",
-          "firstTimestamp": "2023-09-25T11:42:14Z",
-          "lastTimestamp": "2023-09-25T11:42:14Z",
-          "reason": "Created",
-          "message": "Created head pod test-v1-raycluster-7grg7-head-jfkq5",
-          "type": "Normal",
-          "count": 1
-        },
-        {
-          "id": "test-v1-raycluster-7grg7.178821898168eedb",
-          "name": "test-v1-test-v1-raycluster-7grg7.178821898168eedb",
-          "createdAt": "2023-09-25T11:42:14Z",
-          "firstTimestamp": "2023-09-25T11:42:14Z",
-          "lastTimestamp": "2023-09-25T11:42:14Z",
-          "reason": "Created",
-          "message": "Created worker pod ",
-          "type": "Normal",
-          "count": 1
-        }
-      ],
-      "rayClusterName": "test-v1-raycluster-7grg7",
-      "serveApplicationStatus": [
-        {
-          "name": "default",
-          "status": "RUNNING",
-          "serveDeploymentStatus": [
-            {
-              "deploymentName": "DAGDriver",
-              "status": "HEALTHY"
+      "workerGroupSpec":[
+         {
+            "groupName":"small-wg",
+            "computeTemplate":"default-template",
+            "image":"rayproject/ray:2.9.0-py310",
+            "replicas":1,
+            "minReplicas":1,
+            "maxReplicas":5,
+            "rayStartParams":{
+               "node-ip-address":"$MY_POD_IP"
             },
-            {
-              "deploymentName": "FruitMarket",
-              "status": "HEALTHY"
-            },
-            {
-              "deploymentName": "MangoStand",
-              "status": "HEALTHY"
-            },
-            {
-              "deploymentName": "OrangeStand",
-              "status": "HEALTHY"
-            },
-            {
-              "deploymentName": "PearStand",
-              "status": "HEALTHY"
+            "environment":{
+               
             }
-          ]
-        }
+         }
       ]
-    },
-    "createdAt": "2023-09-25T11:42:11Z",
-    "deleteAt": "1969-12-31T23:59:59Z"
-  }
-  ```
+   },
+   "rayServiceStatus":{
+      "rayServiceEvents":[
+         {
+            "id":"test-v2.17ab175ec787d26e",
+            "name":"test-v2-test-v2.17ab175ec787d26e",
+            "createdAt":"2024-01-17T09:09:39Z",
+            "firstTimestamp":"2024-01-17T09:09:39Z",
+            "lastTimestamp":"2024-01-17T09:10:04Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":13
+         },
+         {
+            "id":"test-v2.17ab176292337141",
+            "name":"test-v2-test-v2.17ab176292337141",
+            "createdAt":"2024-01-17T09:09:56Z",
+            "firstTimestamp":"2024-01-17T09:09:56Z",
+            "lastTimestamp":"2024-01-17T09:09:56Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lmk5c",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab1764fe827fe3",
+            "name":"test-v2-test-v2.17ab1764fe827fe3",
+            "createdAt":"2024-01-17T09:10:06Z",
+            "firstTimestamp":"2024-01-17T09:10:06Z",
+            "lastTimestamp":"2024-01-17T09:14:41Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":139
+         },
+         {
+            "id":"test-v2.17ab1815ce6a98da",
+            "name":"test-v2-test-v2.17ab1815ce6a98da",
+            "createdAt":"2024-01-17T09:22:45Z",
+            "firstTimestamp":"2024-01-17T09:22:45Z",
+            "lastTimestamp":"2024-01-17T09:23:16Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":16
+         },
+         {
+            "id":"test-v2.17ab181a8576812d",
+            "name":"test-v2-test-v2.17ab181a8576812d",
+            "createdAt":"2024-01-17T09:23:06Z",
+            "firstTimestamp":"2024-01-17T09:23:06Z",
+            "lastTimestamp":"2024-01-17T09:23:06Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-b85bj",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab181d64327965",
+            "name":"test-v2-test-v2.17ab181d64327965",
+            "createdAt":"2024-01-17T09:23:18Z",
+            "firstTimestamp":"2024-01-17T09:23:18Z",
+            "lastTimestamp":"2024-01-17T09:23:26Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":8
+         },
+         {
+            "id":"test-v2.17ab1857fcf7e3a4",
+            "name":"test-v2-test-v2.17ab1857fcf7e3a4",
+            "createdAt":"2024-01-17T09:27:30Z",
+            "firstTimestamp":"2024-01-17T09:27:30Z",
+            "lastTimestamp":"2024-01-17T09:27:58Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":15
+         },
+         {
+            "id":"test-v2.17ab185bc523559a",
+            "name":"test-v2-test-v2.17ab185bc523559a",
+            "createdAt":"2024-01-17T09:27:46Z",
+            "firstTimestamp":"2024-01-17T09:27:46Z",
+            "lastTimestamp":"2024-01-17T09:27:46Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-lbl9x",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab185f245800ff",
+            "name":"test-v2-test-v2.17ab185f245800ff",
+            "createdAt":"2024-01-17T09:28:00Z",
+            "firstTimestamp":"2024-01-17T09:28:00Z",
+            "lastTimestamp":"2024-01-17T09:28:11Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":9
+         },
+         {
+            "id":"test-v2.17ab189170a9c462",
+            "name":"test-v2-test-v2.17ab189170a9c462",
+            "createdAt":"2024-01-17T09:31:36Z",
+            "firstTimestamp":"2024-01-17T09:31:36Z",
+            "lastTimestamp":"2024-01-17T09:32:08Z",
+            "reason":"ServiceNotReady",
+            "message":"The service is not ready yet. Controller will perform a round of actions in 2s.",
+            "type":"Normal",
+            "count":16
+         },
+         {
+            "id":"test-v2.17ab18965aab5e92",
+            "name":"test-v2-test-v2.17ab18965aab5e92",
+            "createdAt":"2024-01-17T09:31:57Z",
+            "firstTimestamp":"2024-01-17T09:31:57Z",
+            "lastTimestamp":"2024-01-17T09:31:57Z",
+            "reason":"SubmittedServeDeployment",
+            "message":"Controller sent API request to update Serve deployments on cluster test-v2-raycluster-qhrmk",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2.17ab18993b7ef94e",
+            "name":"test-v2-test-v2.17ab18993b7ef94e",
+            "createdAt":"2024-01-17T09:32:10Z",
+            "firstTimestamp":"2024-01-17T09:32:10Z",
+            "lastTimestamp":"2024-01-17T09:46:38Z",
+            "reason":"Running",
+            "message":"The Serve applicaton is now running and healthy.",
+            "type":"Normal",
+            "count":433
+         },
+         {
+            "id":"test-v2-raycluster-qhrmk.17ab1891669f9337",
+            "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891669f9337",
+            "createdAt":"2024-01-17T09:31:36Z",
+            "firstTimestamp":"2024-01-17T09:31:36Z",
+            "lastTimestamp":"2024-01-17T09:31:36Z",
+            "reason":"Created",
+            "message":"Created service test-v2-raycluster-qhrmk-head-svc",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2-raycluster-qhrmk.17ab1891683f5579",
+            "name":"test-v2-test-v2-raycluster-qhrmk.17ab1891683f5579",
+            "createdAt":"2024-01-17T09:31:36Z",
+            "firstTimestamp":"2024-01-17T09:31:36Z",
+            "lastTimestamp":"2024-01-17T09:31:36Z",
+            "reason":"Created",
+            "message":"Created head pod test-v2-raycluster-qhrmk-head-8kptm",
+            "type":"Normal",
+            "count":1
+         },
+         {
+            "id":"test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+            "name":"test-v2-test-v2-raycluster-qhrmk.17ab18916aa9fca3",
+            "createdAt":"2024-01-17T09:31:36Z",
+            "firstTimestamp":"2024-01-17T09:31:36Z",
+            "lastTimestamp":"2024-01-17T09:31:36Z",
+            "reason":"Created",
+            "message":"Created worker pod ",
+            "type":"Normal",
+            "count":1
+         }
+      ],
+      "rayClusterName":"test-v2-raycluster-qhrmk",
+      "serveApplicationStatus":[
+         {
+            "name":"fruit_app",
+            "status":"RUNNING",
+            "serveDeploymentStatus":[
+               {
+                  "deploymentName":"PearStand",
+                  "status":"HEALTHY"
+               },
+               {
+                  "deploymentName":"FruitMarket",
+                  "status":"HEALTHY"
+               },
+               {
+                  "deploymentName":"MangoStand",
+                  "status":"HEALTHY"
+               },
+               {
+                  "deploymentName":"OrangeStand",
+                  "status":"HEALTHY"
+               }
+            ]
+         },
+         {
+            "name":"math_app",
+            "status":"RUNNING",
+            "serveDeploymentStatus":[
+               {
+                  "deploymentName":"Adder",
+                  "status":"HEALTHY"
+               },
+               {
+                  "deploymentName":"Multiplier",
+                  "status":"HEALTHY"
+               },
+               {
+                  "deploymentName":"Router",
+                  "status":"HEALTHY"
+               }
+            ]
+         }
+      ]
+   },
+   "createdAt":"2024-01-17T09:31:34Z",
+   "deleteAt":"1969-12-31T23:59:59Z"
+}
+```
 
 #### Delete service by its name and namespace
 
@@ -2225,7 +2466,7 @@ Examples:
 
   ```sh
   curl --silent -X 'DELETE' \
-  'http://localhost:31888/apis/v1/namespaces/ray-system/services/test-v1' \
+  'http://localhost:31888/apis/v1/namespaces/default/services/test-v2' \
   -H 'accept: application/json'  
   ```
 

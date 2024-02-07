@@ -1,11 +1,13 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -24,7 +26,9 @@ func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
 
 // BuildServiceForHeadPod Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildServiceForHeadPod(cluster rayv1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
+func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -94,9 +98,9 @@ func BuildServiceForHeadPod(cluster rayv1.RayCluster, labels map[string]string, 
 		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
 
 		setLabelsforUserProvidedService(headService, labels_for_service)
-		setNameforUserProvidedService(headService, default_name)
-		setNamespaceforUserProvidedService(headService, default_namespace)
-		setServiceTypeForUserProvidedService(headService, default_type)
+		setNameforUserProvidedService(ctx, headService, default_name)
+		setNamespaceforUserProvidedService(ctx, headService, default_namespace)
+		setServiceTypeForUserProvidedService(ctx, headService, default_type)
 
 		return headService, nil
 	}
@@ -129,8 +133,8 @@ func BuildServiceForHeadPod(cluster rayv1.RayCluster, labels map[string]string, 
 // BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
-func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
-	service, err := BuildServiceForHeadPod(rayCluster, nil, nil)
+func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	service, err := BuildServiceForHeadPod(ctx, rayCluster, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -143,40 +147,48 @@ func BuildHeadServiceForRayService(rayService rayv1.RayService, rayCluster rayv1
 	service.ObjectMeta.Name = headSvcName
 	service.ObjectMeta.Namespace = rayService.Namespace
 	service.ObjectMeta.Labels = map[string]string{
-		utils.RayServiceLabelKey:  rayService.Name,
-		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
-		utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
+		utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+		utils.RayNodeTypeLabelKey:             string(rayv1.HeadNode),
+		utils.RayIDLabelKey:                   utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
 	}
 
 	return service, nil
 }
 
 // BuildServeServiceForRayService builds the serve service for RayService.
-func BuildServeServiceForRayService(rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
-	return BuildServeService(rayService, rayCluster, true)
+func BuildServeServiceForRayService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	return BuildServeService(ctx, rayService, rayCluster, true)
 }
 
 // BuildServeServiceForRayCluster builds the serve service for Ray cluster.
-func BuildServeServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
-	return BuildServeService(rayv1.RayService{}, rayCluster, false)
+func BuildServeServiceForRayCluster(ctx context.Context, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	return BuildServeService(ctx, rayv1.RayService{}, rayCluster, false)
 }
 
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
-func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
+func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
+	log := ctrl.LoggerFrom(ctx)
 	name := rayCluster.Name
 	namespace := rayCluster.Namespace
+	crdType := utils.RayClusterCRD
 	if isRayService {
 		name = rayService.Name
 		namespace = rayService.Namespace
+		crdType = utils.RayServiceCRD
 	}
 
 	labels := map[string]string{
-		utils.RayServiceLabelKey:               name,
+		utils.RayOriginatedFromCRNameLabelKey:  name,
+		utils.RayOriginatedFromCRDLabelKey:     utils.RayOriginatedFromCRDLabelValue(crdType),
 		utils.RayClusterServingServiceLabelKey: utils.GenerateServeServiceLabel(name),
 	}
+
 	selectorLabels := map[string]string{
-		utils.RayClusterLabelKey:               rayCluster.Name,
-		utils.RayClusterServingServiceLabelKey: utils.EnableRayClusterServingServiceTrue,
+		utils.RayClusterLabelKey: rayCluster.Name,
+	}
+	if isRayService {
+		selectorLabels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	}
 
 	default_name := utils.GenerateServeServiceName(name)
@@ -234,9 +246,9 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
-			setNameforUserProvidedService(serveService, default_name)
-			setNamespaceforUserProvidedService(serveService, default_namespace)
-			setServiceTypeForUserProvidedService(serveService, default_type)
+			setNameforUserProvidedService(ctx, serveService, default_name)
+			setNamespaceforUserProvidedService(ctx, serveService, default_namespace)
+			setServiceTypeForUserProvidedService(ctx, serveService, default_type)
 
 			return serveService, nil
 		}
@@ -264,7 +276,8 @@ func BuildServeService(rayService rayv1.RayService, rayCluster rayv1.RayCluster,
 	return serveService, nil
 }
 
-func setServiceTypeForUserProvidedService(service *corev1.Service, default_type corev1.ServiceType) {
+func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, default_type corev1.ServiceType) {
+	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type
 	if service.Spec.Type == "" {
 		log.Info("Using default serviceType passed for the user provided service",
@@ -280,7 +293,8 @@ func setServiceTypeForUserProvidedService(service *corev1.Service, default_type 
 	}
 }
 
-func setNamespaceforUserProvidedService(service *corev1.Service, default_namespace string) {
+func setNamespaceforUserProvidedService(ctx context.Context, service *corev1.Service, default_namespace string) {
+	log := ctrl.LoggerFrom(ctx)
 	// If the user has specified a namespace, ignore it and raise a warning
 	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != default_namespace {
 		log.Info("Ignoring namespace in user provided service",
@@ -292,7 +306,8 @@ func setNamespaceforUserProvidedService(service *corev1.Service, default_namespa
 	service.ObjectMeta.Namespace = default_namespace
 }
 
-func setNameforUserProvidedService(service *corev1.Service, default_name string) {
+func setNameforUserProvidedService(ctx context.Context, service *corev1.Service, default_name string) {
+	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a name, use the default name passed
 	if service.ObjectMeta.Name == "" {
 		log.Info("Using default name for user provided service.", "default_name", default_name)

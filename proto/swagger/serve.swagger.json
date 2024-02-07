@@ -227,54 +227,6 @@
         ]
       }
     },
-    "/apis/v1/namespaces/{namespace}/services/{name}/configs": {
-      "patch": {
-        "summary": "Update a ray serve configs.\nPatch mode update without possible deletion the existing raycluster under the hood. \nonly support update the service configs and worker.",
-        "operationId": "RayServeService_UpdateRayServiceConfigs",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoRayService"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "namespace",
-            "description": "Required. The namespace of the ray service to be updated.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "name",
-            "description": "Required. The name of ray service to be updated.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "description": "Required. The ray service to be updated.",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoUpdateRayServiceBody"
-            }
-          }
-        ],
-        "tags": [
-          "RayServeService"
-        ]
-      }
-    },
     "/apis/v1/services": {
       "get": {
         "summary": "Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.",
@@ -384,58 +336,6 @@
           }
         }
       }
-    },
-    "protoActorOptions": {
-      "type": "object",
-      "properties": {
-        "runtimeEnv": {
-          "type": "string",
-          "description": "This deployment's runtime_env used by the actor."
-        },
-        "cpusPerActor": {
-          "type": "number",
-          "format": "double",
-          "description": "Required. The number of CPUs required by the deployment's application per replica.",
-          "required": [
-            "cpus_per_actor"
-          ]
-        },
-        "gpusPerActor": {
-          "type": "number",
-          "format": "double",
-          "description": "Required. The number of GPUs required by the deployment's application per replica.",
-          "required": [
-            "gpus_per_actor"
-          ]
-        },
-        "memoryPerActor": {
-          "type": "string",
-          "format": "uint64",
-          "description": "Required. Restrict the heap memory usage of each replica.",
-          "required": [
-            "memory_per_actor"
-          ]
-        },
-        "objectStoreMemoryPerActor": {
-          "type": "string",
-          "format": "uint64",
-          "description": "Restrict the object store memory used per replica when creating objects."
-        },
-        "customResource": {
-          "type": "string",
-          "description": "The custom resources required by each replica."
-        },
-        "accceleratorType": {
-          "type": "string",
-          "description": "Forces replicas to run on nodes with the specified accelerator type."
-        }
-      },
-      "description": "ActorOptions config actor configuration related to one serve deployement.",
-      "required": [
-        "cpusPerActor",
-        "gpusPerActor",
-        "memoryPerActor"
-      ]
     },
     "protoAutoscalerOptions": {
       "type": "object",
@@ -681,9 +581,12 @@
             "user"
           ]
         },
-        "serveDeploymentGraphSpec": {
-          "$ref": "#/definitions/protoServeDeploymentGraphSpec",
-          "description": "The config for ray serve deployments V1."
+        "version": {
+          "type": "string",
+          "title": "Required field. This field indicates Ray version. Should be the same as image version",
+          "required": [
+            "version"
+          ]
         },
         "serveConfigV2": {
           "type": "string",
@@ -723,7 +626,8 @@
       "required": [
         "name",
         "namespace",
-        "user"
+        "user",
+        "version"
       ]
     },
     "protoRayServiceEvent": {
@@ -844,81 +748,6 @@
         }
       }
     },
-    "protoServeConfig": {
-      "type": "object",
-      "properties": {
-        "deploymentName": {
-          "type": "string",
-          "description": "Required. Input field. Unique ray service deployment name provided by user.",
-          "required": [
-            "deployment_name"
-          ]
-        },
-        "replicas": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Rquired. Ray service deployment replicas, default set to 1.",
-          "required": [
-            "replicas"
-          ]
-        },
-        "routePrefix": {
-          "type": "string",
-          "description": "ray service deployment route prefix indicated by user."
-        },
-        "maxConcurrentQueries": {
-          "type": "integer",
-          "format": "int32",
-          "description": "max concurrent queries indicate for each ray service deployment."
-        },
-        "userConfig": {
-          "type": "string",
-          "description": "user config to the ray serve deployment."
-        },
-        "autoscalingConfig": {
-          "type": "string",
-          "description": "auto scaling config for ray serve deployment indicate by user."
-        },
-        "actorOptions": {
-          "$ref": "#/definitions/protoActorOptions",
-          "description": "Required. Actor options indicated resource of each deployment's actor."
-        }
-      },
-      "required": [
-        "deploymentName",
-        "replicas"
-      ]
-    },
-    "protoServeDeploymentGraphSpec": {
-      "type": "object",
-      "properties": {
-        "importPath": {
-          "type": "string",
-          "description": "Required input field. Import path for load the ray serve.",
-          "required": [
-            "import_path"
-          ]
-        },
-        "runtimeEnv": {
-          "type": "string",
-          "description": "runtime env for loading the ray serve."
-        },
-        "serveConfigs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protoServeConfig"
-          },
-          "description": "Required. Deployments config of the ray serve.",
-          "required": [
-            "serve_configs"
-          ]
-        }
-      },
-      "required": [
-        "importPath",
-        "serveConfigs"
-      ]
-    },
     "protoServeDeploymentStatus": {
       "type": "object",
       "properties": {
@@ -935,28 +764,6 @@
           "description": "A human-readable description of the status of this operation."
         }
       }
-    },
-    "protoUpdateRayServiceBody": {
-      "type": "object",
-      "properties": {
-        "workerGroupUpdateSpec": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protoWorkerGroupUpdateSpec"
-          },
-          "title": "Required. Specify the worker group to be update",
-          "required": [
-            "worker_group_update_spec"
-          ]
-        },
-        "serveDeploymentGraphSpec": {
-          "$ref": "#/definitions/protoServeDeploymentGraphSpec",
-          "description": "Required. Deployments config of the ray serve."
-        }
-      },
-      "required": [
-        "workerGroupUpdateSpec"
-      ]
     },
     "protoVolume": {
       "type": "object",
@@ -1092,44 +899,6 @@
         "replicas",
         "maxReplicas",
         "rayStartParams"
-      ]
-    },
-    "protoWorkerGroupUpdateSpec": {
-      "type": "object",
-      "properties": {
-        "groupName": {
-          "type": "string",
-          "description": "The name of the worker group to be updated."
-        },
-        "replicas": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Required. The replicas of the worker group to be updated.",
-          "required": [
-            "replicas"
-          ]
-        },
-        "minReplicas": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Required. The min replicas of the worker group to be updated.",
-          "required": [
-            "min_replicas"
-          ]
-        },
-        "maxReplicas": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Required. The max replicas of the worker group to be updated.",
-          "required": [
-            "max_replicas"
-          ]
-        }
-      },
-      "required": [
-        "replicas",
-        "minReplicas",
-        "maxReplicas"
       ]
     },
     "protobufAny": {

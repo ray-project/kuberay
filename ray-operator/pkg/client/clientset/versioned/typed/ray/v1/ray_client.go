@@ -17,7 +17,7 @@ type RayV1Interface interface {
 	RayServicesGetter
 }
 
-// RayV1Client is used to interact with features provided by the ray group.
+// RayV1Client is used to interact with features provided by the ray.io group.
 type RayV1Client struct {
 	restClient rest.Interface
 }

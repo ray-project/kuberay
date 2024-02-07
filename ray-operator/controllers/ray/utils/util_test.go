@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,11 +59,11 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	podList1 := corev1.PodList{
 		Items: pods,
 	}
-	if CheckAllPodsRunning(podList1) {
+	if CheckAllPodsRunning(context.Background(), podList1) {
 		t.Fail()
 	}
 	podList2 := corev1.PodList{}
-	if CheckAllPodsRunning(podList2) {
+	if CheckAllPodsRunning(context.Background(), podList2) {
 		t.Fail()
 	}
 }
@@ -452,6 +453,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
+	ctx := context.Background()
 	// Test 1: `WorkerGroupSpec.Replicas` is nil.
 	// `Replicas` is impossible to be nil in a real RayCluster CR as it has a default value assigned in the CRD.
 	minReplicas := int32(1)
@@ -461,28 +463,28 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
 	}
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), minReplicas)
 
 	// Test 2: `WorkerGroupSpec.Replicas` is not nil and is within the range.
 	replicas := int32(3)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas)
 
 	// Test 3: `WorkerGroupSpec.Replicas` is not nil but is more than maxReplicas.
 	replicas = int32(6)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), maxReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), maxReplicas)
 
 	// Test 4: `WorkerGroupSpec.Replicas` is not nil but is less than minReplicas.
 	replicas = int32(0)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), minReplicas)
 
 	// Test 5: `WorkerGroupSpec.Replicas` is nil and minReplicas is less than maxReplicas.
 	workerGroupSpec.Replicas = nil
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), *workerGroupSpec.MaxReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), *workerGroupSpec.MaxReplicas)
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
@@ -544,7 +546,41 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 					},
 				},
 			}
-			assert.Equal(t, CalculateDesiredReplicas(&cluster), tc.answer)
+			assert.Equal(t, CalculateDesiredReplicas(context.Background(), &cluster), tc.answer)
+		})
+	}
+}
+
+func TestUnmarshalRuntimeEnv(t *testing.T) {
+	tests := map[string]struct {
+		runtimeEnvYAML string
+		isErrorNil     bool
+	}{
+		"Empty runtimeEnvYAML": {
+			runtimeEnvYAML: "",
+			isErrorNil:     true,
+		},
+		"Valid runtimeEnvYAML": {
+			runtimeEnvYAML: `
+env_vars:
+  counter_name: test_counter
+`,
+			isErrorNil: true,
+		},
+		"Invalid runtimeEnvYAML": {
+			runtimeEnvYAML: `invalid_yaml_str`,
+			isErrorNil:     false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
+			if tc.isErrorNil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+			}
 		})
 	}
 }

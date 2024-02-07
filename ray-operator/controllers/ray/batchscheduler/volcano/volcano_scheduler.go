@@ -46,11 +46,11 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(app *rayv1.RayCluster) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if app.Spec.EnableInTreeAutoscaling == nil || !*app.Spec.EnableInTreeAutoscaling {
-		minMember = utils.CalculateDesiredReplicas(app) + 1
+		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
 		totalResource = utils.CalculateDesiredResources(app)
 	} else {
 		minMember = utils.CalculateMinReplicas(app) + 1

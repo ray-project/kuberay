@@ -43,16 +43,6 @@ service RayServeService {
     };
   }
 
-  // Update a ray serve configs.
-  // Patch mode update without possible deletion the existing raycluster under the hood. 
-  // only support update the service configs and worker.
-  rpc UpdateRayServiceConfigs(UpdateRayServiceConfigsRequest) returns (RayService) {
-    option (google.api.http) = {
-      patch: "/apis/v1/namespaces/{namespace}/services/{name}/configs"
-      body: "update_service"
-    };
-  }
-
   // Find a specific ray serve by name and namespace.
   rpc GetRayService(GetRayServiceRequest) returns (RayService) {
     option (google.api.http) = {
@@ -95,22 +85,6 @@ message UpdateRayServiceRequest {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required. The name of the ray service to be updated.
   string name = 3 [(google.api.field_behavior) = REQUIRED];
-}
-
-message UpdateRayServiceConfigsRequest {
-  // Required. The name of ray service to be updated.
-  string name = 1 [(google.api.field_behavior) = REQUIRED];
-  // Required. The namespace of the ray service to be updated.
-  string namespace = 2 [(google.api.field_behavior) = REQUIRED];
-  // Required. The ray service to be updated.
-  UpdateRayServiceBody update_service = 3 [(google.api.field_behavior) = REQUIRED];
-}
-
-message UpdateRayServiceBody {
-  // Required. Specify the worker group to be update
-  repeated WorkerGroupUpdateSpec worker_group_update_spec = 1 [(google.api.field_behavior) = REQUIRED];
-  // Required. Deployments config of the ray serve.
-  ServeDeploymentGraphSpec serve_deployment_graph_spec = 2 [(google.api.field_behavior) = REQUIRED]; 
 }
 
 message GetRayServiceRequest {
@@ -176,8 +150,8 @@ message RayService {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required field. This field indicates the user who owns the ray service.
   string user = 3 [(google.api.field_behavior) = REQUIRED];
-  // The config for ray serve deployments V1.
-  ServeDeploymentGraphSpec serve_deployment_graph_spec = 4 [deprecated=true];
+  // Required field. This field indicates Ray version. Should be the same as image version
+  string version = 12 [(google.api.field_behavior) = REQUIRED];
   // Config for serve deployment V2. Note that only one config V1 or V2 can be specified
   string serve_config_V2 = 9;
   // Serve deployment related health check
@@ -192,50 +166,6 @@ message RayService {
   google.protobuf.Timestamp created_at = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the ray service deleted.     
   google.protobuf.Timestamp delete_at = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
-}
-
-message ServeDeploymentGraphSpec {
-    // Required input field. Import path for load the ray serve.
-    string import_path = 1 [(google.api.field_behavior) = REQUIRED];
-    // runtime env for loading the ray serve.
-    string runtime_env = 2;
-    // Required. Deployments config of the ray serve.
-    repeated ServeConfig serve_configs = 3 [(google.api.field_behavior) = REQUIRED];
-}
-
-message ServeConfig {
-  // Required. Input field. Unique ray service deployment name provided by user.
-  string deployment_name = 1 [(google.api.field_behavior) = REQUIRED];
-  // Rquired. Ray service deployment replicas, default set to 1.  
-  int32 replicas = 2 [(google.api.field_behavior) = REQUIRED];
-  // ray service deployment route prefix indicated by user.
-  string route_prefix = 3;
-  // max concurrent queries indicate for each ray service deployment.
-  int32 max_concurrent_queries = 4;
-  // user config to the ray serve deployment.
-  string user_config = 5;
-  // auto scaling config for ray serve deployment indicate by user.
-  string autoscaling_config = 6;
-  // Required. Actor options indicated resource of each deployment's actor.
-  ActorOptions actor_options = 7;
-}
-
-// ActorOptions config actor configuration related to one serve deployement.
-message ActorOptions {
-  // This deployment's runtime_env used by the actor.
-  string runtime_env = 1;
-  // Required. The number of CPUs required by the deployment's application per replica.
-  double cpus_per_actor = 2 [(google.api.field_behavior) = REQUIRED];
-  // Required. The number of GPUs required by the deployment's application per replica.
-  double gpus_per_actor = 3 [(google.api.field_behavior) = REQUIRED];
-  // Required. Restrict the heap memory usage of each replica.
-  uint64 memory_per_actor = 4 [(google.api.field_behavior) = REQUIRED];
-  // Restrict the object store memory used per replica when creating objects.
-  uint64 object_store_memory_per_actor = 5;
-  // The custom resources required by each replica.
-  string custom_resource = 6;
-  // Forces replicas to run on nodes with the specified accelerator type.
-  string acccelerator_type = 7;
 }
 
 message RayServiceStatus {

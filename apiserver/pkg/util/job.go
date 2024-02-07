@@ -14,8 +14,6 @@ type RayJob struct {
 	*rayv1api.RayJob
 }
 
-const rayJobDefaultVersion = "1.13"
-
 // NewRayJob creates a RayJob.
 func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTemplate) (*RayJob, error) {
 	rayJob := &rayv1api.RayJob{
@@ -37,7 +35,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		},
 	}
 	if apiJob.ClusterSpec != nil {
-		clusterSpec, err := buildRayClusterSpec(rayJobDefaultVersion, nil, apiJob.ClusterSpec, computeTemplateMap, false)
+		clusterSpec, err := buildRayClusterSpec(apiJob.Version, nil, apiJob.ClusterSpec, computeTemplateMap, false)
 		if err != nil {
 			return nil, err
 		}

@@ -403,35 +403,6 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 	return rayService, nil, nil
 }
 
-// Update a ray serve configs.
-// Patch mode update without possible deletion the existing raycluster under the hood.
-// only support update the service configs and worker.
-func (krc *KuberayAPIServerClient) UpdateRayServiceConfigs(request *api.UpdateRayServiceConfigsRequest) (*api.RayService, *rpcStatus.Status, error) {
-	updateURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name + "/configs"
-	bytez, err := krc.marshaler.Marshal(request.UpdateService)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
-	}
-
-	httpRequest, err := krc.createHttpRequest("PATCH", updateURL, bytes.NewReader(bytez))
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", updateURL, err)
-	}
-
-	httpRequest.Header.Add("Accept", "application/json")
-	httpRequest.Header.Add("Content-Type", "application/json")
-
-	bodyBytes, status, err := krc.executeRequest(httpRequest, updateURL)
-	if err != nil {
-		return nil, status, err
-	}
-	rayService := &api.RayService{}
-	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
-		return nil, status, nil
-	}
-	return rayService, nil, nil
-}
-
 // Find a specific ray serve by name and namespace.
 func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
@@ -498,6 +469,121 @@ func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServices
 // DeleteRayService deletes a ray service by its name and namespace
 func (krc *KuberayAPIServerClient) DeleteRayService(request *api.DeleteRayServiceRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
+	return krc.doDelete(deleteURL)
+}
+
+// SubmitRayJob creates a new job on a given cluster.
+func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest) (*api.SubmitRayJobReply, *rpcStatus.Status, error) {
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername
+	bytez, err := krc.marshaler.Marshal(request.Jobsubmission)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
+	}
+
+	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
+	}
+
+	httpRequest.Header.Add("Accept", "application/json")
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	if err != nil {
+		return nil, status, err
+	}
+	submission := &api.SubmitRayJobReply{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, submission); err != nil {
+		return nil, status, nil
+	}
+	return submission, nil, nil
+}
+
+// GetRayJobDetails. Get details about specific job on a given cluster.
+func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRequest) (*api.JobSubmissionInfo, *rpcStatus.Status, error) {
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
+	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
+	}
+
+	httpRequest.Header.Add("Accept", "application/json")
+
+	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	if err != nil {
+		return nil, status, err
+	}
+	response := &api.JobSubmissionInfo{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
+		return nil, status, nil
+	}
+	return response, nil, nil
+}
+
+// GetRayJobLog. Get log for a specific job on a given cluster.
+func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (*api.GetJobLogReply, *rpcStatus.Status, error) {
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/log/" + request.Submissionid
+	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
+	}
+
+	httpRequest.Header.Add("Accept", "application/json")
+
+	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	if err != nil {
+		return nil, status, err
+	}
+	response := &api.GetJobLogReply{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
+		return nil, status, nil
+	}
+	return response, nil, nil
+}
+
+// ListRayJobsCluster. List Ray jobs on a given cluster.
+func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetailsRequest) (*api.ListJobSubmissionInfo, *rpcStatus.Status, error) {
+	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername
+	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
+	}
+
+	httpRequest.Header.Add("Accept", "application/json")
+
+	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	if err != nil {
+		return nil, status, err
+	}
+	response := &api.ListJobSubmissionInfo{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
+		return nil, status, nil
+	}
+	return response, nil, nil
+}
+
+// StopRayJob stops job on a given cluster.
+func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionRequest) (*rpcStatus.Status, error) {
+	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
+
+	httpRequest, err := krc.createHttpRequest("POST", createURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
+	}
+
+	httpRequest.Header.Add("Accept", "application/json")
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	_, status, err := krc.executeRequest(httpRequest, createURL)
+	if err != nil {
+		return status, err
+	}
+	return nil, nil
+}
+
+// DeleteRayService deletes a ray service by its name and namespace
+func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJobSubmissionRequest) (*rpcStatus.Status, error) {
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
 	return krc.doDelete(deleteURL)
 }
 

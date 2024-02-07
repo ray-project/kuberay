@@ -120,6 +120,8 @@ message RayJob {
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
   // Required field. This field indicates the user who owns the job.
   string user = 3 [(google.api.field_behavior) = REQUIRED];
+  // Required field. This field indicates Ray version. Should be the same as image version
+  string version = 21 [(google.api.field_behavior) = REQUIRED];
   // Required field. The entrypoint of the RayJob
   string entrypoint = 4 [(google.api.field_behavior) = REQUIRED];
   // Optional. Metadata is data to store along with this job.

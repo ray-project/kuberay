@@ -26,7 +26,6 @@ class CONST:
     __slots__ = ()
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
-    RAY_IMAGE_KEY = "ray-image"
     KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.0.0"
 
     # Kubernetes API clients
@@ -232,7 +231,6 @@ class OperatorManager(ABC):
             if namespace == None:
                 namespace = "default"
             DEFAULT_IMAGE_DICT = {
-               CONST.RAY_IMAGE_KEY: os.getenv('RAY_IMAGE', default='rayproject/ray:2.9.0'),
                 CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
             }
             default_operator_manager = DefaultOperatorManager(DEFAULT_IMAGE_DICT, namespace, patch, cluster_manager)
@@ -259,7 +257,7 @@ class DefaultOperatorManager(OperatorManager):
         self.cluster_manager = cluster_manager
         self.namespace = namespace
         self.values_yaml = {}
-        for key in [CONST.OPERATOR_IMAGE_KEY, CONST.RAY_IMAGE_KEY]:
+        for key in [CONST.OPERATOR_IMAGE_KEY]:
             if key not in self.docker_image_dict:
                 raise Exception(f"Image {key} does not exist!")
         repo, tag = self.docker_image_dict[CONST.OPERATOR_IMAGE_KEY].split(":")

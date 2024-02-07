@@ -5,7 +5,15 @@ const (
 	// Default application name
 	DefaultServeAppName = "default"
 	// Belows used as label key
-	RayServiceLabelKey                       = "ray.io/service"
+
+	// RayOriginatedFromCRNameLabelKey and RayOriginatedFromCRDLabelKey are the labels used to associate the root KubeRay Custom Resource.
+	// [Example 1] If we create a RayJob named `myjob`, then (1) the RayCluster and (2) the submitter K8s Job will have a
+	// `ray.io/originated-from-cr-name=myjob` and a `ray.io/originated-from-crd=RayJob` label.
+	//
+	// [Example 2] If we create a RayService named `mysvc`, then (1) the RayCluster and (2) the Kubernetes services managed by the RayService
+	// will have a `ray.io/originated-from-cr-name=mysvc` and a `ray.io/originated-from-crd=RayService` label.
+	RayOriginatedFromCRNameLabelKey          = "ray.io/originated-from-cr-name"
+	RayOriginatedFromCRDLabelKey             = "ray.io/originated-from-crd"
 	RayClusterLabelKey                       = "ray.io/cluster"
 	RayNodeTypeLabelKey                      = "ray.io/node-type"
 	RayNodeGroupLabelKey                     = "ray.io/group"
@@ -37,6 +45,8 @@ const (
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
+	// EnableServeServiceKey is exclusively utilized to indicate if a RayCluster is directly used for serving.
+	// See https://github.com/ray-project/kuberay/pull/1672 for more details.
 	EnableServeServiceKey  = "ray.io/enable-serve-service"
 	EnableServeServiceTrue = "true"
 
@@ -76,9 +86,6 @@ const (
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
 
-	// The default RayService Identifier.
-	RayServiceCreatorLabelValue = "rayservice"
-
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
 	RAY_IP                                  = "RAY_IP"
@@ -92,11 +99,16 @@ const (
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
-	SERVE_CONTROLLER_PIN_ON_NODE            = "RAY_INTERNAL_SERVE_CONTROLLER_PIN_ON_NODE"
 	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+
+	// Environment variables for RayJob submitter Kubernetes Job.
+	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
+	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
+	RAY_JOB_SUBMISSION_ID = "RAY_JOB_SUBMISSION_ID"
+
 	// This environment variable is used by Ray Autoscaler V2. For the Autoscaler V2 alpha
 	// release, its value is the Pod name. This may change in the future.
 	RAY_CLOUD_INSTANCE_ID = "RAY_CLOUD_INSTANCE_ID"
@@ -156,3 +168,9 @@ const (
 	HeadService    ServiceType = "headService"
 	ServingService ServiceType = "serveService"
 )
+
+// RayOriginatedFromCRDLabelValue generates a value for the label RayOriginatedFromCRDLabelKey
+// This is also the only function to construct label filter of resources originated from a given CRDType.
+func RayOriginatedFromCRDLabelValue(crdType CRDType) string {
+	return string(crdType)
+}
