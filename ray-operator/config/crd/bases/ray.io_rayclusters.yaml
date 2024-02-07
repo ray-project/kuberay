@@ -3780,7 +3780,7 @@ spec:
                       type: integer
                     scaleStrategy:
                       properties:
-                        multihostGroupsToDelete:
+                        multihostReplicasToDelete:
                           items:
                             type: string
                           type: array

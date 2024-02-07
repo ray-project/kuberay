@@ -548,8 +548,8 @@ func (in *ScaleStrategy) DeepCopyInto(out *ScaleStrategy) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.MultihostGroupsToDelete != nil {
-		in, out := &in.MultihostGroupsToDelete, &out.MultihostGroupsToDelete
+	if in.MultihostReplicasToDelete != nil {
+		in, out := &in.MultihostReplicasToDelete, &out.MultihostReplicasToDelete
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
