@@ -827,7 +827,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				group := rand.Uint32()
 				var j uint32
 				for j = 0; j < uint32(worker.NumOfHosts); j++ {
-					r.Log.Info("reconcilePods", "creating worker: ", j)
 					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), group, j); err != nil {
 						return err
 					}
