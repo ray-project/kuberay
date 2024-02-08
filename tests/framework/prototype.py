@@ -597,5 +597,5 @@ class GeneralTestCase(unittest.TestCase):
                 logger.error(str(ex))
                 K8S_CLUSTER_MANAGER.cleanup()
         else:
-            namespace = self.cr_event.namespace
-            logger.error("Preserving CR in namespace %s for debugging", namespace)
+            logger.info("Preserving CR in namespace %s for debugging", self.cr_event.namespace)
+            logger.info("Need to Cleanup CR manually. Use command `kubectl delete -f <yaml_file_name>.`")
