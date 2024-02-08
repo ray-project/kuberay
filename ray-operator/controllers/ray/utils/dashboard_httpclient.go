@@ -186,8 +186,8 @@ type RuntimeEnvType map[string]interface{}
 
 // RayJobInfo is the response of "ray job status" api.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
+// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/pydantic_models.py#L38-L107
 type RayJobInfo struct {
-	// TODO (kevin85421): Double check whether the types are correct or not.
 	JobStatus    rayv1.JobStatus   `json:"status,omitempty"`
 	Entrypoint   string            `json:"entrypoint,omitempty"`
 	JobId        string            `json:"job_id,omitempty"`
