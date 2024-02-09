@@ -91,25 +91,35 @@ func TestCheckName(t *testing.T) {
 }
 
 func TestCheckRouteName(t *testing.T) {
-	// test 1 -> change
-	str := "cv-traffic-training-202402090958"
-	ns := "development-namespace"
-	str = CheckRouteName(context.Background(), str, ns)
-	if str != "cv-traffic-training-2024020909" {
-		t.Fail()
-	}
-	// test 2 -> change
-	str = "2-step-cv-training-network-revisited"
-	str = CheckRouteName(context.Background(), str, ns)
-	if str != "r-step-cv-training-network-rev" {
-		t.Fail()
-	}
+	tests := []struct {
+		name      string
+		routeName string
+		namespace string
+		want      string
+	}{{
+		name:      "long route name truncated",
+		routeName: "cv-traffic-training-202402090958",
+		namespace: "development-namespace",
+		want:      "cv-traffic-training-2024020909",
+	}, {
+		name:      "long route name w/number start truncated and number replaced",
+		routeName: "2-step-cv-training-network-revisited",
+		namespace: "development-namespace",
+		want:      "r-step-cv-training-network-rev",
+	}, {
+		name:      "well-formatted and well-sized route name unaffected",
+		routeName: "acceptable-name-head-12345",
+		namespace: "development-namespace",
+		want:      "acceptable-name-head-12345",
+	}}
 
-	// test 3 -> keep
-	str = "acceptable-name-head-12345"
-	str = CheckRouteName(context.Background(), str, ns)
-	if str != "acceptable-name-head-12345" {
-		t.Fail()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			name := CheckRouteName(context.Background(), tc.routeName, tc.namespace)
+			if name != tc.want {
+				t.Fatalf("got %s, want %s", name, tc.want)
+			}
+		})
 	}
 }
 
