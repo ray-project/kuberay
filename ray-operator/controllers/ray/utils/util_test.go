@@ -92,16 +92,16 @@ func TestCheckName(t *testing.T) {
 
 func TestCheckRouteName(t *testing.T) {
 	// test 1 -> change
-	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
-	ns := "my-test-namespace"
+	str := "cv-traffic-training-202402090958"
+	ns := "development-namespace"
 	str = CheckRouteName(context.Background(), str, ns)
-	if str != "r2fbcc7e-a661-4b18e-ca41-e903-fc3a" {
+	if str != "cv-traffic-training-2024020909" {
 		t.Fail()
 	}
 	// test 2 -> change
-	str = "--------566666--------444433-----------222222----------4444"
+	str = "2-step-cv-training-network-revisited"
 	str = CheckRouteName(context.Background(), str, ns)
-	if str != "r-------566666--------444433------" {
+	if str != "r-step-cv-training-network-rev" {
 		t.Fail()
 	}
 
