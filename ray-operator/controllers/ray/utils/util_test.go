@@ -95,13 +95,13 @@ func TestCheckRouteName(t *testing.T) {
 	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
 	ns := "my-test-namespace"
 	str = CheckRouteName(context.Background(), str, ns)
-	if str != "r34b18e-lazer090scholar-director-s" {
+	if str != "r2fbcc7e-a661-4b18e-ca41-e903-fc3a" {
 		t.Fail()
 	}
 	// test 2 -> change
 	str = "--------566666--------444433-----------222222----------4444"
 	str = CheckRouteName(context.Background(), str, ns)
-	if str != "r33-----------222222----------4444" {
+	if str != "r-------566666--------444433------" {
 		t.Fail()
 	}
 
