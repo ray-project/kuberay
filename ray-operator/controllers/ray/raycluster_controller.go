@@ -925,7 +925,7 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 
 func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *routev1.Route, instance *rayv1.RayCluster) error {
 	// making sure the name is valid
-	route.Name = utils.CheckName(route.Name)
+	route.Name = utils.CheckRouteName(ctx, route.Name, route.Namespace)
 
 	if err := r.Create(ctx, route); err != nil {
 		if errors.IsAlreadyExists(err) {
