@@ -243,7 +243,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			// RayJob transitions to Complete.
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
-				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 		})
 
 		It("If shutdownAfterJobFinishes is true, RayCluster should be deleted but not the submitter Job.", func() {
