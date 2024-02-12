@@ -38,6 +38,14 @@ type Configuration struct {
 	// LogFile is a path to a local file for synchronizing logs.
 	LogFile string `json:"logFile,omitempty"`
 
+	// LogFileEncoder is the encoder to use when logging to a file. Valid values are "json" and "console".
+	// Defaults to `json` if empty.
+	LogFileEncoder string `json:"logFileEncoder,omitempty"`
+
+	// LogFileEncoder is the encoder to use when logging to a file. Valid values are "json" and "console".
+	// Defaults to `json` if empty.
+	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
+
 	// EnableBatchScheduler enables the batch scheduler. Currently this is supported
 	// by Volcano to support gang scheduling.
 	EnableBatchScheduler bool `json:"enableBatchScheduler,omitempty"`
