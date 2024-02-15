@@ -7227,6 +7227,9 @@ spec:
             type: object
           status:
             properties:
+              NumServeEndpoints:
+                format: int32
+                type: integer
               activeServiceStatus:
                 properties:
                   applicationStatuses:

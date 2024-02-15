@@ -13,6 +13,7 @@ type RayServiceStatusesApplyConfiguration struct {
 	ActiveServiceStatus  *RayServiceStatusApplyConfiguration `json:"activeServiceStatus,omitempty"`
 	PendingServiceStatus *RayServiceStatusApplyConfiguration `json:"pendingServiceStatus,omitempty"`
 	ServiceStatus        *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
+	NumServeEndpoints    *int32                              `json:"NumServeEndpoints,omitempty"`
 	ObservedGeneration   *int64                              `json:"observedGeneration,omitempty"`
 	LastUpdateTime       *metav1.Time                        `json:"lastUpdateTime,omitempty"`
 }
@@ -44,6 +45,14 @@ func (b *RayServiceStatusesApplyConfiguration) WithPendingServiceStatus(value *R
 // If called multiple times, the ServiceStatus field is set to the value of the last call.
 func (b *RayServiceStatusesApplyConfiguration) WithServiceStatus(value rayv1.ServiceStatus) *RayServiceStatusesApplyConfiguration {
 	b.ServiceStatus = &value
+	return b
+}
+
+// WithNumServeEndpoints sets the NumServeEndpoints field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NumServeEndpoints field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithNumServeEndpoints(value int32) *RayServiceStatusesApplyConfiguration {
+	b.NumServeEndpoints = &value
 	return b
 }
 
