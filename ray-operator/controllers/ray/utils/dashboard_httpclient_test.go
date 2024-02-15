@@ -62,6 +62,29 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(rayJobRequest.RuntimeEnv["working_dir"]).To(Equal("./"))
 	})
 
+	It("Test ConvertRayJobToReq with EntrypointResources", func() {
+		rayJobRequest, err := ConvertRayJobToReq(&rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				EntrypointResources: `{"r1": 0.1, "r2": 0.2}`,
+				EntrypointNumCpus:   1.1,
+				EntrypointNumGpus:   2.2,
+			},
+		})
+		Expect(err).To(BeNil())
+		Expect(rayJobRequest.NumCpus).To(Equal(float32(1.1)))
+		Expect(rayJobRequest.NumGpus).To(Equal(float32(2.2)))
+		Expect(rayJobRequest.Resources).To(Equal(map[string]float32{"r1": 0.1, "r2": 0.2}))
+	})
+
+	It("Test ConvertRayJobToReq with invalid EntrypointResources", func() {
+		_, err := ConvertRayJobToReq(&rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				EntrypointResources: `{"r1": "string"}`,
+			},
+		})
+		Expect(err).Should(MatchError(ContainSubstring("json: cannot unmarshal")))
+	})
+
 	It("Test submitting/getting rayJob", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()

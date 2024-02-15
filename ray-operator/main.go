@@ -63,6 +63,8 @@ func main() {
 	var reconcileConcurrency int
 	var watchNamespace string
 	var logFile string
+	var logFileEncoder string
+	var logStdoutEncoder string
 	var configFile string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
@@ -83,12 +85,15 @@ func main() {
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
+	flag.StringVar(&logFileEncoder, "log-file-encoder", "json",
+		"Encoder to use for log file. Valid values are 'json' and 'console'. Defaults to 'json'")
+	flag.StringVar(&logStdoutEncoder, "log-stdout-encoder", "json",
+		"Encoder to use for logging stdout. Valid values are 'json' and 'console'. Defaults to 'json'")
 	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
 		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 
 	opts := k8szap.Options{
-		Development: true,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
@@ -121,8 +126,14 @@ func main() {
 		config.WatchNamespace = watchNamespace
 		config.ForcedClusterUpgrade = ray.ForcedClusterUpgrade
 		config.LogFile = logFile
+		config.LogFileEncoder = logFileEncoder
+		config.LogStdoutEncoder = logStdoutEncoder
 		config.EnableBatchScheduler = ray.EnableBatchScheduler
 	}
+
+	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
+	exitOnError(err, "failed to create log encoder for stdout")
+	opts.Encoder = stdoutEncoder
 
 	if config.LogFile != "" {
 		fileWriter := &lumberjack.Logger{
@@ -132,15 +143,14 @@ func main() {
 			MaxAge:     30,  // days
 		}
 
-		pe := zap.NewProductionEncoderConfig()
-		pe.EncodeTime = zapcore.ISO8601TimeEncoder
-		consoleEncoder := zapcore.NewConsoleEncoder(pe)
+		fileEncoder, err := newLogEncoder(logFileEncoder)
+		exitOnError(err, "failed to create log encoder for file")
 
 		k8sLogger := k8szap.NewRaw(k8szap.UseFlagOptions(&opts))
 		zapOpts := append(opts.ZapOpts, zap.AddCallerSkip(1))
 		combineLogger := zap.New(zapcore.NewTee(
 			k8sLogger.Core(),
-			zapcore.NewCore(consoleEncoder, zapcore.AddSync(fileWriter), zap.InfoLevel),
+			zapcore.NewCore(fileEncoder, zapcore.AddSync(fileWriter), zap.InfoLevel),
 		)).WithOptions(zapOpts...)
 		combineLoggerR := zapr.NewLogger(combineLogger)
 
@@ -255,4 +265,19 @@ func decodeConfig(configData []byte, scheme *runtime.Scheme) (configapi.Configur
 
 	scheme.Default(&cfg)
 	return cfg, nil
+}
+
+// newLogEncoder returns a zapcore.Encoder based on the encoder type ('json' or 'console')
+func newLogEncoder(encoderType string) (zapcore.Encoder, error) {
+	pe := zap.NewProductionEncoderConfig()
+	pe.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	if encoderType == "json" || encoderType == "" {
+		return zapcore.NewJSONEncoder(pe), nil
+	}
+	if encoderType == "console" {
+		return zapcore.NewConsoleEncoder(pe), nil
+	}
+
+	return nil, fmt.Errorf("invalid encoder %q (must be 'json' or 'console')", encoderType)
 }

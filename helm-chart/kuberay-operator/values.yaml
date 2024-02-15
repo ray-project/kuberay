@@ -35,6 +35,16 @@ resources:
   #   cpu: 100m
   #   memory: 512Mi
 
+logging:
+  # Log encoder to use for stdout (one of 'json' or 'console', default is 'json')
+  stdoutEncoder: ""
+  # Log encoder to use for file logging (one of 'json' or 'console', default is 'json')
+  fileEncoder: ""
+  # Directory for kuberay-operator log file
+  baseDir: ""
+  # File name for kuberay-operator log file
+  fileName: ""
+
 livenessProbe:
   initialDelaySeconds: 10
   periodSeconds: 5

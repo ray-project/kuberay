@@ -103,7 +103,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 
 func (r *RayDashboardClient) InitClient(url string) {
 	r.client = http.Client{
-		Timeout: 120 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 	r.dashboardURL = "http://" + url
 }
@@ -186,8 +186,8 @@ type RuntimeEnvType map[string]interface{}
 
 // RayJobInfo is the response of "ray job status" api.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
+// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/pydantic_models.py#L38-L107
 type RayJobInfo struct {
-	// TODO (kevin85421): Double check whether the types are correct or not.
 	JobStatus    rayv1.JobStatus   `json:"status,omitempty"`
 	Entrypoint   string            `json:"entrypoint,omitempty"`
 	JobId        string            `json:"job_id,omitempty"`
@@ -202,15 +202,15 @@ type RayJobInfo struct {
 
 // RayJobRequest is the request body to submit.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
+// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/common.py#L325-L353
 type RayJobRequest struct {
-	// TODO (kevin85421): Double check whether the types are correct or not.
-	Entrypoint   string            `json:"entrypoint"`
-	SubmissionId string            `json:"submission_id,omitempty"`
-	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-	NumCpus      float32           `json:"entrypoint_num_cpus,omitempty"`
-	NumGpus      float32           `json:"entrypoint_num_gpus,omitempty"`
-	Resources    map[string]string `json:"entrypoint_resources,omitempty"`
+	Entrypoint   string             `json:"entrypoint"`
+	SubmissionId string             `json:"submission_id,omitempty"`
+	RuntimeEnv   RuntimeEnvType     `json:"runtime_env,omitempty"`
+	Metadata     map[string]string  `json:"metadata,omitempty"`
+	NumCpus      float32            `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32            `json:"entrypoint_num_gpus,omitempty"`
+	Resources    map[string]float32 `json:"entrypoint_resources,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -431,7 +431,13 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 		}
 		req.RuntimeEnv = runtimeEnv
 	}
-	// TODO (kevin85421): Support entrypointNumCpus, entrypointNumGpus, entrypointResources
+	req.NumCpus = rayJob.Spec.EntrypointNumCpus
+	req.NumGpus = rayJob.Spec.EntrypointNumGpus
+	if rayJob.Spec.EntrypointResources != "" {
+		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
+			return nil, err
+		}
+	}
 	return req, nil
 }
 

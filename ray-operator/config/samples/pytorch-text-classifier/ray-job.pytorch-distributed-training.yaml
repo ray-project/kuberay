@@ -21,6 +21,10 @@ spec:
         dashboard-host: '0.0.0.0'
       template:
         spec:
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
           containers:
             - name: ray-head
               image: rayproject/ray-ml:2.9.0-gpu
@@ -33,6 +37,7 @@ spec:
                   name: client
               resources:
                 limits:
+                  cpu: "2"
                   memory: "8G"
                   nvidia.com/gpu: "1"
                 requests:

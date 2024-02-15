@@ -22,143 +22,84 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
 
-var myRayJob = &rayv1.RayJob{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "rayjob-test",
-		Namespace: "default",
-	},
-	Spec: rayv1.RayJobSpec{
-		Entrypoint:               "sleep 999",
-		ShutdownAfterJobFinishes: true,
-		RayClusterSpec: &rayv1.RayClusterSpec{
-			RayVersion: "1.12.1",
-			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{
-					"port":                        "6379",
-					"object-store-memory":         "100000000",
-					"dashboard-host":              "0.0.0.0",
-					"num-cpus":                    "1",
-					"node-ip-address":             "127.0.0.1",
-					"dashboard-agent-listen-port": "52365",
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"groupName": "headgroup",
-						},
-						Annotations: map[string]string{
-							"key": "value",
-						},
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
-								Env: []corev1.EnvVar{
-									{
-										Name: "MY_POD_IP",
-										ValueFrom: &corev1.EnvVarSource{
-											FieldRef: &corev1.ObjectFieldSelector{
-												FieldPath: "status.podIP",
-											},
-										},
-									},
-								},
-								Resources: corev1.ResourceRequirements{
-									Limits: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("1"),
-										corev1.ResourceMemory: resource.MustParse("2Gi"),
-									},
-									Requests: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("1"),
-										corev1.ResourceMemory: resource.MustParse("2Gi"),
-									},
-								},
-								Ports: []corev1.ContainerPort{
-									{
-										Name:          "gcs-server",
-										ContainerPort: 6379,
-									},
-									{
-										Name:          "dashboard",
-										ContainerPort: 8265,
-									},
-									{
-										Name:          "head",
-										ContainerPort: 10001,
-									},
-									{
-										Name:          "dashboard-agent",
-										ContainerPort: 52365,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-				{
-					Replicas:    pointer.Int32(3),
-					MinReplicas: pointer.Int32(0),
-					MaxReplicas: pointer.Int32(10000),
-					GroupName:   "small-group",
-					RayStartParams: map[string]string{
-						"port":                        "6379",
-						"num-cpus":                    "1",
-						"dashboard-agent-listen-port": "52365",
-					},
+func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
+	return &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:               "sleep 999",
+			SubmissionMode:           rayv1.K8sJobMode,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				RayVersion: "2.9.0",
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Labels: map[string]string{
-								"groupName": "small-group",
-							},
-						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
-									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.9.0",
-									Command: []string{"echo"},
-									Args:    []string{"Hello Ray"},
-									Env: []corev1.EnvVar{
-										{
-											Name: "MY_POD_IP",
-											ValueFrom: &corev1.EnvVarSource{
-												FieldRef: &corev1.ObjectFieldSelector{
-													FieldPath: "status.podIP",
-												},
-											},
+									Name:  "ray-head",
+									Image: "rayproject/ray:2.9.0",
+									Resources: corev1.ResourceRequirements{
+										Limits: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("1"),
+											corev1.ResourceMemory: resource.MustParse("2Gi"),
+										},
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("1"),
+											corev1.ResourceMemory: resource.MustParse("2Gi"),
 										},
 									},
 									Ports: []corev1.ContainerPort{
 										{
-											Name:          "client",
-											ContainerPort: 80,
+											Name:          "gcs-server",
+											ContainerPort: 6379,
 										},
 										{
-											Name:          "dashboard-agent",
-											ContainerPort: 52365,
+											Name:          "dashboard",
+											ContainerPort: 8265,
 										},
+										{
+											Name:          "client",
+											ContainerPort: 10001,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:       pointer.Int32(3),
+						MinReplicas:    pointer.Int32(0),
+						MaxReplicas:    pointer.Int32(10000),
+						GroupName:      "small-group",
+						RayStartParams: map[string]string{},
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "ray-worker",
+										Image: "rayproject/ray:2.9.0",
 									},
 								},
 							},
@@ -167,146 +108,155 @@ var myRayJob = &rayv1.RayJob{
 				},
 			},
 		},
-	},
+	}
 }
 
-var _ = Context("Inside the default namespace", func() {
-	ctx := context.TODO()
-	myRayJob := myRayJob.DeepCopy()
-	myRayJob.Name = "rayjob-test-default"
+var _ = Context("RayJob in K8sJobMode", func() {
+	Describe("Successful RayJob in K8sJobMode", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayJob := rayJobTemplate("rayjob-test", namespace)
+		rayCluster := &rayv1.RayCluster{}
 
-	Describe("When creating a rayjob", func() {
-		It("should create a rayjob object", func() {
-			err := k8sClient.Create(ctx, myRayJob)
-			Expect(err).NotTo(HaveOccurred(), "failed to create test RayJob resource")
+		It("Verify RayJob spec", func() {
+			// This test case simulates the most common scenario in the RayJob code path.
+			// (1) The submission mode is K8sJobMode.
+			// (2) `shutdownAfterJobFinishes` is true.
+			// In this test, RayJob passes through the following states: New -> Initializing -> Running -> Complete
+			Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.K8sJobMode))
+			Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
+
+			// This test assumes that there is only one worker group.
+			Expect(len(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs)).To(Equal(1))
 		})
 
-		It("should see a rayjob object", func() {
+		It("Create a RayJob custom resource", func() {
+			err := k8sClient.Create(ctx, rayJob)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, myRayJob),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayJob  = %v", myRayJob.Name)
+				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
 		})
 
-		It("should create a raycluster object", func() {
+		It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
 			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-			myRayCluster := &rayv1.RayCluster{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-			Expect(myRayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, myRayJob.Name))
-			Expect(myRayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			// In Initializing state, both Status.RayClusterName and Status.JobId must be set.
+			Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+			Expect(rayJob.Status.JobId).NotTo(BeEmpty())
 		})
 
-		It("Should create a number of workers equal to the replica setting", func() {
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
+		It("In Initializing state, the RayCluster should eventually be created.", func() {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+			// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
+			Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
+
+			// TODO (kevin85421): Check the RayCluster labels and annotations.
+			Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
+			Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+		})
+
+		It("Make RayCluster.Status.State to be rayv1.Ready", func() {
+			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+			allPods := []corev1.Pod{}
+
+			// Check whether the number of worker Pods is consistent with RayCluster CR or not.
+			numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+			workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(int(*myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-		})
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				time.Second*3, time.Millisecond*500).Should(Equal(int(numWorkerPods)), fmt.Sprintf("workerGroup: %v", workerPods.Items))
 
-		It("should be able to update all Pods to Running", func() {
-			myRayCluster := &rayv1.RayCluster{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-			Expect(myRayCluster.Status.State).NotTo(Equal(rayv1.Ready))
-
-			// Update worker Pods to Running and PodReady.
-			replicas := *myRayCluster.Spec.WorkerGroupSpecs[0].Replicas
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayJob.Status.RayClusterName, utils.RayNodeGroupLabelKey: myRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName}
-			workerPods := corev1.PodList{}
-			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
-				time.Second*15, time.Millisecond*500).Should(Equal(int(replicas)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			for _, workerPod := range workerPods.Items {
-				workerPod.Status.Phase = corev1.PodRunning
-				// TODO: Check https://github.com/ray-project/kuberay/issues/1736.
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
-			}
-
-			// Update the head Pod to Running and PodReady.
+			// The number of head Pods should be 1.
 			headPods := corev1.PodList{}
-			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
-			err := k8sClient.List(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}, client.InNamespace(myRayCluster.Namespace))
-			Expect(err).NotTo(HaveOccurred(), "failed list head pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "My head pod list= %v", headPods.Items)
-			headPod := headPods.Items[0]
-			headPod.Status.Phase = corev1.PodRunning
-			for _, cond := range headPod.Status.Conditions {
-				if cond.Type == corev1.PodReady {
-					cond.Status = corev1.ConditionTrue
-				}
+			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head Pod: %v", headPods.Items))
+
+			// Update all Pods, including head and worker Pods, to Running and PodReady.
+			allPods = append(allPods, headPods.Items...)
+			allPods = append(allPods, workerPods.Items...)
+
+			for _, pod := range allPods {
+				pod.Status.Phase = corev1.PodRunning
+				// In envtest, if Pod.Status.Phase is set to running, the Pod's PodReady condition becomes true automatically.
+				// Check https://github.com/ray-project/kuberay/issues/1736 for more details.
+				Expect(k8sClient.Status().Update(ctx, &pod)).Should(BeNil())
 			}
-			Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
 
 			// The RayCluster.Status.State should be Ready.
 			Eventually(
-				getClusterState(ctx, "default", myRayCluster.Name),
-				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.Ready))
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
-		It("Dashboard URL should be set", func() {
+		It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
 			Eventually(
-				getDashboardURLForRayJob(ctx, myRayJob),
-				time.Second*1, time.Millisecond*500).Should(HavePrefix(myRayJob.Name), "Dashboard URL = %v", myRayJob.Status.DashboardURL)
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			// In Running state, the RayJob's Status.DashboardURL must be set.
+			Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+
+			// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+			namespacedName := getK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			err := k8sClient.Get(ctx, namespacedName, job)
+			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 		})
 
-		It("test cluster selector", func() {
-			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "My RayCluster name  = %v", myRayJob.Status.RayClusterName)
-			myRayJobWithClusterSelector := &rayv1.RayJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "rayjob-test-default-2",
-					Namespace: "default",
-				},
-				Spec: rayv1.RayJobSpec{
-					Entrypoint:      "sleep 999",
-					ClusterSelector: map[string]string{},
-				},
-			}
-			myRayJobWithClusterSelector.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey] = myRayJob.Status.RayClusterName
-
-			err := k8sClient.Create(ctx, myRayJobWithClusterSelector)
-			Expect(err).NotTo(HaveOccurred(), "failed to create RayJob resource")
-
-			Eventually(
-				getRayClusterNameForRayJob(ctx, myRayJobWithClusterSelector),
-				time.Second*15, time.Millisecond*500).Should(Equal(myRayJob.Status.RayClusterName))
-		})
-
-		It("job reached terminal state, deployment status should be Completed with EndTime set", func() {
-			now := time.Now()
-			// update fake dashboard client to return job info with "Succeeded status"
+		It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+			// Update fake dashboard client to return job info with "Succeeded" status.
 			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) {
 				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded}, nil
 			}
 			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
 
+			// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+			Consistently(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			// Update the submitter Kubernetes Job to Complete.
+			namespacedName := getK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			err := k8sClient.Get(ctx, namespacedName, job)
+			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+			// Update the submitter Kubernetes Job to Complete.
+			conditions := []batchv1.JobCondition{
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			}
+			job.Status.Conditions = conditions
+			Expect(k8sClient.Status().Update(ctx, job)).Should(BeNil())
+
+			// RayJob transitions to Complete.
 			Eventually(
-				getRayJobDeploymentStatus(ctx, myRayJob),
-				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", myRayJob.Status.JobDeploymentStatus)
-			Expect(myRayJob.Status.EndTime.After(now)).Should(BeTrue(), "EndTime = %v, Now = %v", myRayJob.Status.EndTime, now)
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 		})
 
-		It("job completed with ShutdownAfterJobFinishes=true, RayCluster should be deleted but not the submitter Job", func() {
-			myRayCluster := &rayv1.RayCluster{}
+		It("If shutdownAfterJobFinishes is true, RayCluster should be deleted but not the submitter Job.", func() {
 			Eventually(
 				func() bool {
-					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Status.RayClusterName, Namespace: "default"}, myRayCluster)())
+					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)())
 				},
-				time.Second*15, time.Millisecond*500).Should(BeTrue(), "My myRayJob  = %v", myRayJob.Name)
-
-			submitterJob := &batchv1.Job{}
-			Eventually(
-				func() error {
-					return getResourceFunc(ctx, client.ObjectKey{Name: myRayJob.Name, Namespace: "default"}, submitterJob)()
-				},
-				time.Second*5, time.Millisecond*500).Should(BeNil(), "Expected Kubernetes job to be present")
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+			namespacedName := getK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			Consistently(
+				getResourceFunc(ctx, namespacedName, job),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
 		})
 	})
 })

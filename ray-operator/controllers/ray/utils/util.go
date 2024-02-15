@@ -82,6 +82,27 @@ func IsRunningAndReady(pod *corev1.Pod) bool {
 	return false
 }
 
+func CheckRouteName(ctx context.Context, s string, n string) string {
+	log := ctrl.LoggerFrom(ctx)
+
+	// 6 chars are consumed at the end with "-head-" + 5 generated.
+	// Namespace name will be appended to form: {name}-{namespace} for first host
+	//   segment within route
+	// 63 - (6 + 5) - (length of namespace name + 1)
+	// => 52 - (length of namespace name + 1)
+	// => 51 - (length of namespace name)
+	maxLength := 51 - len(n)
+
+	if len(s) > maxLength {
+		// shorten the name
+		log.Info(fmt.Sprintf("route name is too long: len = %v, we will shorten it to = %v\n", len(s), maxLength))
+		s = s[:maxLength]
+	}
+
+	// Pass through CheckName for remaining string validations
+	return CheckName(s)
+}
+
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
 func CheckName(s string) string {
 	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
@@ -89,7 +110,7 @@ func CheckName(s string) string {
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
+		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
 		s = s[offset:]
 	}
 

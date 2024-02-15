@@ -73,6 +73,7 @@ func NewRayJobReconciler(mgr manager.Manager, dashboardClientFunc func() utils.R
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
 // Reconcile used to bridge the desired state with the current state
 func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	ctx = ctrl.LoggerInto(ctx, r.Log)
 	r.Log.Info("reconciling RayJob", "NamespacedName", request.NamespacedName)
 
 	// Get RayJob instance
@@ -177,9 +178,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// TODO (kevin85421): For light-weight mode, calculate the number of failed retries and transition
 		// the status to `Complete` if the number of failed retries exceeds the threshold.
+		job := &batchv1.Job{}
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			// If the Job reaches the backoff limit, transition the status to `Complete`.
-			job := &batchv1.Job{}
 			namespacedName := getK8sJobNamespacedName(rayJobInstance)
 			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 				r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
@@ -221,7 +222,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// as "Complete" to avoid unnecessary reconciliation.
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
 		if rayv1.IsJobTerminal(jobInfo.JobStatus) {
-			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+			switch rayJobInstance.Spec.SubmissionMode {
+			case rayv1.HTTPMode:
+				jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+			case rayv1.K8sJobMode:
+				if _, finished := utils.IsJobFinished(job); finished {
+					r.Log.Info("The submitter Kubernetes Job is finished", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+					jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+				}
+			}
 		}
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
 		rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status

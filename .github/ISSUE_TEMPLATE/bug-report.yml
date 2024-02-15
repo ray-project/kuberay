@@ -1,7 +1,7 @@
 name: Bug report
 title: "[Bug] "
 description: Problems and issues with code of KubeRay
-labels: [bug, triage]
+labels: bug, triage
 body:
   - type: markdown
     attributes:
