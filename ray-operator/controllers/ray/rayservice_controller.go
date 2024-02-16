@@ -241,6 +241,8 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	}
 
 	numServeEndpoints := 0
+	// Ray Pod addresses are categorized into subsets based on the IPs they share.
+	// subset.Addresses contains a list of Ray Pod addresses with ready serve port.
 	for _, subset := range serveEndPoints.Subsets {
 		numServeEndpoints += len(subset.Addresses)
 	}
