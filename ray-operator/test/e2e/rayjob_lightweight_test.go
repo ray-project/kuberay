@@ -22,8 +22,8 @@ func TestRayJobLightWeightMode(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobs := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
-	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Create(test.Ctx(), jobs, metav1.CreateOptions{})
+	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
+	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 

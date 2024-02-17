@@ -8,7 +8,6 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
@@ -23,34 +22,25 @@ func TestRayJob(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobs := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
-	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Create(test.Ctx(), jobs, metav1.CreateOptions{})
+	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
+	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
 	test.T().Run("Successful RayJob", func(t *testing.T) {
 		// RayJob
-		rayJob := &rayv1.RayJob{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rayv1.GroupVersion.String(),
-				Kind:       "RayJob",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "counter",
-				Namespace: namespace.Name,
-			},
-			Spec: rayv1.RayJobSpec{
-				RayClusterSpec: newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
-				Entrypoint:     "python /home/ray/jobs/counter.py",
-				RuntimeEnvYAML: `
+		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
-`,
-				ShutdownAfterJobFinishes: true,
-				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
-			},
-		}
-		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Create(test.Ctx(), rayJob, metav1.CreateOptions{})
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
@@ -82,9 +72,8 @@ env_vars:
 		// cascadingly deleted with the Kubernetes Job by default.
 
 		test.T().Logf("Update `suspend` to true. However, since the RayJob is completed, the status should not be updated to `Suspended`.")
-		rayJob.Spec.Suspend = true
-		// TODO (kevin85421): We may need to retry `Update` if 409 conflict makes the test flaky.
-		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Update(test.Ctx(), rayJob, metav1.UpdateOptions{})
+		rayJobAC.Spec.WithSuspend(true)
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
@@ -97,23 +86,14 @@ env_vars:
 
 	test.T().Run("Failing RayJob without cluster shutdown after finished", func(t *testing.T) {
 		// RayJob
-		rayJob := &rayv1.RayJob{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rayv1.GroupVersion.String(),
-				Kind:       "RayJob",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "fail",
-				Namespace: namespace.Name,
-			},
-			Spec: rayv1.RayJobSpec{
-				RayClusterSpec:           newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
-				Entrypoint:               "python /home/ray/jobs/fail.py",
-				ShutdownAfterJobFinishes: false,
-				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
-			},
-		}
-		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Create(test.Ctx(), rayJob, metav1.CreateOptions{})
+		rayJobAC := rayv1ac.RayJob("fail", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/fail.py").
+				WithShutdownAfterJobFinishes(false).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
@@ -149,28 +129,19 @@ env_vars:
 
 	test.T().Run("Failing submitter K8s Job", func(t *testing.T) {
 		// RayJob
-		rayJob := &rayv1.RayJob{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rayv1.GroupVersion.String(),
-				Kind:       "RayJob",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "fail-k8s-job",
-				Namespace: namespace.Name,
-			},
-			Spec: rayv1.RayJobSpec{
-				RayClusterSpec:           newRayClusterSpec(mountConfigMap[rayv1.RayClusterSpec](jobs, "/home/ray/jobs")),
-				Entrypoint:               "The command will be overridden by the submitter Job",
-				ShutdownAfterJobFinishes: true,
-				SubmitterPodTemplate:     jobSubmitterPodTemplate(),
-			},
-		}
+		rayJobAC := rayv1ac.RayJob("fail-k8s-job", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("The command will be overridden by the submitter Job").
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
 		// In this test, we try to simulate the case where the submitter Job can't connect to the RayCluster successfully.
 		// Hence, KubeRay can't get the Ray job information from the RayCluster. When the submitter Job reaches the backoff
 		// limit, it will be marked as failed. Then, the RayJob should transition to `Complete`.
-		rayJob.Spec.SubmitterPodTemplate.Spec.Containers[0].Command = []string{"ray", "job", "submit", "--address", "http://do-not-exist:8265", "--", "echo 123"}
+		rayJobAC.Spec.SubmitterPodTemplate.Spec.Containers[0].WithCommand("ray", "job", "submit", "--address", "http://do-not-exist:8265", "--", "echo 123")
 
-		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Create(test.Ctx(), rayJob, metav1.CreateOptions{})
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
@@ -202,14 +173,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/stop.py").
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
-				WithRayClusterSpec(rayv1ac.RayClusterSpec().
-					WithRayVersion(GetRayVersion()).
-					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-						WithRayStartParams(map[string]string{
-							"dashboard-host": "0.0.0.0",
-						}).
-						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -238,14 +202,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRuntimeEnvYAML(`invalid_yaml_string`).
-				WithRayClusterSpec(rayv1ac.RayClusterSpec().
-					WithRayVersion(GetRayVersion()).
-					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-						WithRayStartParams(map[string]string{
-							"dashboard-host": "0.0.0.0",
-						}).
-						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
