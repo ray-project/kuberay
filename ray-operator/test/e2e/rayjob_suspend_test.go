@@ -45,9 +45,6 @@ func TestRayJobSuspend(t *testing.T) {
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
 
-		// Refresh the RayJob status
-		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-
 		test.T().Logf("Suspend the RayJob %s/%s", rayJob.Namespace, rayJob.Name)
 		rayJobAC.Spec.WithSuspend(true)
 		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
@@ -68,9 +65,6 @@ func TestRayJobSuspend(t *testing.T) {
 		// TODO (kevin85421): Check whether the Pods associated with the RayCluster and the submitter Job have been deleted.
 		// For Kubernetes Jobs, the default deletion behavior is "orphanDependents," which means the Pods will not be
 		// cascade-deleted with the Kubernetes Job by default.
-
-		// Refresh the RayJob status
-		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 
 		test.T().Logf("Resume the RayJob by updating `suspend` to false.")
 		rayJobAC.Spec.WithSuspend(false)
