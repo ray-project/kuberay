@@ -83,14 +83,8 @@ env_vars:
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
-				WithRayClusterSpec(rayv1ac.RayClusterSpec().
-					WithRayVersion(GetRayVersion()).
-					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-						WithRayStartParams(map[string]string{
-							"dashboard-host": "0.0.0.0",
-						}).
-						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
@@ -118,14 +112,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/stop.py").
-				WithRayClusterSpec(rayv1ac.RayClusterSpec().
-					WithRayVersion(GetRayVersion()).
-					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-						WithRayStartParams(map[string]string{
-							"dashboard-host": "0.0.0.0",
-						}).
-						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
