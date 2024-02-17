@@ -82,6 +82,7 @@ func NewRayServiceReconciler(mgr manager.Manager, dashboardClientFunc func() uti
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
@@ -212,6 +213,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	}
 
+	if err := r.calculateStatus(ctx, rayServiceInstance, rayClusterInstance); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
 	// Final status update for any CR modification.
 	if r.inconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
@@ -222,6 +227,27 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
+	serveSvc, err := common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
+	if err != nil {
+		return err
+	}
+	serveEndPoints := &corev1.Endpoints{}
+	if err := r.Get(ctx, client.ObjectKey{Name: serveSvc.Name, Namespace: serveSvc.Namespace}, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+		r.Log.Error(err, "Fail to retrieve the Kubernetes Endpoints from the cluster!")
+		return err
+	}
+
+	numServeEndpoints := 0
+	// Ray Pod addresses are categorized into subsets based on the IPs they share.
+	// subset.Addresses contains a list of Ray Pod addresses with ready serve port.
+	for _, subset := range serveEndPoints.Subsets {
+		numServeEndpoints += len(subset.Addresses)
+	}
+	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints)
+	return nil
 }
 
 // Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
@@ -282,6 +308,11 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(oldStatus rayv1.RayS
 func (r *RayServiceReconciler) inconsistentRayServiceStatuses(oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
 	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
 		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServiceStatus changed from %s to %s", oldStatus.ServiceStatus, newStatus.ServiceStatus))
+		return true
+	}
+
+	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
+		r.Log.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService NumServeEndpoints changed from %d to %d", oldStatus.NumServeEndpoints, newStatus.NumServeEndpoints))
 		return true
 	}
 
