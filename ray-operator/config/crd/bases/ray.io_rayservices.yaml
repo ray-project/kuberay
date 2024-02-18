@@ -7227,9 +7227,6 @@ spec:
             type: object
           status:
             properties:
-              NumServeEndpoints:
-                format: int32
-                type: integer
               activeServiceStatus:
                 properties:
                   applicationStatuses:
@@ -7323,6 +7320,9 @@ spec:
               lastUpdateTime:
                 format: date-time
                 type: string
+              numServeEndpoints:
+                format: int32
+                type: integer
               observedGeneration:
                 format: int64
                 type: integer

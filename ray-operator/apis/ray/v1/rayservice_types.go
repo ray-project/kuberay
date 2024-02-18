@@ -73,7 +73,7 @@ type RayServiceStatuses struct {
 	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
 	// NumServeEndpoints indicates the number of Ray Pods that are actively serving or have been selected by the serve service.
 	// Ray Pods without a proxy actor or those that are unhealthy will not be counted.
-	NumServeEndpoints int32 `json:"NumServeEndpoints,omitempty"`
+	NumServeEndpoints int32 `json:"numServeEndpoints,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
 	// RayService's generation, which is updated on mutation by the API Server.
 	// +optional
