@@ -314,6 +314,11 @@ func setupTest(t *testing.T) {
 										},
 									},
 								},
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceMemory: resource.MustParse("100000000"),
+									},
+								},
 							},
 						},
 					},
@@ -1570,38 +1575,130 @@ func TestCalculateStatus(t *testing.T) {
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	assert.Nil(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
-	headPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "headNode",
-			Namespace: namespaceStr,
-			Labels: map[string]string{
-				utils.RayClusterLabelKey:  instanceName,
-				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+
+	tests := map[string]struct {
+		pods                  []*corev1.Pod
+		expectedState         rayv1.ClusterState
+		expectedHeadNodeIP    string
+		expectedHeadServiceIP string
+	}{
+		".status.state should be ready if all Pods have .status.phase Running": {
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "headNode",
+						Namespace: namespaceStr,
+						Labels: map[string]string{
+							utils.RayClusterLabelKey:  instanceName,
+							utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIP: headNodeIP,
+						Phase: corev1.PodRunning,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "workerNode",
+						Namespace: namespaceStr,
+						Labels: map[string]string{
+							utils.RayClusterLabelKey:  instanceName,
+							utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
 			},
+			expectedState:         rayv1.Ready,
+			expectedHeadNodeIP:    headNodeIP,
+			expectedHeadServiceIP: headServiceIP,
 		},
-		Status: corev1.PodStatus{
-			PodIP: headNodeIP,
+		".status.state should be unhealthy if there aren't any Pods": {
+			pods:                  []*corev1.Pod{},
+			expectedState:         rayv1.Unhealthy,
+			expectedHeadNodeIP:    "",
+			expectedHeadServiceIP: headServiceIP,
+		},
+		".status.state should be unhealthy if any Pods don't have .status.phase Running": {
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "headNode",
+						Namespace: namespaceStr,
+						Labels: map[string]string{
+							utils.RayClusterLabelKey:  instanceName,
+							utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIP: headNodeIP,
+						Phase: corev1.PodPending,
+					},
+				},
+			},
+			expectedState:         rayv1.Unhealthy,
+			expectedHeadNodeIP:    headNodeIP,
+			expectedHeadServiceIP: headServiceIP,
+		},
+		".status.state should be unhealthy if any Pods have a .status.condition of type: Ready that's not status: True": {
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "headNode",
+						Namespace: namespaceStr,
+						Labels: map[string]string{
+							utils.RayClusterLabelKey:  instanceName,
+							utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIP: headNodeIP,
+						Phase: corev1.PodPending,
+						Conditions: []corev1.PodCondition{
+							{
+								Type:   corev1.PodReady,
+								Status: corev1.ConditionFalse,
+							},
+						},
+					},
+				},
+			},
+			expectedState:         rayv1.Unhealthy,
+			expectedHeadNodeIP:    headNodeIP,
+			expectedHeadServiceIP: headServiceIP,
 		},
 	}
-	runtimeObjects := []runtime.Object{headPod, headService}
 
-	// Initialize a fake client with newScheme and runtimeObjects.
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-	ctx := context.Background()
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			runtimeObjects := []runtime.Object{headService}
+			for _, pod := range tc.pods {
+				runtimeObjects = append(runtimeObjects, pod)
+			}
 
-	// Initialize a RayCluster reconciler.
-	r := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			ctx := context.Background()
+
+			// Initialize a RayCluster reconciler.
+			r := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			// Test head information
+			newInstance, err := r.calculateStatus(ctx, testRayCluster)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expectedHeadNodeIP, newInstance.Status.Head.PodIP)
+			assert.Equal(t, tc.expectedHeadServiceIP, newInstance.Status.Head.ServiceIP)
+			assert.Equal(t, tc.expectedState, newInstance.Status.State)
+		})
 	}
-
-	// Test head information
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
-	assert.Nil(t, err)
-	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
-	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 }
 
 func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
