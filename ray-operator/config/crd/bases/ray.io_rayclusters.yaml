@@ -3780,10 +3780,6 @@ spec:
                       type: integer
                     scaleStrategy:
                       properties:
-                        multihostReplicasToDelete:
-                          items:
-                            type: string
-                          type: array
                         workersToDelete:
                           items:
                             type: string

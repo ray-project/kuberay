@@ -71,8 +71,6 @@ type WorkerGroupSpec struct {
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
-	// MultihostReplicasToDelete multi-host replicas to be deleted
-	MultihostReplicasToDelete []string `json:"multihostReplicasToDelete,omitempty"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
