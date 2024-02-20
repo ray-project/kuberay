@@ -61,7 +61,12 @@ spec:
             securityContext:
             {{- toYaml .Values.head.securityContext | nindent 14 }}
             env:
-            {{- toYaml .Values.head.containerEnv | nindent 14}}
+            {{- with .Values.common.containerEnv }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with .Values.head.containerEnv }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
             {{- with .Values.head.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
@@ -142,7 +147,12 @@ spec:
             securityContext:
             {{- toYaml $values.securityContext | nindent 14 }}
             env:
-            {{- toYaml $values.containerEnv | nindent 14}}
+            {{- with $.Values.common.containerEnv }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with $values.containerEnv }}
+            {{- toYaml . | nindent 14}}
+            {{- end }}
             {{- if $values.envFrom }}
             envFrom: {{- toYaml $values.envFrom | nindent 14 }}
             {{- end }}
@@ -221,7 +231,12 @@ spec:
             securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 14 }}
             env:
-            {{- toYaml .Values.worker.containerEnv | nindent 14}}
+            {{- with .Values.common.containerEnv }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with .Values.worker.containerEnv }}
+            {{- toYaml . | nindent 14}}
+            {{- end }}
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
