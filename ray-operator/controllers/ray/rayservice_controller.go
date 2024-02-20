@@ -213,7 +213,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	}
 
-	if err := r.calculateStatus(ctx, rayServiceInstance, rayClusterInstance); err != nil {
+	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
@@ -229,13 +229,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
-	serveSvc, err := common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
-	if err != nil {
-		return err
-	}
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
+	serveSvc := common.ServeServiceNameForRayService(rayServiceInstance)
 	serveEndPoints := &corev1.Endpoints{}
-	if err := r.Get(ctx, client.ObjectKey{Name: serveSvc.Name, Namespace: serveSvc.Namespace}, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Name: serveSvc, Namespace: rayServiceInstance.Namespace}, serveEndPoints); err != nil && !errors.IsNotFound(err) {
 		r.Log.Error(err, "Fail to retrieve the Kubernetes Endpoints from the cluster!")
 		return err
 	}

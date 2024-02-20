@@ -166,6 +166,13 @@ func BuildServeServiceForRayCluster(ctx context.Context, rayCluster rayv1.RayClu
 	return BuildServeService(ctx, rayv1.RayService{}, rayCluster, false)
 }
 
+func ServeServiceNameForRayService(rayService *rayv1.RayService) string {
+	if rayService.Spec.ServeService != nil && rayService.Spec.ServeService.Name != "" {
+		return rayService.Spec.ServeService.Name
+	}
+	return utils.GenerateServeServiceName(rayService.Name)
+}
+
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
 func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
 	log := ctrl.LoggerFrom(ctx)
