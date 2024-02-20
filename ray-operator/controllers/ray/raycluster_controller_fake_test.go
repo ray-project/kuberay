@@ -2513,8 +2513,6 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 				for _, pod := range podList.Items {
 					if pod.Labels[utils.RayNodeGroupLabelKey] == groupNameStr {
 						groupKey := pod.Labels[utils.MultihostReplicaKey]
-						hostIndex := pod.Labels[utils.RayNodeHostIndexKey]
-						assert.NotEqual(t, hostIndex, "", "Host index missing on multi-host pod: %s", pod.Name)
 						assert.NotEqual(t, groupKey, "", "MultihostReplicaKey missing on multi-host pod: %s", pod.Name)
 					}
 				}

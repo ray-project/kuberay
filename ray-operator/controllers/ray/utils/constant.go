@@ -23,7 +23,6 @@ const (
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	MultihostReplicaKey                      = "ray.io/multihost-replica"
-	RayNodeHostIndexKey                      = "ray.io/host-index"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0

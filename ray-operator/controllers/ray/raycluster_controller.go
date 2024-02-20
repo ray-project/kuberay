@@ -1173,7 +1173,6 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 
 	// Set multihost pod labels
 	podTemplateSpec.Labels[utils.MultihostReplicaKey] = strconv.FormatUint(uint64(multihostReplica), 10)
-	podTemplateSpec.Labels[utils.RayNodeHostIndexKey] = strconv.FormatUint(uint64(hostIndex), 10)
 
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
