@@ -67,8 +67,6 @@ securityContext:
     drop:
     - ALL
   runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
 
 
 # If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
