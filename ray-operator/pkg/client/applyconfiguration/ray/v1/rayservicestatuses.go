@@ -13,7 +13,7 @@ type RayServiceStatusesApplyConfiguration struct {
 	ActiveServiceStatus  *RayServiceStatusApplyConfiguration `json:"activeServiceStatus,omitempty"`
 	PendingServiceStatus *RayServiceStatusApplyConfiguration `json:"pendingServiceStatus,omitempty"`
 	ServiceStatus        *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
-	NumServeEndpoints    *int32                              `json:"NumServeEndpoints,omitempty"`
+	NumServeEndpoints    *int32                              `json:"numServeEndpoints,omitempty"`
 	ObservedGeneration   *int64                              `json:"observedGeneration,omitempty"`
 	LastUpdateTime       *metav1.Time                        `json:"lastUpdateTime,omitempty"`
 }
