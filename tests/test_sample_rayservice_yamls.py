@@ -45,8 +45,8 @@ class RayServiceAddCREvent(CREvent):
         """Wait for RayService to converge
 
         Wait until:
-          (1) serviceStatus is "Running", This means serve applications in Raycluster are ready to serve incoming traffic.
-          (2) numServeEndpoints > 0, This means the k8s serve service is ready to redirect traffic to the Raycluster.
+          (1) serviceStatus is "Running": This means serve applications in RayCluster are ready to serve incoming traffic.
+          (2) numServeEndpoints > 0: This means the k8s serve service is ready to redirect traffic to the RayCluster.
         """
 
         logger.info("Waiting for pods in ray service to be running...")
