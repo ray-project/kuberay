@@ -140,6 +140,7 @@ _Appears in:_
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster. It's only working when ShutdownAfterJobFinishes set to true. |
+| `activeDeadlineSeconds` _integer_ | ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before KubeRay actively tries to terminate the RayJob; value must be positive integer. |
 | `rayClusterSpec` _[RayClusterSpec](#rayclusterspec)_ | RayClusterSpec is the cluster template to run the job |
 | `clusterSelector` _object (keys:string, values:string)_ | clusterSelector is used to select running rayclusters by labels |
 | `submissionMode` _[JobSubmissionMode](#jobsubmissionmode)_ | SubmissionMode specifies how RayJob submits the Ray job to the RayCluster. In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job. In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job. |

@@ -76,7 +76,6 @@ type RayServiceStatuses struct {
 	NumServeEndpoints int32 `json:"NumServeEndpoints,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
 	// RayService's generation, which is updated on mutation by the API Server.
-	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// LastUpdateTime represents the timestamp when the RayService status was last updated.
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`

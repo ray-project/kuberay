@@ -14,6 +14,10 @@ spec:
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
 
+  # activeDeadlineSeconds is the duration in seconds that the RayJob may be active before
+  # KubeRay actively tries to terminate the RayJob; value must be positive integer.
+  # activeDeadlineSeconds: 120
+
   # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
   # See https://docs.ray.io/en/latest/ray-core/handling-dependencies.html for details.
   # (New in KubeRay version 1.0.)

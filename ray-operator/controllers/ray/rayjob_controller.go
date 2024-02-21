@@ -142,6 +142,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if shouldUpdate := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
+		if pastActiveDeadline(rayJobInstance) {
+			r.Log.Info("The RayJob has passed the activeDeadlineSeconds. Transition the status to `Complete`.", "StartTime", rayJobInstance.Status.StartTime, "ActiveDeadlineSeconds", *rayJobInstance.Spec.ActiveDeadlineSeconds)
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+			break
+		}
 
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
@@ -175,12 +180,19 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if shouldUpdate := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
+		if pastActiveDeadline(rayJobInstance) {
+			r.Log.Info("The RayJob has passed the activeDeadlineSeconds. Transition the status to `Complete`.", "StartTime", rayJobInstance.Status.StartTime, "ActiveDeadlineSeconds", *rayJobInstance.Spec.ActiveDeadlineSeconds)
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+			break
+		}
 
-		// TODO (kevin85421): For light-weight mode, calculate the number of failed retries and transition
-		// the status to `Complete` if the number of failed retries exceeds the threshold.
 		job := &batchv1.Job{}
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-			// If the Job reaches the backoff limit, transition the status to `Complete`.
+			// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete`. This is because,
+			// beyond this point, it becomes impossible for the submitter to submit any further Ray jobs. For light-weight mode,
+			// we don't transition the status to `Complete` based on the number of failed requests. Instead, users can use the
+			// `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight mode is not stuck in the `Running` status
+			// indefinitely.
 			namespacedName := getK8sJobNamespacedName(rayJobInstance)
 			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 				r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
@@ -236,7 +248,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
 		rayJobInstance.Status.JobStatus = jobInfo.JobStatus
 		rayJobInstance.Status.Message = jobInfo.Message
-		rayJobInstance.Status.StartTime = utils.ConvertUnixTimeToMetav1Time(jobInfo.StartTime)
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 	case rayv1.JobDeploymentStatusSuspending:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
@@ -510,7 +521,8 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // This function is the sole place where `JobDeploymentStatusInitializing` is defined. It initializes `Status.JobId` and `Status.RayClusterName`
-// prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations.
+// prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations. In addition, this
+// function also sets `Status.StartTime` to support `ActiveDeadlineSeconds`.
 func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
 	// Please don't update `shouldUpdateStatus` below.
@@ -546,6 +558,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
 	return nil
 }
 
@@ -670,6 +683,13 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 	return false
 }
 
+func pastActiveDeadline(rayJob *rayv1.RayJob) bool {
+	if rayJob.Spec.ActiveDeadlineSeconds == nil {
+		return false
+	}
+	return time.Now().After(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.ActiveDeadlineSeconds) * time.Second))
+}
+
 func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
 	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
@@ -687,6 +707,9 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// as a YAML string, not its adherence to the runtime environment schema.
 	if _, err := utils.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
 		return err
+	}
+	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
+		return fmt.Errorf("activeDeadlineSeconds must be a positive integer")
 	}
 	return nil
 }

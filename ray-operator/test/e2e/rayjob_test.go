@@ -5,7 +5,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -22,7 +21,7 @@ func TestRayJob(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
+	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py", "long_running.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -211,5 +210,25 @@ env_vars:
 		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller will not do anything with the CR.
 		test.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 5*time.Second).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
+	})
+
+	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(t *testing.T) {
+		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithTTLSecondsAfterFinished(600).
+				WithActiveDeadlineSeconds(5).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// The RayJob will transition to `Complete` because it has passed `ActiveDeadlineSeconds`.
+		test.T().Logf("Waiting for RayJob %s/%s to be 'Complete'", rayJob.Namespace, rayJob.Name)
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
 	})
 }

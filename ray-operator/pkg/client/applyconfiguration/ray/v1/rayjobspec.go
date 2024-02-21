@@ -16,6 +16,7 @@ type RayJobSpecApplyConfiguration struct {
 	JobId                    *string                                   `json:"jobId,omitempty"`
 	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
 	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
+	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
 	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
@@ -83,6 +84,14 @@ func (b *RayJobSpecApplyConfiguration) WithShutdownAfterJobFinishes(value bool) 
 // If called multiple times, the TTLSecondsAfterFinished field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithTTLSecondsAfterFinished(value int32) *RayJobSpecApplyConfiguration {
 	b.TTLSecondsAfterFinished = &value
+	return b
+}
+
+// WithActiveDeadlineSeconds sets the ActiveDeadlineSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ActiveDeadlineSeconds field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithActiveDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
+	b.ActiveDeadlineSeconds = &value
 	return b
 }
 

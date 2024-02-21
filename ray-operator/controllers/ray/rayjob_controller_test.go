@@ -143,9 +143,10 @@ var _ = Context("RayJob in K8sJobMode", func() {
 				getRayJobDeploymentStatus(ctx, rayJob),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 
-			// In Initializing state, both Status.RayClusterName and Status.JobId must be set.
+			// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
 			Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
 			Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+			Expect(rayJob.Status.StartTime).NotTo(BeNil())
 		})
 
 		It("In Initializing state, the RayCluster should eventually be created.", func() {
@@ -257,6 +258,48 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			Consistently(
 				getResourceFunc(ctx, namespacedName, job),
 				time.Second*3, time.Millisecond*500).Should(BeNil())
+		})
+	})
+
+	Describe("RayJob has passed the ActiveDeadlineSeconds", func() {
+		ctx := context.Background()
+		namespace := "default"
+		activeDeadlineSeconds := int32(3)
+		rayJob := rayJobTemplate("rayjob-deadline", namespace)
+		rayJob.Spec.ActiveDeadlineSeconds = pointer.Int32(activeDeadlineSeconds)
+
+		It("Verify RayJob spec", func() {
+			// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).
+			Expect(rayJob.Spec.ActiveDeadlineSeconds).NotTo(BeNil())
+
+			// This test assumes that there is only one worker group.
+			Expect(len(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs)).To(Equal(1))
+		})
+
+		It("Create a RayJob custom resource", func() {
+			err := k8sClient.Create(ctx, rayJob)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+		})
+
+		It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+			Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+			Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+			Expect(rayJob.Status.StartTime).NotTo(BeNil())
+		})
+
+		It("RayJobs has passed the activeDeadlineSeconds, and the JobDeploymentStatus transitions from Initializing to Complete.", func() {
+			// RayJob transitions to Complete.
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 		})
 	})
 })
