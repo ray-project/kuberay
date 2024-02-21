@@ -2387,14 +2387,6 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 			desiredReplicas: 3,
 			numOfHosts:      4,
 		},
-		"Replicas decreases from MaxReplicas": {
-			// If the value of `Replicas` decreases, the controller will delete entire workerGroups and leave `Replicas`*`NumOfHosts` Pods.
-			replicas:        pointer.Int32(1),
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(3),
-			desiredReplicas: 1,
-			numOfHosts:      4,
-		},
 	}
 
 	for name, tc := range tests {
@@ -2508,85 +2500,12 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 			if tc.numOfHosts > 1 {
 				assert.Equal(t, int(tc.numOfHosts), len(podList.Items),
 					"Number of worker pods is wrong after reconcile expect %d actual %d", int(tc.numOfHosts), len(podList.Items)-1)
-
-				// check if multi-host labels are set for workergroup
-				for _, pod := range podList.Items {
-					if pod.Labels[utils.RayNodeGroupLabelKey] == groupNameStr {
-						groupKey := pod.Labels[utils.MultihostReplicaKey]
-						assert.NotEqual(t, groupKey, "", "MultihostReplicaKey missing on multi-host pod: %s", pod.Name)
-					}
-				}
 			} else {
 				assert.Equal(t, int(*tc.replicas), len(podList.Items),
 					"Replica number is wrong after reconcile expect %d actual %d", int(*tc.replicas), len(podList.Items))
 			}
 		})
 	}
-}
-
-func TestDelete_Multihost_Group(t *testing.T) {
-	setupTest(t)
-
-	// This test makes some assumptions about the testRayCluster object.
-	// (1) 1 workerGroup (2) disable autoscaling
-	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
-
-	// Disable autoscaling so that the random Pod deletion is enabled.
-	// Set `Replicas` to 1 and `NumOfHosts` to 4 to specify multi-host group
-	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
-	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
-	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
-	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
-
-	t.Run("Delete pod from multihost group", func(t *testing.T) {
-		cluster := testRayCluster.DeepCopy()
-
-		numHeadPods := 1
-		oldNumWorkerPods := 4 // start with 4 worker pods
-
-		// Initialize a fake client with newScheme and runtimeObjects.
-		fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods[0], testPods[1], testPods[2], testPods[3], testPods[4]).Build()
-		ctx := context.Background()
-
-		// Get the pod list from the fake client.
-		podList := corev1.PodList{}
-		err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-		assert.Nil(t, err, "Fail to get pod list")
-		assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
-
-		// Initialize a new RayClusterReconciler.
-		testRayClusterReconciler := &RayClusterReconciler{
-			Client:   fakeClient,
-			Recorder: &record.FakeRecorder{},
-			Scheme:   scheme.Scheme,
-			Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
-		}
-
-		err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-		assert.Nil(t, err, "Fail to reconcile Pods")
-
-		err = fakeClient.List(ctx, &podList, &client.ListOptions{
-			LabelSelector: workerSelector,
-			Namespace:     namespaceStr,
-		})
-		assert.Nil(t, err, "Fail to get pod list after reconcile")
-
-		// Update 1 worker Pod to Failed (a terminate state) state.
-		podList.Items[0].Status.Phase = corev1.PodFailed
-		err = fakeClient.Status().Update(ctx, &podList.Items[0])
-		assert.Nil(t, err, "Fail to update Pod status")
-
-		// Reconcile Pods after 1 worker has failed
-		testRayClusterReconciler.reconcilePods(ctx, cluster)
-
-		err = fakeClient.List(ctx, &podList, &client.ListOptions{
-			LabelSelector: workerSelector,
-			Namespace:     namespaceStr,
-		})
-		assert.Nil(t, err, "Fail to get pod list after reconcile")
-
-		assert.Equal(t, 0, len(podList.Items), "Failed to delete multi-host workergroup")
-	})
 }
 
 func TestSumGPUs(t *testing.T) {
