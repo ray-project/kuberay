@@ -16,9 +16,11 @@ fullnameOverride: ""
 imagePullSecrets: []
   # - name: an-existing-secret
 
+# common defined values shared between the head and worker
 common:
-  {}
-  # containerEnv:
+  # containerEnv specifies environment variables for the Ray head and worker containers.
+  # Follows standard K8s container env schema.
+  containerEnv: {}
   #  - name: BLAH
   #    value: VAL
 head:
