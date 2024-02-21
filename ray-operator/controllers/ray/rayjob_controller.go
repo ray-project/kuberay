@@ -708,6 +708,9 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if _, err := utils.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
 		return err
 	}
+	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
+		return fmt.Errorf("activeDeadlineSeconds must be a positive integer")
+	}
 	return nil
 }
 
