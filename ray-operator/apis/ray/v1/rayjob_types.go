@@ -67,6 +67,9 @@ type RayJobSpec struct {
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	// +kubebuilder:default:=0
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
+	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
+	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
@@ -103,9 +106,7 @@ type RayJobStatus struct {
 	JobStatus           JobStatus           `json:"jobStatus,omitempty"`
 	JobDeploymentStatus JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
 	Message             string              `json:"message,omitempty"`
-	// Represents time when the job was acknowledged by the Ray cluster.
-	// It is not guaranteed to be set in happens-before order across separate operations.
-	// It is represented in RFC3339 form
+	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
 	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
@@ -114,7 +115,6 @@ type RayJobStatus struct {
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
-	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 

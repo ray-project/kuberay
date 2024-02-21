@@ -353,6 +353,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.ActiveDeadlineSeconds != nil {
+		in, out := &in.ActiveDeadlineSeconds, &out.ActiveDeadlineSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	if in.RayClusterSpec != nil {
 		in, out := &in.RayClusterSpec, &out.RayClusterSpec
 		*out = new(RayClusterSpec)
