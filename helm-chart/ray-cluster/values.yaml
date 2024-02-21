@@ -18,7 +18,7 @@ imagePullSecrets: []
 
 common:
   {}
-  #containerEnv:
+  # containerEnv:
   #  - name: BLAH
   #    value: VAL
 head:
