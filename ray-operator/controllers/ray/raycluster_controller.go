@@ -797,11 +797,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
-		runningReplicas := int32(len(runningPods.Items))
-		if worker.NumOfHosts > 1 {
-			// A replica can contain multiple hosts, so we need to calculate this based on the number of hosts per replica.
-			runningReplicas = runningReplicas / worker.NumOfHosts
-		}
+		// A replica can contain multiple hosts, so we need to calculate this based on the number of hosts per replica.
+		runningReplicas := int32(len(runningPods.Items)) / worker.NumOfHosts
 
 		diff := workerReplicas - runningReplicas
 		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
