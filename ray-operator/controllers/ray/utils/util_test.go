@@ -50,21 +50,49 @@ func TestStatus(t *testing.T) {
 }
 
 func TestCheckAllPodsRunning(t *testing.T) {
-	pods := []corev1.Pod{
-		*createSomePod(),
-		*createSomePod(),
+	tests := map[string]struct {
+		pods     corev1.PodList
+		expected bool
+	}{
+		"should return true if all Pods are running": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createSomePodWithPhase(corev1.PodRunning),
+					*createSomePodWithPhase(corev1.PodRunning),
+				},
+			},
+			expected: true,
+		},
+		"should return false if there are no Pods": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{},
+			},
+			expected: false,
+		},
+		"should return false if any Pods don't have .status.phase Running": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createSomePodWithPhase(corev1.PodPending),
+					*createSomePodWithPhase(corev1.PodRunning),
+				},
+			},
+			expected: false,
+		},
+		"should return false if any Pods have a .status.condition of type: Ready that's not status: True": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createSomePodWithPhase(corev1.PodRunning),
+					*createSomePodWithCondition(corev1.PodReady, corev1.ConditionFalse),
+				},
+			},
+			expected: false,
+		},
 	}
-	pods[0].Status.Phase = corev1.PodPending
-	pods[1].Status.Phase = corev1.PodRunning
-	podList1 := corev1.PodList{
-		Items: pods,
-	}
-	if CheckAllPodsRunning(context.Background(), podList1) {
-		t.Fail()
-	}
-	podList2 := corev1.PodList{}
-	if CheckAllPodsRunning(context.Background(), podList2) {
-		t.Fail()
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, CheckAllPodsRunning(context.Background(), tc.pods))
+		})
 	}
 }
 
@@ -132,6 +160,43 @@ func createSomePod() (pod *corev1.Pod) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample-small-group-worker-0",
 			Namespace: "default",
+		},
+	}
+}
+
+func createSomePodWithPhase(phase corev1.PodPhase) (pod *corev1.Pod) {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-small-group-worker-0",
+			Namespace: "default",
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+		},
+	}
+}
+
+func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-small-group-worker-0",
+			Namespace: "default",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   typ,
+					Status: status,
+				},
+			},
 		},
 	}
 }

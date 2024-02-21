@@ -390,10 +390,10 @@ func GetHeadGroupServiceAccountName(cluster *rayv1.RayCluster) string {
 	return cluster.Name
 }
 
-// CheckAllPodsRunning check if all pod in a list is running
+// CheckAllPodsRunning returns true if all the RayCluster's Pods are running, false otherwise
 func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 	log := ctrl.LoggerFrom(ctx)
-	// check if there is no pods.
+	// check if there are no pods.
 	if len(runningPods.Items) == 0 {
 		return false
 	}
