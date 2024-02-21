@@ -60,7 +60,13 @@ batchScheduler:
 
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+  runAsNonRoot: true
 
 
 # If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
