@@ -22,6 +22,6 @@ bases:
 
 images:
 - name: kuberay/operator
-  newName: kuberay/operator
+  newName: quay.io/kuberay/operator
   newTag: nightly
 

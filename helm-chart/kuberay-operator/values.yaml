@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: kuberay/operator
+  repository: quay.io/kuberay/operator
   tag: nightly
   pullPolicy: IfNotPresent
 

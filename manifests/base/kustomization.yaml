@@ -10,9 +10,9 @@ resources:
 
 images:
 - name: kuberay/apiserver
-  newName: kuberay/apiserver
+  newName: quay.io/kuberay/apiserver
   newTag: nightly
 - name: kuberay/operator
-  newName: kuberay/operator
+  newName: quay.io/kuberay/operator
   newTag: nightly
 

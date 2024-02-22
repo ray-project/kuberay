@@ -18,7 +18,7 @@
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_raycluster_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=quay.io/kuberay/operator:v1.0.0 python3 tests/test_sample_raycluster_yamls.py
 
 - label: 'Test RayJob Sample YAMLs (nightly operator)'
   instance_size: large
@@ -38,7 +38,7 @@
   commands:
     - ./.buildkite/setup-env.sh
     # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_rayjob_yamls.py
+    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=quay.io/kuberay/operator:v1.0.0 python3 tests/test_sample_rayjob_yamls.py
 
 - label: 'Test RayService Sample YAMLs (nightly operator)'
   instance_size: large
@@ -62,4 +62,4 @@
 #   commands:
 #     - ./.buildkite/setup-env.sh
 #     # Use KubeRay operator image from the latest release
-#     - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:v1.0.0 python3 tests/test_sample_rayservice_yamls.py
+#     - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=quay.io/kuberay/operator:v1.0.0 python3 tests/test_sample_rayservice_yamls.py
