@@ -50,10 +50,10 @@ spec:
             {{- if or .Values.head.volumeMounts .Values.common.volumeMounts }}
             volumeMounts:
             {{- with .Values.head.volumeMounts -}}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- with .Values.common.volumeMounts -}}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- end }}
             {{- if .Values.head.image }}
@@ -148,10 +148,10 @@ spec:
             {{- if or $values.volumeMounts $.Values.common.volumeMounts }}
             volumeMounts:
             {{- with $values.volumeMounts -}}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- with $.Values.common.volumeMounts }}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- end }}
             {{- if $values.image }}
@@ -244,10 +244,10 @@ spec:
             {{- if or .Values.worker.volumeMounts .Values.common.volumeMounts }}
             volumeMounts:
             {{- with .Values.worker.volumeMounts }}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- with .Values.common.volumeMounts }}
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- end }}
             {{- if .Values.worker.image }}
