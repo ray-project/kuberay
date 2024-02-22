@@ -23,5 +23,5 @@ helm install kuberay-operator kuberay/kuberay-operator
 #### Method 2: Kustomize
 ```sh
 # Install CRD and KubeRay operator
-kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=${KUBERAY_VERSION}&timeout=90s"
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0&timeout=90s"
 ```
