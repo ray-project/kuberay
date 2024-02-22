@@ -214,8 +214,6 @@ additionalWorkerGroups:
     affinity: {}
     # Ray container security context.
     securityContext: {}
-    # Optional: The following volumes/volumeMounts configurations are optional but recommended because
-    # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
     volumes: {}
     #  - name: log-volume
     #    emptyDir: {}
