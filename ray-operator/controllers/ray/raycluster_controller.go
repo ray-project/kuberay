@@ -1163,7 +1163,6 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 // SetupWithManager builds the reconciler.
 func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	b := ctrl.NewControllerManagedBy(mgr).
-		Named("raycluster-controller").
 		For(&rayv1.RayCluster{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
 			predicate.LabelChangedPredicate{},
