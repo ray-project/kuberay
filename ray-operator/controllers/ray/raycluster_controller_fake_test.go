@@ -59,6 +59,7 @@ var (
 	headGroupNameStr        string
 	groupNameStr            string
 	expectReplicaNum        int32
+	expectNumOfHostNum      int32
 	testPods                []runtime.Object
 	testPodsNoHeadIP        []runtime.Object
 	testRayCluster          *rayv1.RayCluster
@@ -77,6 +78,7 @@ func setupTest(t *testing.T) {
 	headGroupNameStr = "head-group"
 	groupNameStr = "small-group"
 	expectReplicaNum = 3
+	expectNumOfHostNum = 1
 	workersToDelete = []string{"pod1", "pod2"}
 	headNodeIP = "1.2.3.4"
 	testPods = []runtime.Object{
@@ -324,6 +326,7 @@ func setupTest(t *testing.T) {
 					Replicas:    pointer.Int32(expectReplicaNum),
 					MinReplicas: pointer.Int32(0),
 					MaxReplicas: pointer.Int32(10000),
+					NumOfHosts:  expectNumOfHostNum,
 					GroupName:   groupNameStr,
 					RayStartParams: map[string]string{
 						"port":     "6379",
@@ -2336,6 +2339,171 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, tc.desiredReplicas, len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", tc.desiredReplicas, len(podList.Items))
+		})
+	}
+}
+
+func TestReconcile_Multihost_Replicas(t *testing.T) {
+	setupTest(t)
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) disable autoscaling
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+
+	// Disable autoscaling so that the random Pod deletion is enabled.
+	// Set `NumOfHosts` to 4 to specify multi-host group
+	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
+
+	tests := map[string]struct {
+		replicas        *int32
+		minReplicas     *int32
+		maxReplicas     *int32
+		desiredReplicas int
+		numOfHosts      int
+	}{
+		"Replicas is nil": {
+			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
+			replicas:        nil,
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(10000),
+			desiredReplicas: 1,
+			numOfHosts:      4,
+		},
+		"Replicas is smaller than MinReplicas": {
+			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
+			replicas:        pointer.Int32(0),
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(10000),
+			desiredReplicas: 1,
+			numOfHosts:      4,
+		},
+		"Replicas is larger than MaxReplicas": {
+			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas`*`NumOfHosts` Pods.
+			replicas:        pointer.Int32(4),
+			minReplicas:     pointer.Int32(1),
+			maxReplicas:     pointer.Int32(3),
+			desiredReplicas: 3,
+			numOfHosts:      4,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.WorkerGroupSpecs[0].Replicas = tc.replicas
+			cluster.Spec.WorkerGroupSpecs[0].MinReplicas = tc.minReplicas
+			cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = tc.maxReplicas
+
+			// This test makes some assumptions about the testPods object.
+			// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+			assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+			numHeadPods := 1
+			oldNumWorkerPods := len(testPods) - numHeadPods
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
+
+			// Get the pod list from the fake client.
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
+
+			// Initialize a new RayClusterReconciler.
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			// Since the desired state of the workerGroup is 1 replica,
+			// the controller will delete 4 worker Pods.
+			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+			assert.Nil(t, err, "Fail to reconcile Pods")
+
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: workerSelector,
+				Namespace:     namespaceStr,
+			})
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.Equal(t, tc.desiredReplicas*tc.numOfHosts, len(podList.Items),
+				"Pod list is wrong after reconcile expect %d actual %d", tc.desiredReplicas*tc.numOfHosts, len(podList.Items))
+		})
+	}
+}
+
+func TestReconcile_NumOfHosts(t *testing.T) {
+	setupTest(t)
+
+	// This test makes some assumptions about the testRayCluster object.
+	// (1) 1 workerGroup (2) disable autoscaling
+	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+
+	// Disable autoscaling so that the random Pod deletion is enabled.
+	// Set `Replicas` to 1 and clear `WorkersToDelete`
+	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
+	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
+
+	tests := map[string]struct {
+		replicas   *int32
+		numOfHosts int32
+	}{
+		"NumOfHosts is 1": {
+			// If `NumOfHosts` is 1, the controller will set the desired state of the workerGroup to `Replicas` Pods.
+			replicas:   pointer.Int32(1),
+			numOfHosts: 1,
+		},
+		"NumOfHosts is larger than 1": {
+			// If `NumOfHosts` is larger than 1, the controller will set the desired state of the workerGroup to `NumOfHosts` Pods.
+			replicas:   pointer.Int32(1),
+			numOfHosts: 4,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.WorkerGroupSpecs[0].NumOfHosts = tc.numOfHosts
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			// The fake client will start with 1 head pod and 0 worker pods.
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods[0]).Build()
+			ctx := context.Background()
+
+			// Get the pod list from the fake client.
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, 1, len(podList.Items), "Init pod list len is wrong")
+
+			// Initialize a new RayClusterReconciler.
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+			}
+
+			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+			assert.Nil(t, err, "Fail to reconcile Pods")
+
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: workerSelector,
+				Namespace:     namespaceStr,
+			})
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			if tc.numOfHosts > 1 {
+				assert.Equal(t, int(tc.numOfHosts), len(podList.Items),
+					"Number of worker pods is wrong after reconcile expect %d actual %d", int(tc.numOfHosts), len(podList.Items)-1)
+			} else {
+				assert.Equal(t, int(*tc.replicas), len(podList.Items),
+					"Replica number is wrong after reconcile expect %d actual %d", int(*tc.replicas), len(podList.Items))
+			}
 		})
 	}
 }

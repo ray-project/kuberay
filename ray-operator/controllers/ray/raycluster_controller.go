@@ -706,14 +706,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// Delete unhealthy worker Pods
+		// Delete unhealthy worker Pods.
 		deletedWorkers := make(map[string]struct{})
 		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
 			r.Log.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
-			// TODO (kevin85421): We may need to allow users to configure how many `Failed` or `Succeeded` Pods should be kept for debugging purposes.
 			if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
 				deletedWorkers[workerPod.Name] = deleted
@@ -758,7 +757,10 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				runningPods.Items = append(runningPods.Items, pod)
 			}
 		}
-		diff := workerReplicas - int32(len(runningPods.Items))
+		// A replica can contain multiple hosts, so we need to calculate this based on the number of hosts per replica.
+		numExpectedPods := workerReplicas * worker.NumOfHosts
+		diff := numExpectedPods - int32(len(runningPods.Items))
+
 		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
