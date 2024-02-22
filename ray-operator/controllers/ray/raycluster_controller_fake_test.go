@@ -2430,8 +2430,8 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 				Namespace:     namespaceStr,
 			})
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
-			assert.Equal(t, tc.desiredReplicas*tc.numOfHosts, len(podList.Items)-1,
-				"Pod list is wrong after reconcile expect %d actual %d", tc.desiredReplicas*tc.numOfHosts, len(podList.Items)-1)
+			assert.Equal(t, tc.desiredReplicas*tc.numOfHosts, len(podList.Items),
+				"Pod list is wrong after reconcile expect %d actual %d", tc.desiredReplicas*tc.numOfHosts, len(podList.Items))
 		})
 	}
 }

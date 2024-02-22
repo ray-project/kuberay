@@ -758,9 +758,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			}
 		}
 		// A replica can contain multiple hosts, so we need to calculate this based on the number of hosts per replica.
-		runningReplicas := int32(len(runningPods.Items)) / worker.NumOfHosts
+		numExpectedPods := workerReplicas * worker.NumOfHosts
+		diff := numExpectedPods - int32(len(runningPods.Items))
 
-		diff := workerReplicas - runningReplicas
 		r.Log.Info("reconcilePods", "workerReplicas", workerReplicas, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
@@ -770,12 +770,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			var i int32
 			for i = 0; i < diff; i++ {
 				r.Log.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
-				// create NumOfHosts pods per worker group
-				var j uint32
-				for j = 0; j < uint32(worker.NumOfHosts); j++ {
-					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
-						return err
-					}
+				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
+					return err
 				}
 			}
 		} else if diff == 0 {
@@ -1081,7 +1077,6 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
-
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		r.Log.Error(err, "Failed to set controller reference for raycluster pod")
