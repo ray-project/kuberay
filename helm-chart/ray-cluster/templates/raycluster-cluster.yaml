@@ -52,7 +52,9 @@ spec:
             {{- with .Values.head.volumeMounts -}}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-            {{- toYaml .Values.common.volumeMounts | nindent 12 }}
+            {{- with .Values.common.volumeMounts -}}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             {{- end }}
             {{- if .Values.head.image }}
             image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
