@@ -1,7 +1,0 @@
-[
-  {
-    "op": "replace",
-    "path": "/metadata/namespace",
-    "value": "${KUBERAY_NAMESPACE}"
-  }
-]

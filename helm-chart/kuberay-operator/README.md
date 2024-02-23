@@ -40,7 +40,7 @@ helm version
   * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
-  kubectl create -k "github.com/ray-project/kuberay/manifests/cluster-scope-resources?ref=v1.0.0&timeout=90s"
+  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.0.0&timeout=90s"
 
   # Step 2: Install KubeRay operator only. (for developer)
   helm install kuberay-operator kuberay/kuberay-operator --version 1.0.0 --skip-crds
