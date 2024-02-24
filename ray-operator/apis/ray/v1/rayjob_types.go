@@ -38,8 +38,15 @@ const (
 	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
 	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
 	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
+	JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
 	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
+)
+
+const (
+	JobReasonSubmissionFailed       string = "SubmissionFailed"
+	JobReasonDeadlineExceeded       string = "DeadlineExceeded"
+	JobReasonApplicationLevelFailed string = "ApplicationLevelFailed"
 )
 
 type JobSubmissionMode string
@@ -105,6 +112,7 @@ type RayJobStatus struct {
 	DashboardURL        string              `json:"dashboardURL,omitempty"`
 	JobStatus           JobStatus           `json:"jobStatus,omitempty"`
 	JobDeploymentStatus JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
+	Reason              string              `json:"reason,omitempty"`
 	Message             string              `json:"message,omitempty"`
 	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
 	StartTime *metav1.Time `json:"startTime,omitempty"`

@@ -97,9 +97,11 @@ env_vars:
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
 
-		// And the RayJob deployment status is updated accordingly
+		// Assert that the RayJob deployment status and RayJob reason have been updated accordingly.
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.JobReasonApplicationLevelFailed)))
 
 		// In the lightweight submission mode, the submitter Kubernetes Job should not be created.
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
