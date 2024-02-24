@@ -586,33 +586,6 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
 }
 
-func TestServeServiceNameForRayService(t *testing.T) {
-	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
-	assert.Nil(t, err)
-	if name := ServeServiceNameForRayService(serviceInstance); name != svc.Name {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Name, name)
-	}
-}
-
-func TestServeServiceNameForUserSpecifiedServeService(t *testing.T) {
-	testRayServiceWithServeService := serviceInstance.DeepCopy()
-	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "user-custom-name",
-		},
-	}
-	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithWrongSvc)
-	assert.Nil(t, err)
-
-	name := ServeServiceNameForRayService(testRayServiceWithServeService)
-	if name != svc.Name {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Name, name)
-	}
-	if name != "user-custom-name" {
-		t.Fatalf("Expected `%v` but got `%v`", "user-custom-name", name)
-	}
-}
-
 func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {
 	// Test that the user service type takes priority over the default service type (example: ClusterIP)
 	if svc.Spec.Type != userType {

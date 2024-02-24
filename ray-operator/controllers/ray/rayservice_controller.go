@@ -230,9 +230,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 }
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
-	serveSvc := common.ServeServiceNameForRayService(rayServiceInstance)
 	serveEndPoints := &corev1.Endpoints{}
-	if err := r.Get(ctx, client.ObjectKey{Name: serveSvc, Namespace: rayServiceInstance.Namespace}, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+	if err := r.Get(ctx, common.RayServiceServeServiceNamespacedName(rayServiceInstance), serveEndPoints); err != nil && !errors.IsNotFound(err) {
 		r.Log.Error(err, "Fail to retrieve the Kubernetes Endpoints from the cluster!")
 		return err
 	}
@@ -373,12 +372,12 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	}
 
 	// Get active cluster and pending cluster instances.
-	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
+	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{Name: rayServiceInstance.Status.PendingServiceStatus.RayClusterName, Namespace: rayServiceInstance.Namespace})
+	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -596,7 +595,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	switch clusterAction {
 	case RolloutNew:
 		r.Log.Info("Creating a new pending RayCluster instance.")
-		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
+		pendingRayCluster, err = r.createRayClusterInstance(ctx, rayServiceInstance)
 	case Update:
 		r.Log.Info("Updating the pending RayCluster instance.")
 		if pendingRayCluster, err = r.constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name); err != nil {
@@ -652,13 +651,10 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
 // One important part is that if this method deletes the old RayCluster, it will return instantly. It depends on the controller to call it again to generate the new RayCluster instance.
-func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstanceName string) (*rayv1.RayCluster, error) {
-	r.Log.V(1).Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterInstanceName)
+func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, error) {
+	rayClusterKey := common.RayServicePendingRayClusterNamespacedName(rayServiceInstance)
 
-	rayClusterKey := client.ObjectKey{
-		Namespace: rayServiceInstance.Namespace,
-		Name:      rayClusterInstanceName,
-	}
+	r.Log.V(1).Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterKey.Name)
 
 	rayClusterInstance := &rayv1.RayCluster{}
 
@@ -684,7 +680,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	}
 
 	r.Log.V(1).Info("No pending RayCluster, creating RayCluster.")
-	rayClusterInstance, err = r.constructRayClusterForRayService(rayServiceInstance, rayClusterInstanceName)
+	rayClusterInstance, err = r.constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name)
 	if err != nil {
 		r.Log.Error(err, "unable to construct rayCluster from spec")
 		return nil, err

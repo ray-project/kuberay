@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -209,7 +210,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
 
 			// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
-			namespacedName := getK8sJobNamespacedName(rayJob)
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
 			job := &batchv1.Job{}
 			err := k8sClient.Get(ctx, namespacedName, job)
 			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
@@ -229,7 +230,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 
 			// Update the submitter Kubernetes Job to Complete.
-			namespacedName := getK8sJobNamespacedName(rayJob)
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
 			job := &batchv1.Job{}
 			err := k8sClient.Get(ctx, namespacedName, job)
 			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
@@ -253,7 +254,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)())
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
-			namespacedName := getK8sJobNamespacedName(rayJob)
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
 			job := &batchv1.Job{}
 			Consistently(
 				getResourceFunc(ctx, namespacedName, job),
