@@ -26,6 +26,11 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
 
+	// https://github.com/ray-project/kuberay/pull/1312#issuecomment-1712451301
+	annotation := map[string]string{
+		"nginx.ingress.kubernetes.io/rewrite-target": "/$1\\",
+	}
+
 	// Copy other ingress configurations from cluster annotations to provide a generic way
 	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
 	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
@@ -33,7 +38,6 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	exclude_set := map[string]struct{}{
 		IngressClassAnnotationKey: {},
 	}
-	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
 		if _, ok := exclude_set[key]; !ok {
 			annotation[key] = value
