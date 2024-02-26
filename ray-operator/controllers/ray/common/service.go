@@ -289,20 +289,16 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
 	}
 
-	default_namespace := namespace
-	default_type := corev1.ServiceTypeClusterIP
-	clusterIP := "None"
-
 	headlessService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: default_namespace,
+			Namespace: namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: clusterIP,
+			ClusterIP: "None",
 			Selector:  selectorLabels,
-			Type:      default_type,
+			Type:      corev1.ServiceTypeClusterIP,
 		},
 	}
 
