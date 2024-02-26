@@ -20,7 +20,7 @@ const (
 	RayNodeLabelKey                          = "ray.io/is-ray-node"
 	RayIDLabelKey                            = "ray.io/identifier"
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
-	RayClusterHeadlessServiceLabelKey        = "ray.io/tpu-worker-svc"
+	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 
