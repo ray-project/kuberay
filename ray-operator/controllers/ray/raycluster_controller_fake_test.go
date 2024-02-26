@@ -1095,6 +1095,7 @@ func TestReconcileHeadlessService(t *testing.T) {
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
 	assert.Equal(t, expectedName, serviceList.Items[0].ObjectMeta.Name, "Headless Service name is wrong, expected %s actual %s", expectedName, serviceList.Items[0].ObjectMeta.Name)
+	assert.Equal(t, "None", serviceList.Items[0].Spec.ClusterIP, "Created service is not a headless service, ClusterIP is not None")
 
 	// Case 2: Headless service already exists, nothing should be done
 	err = r.reconcileHeadlessService(ctx, cluster)
