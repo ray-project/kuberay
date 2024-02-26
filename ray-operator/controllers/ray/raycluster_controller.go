@@ -606,7 +606,6 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 		}
 		// Check if there's an existing headless service in the cluster.
 		if len(services.Items) != 0 {
-			r.Log.Info("reconcileHeadlessService", "Headless service already created")
 			// service exists, do nothing
 			return nil
 		} else {
@@ -620,7 +619,6 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 			if err := r.createService(ctx, headlessSvc, instance); err != nil {
 				return err
 			}
-			r.Log.Info("reconcileHeadlessService", "Headless service created")
 		}
 	}
 
