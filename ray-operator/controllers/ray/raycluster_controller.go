@@ -611,7 +611,6 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 		} else {
 			// Create headless tpu worker service if there's no existing one in the cluster.
 			headlessSvc, err := common.BuildHeadlessServiceForRayCluster(*instance)
-
 			if err != nil {
 				return err
 			}
