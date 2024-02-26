@@ -599,7 +599,7 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 
 	if isMultiHost {
 		services := corev1.ServiceList{}
-		filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode)}
+		filterLabels := client.MatchingLabels{utils.RayClusterHeadlessServiceLabelKey: instance.Name}
 
 		if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 			return err
