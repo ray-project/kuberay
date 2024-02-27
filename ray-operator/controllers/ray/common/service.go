@@ -278,7 +278,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 
 // BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
 func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
-	name := utils.GenerateHeadlessServiceName(rayCluster.Name)
+	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	namespace := rayCluster.Namespace
 
 	labels := map[string]string{

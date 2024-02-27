@@ -25,11 +25,10 @@ import (
 )
 
 const (
-	RayClusterSuffix      = "-raycluster-"
-	ServeName             = "serve"
-	HeadlessServiceSuffix = "headless-worker-svc"
-	ClusterDomainEnvKey   = "CLUSTER_DOMAIN"
-	DefaultDomainName     = "cluster.local"
+	RayClusterSuffix    = "-raycluster-"
+	ServeName           = "serve"
+	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
+	DefaultDomainName   = "cluster.local"
 )
 
 // TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
@@ -215,12 +214,6 @@ func GenerateServeServiceName(serviceName string) string {
 // GenerateServeServiceLabel generates label value for serve service selector.
 func GenerateServeServiceLabel(serviceName string) string {
 	return fmt.Sprintf("%s-%s", serviceName, ServeName)
-}
-
-// GenerateHeadlessServiceName generates name for headless service for multi-host worker groups.
-// The name will be of the form "${RayCluster_Name}-headless-worker-svc".
-func GenerateHeadlessServiceName(serviceName string) string {
-	return CheckName(fmt.Sprintf("%s-%s", serviceName, HeadlessServiceSuffix))
 }
 
 // GenerateIngressName generates an ingress name from cluster name

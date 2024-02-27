@@ -65,24 +65,6 @@ func TestRayClusterServeServiceNamespacedName(t *testing.T) {
 	}
 }
 
-// TestRayClusterHeadlessServiceNamespacedName tests the function for generating a NamespacedName for a RayCluster's headless service
-func TestRayClusterHeadlessServiceNamespacedName(t *testing.T) {
-	instance := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "raycluster-example",
-			Namespace: "default",
-		},
-	}
-	expected := types.NamespacedName{
-		Namespace: "default",
-		Name:      utils.GenerateHeadlessServiceName(instance.Name),
-	}
-	result := RayClusterHeadlessServiceNamespacedName(instance)
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("Expected %v, got %v", expected, result)
-	}
-}
-
 // TestRayClusterAutoscalerRoleNamespacedName tests the function for generating a NamespacedName for a RayCluster's autoscaler role
 func TestRayClusterAutoscalerRoleNamespacedName(t *testing.T) {
 	instance := &rayv1.RayCluster{
