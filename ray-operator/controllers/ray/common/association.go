@@ -13,6 +13,13 @@ func RayClusterServeServiceNamespacedName(instance *rayv1.RayCluster) types.Name
 	}
 }
 
+func RayClusterHeadlessServiceNamespacedName(instance *rayv1.RayCluster) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: instance.Namespace,
+		Name:      utils.GenerateHeadlessServiceName(instance.Name),
+	}
+}
+
 func RayClusterAutoscalerRoleNamespacedName(instance *rayv1.RayCluster) types.NamespacedName {
 	return types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
 }
