@@ -199,15 +199,16 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 		},
 		ServiceStatus: rayv1.Restarting,
 	}
+	ctx := context.Background()
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.ServiceStatus = rayv1.WaitForServeDeploymentReady
-	assert.True(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
+	assert.True(t, r.inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus
 	newStatus = oldStatus.DeepCopy()
-	assert.False(t, r.inconsistentRayServiceStatuses(oldStatus, *newStatus))
+	assert.False(t, r.inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 }
 
 func TestInconsistentRayServiceStatus(t *testing.T) {
@@ -245,6 +246,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	r := &RayServiceReconciler{
 		Log: ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
+	ctx := context.Background()
 
 	// Test 1: Only HealthLastUpdateTime is updated.
 	newStatus := oldStatus.DeepCopy()
@@ -252,7 +254,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 		newStatus.Applications[appName] = application
 	}
-	assert.False(t, r.inconsistentRayServiceStatus(oldStatus, *newStatus))
+	assert.False(t, r.inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -674,6 +676,7 @@ applications:
 	num_cpus: 0.1`,
 		},
 	}
+	ctx := context.Background()
 
 	// Test 1: The RayCluster is new, and this is the first reconciliation after the RayCluster becomes ready.
 	// No Serve application has been created yet, so the RayService's serve configuration has not been cached in
@@ -681,14 +684,14 @@ applications:
 	cacheKey := r.generateConfigKey(&rayService, cluster.Name)
 	_, exist := r.ServeConfigs.Get(cacheKey)
 	assert.False(t, exist)
-	shouldCreate := r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &rayv1.RayServiceStatus{})
+	shouldCreate := r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 2: The RayCluster is not new, but the head Pod without GCS FT-enabled crashes and restarts.
 	// Hence, the RayService's Serve application status is empty, but the KubeRay operator has cached the Serve
 	// application's configuration.
 	r.ServeConfigs.Set(cacheKey, rayService.Spec.ServeConfigV2) // Simulate the Serve application's configuration has been cached.
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &rayv1.RayServiceStatus{})
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 3: The Serve application has been created, and the RayService's status has been updated.
@@ -701,7 +704,7 @@ applications:
 			},
 		},
 	}
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &serveStatus)
 	assert.False(t, shouldCreate)
 
 	// Test 4: The Serve application has been created, but the Serve config has been updated.
@@ -710,7 +713,7 @@ applications:
 applications:
 - name: new_app_name
   import_path: fruit.deployment_graph`
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(&rayService, &cluster, &serveStatus)
+	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &serveStatus)
 	assert.True(t, shouldCreate)
 }
 
