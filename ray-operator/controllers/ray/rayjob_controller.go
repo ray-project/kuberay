@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -193,7 +192,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// we don't transition the status to `Complete` based on the number of failed requests. Instead, users can use the
 			// `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight mode is not stuck in the `Running` status
 			// indefinitely.
-			namespacedName := getK8sJobNamespacedName(rayJobInstance)
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 				r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -335,7 +334,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
 func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
 	job := &batchv1.Job{}
-	namespacedName := getK8sJobNamespacedName(rayJobInstance)
+	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
 			submitterTemplate, err := r.getSubmitterTemplate(rayJobInstance, rayClusterInstance)
@@ -450,7 +449,7 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 	// and its Pods when suspending. A new submitter Kubernetes Job must be created to resubmit the
 	// Ray job if the RayJob is resumed.
 	job := &batchv1.Job{}
-	namespacedName := getK8sJobNamespacedName(rayJobInstance)
+	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
 			isJobDeleted = true
@@ -477,11 +476,7 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 
 // deleteClusterResources deletes the RayCluster associated with the RayJob to release the compute resources.
 func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	namespace := rayJobInstance.Namespace
-	clusterIdentifier := types.NamespacedName{
-		Name:      rayJobInstance.Status.RayClusterName,
-		Namespace: namespace,
-	}
+	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJobInstance)
 
 	var isClusterDeleted bool
 	cluster := rayv1.RayCluster{}
@@ -585,24 +580,20 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 }
 
 func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, rayJobInstance *rayv1.RayJob) (*rayv1.RayCluster, error) {
-	rayClusterInstanceName := rayJobInstance.Status.RayClusterName
-	r.Log.Info("try to find existing RayCluster instance", "name", rayClusterInstanceName)
-	rayClusterNamespacedName := types.NamespacedName{
-		Namespace: rayJobInstance.Namespace,
-		Name:      rayClusterInstanceName,
-	}
+	rayClusterNamespacedName := common.RayJobRayClusterNamespacedName(rayJobInstance)
+	r.Log.Info("try to find existing RayCluster instance", "name", rayClusterNamespacedName.Name)
 
 	rayClusterInstance := &rayv1.RayCluster{}
 	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 			if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterInstanceName, err)
+				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterNamespacedName.Name, err)
 				return nil, err
 			}
 
 			r.Log.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
-			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterInstanceName)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				r.Log.Error(err, "unable to construct a new RayCluster")
 				return nil, err
@@ -712,12 +703,4 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("activeDeadlineSeconds must be a positive integer")
 	}
 	return nil
-}
-
-// getK8sJobNamespacedName is the only place to associate the RayJob with the submitter Kubernetes Job.
-func getK8sJobNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: rayJob.Namespace,
-		Name:      rayJob.Name,
-	}
 }

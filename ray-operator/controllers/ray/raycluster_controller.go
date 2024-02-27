@@ -556,7 +556,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
 	svc := &corev1.Service{}
-	err := r.Get(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(instance.Name), Namespace: instance.Namespace}, svc)
+	err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), svc)
 	if err == nil {
 		// service exists, do nothing
 		return nil
@@ -1330,7 +1330,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 	}
 
 	serviceAccount := &corev1.ServiceAccount{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetHeadGroupServiceAccountName(instance)}
+	namespacedName := common.RayClusterAutoscalerServiceAccountNamespacedName(instance)
 
 	if err := r.Get(ctx, namespacedName, serviceAccount); err != nil {
 		if !errors.IsNotFound(err) {
@@ -1385,7 +1385,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 	}
 
 	role := &rbacv1.Role{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	namespacedName := common.RayClusterAutoscalerRoleNamespacedName(instance)
 	if err := r.Get(ctx, namespacedName, role); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -1426,7 +1426,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 	}
 
 	roleBinding := &rbacv1.RoleBinding{}
-	namespacedName := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+	namespacedName := common.RayClusterAutoscalerRoleBindingNamespacedName(instance)
 	if err := r.Get(ctx, namespacedName, roleBinding); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
