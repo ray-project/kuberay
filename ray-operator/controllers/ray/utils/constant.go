@@ -20,6 +20,7 @@ const (
 	RayNodeLabelKey                          = "ray.io/is-ray-node"
 	RayIDLabelKey                            = "ray.io/identifier"
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
+	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 
@@ -83,6 +84,10 @@ const (
 
 	// The default name for kuberay operator
 	ComponentName = "kuberay-operator"
+
+	// The default suffix for Headless Service for multi-host worker groups.
+	// The full name will be of the form "${RayCluster_Name}-headless-worker-svc".
+	HeadlessServiceSuffix = "headless-worker-svc"
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
