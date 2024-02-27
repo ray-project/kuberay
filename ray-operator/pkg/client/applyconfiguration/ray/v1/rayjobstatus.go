@@ -15,7 +15,7 @@ type RayJobStatusApplyConfiguration struct {
 	DashboardURL        *string                             `json:"dashboardURL,omitempty"`
 	JobStatus           *v1.JobStatus                       `json:"jobStatus,omitempty"`
 	JobDeploymentStatus *v1.JobDeploymentStatus             `json:"jobDeploymentStatus,omitempty"`
-	Reason              *string                             `json:"reason,omitempty"`
+	Reason              *v1.JobFailedReason                 `json:"reason,omitempty"`
 	Message             *string                             `json:"message,omitempty"`
 	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
 	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
@@ -72,7 +72,7 @@ func (b *RayJobStatusApplyConfiguration) WithJobDeploymentStatus(value v1.JobDep
 // WithReason sets the Reason field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Reason field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithReason(value string) *RayJobStatusApplyConfiguration {
+func (b *RayJobStatusApplyConfiguration) WithReason(value v1.JobFailedReason) *RayJobStatusApplyConfiguration {
 	b.Reason = &value
 	return b
 }

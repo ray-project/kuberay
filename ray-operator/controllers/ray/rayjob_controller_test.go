@@ -301,7 +301,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
 				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
-			Expect(rayJob.Status.Reason).To(Equal(rayv1.JobReasonDeadlineExceeded))
+			Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
 		})
 	})
 })

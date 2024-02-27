@@ -28,7 +28,7 @@ func RayJobDeploymentStatus(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
 	return job.Status.JobDeploymentStatus
 }
 
-func RayJobReason(job *rayv1.RayJob) string {
+func RayJobReason(job *rayv1.RayJob) rayv1.JobFailedReason {
 	return job.Status.Reason
 }
 

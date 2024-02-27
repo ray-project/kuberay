@@ -101,7 +101,7 @@ env_vars:
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.JobReasonApplicationLevelFailed)))
+			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 
 		// In the lightweight submission mode, the submitter Kubernetes Job should not be created.
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())

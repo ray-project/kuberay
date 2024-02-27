@@ -108,7 +108,7 @@ env_vars:
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.JobReasonApplicationLevelFailed)))
+			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 
 		// TODO (kevin85421): Ensure the RayCluster and Kubernetes Job are not deleted because `ShutdownAfterJobFinishes` is false.
 
@@ -152,7 +152,7 @@ env_vars:
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.JobReasonSubmissionFailed)))
+			To(WithTransform(RayJobReason, Equal(rayv1.SubmissionFailed)))
 
 		// Refresh the RayJob status
 		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
@@ -235,6 +235,6 @@ env_vars:
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.JobReasonDeadlineExceeded)))
+			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
 	})
 }

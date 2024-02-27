@@ -183,11 +183,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		job := &batchv1.Job{}
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-			// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete`. This is because,
-			// beyond this point, it becomes impossible for the submitter to submit any further Ray jobs. For light-weight mode,
-			// we don't transition the status to `Complete` based on the number of failed requests. Instead, users can use the
-			// `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight mode is not stuck in the `Running` status
-			// indefinitely.
+			// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
+			// This is because, beyond this point, it becomes impossible for the submitter to submit any further Ray jobs.
+			// For light-weight mode, we don't transition the status to `Complete` or `Failed` based on the number of failed
+			// requests. Instead, users can use the `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight
+			// mode is not stuck in the `Running` status indefinitely.
 			namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 				r.Log.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
@@ -228,7 +228,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
-		reason := ""
+		reason := rayv1.JobFailedReason("")
 		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
@@ -241,7 +241,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 			if jobInfo.JobStatus == rayv1.JobStatusFailed {
 				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				reason = rayv1.JobReasonApplicationLevelFailed
+				reason = rayv1.AppFailed
 			}
 		}
 
@@ -670,13 +670,13 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
 			r.Log.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.", "RayJob", rayJob.Name, "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			// The Submitter Job needs to wait for the user code to finish and retrieve its logs.
+			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
 			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
 			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
 			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.JobReasonApplicationLevelFailed
+				rayJob.Status.Reason = rayv1.AppFailed
 			} else {
-				rayJob.Status.Reason = rayv1.JobReasonSubmissionFailed
+				rayJob.Status.Reason = rayv1.SubmissionFailed
 				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", cond.Reason, cond.Message)
 			}
 			return true
@@ -691,7 +691,7 @@ func (r *RayJobReconciler) checkActiveDeadlineAndUpdateStatusIfNeeded(ctx contex
 	}
 	r.Log.Info("The RayJob has passed the activeDeadlineSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "ActiveDeadlineSeconds", *rayJob.Spec.ActiveDeadlineSeconds)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-	rayJob.Status.Reason = rayv1.JobReasonDeadlineExceeded
+	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
 }

@@ -43,10 +43,13 @@ const (
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 )
 
+// JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
+type JobFailedReason string
+
 const (
-	JobReasonSubmissionFailed       string = "SubmissionFailed"
-	JobReasonDeadlineExceeded       string = "DeadlineExceeded"
-	JobReasonApplicationLevelFailed string = "ApplicationLevelFailed"
+	SubmissionFailed JobFailedReason = "SubmissionFailed"
+	DeadlineExceeded JobFailedReason = "DeadlineExceeded"
+	AppFailed        JobFailedReason = "AppFailed"
 )
 
 type JobSubmissionMode string
@@ -112,7 +115,7 @@ type RayJobStatus struct {
 	DashboardURL        string              `json:"dashboardURL,omitempty"`
 	JobStatus           JobStatus           `json:"jobStatus,omitempty"`
 	JobDeploymentStatus JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
-	Reason              string              `json:"reason,omitempty"`
+	Reason              JobFailedReason     `json:"reason,omitempty"`
 	Message             string              `json:"message,omitempty"`
 	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
