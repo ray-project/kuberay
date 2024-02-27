@@ -174,7 +174,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// No match found
 	if errors.IsNotFound(err) {
-		logger.Info("Read request instance not found error!", "name", request.NamespacedName)
+		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -194,7 +194,7 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, namespace stri
 		}
 	}
 	if active > 0 {
-		logger.Info(fmt.Sprintf("Deleting all pods with labels %v in %q namespace.", filterLabels, namespace))
+		logger.Info("Deleting all Pods with labels", "filterLabels", filterLabels, "Number of active Pods", active)
 		return active, pods, r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(namespace), filterLabels)
 	}
 	return active, pods, nil
