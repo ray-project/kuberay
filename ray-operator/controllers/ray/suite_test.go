@@ -104,17 +104,17 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			},
 		},
 	}
-	err = NewReconciler(mgr, options).SetupWithManager(mgr, 1)
+	err = NewReconciler(ctx, mgr, options).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
-	err = NewRayServiceReconciler(mgr, func() utils.RayDashboardClientInterface {
+	err = NewRayServiceReconciler(ctx, mgr, func() utils.RayDashboardClientInterface {
 		return fakeRayDashboardClient
 	}, func() utils.RayHttpProxyClientInterface {
 		return fakeRayHttpProxyClient
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
-	err = NewRayJobReconciler(mgr, func() utils.RayDashboardClientInterface {
+	err = NewRayJobReconciler(ctx, mgr, func() utils.RayDashboardClientInterface {
 		return fakeRayDashboardClient
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
