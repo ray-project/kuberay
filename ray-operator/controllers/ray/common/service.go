@@ -305,39 +305,6 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 	return headlessService, nil
 }
 
-// BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
-func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
-	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
-	namespace := rayCluster.Namespace
-
-	labels := map[string]string{
-		utils.RayClusterHeadlessServiceLabelKey: rayCluster.Name,
-	}
-	selectorLabels := map[string]string{
-		utils.RayClusterLabelKey:  rayCluster.Name,
-		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
-	}
-
-	default_namespace := namespace
-	default_type := corev1.ServiceTypeClusterIP
-	clusterIP := "None"
-
-	headlessService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: default_namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: clusterIP,
-			Selector:  selectorLabels,
-			Type:      default_type,
-		},
-	}
-
-	return headlessService, nil
-}
-
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, default_type corev1.ServiceType) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type
