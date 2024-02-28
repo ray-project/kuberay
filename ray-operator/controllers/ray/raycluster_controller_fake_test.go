@@ -1050,6 +1050,67 @@ func TestReconcileHeadService(t *testing.T) {
 	assert.NotNil(t, err, "Reconciler should report an error when there are two head services")
 }
 
+func TestReconcileHeadlessService(t *testing.T) {
+	setupTest(t)
+
+	// Specify a multi-host worker group
+	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
+
+	// Mock data
+	cluster := testRayCluster.DeepCopy()
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{cluster}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	// Initialize RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
+	}
+
+	headlessServiceSelector := labels.SelectorFromSet(map[string]string{
+		utils.RayClusterHeadlessServiceLabelKey: cluster.Name,
+	})
+
+	// Case 1: Headless service does not exist.
+	err := r.reconcileHeadlessService(ctx, cluster)
+	assert.Nil(t, err, "Fail to reconcile head service")
+
+	// One headless service should be created.
+	serviceList := corev1.ServiceList{}
+	err = fakeClient.List(ctx, &serviceList, &client.ListOptions{
+		LabelSelector: headlessServiceSelector,
+		Namespace:     cluster.Namespace,
+	})
+	expectedName := cluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
+	assert.Equal(t, expectedName, serviceList.Items[0].ObjectMeta.Name, "Headless Service name is wrong, expected %s actual %s", expectedName, serviceList.Items[0].ObjectMeta.Name)
+	assert.Equal(t, "None", serviceList.Items[0].Spec.ClusterIP, "Created service is not a headless service, ClusterIP is not None")
+
+	// Case 2: Headless service already exists, nothing should be done
+	err = r.reconcileHeadlessService(ctx, cluster)
+	assert.Nil(t, err, "Fail to reconcile head service")
+
+	// The namespace should still have only one headless service.
+	serviceList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &serviceList, &client.ListOptions{
+		LabelSelector: headlessServiceSelector,
+		Namespace:     cluster.Namespace,
+	})
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
+}
+
 func contains(slice []string, item string) bool {
 	set := make(map[string]struct{}, len(slice))
 	for _, s := range slice {

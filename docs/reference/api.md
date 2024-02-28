@@ -58,6 +58,17 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s depoyments, statefulsets, etc. |
 
 
+#### JobFailedReason
+
+_Underlying type:_ _string_
+
+JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
+
+_Appears in:_
+- [RayJobStatus](#rayjobstatus)
+
+
+
 #### JobSubmissionMode
 
 _Underlying type:_ _string_

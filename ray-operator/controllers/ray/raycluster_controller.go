@@ -342,6 +342,12 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
+	if err := r.reconcileHeadlessService(ctx, instance); err != nil {
+		if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
+			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+		}
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
 	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
 		if err := r.reconcileServeService(ctx, instance); err != nil {
@@ -583,6 +589,44 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 	} else {
 		return err
 	}
+}
+
+// Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
+func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, instance *rayv1.RayCluster) error {
+	// Check if there are worker groups with NumOfHosts > 1 in the cluster
+	isMultiHost := false
+	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		if workerGroup.NumOfHosts > 1 {
+			isMultiHost = true
+			break
+		}
+	}
+
+	if isMultiHost {
+		services := corev1.ServiceList{}
+		filterLabels := client.MatchingLabels{utils.RayClusterHeadlessServiceLabelKey: instance.Name}
+
+		if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+			return err
+		}
+		// Check if there's an existing headless service in the cluster.
+		if len(services.Items) != 0 {
+			// service exists, do nothing
+			return nil
+		} else {
+			// Create headless tpu worker service if there's no existing one in the cluster.
+			headlessSvc, err := common.BuildHeadlessServiceForRayCluster(*instance)
+			if err != nil {
+				return err
+			}
+
+			if err := r.createService(ctx, headlessSvc, instance); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {

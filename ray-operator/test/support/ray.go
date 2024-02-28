@@ -28,6 +28,10 @@ func RayJobDeploymentStatus(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
 	return job.Status.JobDeploymentStatus
 }
 
+func RayJobReason(job *rayv1.RayJob) rayv1.JobFailedReason {
+	return job.Status.Reason
+}
+
 func GetRayJobId(t Test, namespace, name string) string {
 	t.T().Helper()
 	job := RayJob(t, namespace, name)(t)
