@@ -300,7 +300,8 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			// RayJob transitions to Complete.
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
-				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+			Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
 		})
 	})
 })

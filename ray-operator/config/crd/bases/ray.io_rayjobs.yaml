@@ -10426,6 +10426,8 @@ spec:
                   state:
                     type: string
                 type: object
+              reason:
+                type: string
               startTime:
                 format: date-time
                 type: string
