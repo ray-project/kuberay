@@ -443,7 +443,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 			if !exists {
 				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
 				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
-				logger.V(1).Info(fmt.Sprintf("Scheduled dangling RayCluster "+
+				logger.Info(fmt.Sprintf("Scheduled dangling RayCluster "+
 					"%s for deletion at %s", rayClusterInstance.Name, deletionTimestamp))
 			} else {
 				reasonForDeletion := ""
@@ -454,7 +454,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 				}
 
 				if reasonForDeletion != "" {
-					logger.V(1).Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
+					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 						logger.Error(err, "Fail to delete RayCluster "+rayClusterInstance.Name)
 						return err
@@ -499,7 +499,7 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(ctx context.Context, rayS
 			// Skip configs owned by other RayService Instance.
 			continue
 		}
-		logger.V(1).Info("cleanUpServeConfigCache", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
+		logger.Info("cleanUpServeConfigCache", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
 		r.ServeConfigs.Remove(key)
 	}
 }
@@ -623,9 +623,9 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 // updateRayClusterInstance updates the RayCluster instance.
 func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(1).Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
+	logger.Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
 	// Printing the whole RayCluster is too noisy. Only print the spec.
-	logger.V(1).Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
+	logger.Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
 
 	// Fetch the current state of the RayCluster
 	currentRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{
@@ -655,7 +655,7 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 		return err
 	}
 
-	logger.V(1).Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
+	logger.Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
 	return nil
 }
 
@@ -665,7 +665,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterKey := common.RayServicePendingRayClusterNamespacedName(rayServiceInstance)
 
-	logger.V(1).Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterKey.Name)
+	logger.Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterKey.Name)
 
 	rayClusterInstance := &rayv1.RayCluster{}
 
@@ -675,7 +675,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 	// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
 	if err == nil {
-		logger.V(1).Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String(), "rayClusterInstance.Spec", rayClusterInstance.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
+		logger.Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String(), "rayClusterInstance.Spec", rayClusterInstance.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
 		delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground))
 		if delErr == nil {
 			// Go to next loop and check if the ray cluster is deleted.
@@ -690,7 +690,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 		// if error is `not found`, then continue.
 	}
 
-	logger.V(1).Info("No pending RayCluster, creating RayCluster.")
+	logger.Info("No pending RayCluster, creating RayCluster.")
 	rayClusterInstance, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, rayClusterKey.Name)
 	if err != nil {
 		logger.Error(err, "unable to construct rayCluster from spec")
@@ -700,7 +700,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 		logger.Error(err, "unable to create rayCluster for rayService", "rayCluster", rayClusterInstance)
 		return nil, err
 	}
-	logger.V(1).Info("created rayCluster for rayService", "rayCluster", rayClusterInstance)
+	logger.Info("created rayCluster for rayService", "rayCluster", rayClusterInstance)
 
 	return rayClusterInstance, nil
 }
@@ -756,7 +756,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 	cachedServeConfigV2, exist := r.ServeConfigs.Get(cacheKey)
 
 	if !exist {
-		logger.V(1).Info("shouldUpdate",
+		logger.Info("shouldUpdate",
 			"shouldUpdateServe",
 			true,
 			"reason",
@@ -771,7 +771,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
 	if len(serveStatus.Applications) == 0 {
-		logger.V(1).Info("shouldUpdate", "should create Serve applications", true,
+		logger.Info("shouldUpdate", "should create Serve applications", true,
 			"reason",
 			fmt.Sprintf(
 				"No Serve application found in RayCluster %s, need to create serve applications. "+
@@ -790,14 +790,14 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 		shouldUpdate = true
 		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
 	}
-	logger.V(1).Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
+	logger.Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 
 	return shouldUpdate
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(1).Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
+	logger.Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
 	serveConfig := make(map[string]interface{})
 	if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
@@ -808,7 +808,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	if err != nil {
 		return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
 	}
-	logger.V(1).Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
+	logger.Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
 	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
 		err = fmt.Errorf(
 			"Fail to create / update Serve applications. If you observe this error consistently, "+
@@ -820,7 +820,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 	cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
 	r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
-	logger.V(1).Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
+	logger.Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
 	return nil
 }
 
@@ -842,7 +842,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		return false, err
 	}
 
-	logger.V(1).Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
+	logger.Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isReady := true
 	timeNow := metav1.Now()
@@ -906,7 +906,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 		isReady = false
 	}
 	rayServiceServeStatus.Applications = newApplications
-	logger.V(1).Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
+	logger.Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
 	return isReady, nil
 }
 
@@ -922,7 +922,7 @@ func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(ctx context.C
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Generate RayCluster name for pending cluster.
-	logger.V(1).Info("Current cluster is unhealthy, prepare to restart.", "Status", rayServiceInstance.Status)
+	logger.Info("Current cluster is unhealthy, prepare to restart.", "Status", rayServiceInstance.Status)
 	rayServiceInstance.Status.ServiceStatus = rayv1.Restarting
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 		RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
@@ -931,7 +931,7 @@ func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(ctx context.C
 
 func (r *RayServiceReconciler) updateRayClusterInfo(ctx context.Context, rayServiceInstance *rayv1.RayService, healthyClusterName string) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(1).Info("updateRayClusterInfo", "ActiveRayClusterName", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, "healthyClusterName", healthyClusterName)
+	logger.Info("updateRayClusterInfo", "ActiveRayClusterName", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, "healthyClusterName", healthyClusterName)
 	if rayServiceInstance.Status.ActiveServiceStatus.RayClusterName != healthyClusterName {
 		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
