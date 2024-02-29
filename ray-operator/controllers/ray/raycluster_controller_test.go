@@ -563,6 +563,44 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*2, time.Millisecond*200).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
+
+	Describe("RayCluster with PodTemplate referencing a different namespace", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-podtemplate-namespace", namespace)
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
+		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+
+		It("Create a RayCluster with PodTemplate referencing a different namespace.", func() {
+			rayCluster.Spec.HeadGroupSpec.Template.ObjectMeta.Namespace = "not-default"
+			rayCluster.Spec.WorkerGroupSpecs[0].Template.ObjectMeta.Namespace = "not-default"
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check workers are in the same namespace as RayCluster", func() {
+			numWorkerPods := 3
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("Create a head Pod is in the same namespace as RayCluster", func() {
+			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
+			listOptions := []client.ListOption{
+				client.InNamespace(namespace),
+				headFilterLabels,
+			}
+			err := k8sClient.List(ctx, &headPods, listOptions...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+		})
+	})
 })
 
 func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
