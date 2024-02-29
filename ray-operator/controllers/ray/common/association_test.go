@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestRayServiceServeServiceNamespacedName(t *testing.T) {
@@ -114,6 +115,35 @@ func TestRayClusterAutoscalerServiceAccountNamespacedName(t *testing.T) {
 		Name:      utils.GetHeadGroupServiceAccountName(instance),
 	}
 	result := RayClusterAutoscalerServiceAccountNamespacedName(instance)
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
+func TestRayClusterHeadlessServiceListOptions(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-headless",
+			Namespace: "test-ns",
+		},
+	}
+	headlessSvc, err := BuildHeadlessServiceForRayCluster(*instance)
+	assert.Nil(t, err)
+
+	rayClusterName := ""
+	for k, v := range headlessSvc.Labels {
+		if k == utils.RayClusterHeadlessServiceLabelKey {
+			rayClusterName = v
+			break
+		}
+	}
+	assert.Equal(t, rayClusterName, instance.Name)
+
+	expected := []client.ListOption{
+		client.InNamespace(headlessSvc.Namespace),
+		client.MatchingLabels(map[string]string{utils.RayClusterHeadlessServiceLabelKey: rayClusterName}),
+	}
+	result := RayClusterHeadlessServiceListOptions(instance)
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Expected %v, got %v", expected, result)
 	}
