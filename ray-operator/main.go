@@ -215,11 +215,12 @@ func main() {
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
 	}
-	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
+	ctx := ctrl.SetupSignalHandler()
+	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
@@ -232,7 +233,7 @@ func main() {
 	exitOnError(mgr.AddReadyzCheck("readyz", healthz.Ping), "unable to set up ready check")
 
 	setupLog.Info("starting manager")
-	exitOnError(mgr.Start(ctrl.SetupSignalHandler()), "problem running manager")
+	exitOnError(mgr.Start(ctx), "problem running manager")
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {

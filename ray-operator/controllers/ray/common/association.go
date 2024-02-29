@@ -4,6 +4,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func RayClusterServeServiceNamespacedName(instance *rayv1.RayCluster) types.NamespacedName {
@@ -23,6 +24,13 @@ func RayClusterAutoscalerRoleBindingNamespacedName(instance *rayv1.RayCluster) t
 
 func RayClusterAutoscalerServiceAccountNamespacedName(instance *rayv1.RayCluster) types.NamespacedName {
 	return types.NamespacedName{Namespace: instance.Namespace, Name: utils.GetHeadGroupServiceAccountName(instance)}
+}
+
+func RayClusterHeadlessServiceListOptions(instance *rayv1.RayCluster) []client.ListOption {
+	return []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{utils.RayClusterHeadlessServiceLabelKey: instance.Name}),
+	}
 }
 
 func RayServiceServeServiceNamespacedName(rayService *rayv1.RayService) types.NamespacedName {

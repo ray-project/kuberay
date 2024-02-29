@@ -152,26 +152,27 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	r := &RayJobReconciler{
 		Log: ctrl.Log.WithName("controllers").WithName("RayJob"),
 	}
+	ctx := context.Background()
 
 	// Test 1: User provided template with command
-	submitterTemplate, err := r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err := r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 
 	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
@@ -179,7 +180,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.Equal(t, "1", envVar.Value)
 
 	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
-	submitterTemplate, err = r.getSubmitterTemplate(rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 
 	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
