@@ -599,9 +599,9 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 
 	if isMultiHost {
 		services := corev1.ServiceList{}
-		filterLabels := client.MatchingLabels{utils.RayClusterHeadlessServiceLabelKey: instance.Name}
+		options := common.RayClusterHeadlessServiceListOptions(instance)
 
-		if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+		if err := r.List(ctx, &services, options...); err != nil {
 			return err
 		}
 		// Check if there's an existing headless service in the cluster.
