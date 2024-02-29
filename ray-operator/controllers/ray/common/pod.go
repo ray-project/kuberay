@@ -89,16 +89,14 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
-	log := ctrl.LoggerFrom(ctx)
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
 	podTemplate.GenerateName = podName
-	if podTemplate.ObjectMeta.Namespace == "" {
-		podTemplate.ObjectMeta.Namespace = instance.Namespace
-		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
-	}
+	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
+	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
+	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
@@ -154,13 +152,11 @@ func getEnableProbesInjection() bool {
 
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
-	log := ctrl.LoggerFrom(ctx)
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
-	if podTemplate.ObjectMeta.Namespace == "" {
-		podTemplate.ObjectMeta.Namespace = instance.Namespace
-		log.Info("Setting pod namespaces", "namespace", instance.Namespace)
-	}
+	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
+	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
+	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
 	// The Ray worker should only start once the GCS server is ready.
 	// only inject init container only when ENABLE_INIT_CONTAINER_INJECTION is true
