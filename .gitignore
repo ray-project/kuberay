@@ -50,3 +50,5 @@
 
 # Any file with a .log extension
 **/*.log
+
+**/_output/
