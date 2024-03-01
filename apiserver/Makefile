@@ -118,7 +118,7 @@ load-image: ## Load the api server image to the kind cluster created with create
 
 .PHONY: operator-image
 operator-image: ## Build the operator image to be loaded in your kind cluster.
-	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
+	cd ../ray-operator && $(MAKE) docker-image -e IMG=quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
@@ -129,7 +129,7 @@ deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~
 # Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
 # If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
-	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
+	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.rep=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
 
 .PHONY: undeploy-operator
 undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified in ~/.kube/config.
