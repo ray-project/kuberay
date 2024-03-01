@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -63,7 +62,6 @@ func TestCreateK8sJobIfNeed(t *testing.T) {
 
 	rayJobReconciler := &RayJobReconciler{
 		Client:   fakeClient,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayJob"),
 		Scheme:   newScheme,
 		Recorder: &record.FakeRecorder{},
 	}
@@ -149,9 +147,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 	}
 
-	r := &RayJobReconciler{
-		Log: ctrl.Log.WithName("controllers").WithName("RayJob"),
-	}
+	r := &RayJobReconciler{}
 	ctx := context.Background()
 
 	// Test 1: User provided template with command
@@ -248,7 +244,6 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 			shouldUpdate := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
 			assert.Equal(t, tc.expectedShouldUpdate, shouldUpdate)
@@ -316,7 +311,6 @@ func TestUpdateRayJobStatus(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			err = testRayJobReconciler.updateRayJobStatus(ctx, oldRayJob, newRayJob)
