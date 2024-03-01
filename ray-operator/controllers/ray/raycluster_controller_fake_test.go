@@ -491,7 +491,6 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -585,7 +584,6 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -634,7 +632,6 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -698,7 +695,6 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas,
@@ -756,7 +752,6 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas, the controller
@@ -812,7 +807,6 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Pod3 and Pod4 should be deleted because of the workersToDelete.
@@ -885,7 +879,6 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			if tc.ENABLE_RANDOM_POD_DELETE {
@@ -947,7 +940,6 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -1004,7 +996,6 @@ func TestReconcileHeadService(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Case 1: Head service does not exist.
@@ -1074,7 +1065,6 @@ func TestReconcileHeadlessService(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	headlessServiceSelector := labels.SelectorFromSet(map[string]string{
@@ -1150,7 +1140,6 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, testRayCluster)
@@ -1184,7 +1173,6 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves.
@@ -1205,7 +1193,6 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, cluster)
@@ -1231,7 +1218,6 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerRoleBinding(ctx, testRayCluster)
@@ -1268,7 +1254,6 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 	reason := "test reason"
 
@@ -1289,7 +1274,6 @@ func TestUpdateEndpoints(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	if err := testRayClusterReconciler.updateEndpoints(ctx, testRayCluster); err != nil {
@@ -1356,7 +1340,6 @@ func TestGetHeadPodIP(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			ip, err := testRayClusterReconciler.getHeadPodIP(context.TODO(), testRayCluster)
@@ -1423,7 +1406,6 @@ func TestGetHeadServiceIP(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			ip, err := testRayClusterReconciler.getHeadServiceIP(context.TODO(), testRayCluster)
@@ -1483,7 +1465,6 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
@@ -1520,7 +1501,6 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   newScheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	state := rayv1.Ready
@@ -1540,7 +1520,6 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Mock data
@@ -1659,7 +1638,6 @@ func TestCalculateStatus(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Test head information
@@ -1715,7 +1693,6 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas, the controller
@@ -1839,7 +1816,6 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   newScheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// The head Pod will not be deleted because the restart policy is `Always`.
@@ -1923,7 +1899,6 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   newScheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 	}
 
 	// The head Pod will be deleted and the controller will return an error
@@ -2097,7 +2072,6 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			rayClusterList := rayv1.RayClusterList{}
@@ -2270,7 +2244,6 @@ func Test_RedisCleanup(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			// Check Job
@@ -2386,7 +2359,6 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			// Since the desired state of the workerGroup is 1 replica,
@@ -2479,7 +2451,6 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			// Since the desired state of the workerGroup is 1 replica,
@@ -2548,7 +2519,6 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   scheme.Scheme,
-				Log:      ctrl.Log.WithName("controllers").WithName("RayCluster"),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
@@ -2651,7 +2621,6 @@ func TestDeleteAllPods(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   newScheme,
-		Log:      ctrl.Log.WithName("controllers"),
 	}
 	ctx := context.Background()
 	// The first `deleteAllPods` function call should delete the "alive" Pod.

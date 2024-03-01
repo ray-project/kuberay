@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -157,9 +156,7 @@ func TestGetClusterAction(t *testing.T) {
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
-	r := &RayServiceReconciler{
-		Log: ctrl.Log.WithName("controllers").WithName("RayService"),
-	}
+	r := &RayServiceReconciler{}
 
 	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatuses{
@@ -243,9 +240,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		},
 	}
 
-	r := &RayServiceReconciler{
-		Log: ctrl.Log.WithName("controllers").WithName("RayService"),
-	}
+	r := &RayServiceReconciler{}
 	ctx := context.Background()
 
 	// Test 1: Only HealthLastUpdateTime is updated.
@@ -301,7 +296,6 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
 	// Test 1: There is no head pod. `isHeadPodRunningAndReady` should return false.
@@ -383,7 +377,6 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
 	ctx := context.TODO()
@@ -468,7 +461,6 @@ func TestFetchHeadServiceURL(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 
 	url, err := utils.FetchHeadServiceURL(ctx, r.Client, &cluster, utils.DashboardPortName)
@@ -492,7 +484,6 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 		Client:   fakeClient,
 		Recorder: &record.FakeRecorder{},
 		Scheme:   scheme.Scheme,
-		Log:      ctrl.Log.WithName("controllers").WithName("RayService"),
 	}
 	serveAppName := "serve-app-1"
 	longPeriod := time.Duration(10000)
@@ -644,7 +635,6 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 		Client:       fakeClient,
 		Recorder:     &record.FakeRecorder{},
 		Scheme:       scheme.Scheme,
-		Log:          ctrl.Log.WithName("controllers").WithName("RayService"),
 		ServeConfigs: cmap.New[string](),
 	}
 
@@ -803,7 +793,6 @@ func TestReconcileRayCluster(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			r := RayServiceReconciler{
 				Client: fakeClient,
-				Log:    ctrl.Log.WithName("controllers").WithName("RayService"),
 			}
 			service := rayService.DeepCopy()
 			if tc.updateRayClusterSpec {
