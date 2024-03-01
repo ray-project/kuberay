@@ -456,4 +456,8 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	}
 	req.RuntimeEnv = runtimeEnv
 	return req, nil
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 46642c4 (moved dashboard httpclient and supporting code to the API server)
