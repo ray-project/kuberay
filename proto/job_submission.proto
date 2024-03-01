@@ -54,7 +54,7 @@ service RayJobSubmissionService {
   }
 
 
-  // Stops a job by its name and namespace.
+  // Stops a job by its submissionID for a given a given cluster in a namespace.
   rpc StopRayJob(StopRayJobSubmissionRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       post: "/apis/v1/namespaces/{namespace}/jobsubmissions/{clustername}/{submissionid}"
@@ -62,7 +62,7 @@ service RayJobSubmissionService {
   }
 
 
-  // Deletes a job by its name and namespace.
+  // Deletes a job by its submissionID for a given a given cluster in a namespace.
   rpc DeleteRayJob(DeleteRayJobSubmissionRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1/namespaces/{namespace}/jobsubmissions/{clustername}/{submissionid}"

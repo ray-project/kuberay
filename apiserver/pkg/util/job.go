@@ -35,7 +35,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		},
 	}
 	if apiJob.ClusterSpec != nil {
-		clusterSpec, err := buildRayClusterSpec(apiJob.Version, nil, apiJob.ClusterSpec, computeTemplateMap, false)
+		clusterSpec, err := buildRayClusterSpec(apiJob.Version, nil, apiJob.ClusterSpec, computeTemplateMap, false, false)
 		if err != nil {
 			return nil, err
 		}

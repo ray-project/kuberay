@@ -6,7 +6,7 @@ replicaCount: 1
 
 name: "kuberay-apiserver"
 image:
-  repository: kuberay/apiserver
+  repository: quay.io/kuberay/apiserver
   tag: nightly
   pullPolicy: IfNotPresent
 
@@ -76,14 +76,14 @@ rbacEnable: true
 singleNamespaceInstall: false
 
 # security definition. Comment it out if security is not required
-security:
-  proxy:
-    repository: kuberay/security-proxy
-    tag: nightly
-    pullPolicy: IfNotPresent
-  env:
-    HTTP_LOCAL_PORT: 8988
-    GRPC_LOCAL_PORT: 8987
-    SECURITY_TOKEN: "12345"
-    SECURITY_PREFIX: "/"
-    ENABLE_GRPC: "true"
+# security:
+#  proxy:
+#    repository: kuberay/security-proxy
+#    tag: nightly
+#    pullPolicy: IfNotPresent
+#  env:
+#    HTTP_LOCAL_PORT: 8988
+#    GRPC_LOCAL_PORT: 8987
+#    SECURITY_TOKEN: "12345"
+#    SECURITY_PREFIX: "/"
+#    ENABLE_GRPC: "true"

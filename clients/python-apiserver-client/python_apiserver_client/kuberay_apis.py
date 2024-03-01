@@ -370,3 +370,54 @@ class KubeRayAPIs:
             return response.status_code, response.json()["message"]
         return response.status_code, None
 
+    """
+        submit Ray Serve applications
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+            serve application yaml
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+    """
+    def submit_serve(self, ns: str, name: str, configyaml: str) -> tuple[int, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/serveapplication/{name}"
+        req = {"configyaml": configyaml}
+        response = requests.post(url, json=req, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"]
+        return response.status_code, None
+
+    """
+        get Ray Serve applications
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+            ServeInstance object
+    """
+    def get_serve_applications(self, ns: str, name: str) -> tuple[int, str, ServeInstance]:
+        url = self.base + self.api_base + f"namespaces/{ns}/serveapplication/{name}"
+        response = requests.get(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"], None
+        return response.status_code, None, ServeInstance(response.json())
+
+    """
+        delete Serve applications
+        Parameter:
+            namespace of the cluster
+            name of the cluster
+        Returns:
+            http return code
+            message - only returned if http return code is not equal to 200
+    """
+    def delete_serve_applications(self, ns: str, name: str) -> tuple[int, str]:
+        url = self.base + self.api_base + f"namespaces/{ns}/serveapplication/{name}"
+        response = requests.delete(url, headers=_headers, timeout=(10, 10))
+        if response.status_code // 100 != 2:
+            return response.status_code, response.json()["message"]
+        return response.status_code, None
+

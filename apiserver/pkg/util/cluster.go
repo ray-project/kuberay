@@ -11,6 +11,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	raycommon "github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +31,7 @@ func NewRayCluster(apiCluster *api.Cluster, computeTemplateMap map[string]*api.C
 	}
 
 	// Build cluster spec
-	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap, enableServeService)
+	spec, err := buildRayClusterSpec(apiCluster.Version, apiCluster.Envs, apiCluster.ClusterSpec, computeTemplateMap, enableServeService, true)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,7 @@ func buildRayClusterAnnotations(cluster *api.Cluster) map[string]string {
 
 // TODO(Basasuya & MissionToMars): The job spec depends on ClusterSpec which not all cluster-related configs are included,
 // such as `metadata` and `envs`. We just put `imageVersion` and `envs` in the arguments list, and should be refactored later.
-func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate, enableServeService bool) (*rayv1api.RayClusterSpec, error) {
+func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, clusterSpec *api.ClusterSpec, computeTemplateMap map[string]*api.ComputeTemplate, enableServeService bool, cluster bool) (*rayv1api.RayClusterSpec, error) {
 	computeTemplate := computeTemplateMap[clusterSpec.HeadGroupSpec.ComputeTemplate]
 	headPodTemplate, err := buildHeadPodTemplate(imageVersion, envs, clusterSpec.HeadGroupSpec, computeTemplate, enableServeService)
 	if err != nil {
@@ -94,7 +95,7 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 	// Build worker groups
 	for _, spec := range clusterSpec.WorkerGroupSpec {
 		computeTemplate = computeTemplateMap[spec.ComputeTemplate]
-		workerPodTemplate, err := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate)
+		workerPodTemplate, err := buildWorkerPodTemplate(imageVersion, envs, spec, computeTemplate, cluster)
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +385,7 @@ func constructRayImage(containerImage string, version string) string {
 }
 
 // Build worker pod template
-func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) (*corev1.PodTemplateSpec, error) {
+func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate, cluster bool) (*corev1.PodTemplateSpec, error) {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -531,6 +532,11 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		specEnv := convertEnvironmentVariables(spec.Environment)
 		if len(specEnv) > 0 {
 			container.Env = append(container.Env, specEnv...)
+		}
+
+		// In the case of Ray cluster ensure that liveness/readiness probes are set
+		if cluster {
+			raycommon.InitLivenessAndReadinessProbe(&container, rayv1api.WorkerNode, "")
 		}
 
 		// Replace container
