@@ -1,12 +1,10 @@
-package server
+package util
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/json"
-
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
 const body = `{
@@ -542,25 +540,39 @@ const body = `{
   }`
 
 func TestMarshallingServeData(t *testing.T) {
-	var serveDetails util.ServeDetails
+	var serveDetails ServeDetails
 	err := json.Unmarshal([]byte(body), &serveDetails)
 	assert.Equal(t, err, nil)
-
-	serveDetailsPB := convertServeDetails(&serveDetails)
-	assert.Equal(t, serveDetailsPB.DeployMode, "MULTI_APP")
-	assert.Equal(t, serveDetailsPB.ProxyLocation, "EveryNode")
-	assert.Equal(t, len(serveDetailsPB.Proxies), 2)
-	assert.Equal(t, len(serveDetailsPB.Applications), 2)
-	for _, app := range serveDetailsPB.Applications {
+	assert.Equal(t, serveDetails.DeployMode, "MULTI_APP")
+	assert.Equal(t, serveDetails.ProxyLocation, "EveryNode")
+	assert.Equal(t, len(serveDetails.Proxies), 2)
+	assert.Equal(t, len(serveDetails.Applications), 2)
+	for _, app := range serveDetails.Applications {
 		switch app.Name {
 		case "fruit_app":
 			assert.Equal(t, len(app.Deployments), 5)
-			assert.Equal(t, len(app.DeployedAppConfig.Deployments), 5)
+			assert.Equal(t, len(app.Configuration.Deployments), 5)
 		case "math_app":
 			assert.Equal(t, len(app.Deployments), 5)
-			assert.Equal(t, len(app.DeployedAppConfig.Deployments), 5)
+			assert.Equal(t, len(app.Configuration.Deployments), 5)
 		default:
 			t.Error("unexpected application name ", app.Name)
 		}
+	}
+	detailsJson, err := json.Marshal(serveDetails.Applications)
+	assert.Equal(t, err, nil)
+
+	applicationStatuses := map[string]*ServeApplicationStatus{}
+	err = json.Unmarshal(detailsJson, &applicationStatuses)
+	assert.Equal(t, err, nil)
+
+	assert.Equal(t, len(applicationStatuses), 2)
+
+	for _, element := range applicationStatuses {
+		if element.Name != "fruit_app" && element.Name != "math_app" {
+			t.Errorf("unexpected deployment name")
+		}
+		assert.Equal(t, element.Status, "RUNNING")
+		assert.Equal(t, element.Message, "")
 	}
 }

@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zerologr"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -19,8 +19,8 @@ type RayServeSubmissionServiceServerOptions struct {
 	CollectMetrics bool
 }
 
-// implements `type ClusterServiceServer interface` in cluster_grpc.pb.go
-// ClusterServer is the server API for ClusterService service.
+// implements `type RayServeSubmissionServiceServer interface` in serve_submission_grpc.pb.go
+// RayServeSubmissionServiceServer is the server API for RayServeSubmission service.
 type RayServeSubmissionServiceServer struct {
 	options       *RayServeSubmissionServiceServerOptions
 	clusterServer *ClusterServer
@@ -36,13 +36,13 @@ func NewRayServeSubmissionServiceServer(clusterServer *ClusterServer, options *R
 
 // Submit Serve applications
 func (s *RayServeSubmissionServiceServer) SubmitServeApplications(ctx context.Context, req *api.SubmitRayServeApplicationsRequest) (*emptypb.Empty, error) {
-	s.log.Info("RayServeSubmissionService submit job")
+	s.log.Info("RayServeSubmissionService submit application")
 	clusterRequest := api.GetClusterRequest{Name: req.Clustername, Namespace: req.Namespace}
 	url, err := s.getRayClusterURL(ctx, &clusterRequest)
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClient()
+	rayDashboardClient := util.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.DeployApplication(ctx, req.Submissionyaml.Configyaml)
 	if err != nil {
@@ -53,13 +53,13 @@ func (s *RayServeSubmissionServiceServer) SubmitServeApplications(ctx context.Co
 
 // Get serve cluster details
 func (s *RayServeSubmissionServiceServer) GetServeApplications(ctx context.Context, req *api.GetRayServeApplicationsRequest) (*api.GetRayServeApplicationReply, error) {
-	s.log.Info("RayServeSubmissionService get service")
+	s.log.Info("RayServeSubmissionService get application")
 	clusterRequest := api.GetClusterRequest{Name: req.Clustername, Namespace: req.Namespace}
 	url, err := s.getRayClusterURL(ctx, &clusterRequest)
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClient()
+	rayDashboardClient := util.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	serveDetails, err := rayDashboardClient.GetServeDetails(ctx)
 	if err != nil {
@@ -70,13 +70,13 @@ func (s *RayServeSubmissionServiceServer) GetServeApplications(ctx context.Conte
 
 // Delete serve applications
 func (s *RayServeSubmissionServiceServer) DeleteRayServeApplications(ctx context.Context, req *api.DeleteRayServeApplicationsRequest) (*emptypb.Empty, error) {
-	s.log.Info("RayServeSubmissionService delete job")
+	s.log.Info("RayServeSubmissionService delete application")
 	clusterRequest := api.GetClusterRequest{Name: req.Clustername, Namespace: req.Namespace}
 	url, err := s.getRayClusterURL(ctx, &clusterRequest)
 	if err != nil {
 		return nil, err
 	}
-	rayDashboardClient := utils.GetRayDashboardClient()
+	rayDashboardClient := util.GetRayDashboardClient()
 	rayDashboardClient.InitClient(*url)
 	err = rayDashboardClient.DeleteServeApplications(ctx)
 	if err != nil {
@@ -99,7 +99,7 @@ func (s *RayServeSubmissionServiceServer) getRayClusterURL(ctx context.Context, 
 	return &url, nil
 }
 
-func convertServeDetails(details *utils.ServeDetails) *api.GetRayServeApplicationReply {
+func convertServeDetails(details *util.ServeDetails) *api.GetRayServeApplicationReply {
 	reply := api.GetRayServeApplicationReply{}
 	reply.DeployMode = details.DeployMode
 	reply.ProxyLocation = details.ProxyLocation
@@ -117,7 +117,7 @@ func convertServeDetails(details *utils.ServeDetails) *api.GetRayServeApplicatio
 	return &reply
 }
 
-func convertServeApplicationDetails(detail *utils.ServeApplicationDetails) *api.ServeApplicationDetails {
+func convertServeApplicationDetails(detail *util.ServeApplicationDetails) *api.ServeApplicationDetails {
 	reply := api.ServeApplicationDetails{}
 	reply.DocsPath = detail.DocsPath
 	reply.LastDeployedTimeS = detail.LastDeployed
@@ -133,7 +133,7 @@ func convertServeApplicationDetails(detail *utils.ServeApplicationDetails) *api.
 	return &reply
 }
 
-func convertDeploymentApplicationDetails(details *utils.DeploymentApplicationDetails) *api.DeploymentApplicationDetails {
+func convertDeploymentApplicationDetails(details *util.DeploymentApplicationDetails) *api.DeploymentApplicationDetails {
 	reply := api.DeploymentApplicationDetails{}
 	reply.DeploymentConfig = convertDeploymentSchema(&details.Configuration)
 	reply.Message = details.Message
@@ -146,7 +146,7 @@ func convertDeploymentApplicationDetails(details *utils.DeploymentApplicationDet
 	return &reply
 }
 
-func convertReplica(replica *utils.Replica) *api.Replica {
+func convertReplica(replica *util.Replica) *api.Replica {
 	reply := api.Replica{}
 	reply.ActorId = replica.ActorId
 	reply.ActorName = replica.ActorName
@@ -161,7 +161,7 @@ func convertReplica(replica *utils.Replica) *api.Replica {
 	return &reply
 }
 
-func convertServeDeploymentDetails(detail *utils.ServeDeploymentDetails) *api.ServeDeploymentDetails {
+func convertServeDeploymentDetails(detail *util.ServeDeploymentDetails) *api.ServeDeploymentDetails {
 	reply := api.ServeDeploymentDetails{}
 	reply.Args = detail.Args
 	reply.Host = detail.Host
@@ -186,7 +186,7 @@ func convertStringInterfaceToStringString(si map[string]interface{}) map[string]
 	return result
 }
 
-func convertDeploymentSchema(schema *utils.DeploymentSchema) *api.DeploymentSchema {
+func convertDeploymentSchema(schema *util.DeploymentSchema) *api.DeploymentSchema {
 	reply := api.DeploymentSchema{}
 	if schema.AutoScalingConfig != nil {
 		reply.AutoscalingConfig = convertStringInterfaceToStringString(schema.AutoScalingConfig)
@@ -232,7 +232,7 @@ func convertDeploymentSchema(schema *utils.DeploymentSchema) *api.DeploymentSche
 	return &reply
 }
 
-func convertControllerIfo(info *utils.ControllerInfo) *api.ControllerInfo {
+func convertControllerIfo(info *util.ControllerInfo) *api.ControllerInfo {
 	reply := api.ControllerInfo{}
 	reply.ActorId = info.ActorId
 	reply.ActorName = info.ActorName
@@ -242,7 +242,7 @@ func convertControllerIfo(info *utils.ControllerInfo) *api.ControllerInfo {
 	return &reply
 }
 
-func convertHTTPOptions(options *utils.HTTPOptions) *api.HTTPOptions {
+func convertHTTPOptions(options *util.HTTPOptions) *api.HTTPOptions {
 	reply := api.HTTPOptions{}
 	reply.Host = options.Host
 	reply.KeepAliveTimeoutS = options.KeepAliveTimeout
@@ -252,14 +252,14 @@ func convertHTTPOptions(options *utils.HTTPOptions) *api.HTTPOptions {
 	return &reply
 }
 
-func convertGRPCOptions(options *utils.GRPCOptions) *api.GRPCOptions {
+func convertGRPCOptions(options *util.GRPCOptions) *api.GRPCOptions {
 	reply := api.GRPCOptions{}
 	reply.Port = options.Port
 	reply.GrpcServicerFunctions = options.ServerFunctions
 	return &reply
 }
 
-func convertProxy(proxy *utils.Proxy) *api.Proxy {
+func convertProxy(proxy *util.Proxy) *api.Proxy {
 	reply := api.Proxy{}
 	reply.ActorId = proxy.ActorId
 	reply.ActorName = proxy.ActorName
