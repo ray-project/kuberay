@@ -25,8 +25,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -47,7 +49,6 @@ const (
 type RayServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Log      logr.Logger
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
@@ -63,7 +64,6 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboard
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
-		Log:                          ctrl.Log.WithName("controllers").WithName("RayService"),
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
 		ServeConfigs:                 cmap.New[string](),
 		RayClusterDeletionTimestamps: cmap.New[time.Time](),
@@ -102,8 +102,7 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboard
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	logger := r.Log.WithValues("RayService", request.NamespacedName)
-	ctx = ctrl.LoggerInto(ctx, logger)
+	logger := ctrl.LoggerFrom(ctx)
 
 	var isReady bool = false
 
@@ -338,6 +337,15 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
+		WithOptions(controller.Options{
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := ctrl.Log.WithName("controllers").WithName("RayService")
+				if request != nil {
+					logger = logger.WithValues("RayService", request.NamespacedName)
+				}
+				return logger
+			},
+		}).
 		Complete(r)
 }
 

@@ -108,7 +108,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controllers").WithName("RayCluster"),
 		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
 		BatchSchedulerMgr: batchscheduler.NewSchedulerManager(mgr.GetConfig()),
 		IsOpenShift:       isOpenShift,
@@ -123,7 +122,6 @@ var _ reconcile.Reconciler = &RayClusterReconciler{}
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
-	Log               logr.Logger
 	Scheme            *runtime.Scheme
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
@@ -162,8 +160,7 @@ type RayClusterReconcilerOptions struct {
 
 // Reconcile used to bridge the desired state with the current state
 func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	logger := r.Log.WithValues("RayCluster", request.NamespacedName)
-	ctx = ctrl.LoggerInto(ctx, logger)
+	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
 	// Try to fetch the RayCluster instance
@@ -344,7 +341,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 	if err := r.reconcileHeadlessService(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
-			r.Log.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
+			logger.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
 		}
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -1241,7 +1238,16 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 	}
 
 	return b.
-		WithOptions(controller.Options{MaxConcurrentReconciles: reconcileConcurrency}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := ctrl.Log.WithName("controllers").WithName("RayCluster")
+				if request != nil {
+					logger = logger.WithValues("RayCluster", request.NamespacedName)
+				}
+				return logger
+			},
+		}).
 		Complete(r)
 }
 

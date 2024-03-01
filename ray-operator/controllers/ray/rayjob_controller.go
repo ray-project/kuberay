@@ -21,6 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -35,7 +37,6 @@ const (
 type RayJobReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Log      logr.Logger
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
@@ -46,7 +47,6 @@ func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClie
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
-		Log:                 ctrl.Log.WithName("controllers").WithName("RayJob"),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
 	}
@@ -72,8 +72,7 @@ func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClie
 // Automatically generate RBAC rules to allow the Controller to read and write workloads
 // Reconcile used to bridge the desired state with the current state
 func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	logger := r.Log.WithValues("RayJob", request.NamespacedName)
-	ctx = ctrl.LoggerInto(ctx, logger)
+	logger := ctrl.LoggerFrom(ctx)
 
 	// Get RayJob instance
 	var err error
@@ -522,6 +521,15 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
 		Owns(&batchv1.Job{}).
+		WithOptions(controller.Options{
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := ctrl.Log.WithName("controllers").WithName("RayJob")
+				if request != nil {
+					logger = logger.WithValues("RayJob", request.NamespacedName)
+				}
+				return logger
+			},
+		}).
 		Complete(r)
 }
 
