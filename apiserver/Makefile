@@ -138,9 +138,9 @@ undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified 
 .PHONY: load-operator-image
 load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
 ifneq (${OPERATOR_IMAGE_TAG}, latest)
-	$(ENGINE) pull kuberay/operator:$(OPERATOR_IMAGE_TAG)
+	$(ENGINE) pull quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 endif	
-	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(KIND) load docker-image quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
