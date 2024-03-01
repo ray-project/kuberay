@@ -536,7 +536,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 		// In the case of Ray cluster ensure that liveness/readiness probes are set
 		if cluster {
-			raycommon.InitLivenessAndReadinessProbe(&container, rayv1api.WorkerNode, false)
+			raycommon.InitLivenessAndReadinessProbe(&container, rayv1api.WorkerNode, "")
 		}
 
 		// Replace container

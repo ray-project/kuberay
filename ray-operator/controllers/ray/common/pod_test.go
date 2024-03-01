@@ -1203,7 +1203,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	rayContainer.LivenessProbe = &httpGetProbe
 	rayContainer.ReadinessProbe = &httpGetProbe
-	InitLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, false)
+	InitLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "")
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
@@ -1214,7 +1214,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	InitLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, true)
+	InitLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))

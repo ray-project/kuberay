@@ -239,8 +239,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	return podTemplate
 }
 
-func InitLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, enableServeService bool) {
-
+func InitLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
 	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
 	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
 
@@ -377,7 +376,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		InitLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, enableServeService)
+		InitLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType)
 	}
 
 	return pod

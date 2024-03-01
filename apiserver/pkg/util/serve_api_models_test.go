@@ -575,8 +575,4 @@ func TestMarshallingServeData(t *testing.T) {
 		assert.Equal(t, element.Status, "RUNNING")
 		assert.Equal(t, element.Message, "")
 	}
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 46642c4 (moved dashboard httpclient and supporting code to the API server)

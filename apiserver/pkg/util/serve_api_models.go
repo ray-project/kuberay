@@ -134,8 +134,4 @@ type RayActorOptionSpec struct {
 	ObjectStoreMemory *uint64                `json:"object_store_memory,omitempty"`
 	Resources         map[string]interface{} `json:"resources,omitempty"`
 	AcceleratorType   string                 `json:"accelerator_type,omitempty"`
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 46642c4 (moved dashboard httpclient and supporting code to the API server)

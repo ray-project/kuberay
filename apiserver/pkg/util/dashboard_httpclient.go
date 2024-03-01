@@ -164,7 +164,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
 	serveDetails, err := r.GetServeDetails(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get serve details: %v", err)
+		return nil, fmt.Errorf("failed to get serve details: %v", err)
 	}
 
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
@@ -203,12 +203,12 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *ServeDetails) (map[string]*ServeApplicationStatus, error) {
 	detailsJson, err := json.Marshal(serveDetails.Applications)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal serve details: %v.", serveDetails.Applications)
+		return nil, fmt.Errorf("failed to marshal serve details: %v", serveDetails.Applications)
 	}
 
 	applicationStatuses := map[string]*ServeApplicationStatus{}
 	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %v. Bytes: %s", err, string(detailsJson))
+		return nil, fmt.Errorf("failed to unmarshal serve details bytes into map of application statuses: %v. Bytes: %s", err, string(detailsJson))
 	}
 
 	return applicationStatuses, nil
@@ -416,7 +416,7 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string, log *l
 		}
 		// StopJob only returns an error when JobStatus is not in terminal states (STOPPED / SUCCEEDED / FAILED)
 		if !rayv1.IsJobTerminal(jobInfo.JobStatus) {
-			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
+			return fmt.Errorf("failed to stopped job: %v", jobInfo)
 		}
 	}
 	return nil
@@ -456,8 +456,4 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	}
 	req.RuntimeEnv = runtimeEnv
 	return req, nil
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 46642c4 (moved dashboard httpclient and supporting code to the API server)
