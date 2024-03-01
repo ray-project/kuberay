@@ -664,6 +664,7 @@ curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/serveapplication/test
 --header 'Content-Type: application/json' 
 ```
 
+
 You can validate job deletion by looking at the Ray dashboard (serve pane) and ensuring that it was removed
 
 ## Managing RayServe with the API server vs RayService CRD
