@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi9/go-toolset:1.20.10 as builder
+FROM golang:1.20.10-bullseye as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -18,7 +18,7 @@ COPY controllers/ controllers/
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
+FROM gcr.io/distroless/base-debian11:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
