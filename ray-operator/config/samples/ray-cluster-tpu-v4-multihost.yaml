@@ -1,105 +1,117 @@
-# This template contains a Kuberay cluster using a 2x2x2 TPU v4 PodSlice.
-# To get access to TPU resources, please follow instructions in this doc:
-# https://docs.google.com/document/d/1TRwtfi2pzXbT6We0WQdwNzDdKHruk3u1XeLLJwW38kE/edit#heading=h.8ntu2hqwqvhl
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:
     app.kubernetes.io/name: kuberay
-    app.kubernetes.io/instance: raycluster-tpu
-  name: raycluster-tpu-kuberay
-
+    app.kubernetes.io/instance: example-cluster
+  name: example-cluster-kuberay
 spec:
   headGroupSpec:
+    serviceType: ClusterIP
     rayStartParams:
         dashboard-host: "0.0.0.0"
-        resources: "\"{\\\"google.com/tpu\\\": 4}\""
     template:
       spec:
         imagePullSecrets:
           []
         containers:
-          - volumeMounts:
+          - 
+            volumeMounts:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-head
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
-            ports:
-            - containerPort: 6379
-              name: gcs
-            - containerPort: 8265
-              name: dashboard
-            - containerPort: 10001
-              name: client
             resources:
               limits:
                 cpu: "8"
-                google.com/tpu: "4"
-                memory: 20G
+                ephemeral-storage: 20Gi
+                memory: 40G
               requests:
                 cpu: "8"
-                google.com/tpu: "4"
-                memory: 20G
+                ephemeral-storage: 10Gi
+                memory: 40G
             securityContext:
               {}
             env:
-              []
+              - name: RAY_memory_monitor_refresh_ms
+                value: "0"
+              - name: RAY_GRAFANA_IFRAME_HOST
+                value: http://${grafana_host}
+              - name: RAY_GRAFANA_HOST
+                value: http://grafana:80
+              - name: RAY_PROMETHEUS_HOST
+                value: http://frontend:9090
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+              - containerPort: 8000
+                name: serve
+              - containerPort: 8471
+                name: slicebuilder
+              - containerPort: 8081
+                name: mxla
         volumes:
           - emptyDir: {}
-            name: log-volume
+            name: ray-logs
         affinity:
           {}
         tolerations:
           []
         nodeSelector:
-          cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
-          cloud.google.com/gke-tpu-topology: 2x2x2
+          {}
       metadata:
         annotations:
           {}
         labels:
           cloud.google.com/gke-ray-node-type: head
+          created-by: ray-on-gke
           app.kubernetes.io/name: kuberay
-          app.kubernetes.io/instance: raycluster-tpu
-
+          app.kubernetes.io/instance: example-cluster
 
   workerGroupSpecs:
   - rayStartParams:
-        resources: "\"{\\\"google.com/tpu\\\": 4}\""
+      {}
     replicas: 1
     minReplicas: 1
     maxReplicas: 1
+    numOfHosts: 2
     groupName: workergroup
     template:
       spec:
         imagePullSecrets:
           []
         containers:
-          - volumeMounts:
+          - 
+            volumeMounts:
             - mountPath: /tmp/ray
               name: log-volume
             name: ray-worker
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
             resources:
               limits:
                 cpu: "1"
+                ephemeral-storage: 20Gi
                 google.com/tpu: "4"
-                memory: 20G
+                memory: 40G
               requests:
                 cpu: "1"
+                ephemeral-storage: 10Gi
                 google.com/tpu: "4"
-                memory: 20G
+                memory: 40G
             securityContext:
               {}
             env:
-              []
             ports:
               null
         volumes:
           - emptyDir: {}
-            name: log-volume
+            name: ray-logs
         affinity:
           {}
         tolerations:
@@ -113,4 +125,5 @@ spec:
         labels:
           cloud.google.com/gke-ray-node-type: worker
           app.kubernetes.io/name: kuberay
-          app.kubernetes.io/instance: raycluster-tpu
+          app.kubernetes.io/instance: example-cluster
+
