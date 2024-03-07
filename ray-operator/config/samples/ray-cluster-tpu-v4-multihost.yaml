@@ -101,8 +101,6 @@ spec:
           cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
           cloud.google.com/gke-tpu-topology: 2x2x2
       metadata:
-        annotations:
-          key: value
         labels:
           cloud.google.com/gke-ray-node-type: worker
           app.kubernetes.io/name: kuberay
