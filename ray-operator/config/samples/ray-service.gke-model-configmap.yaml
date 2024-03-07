@@ -1,0 +1,127 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: ray-service
+spec:
+  # More details here on some of the fields: https://docs.ray.io/en/latest/serve/production-guide/kubernetes.html#setting-up-a-rayservice-custom-resource-cr
+  serviceUnhealthySecondThreshold: 720 
+  deploymentUnhealthySecondThreshold: 720 
+  serveConfigV2: |
+    applications:
+    - name: rayllm-serve
+      route_prefix: /
+      import_path: rayllm.backend:router_application
+      args:
+        models:
+        - "./models/tiiuae/falcon-7b-instruct.yaml"
+  rayClusterConfig:
+    headGroupSpec:
+      rayStartParams:
+        resources: '"{\"accelerator_type_cpu\": 2}"'
+        dashboard-host: '0.0.0.0'
+        block: 'true'
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: anyscale/ray-llm:0.5.0
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8Gi"
+              requests:
+                cpu: "2"
+                memory: "8Gi"
+            volumeMounts:
+            - mountPath: /home/ray/models
+              name: model                
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
+          volumes:
+          - name: model
+            configMap:
+              name: falcon-7b-instruct-config
+              items:
+              - key: falcon-7b-instruct.yaml
+                path: tiiuae/falcon-7b-instruct.yaml              
+    workerGroupSpecs:
+    # Worker with Scale to 0 configuration
+    - replicas: 1
+      minReplicas: 0
+      maxReplicas: 1
+      groupName: gpu-worker-group
+      rayStartParams:
+        block: 'true'
+        resources: '"{\"accelerator_type_cpu\": 20, \"accelerator_type_t4\": 1}"'
+      # pod template
+      template:
+        spec:
+          containers:
+          - name: llm
+            image: anyscale/ray-llm:0.5.0
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sh","-c","ray stop"]
+            resources:
+              limits:
+                cpu: "20"
+                memory: "24Gi"
+                nvidia.com/gpu: "1"
+              requests:
+                cpu: "20"
+                memory: "24Gi"
+                nvidia.com/gpu: "1"
+          # Please ensure the taint has been applied to the GPU nodes, if using more taints than one listed below
+          tolerations:
+            - key: "nvidia.com/gpu"
+              operator: "Equal"
+              value: "present"
+              effect: "NoSchedule"
+          nodeSelector:
+            cloud.google.com/gke-accelerator: nvidia-t4
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falcon-7b-instruct-config
+data:
+  falcon-7b-instruct.yaml: |
+    deployment_config:
+      max_concurrent_queries: 24
+      ray_actor_options:
+        resources:
+          accelerator_type_t4: 0.1
+    engine_config:
+      model_id: tiiuae/falcon-7b-instruct
+      hf_model_id: tiiuae/falcon-7b-instruct
+      type: VLLMEngine
+      engine_kwargs:
+        trust_remote_code: false
+        max_num_batched_tokens: 2048
+        max_num_seqs: 64
+        gpu_memory_utilization: 0.9
+      max_total_tokens: 2048
+      generation:
+        prompt_format:
+          system: "{instruction}\n\n"
+          assistant: " {instruction} </s><s>"
+          trailing_assistant: ""
+          user: "[INST] {system}{instruction}"
+          system_in_user: true
+          default_system_message: ""
+        stopping_sequences: ["<unk>"]
+    scaling_config:
+      num_workers: 1
+      num_gpus_per_worker: 1
+      num_cpus_per_worker: 4
+      placement_strategy: "PACK"
+      resources_per_worker:
+        accelerator_type_t4: 0.1
