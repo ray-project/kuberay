@@ -1,24 +1,19 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  labels:
-    app.kubernetes.io/name: kuberay
-    app.kubernetes.io/instance: example-cluster
   name: example-cluster-kuberay
 spec:
   headGroupSpec:
-    serviceType: ClusterIP
     rayStartParams:
-        dashboard-host: "0.0.0.0"
+      {}
     template:
       spec:
         imagePullSecrets:
           []
         containers:
-          - 
-            volumeMounts:
+          - volumeMounts:
             - mountPath: /tmp/ray
-              name: log-volume
+              name: ray-logs
             name: ray-head
             image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
@@ -58,18 +53,9 @@ spec:
         volumes:
           - emptyDir: {}
             name: ray-logs
-        affinity:
-          {}
-        tolerations:
-          []
-        nodeSelector:
-          {}
       metadata:
-        annotations:
-          {}
         labels:
           cloud.google.com/gke-ray-node-type: head
-          created-by: ray-on-gke
           app.kubernetes.io/name: kuberay
           app.kubernetes.io/instance: example-cluster
 
@@ -86,10 +72,9 @@ spec:
         imagePullSecrets:
           []
         containers:
-          - 
-            volumeMounts:
+          - volumeMounts:
             - mountPath: /tmp/ray
-              name: log-volume
+              name: ray-logs
             name: ray-worker
             image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
@@ -112,10 +97,6 @@ spec:
         volumes:
           - emptyDir: {}
             name: ray-logs
-        affinity:
-          {}
-        tolerations:
-          []
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
           cloud.google.com/gke-tpu-topology: 2x2x2
