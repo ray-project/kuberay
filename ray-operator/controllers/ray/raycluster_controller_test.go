@@ -92,7 +92,7 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -323,7 +323,7 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -571,7 +571,7 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
 
 		It("Create a RayCluster with PodTemplate referencing a different namespace.", func() {
 			rayCluster.Spec.HeadGroupSpec.Template.ObjectMeta.Namespace = "not-default"
