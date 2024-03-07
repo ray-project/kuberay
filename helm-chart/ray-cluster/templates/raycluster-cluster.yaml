@@ -121,6 +121,7 @@ spec:
     replicas: {{ $values.replicas }}
     minReplicas: {{ $values.minReplicas | default 0 }}
     maxReplicas: {{ $values.maxReplicas | default 2147483647 }}
+    numOfHosts: {{ $values.numOfHosts | default 1 }}
     groupName: {{ $groupName }}
     template:
       spec:
@@ -205,6 +206,7 @@ spec:
     replicas: {{ .Values.worker.replicas }}
     minReplicas: {{ .Values.worker.minReplicas | default 0 }}
     maxReplicas: {{ .Values.worker.maxReplicas | default 2147483647 }}
+    numOfHosts: {{ .Values.worker.numOfHosts | default 1 }}
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
