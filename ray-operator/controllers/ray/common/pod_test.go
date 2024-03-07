@@ -31,22 +31,10 @@ var instance = rayv1.RayCluster{
 	},
 	Spec: rayv1.RayClusterSpec{
 		HeadGroupSpec: rayv1.HeadGroupSpec{
-			RayStartParams: map[string]string{
-				"port":                "6379",
-				"object-manager-port": "12345",
-				"node-manager-port":   "12346",
-				"object-store-memory": "100000000",
-				"num-cpus":            "1",
-				"include-dashboard":   "true",
-				"log-color":           "true",
-			},
+			RayStartParams: map[string]string{},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
-					Labels: map[string]string{
-						"ray.io/cluster": "raycluster-sample",
-						"ray.io/group":   "headgroup",
-					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -54,14 +42,6 @@ var instance = rayv1.RayCluster{
 							Name:  "ray-head",
 							Image: "repo/image:custom",
 							Env: []corev1.EnvVar{
-								{
-									Name: "MY_POD_IP",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "status.podIP",
-										},
-									},
-								},
 								{
 									Name:  "TEST_ENV_NAME",
 									Value: "TEST_ENV_VALUE",
@@ -109,14 +89,6 @@ var instance = rayv1.RayCluster{
 									},
 								},
 								Env: []corev1.EnvVar{
-									{
-										Name: "MY_POD_IP",
-										ValueFrom: &corev1.EnvVarSource{
-											FieldRef: &corev1.ObjectFieldSelector{
-												FieldPath: "status.podIP",
-											},
-										},
-									},
 									{
 										Name:  "TEST_ENV_NAME",
 										Value: "TEST_ENV_VALUE",
@@ -343,6 +315,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	headRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
 	assert.True(t, strings.Contains(headRayStartCommandEnv.Value, "ray start"))
 
@@ -397,6 +370,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	workerRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
 	assert.True(t, strings.Contains(workerRayStartCommandEnv.Value, "ray start"))
 
@@ -785,12 +759,12 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 
 func TestValidateHeadRayStartParams_OK(t *testing.T) {
 	input := instance.Spec.HeadGroupSpec.DeepCopy()
+	input.RayStartParams = map[string]string{"include-dashboard": "true"}
 	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
 	assert.Equal(t, true, isValid)
 	assert.Nil(t, err)
 	command := convertParamMap(input.RayStartParams)
 	assert.True(t, strings.Contains(command, "--include-dashboard=true"))
-	assert.True(t, strings.Contains(command, "--log-color=true"))
 }
 
 func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T) {

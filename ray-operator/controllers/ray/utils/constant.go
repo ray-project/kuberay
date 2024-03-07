@@ -112,9 +112,11 @@ const (
 	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
 	RAY_JOB_SUBMISSION_ID = "RAY_JOB_SUBMISSION_ID"
 
-	// This environment variable is used by Ray Autoscaler V2. For the Autoscaler V2 alpha
-	// release, its value is the Pod name. This may change in the future.
+	// Environment variables for Ray Autoscaler V2.
+	// The value of RAY_CLOUD_INSTANCE_ID is the Pod name for Autoscaler V2 alpha. This may change in the future.
 	RAY_CLOUD_INSTANCE_ID = "RAY_CLOUD_INSTANCE_ID"
+	// The value of RAY_NODE_TYPE_NAME is the name of the node group (i.e., the value of the "ray.io/group" label).
+	RAY_NODE_TYPE_NAME = "RAY_NODE_TYPE_NAME"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
