@@ -9,7 +9,18 @@
 # - https://cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities
 ## Enable Gateway API
 # https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway 
-
+#
+# To test this out: 
+# curl --location --request POST 'http://ai.example.com/v1/chat/completions' \
+# --header 'Content-Type: application/json' \
+#--data-raw '{
+#    "model": "tiiuae/falcon-7b-instruct",
+#    "messages": [
+#      {"role": "system", "content": "You are a helpful assistant."},
+#      {"role": "user", "content": "What are the top 5 most popular Indian dishes? Please be brief."}
+#    ]
+#}'
+#
 ---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1beta1
@@ -31,7 +42,7 @@ apiVersion: gateway.networking.k8s.io/v1beta1
 metadata:
   name: ray-service-serve-endpoint
 spec:
-  hostnames: 
+  hostnames:
   - "ai.example.com"
   parentRefs:
   - kind: Gateway
@@ -40,12 +51,34 @@ spec:
   - 
     matches:
     - path:
-        type: Exact
+        type: PathPrefix
         value: "/v1/chat/completions"
     - path:
-        type: Exact
+        type: PathPrefix
         value: "/v1/completions"
     backendRefs:
-    - name: rayllm-service-serve-svc
+    - name: ray-service-serve-svc
       port: 8000
 
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: endpoint-healthcheck
+spec:
+  default:
+    checkIntervalSec: 10
+    timeoutSec: 10
+    healthyThreshold: 3
+    unhealthyThreshold: 3
+    logConfig:
+      enabled: true
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8000
+        requestPath: "/-/routes"
+  targetRef:
+    group: ""
+    kind: Service
+    name: ray-service-serve-svc

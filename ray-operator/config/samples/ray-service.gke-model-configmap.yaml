@@ -16,6 +16,7 @@ spec:
         - "./models/tiiuae/falcon-7b-instruct.yaml"
   rayClusterConfig:
     headGroupSpec:
+      serviceType: NodePort
       rayStartParams:
         resources: '"{\"accelerator_type_cpu\": 2}"'
         dashboard-host: '0.0.0.0'
@@ -54,12 +55,12 @@ spec:
     workerGroupSpecs:
     # Worker with Scale to 0 configuration
     - replicas: 1
-      minReplicas: 0
-      maxReplicas: 1
+      minReplicas: 1
+      maxReplicas: 4
       groupName: gpu-worker-group
       rayStartParams:
         block: 'true'
-        resources: '"{\"accelerator_type_cpu\": 20, \"accelerator_type_t4\": 1}"'
+        resources: '"{\"accelerator_type_cpu\": 20, \"accelerator_type_l4\": 1}"'
       # pod template
       template:
         spec:
@@ -73,20 +74,36 @@ spec:
             resources:
               limits:
                 cpu: "20"
-                memory: "24Gi"
-                nvidia.com/gpu: "1"
+                memory: "64Gi"
+                nvidia.com/gpu: "2"
               requests:
                 cpu: "20"
-                memory: "24Gi"
-                nvidia.com/gpu: "1"
-          # Please ensure the taint has been applied to the GPU nodes, if using more taints than one listed below
+                memory: "64Gi"
+                nvidia.com/gpu: "2"
+          # Here we are loading the model from the configmap with the name falcon-7b-instruct-config
+            volumeMounts:
+              - mountPath: /home/ray/models
+                name: model
+          # Please ensure the following taint has been applied to the GPU node in the cluster.
           tolerations:
+            - key: "ray.io/node-type"
+              operator: "Equal"
+              value: "worker"
+              effect: "NoSchedule"
             - key: "nvidia.com/gpu"
               operator: "Equal"
               value: "present"
               effect: "NoSchedule"
           nodeSelector:
-            cloud.google.com/gke-accelerator: nvidia-t4
+            cloud.google.com/gke-accelerator: nvidia-l4
+            # cloud.google.com/gke-accelerator: nvidia-tesla-t4  # to use: nvidia-tesla-t4 GPUs
+          volumes:
+          - name: model
+            configMap:
+              name: falcon-7b-instruct-config
+              items:
+              - key: falcon-7b-instruct.yaml
+                path: tiiuae/falcon-7b-instruct.yaml     
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -95,10 +112,20 @@ metadata:
 data:
   falcon-7b-instruct.yaml: |
     deployment_config:
+      autoscaling_config:
+        min_replicas: 1
+        initial_replicas: 1
+        max_replicas: 4
+        target_num_ongoing_requests_per_replica: 24
+        metrics_interval_s: 10.0
+        look_back_period_s: 60.0
+        smoothing_factor: 0.5
+        downscale_delay_s: 600.0
+        upscale_delay_s: 30.0
       max_concurrent_queries: 24
       ray_actor_options:
         resources:
-          accelerator_type_t4: 0.1
+          accelerator_type_l4: 0.1 # use: accelerator_type_t4 for T4 GPUs
     engine_config:
       model_id: tiiuae/falcon-7b-instruct
       hf_model_id: tiiuae/falcon-7b-instruct
@@ -121,7 +148,7 @@ data:
     scaling_config:
       num_workers: 1
       num_gpus_per_worker: 1
-      num_cpus_per_worker: 4
+      num_cpus_per_worker: 3
       placement_strategy: "PACK"
       resources_per_worker:
-        accelerator_type_t4: 0.1
+        accelerator_type_l4: 0.1 # use: accelerator_type_t4 for T4 GPUs
