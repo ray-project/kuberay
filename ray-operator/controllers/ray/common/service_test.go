@@ -56,7 +56,7 @@ var (
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
 						Labels: map[string]string{
-							"groupName": "headgroup",
+							"groupName": utils.RayNodeHeadGroupLabelValue,
 						},
 					},
 					Spec: corev1.PodSpec{

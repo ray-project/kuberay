@@ -337,7 +337,7 @@ func TestBuildPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 	actualResult = pod.Labels[utils.RayNodeGroupLabelKey]
-	expectedResult = "headgroup"
+	expectedResult = utils.RayNodeHeadGroupLabelValue
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -435,7 +435,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 	actualResult = pod.Labels[utils.RayNodeGroupLabelKey]
-	expectedResult = "headgroup"
+	expectedResult = utils.RayNodeHeadGroupLabelValue
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}

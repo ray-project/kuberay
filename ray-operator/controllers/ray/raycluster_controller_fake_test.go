@@ -2148,7 +2148,7 @@ func Test_RedisCleanup(t *testing.T) {
 	gcsFTEnabledCluster.DeletionTimestamp = &now
 
 	// TODO (kevin85421): Create a constant variable in constant.go for the head group name.
-	const headGroupName = "headgroup"
+	const headGroupName = utils.RayNodeHeadGroupLabelValue
 
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

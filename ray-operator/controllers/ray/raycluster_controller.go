@@ -1028,7 +1028,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	}
 	if EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
-			scheduler.AddMetadataToPod(&instance, "headgroup", &pod)
+			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
 			return err
 		}
