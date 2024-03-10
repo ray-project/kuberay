@@ -91,7 +91,7 @@ var _ = Context("Inside the default namespace", func() {
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"groupName": "headgroup",
+								"groupName": utils.RayNodeHeadGroupLabelValue,
 							},
 							Annotations: map[string]string{
 								"key": "value",
