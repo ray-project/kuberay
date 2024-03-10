@@ -60,6 +60,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods/proxy
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
   - pods/status
   verbs:
   - create
@@ -91,6 +99,14 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/proxy
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - ""
   resources:

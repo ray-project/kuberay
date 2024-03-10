@@ -38,7 +38,7 @@ type RayJobSubmissionServiceServer struct {
 // Create RayJobSubmissionServiceServer
 func NewRayJobSubmissionServiceServer(clusterServer *ClusterServer, options *RayJobSubmissionServiceServerOptions) *RayJobSubmissionServiceServer {
 	zl := zerolog.New(os.Stdout).Level(zerolog.DebugLevel)
-	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClient}
+	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClientFunc(nil)}
 }
 
 // Submit Ray job
