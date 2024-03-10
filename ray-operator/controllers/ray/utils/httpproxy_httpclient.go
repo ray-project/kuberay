@@ -13,22 +13,34 @@ import (
 type RayHttpProxyClientInterface interface {
 	InitClient()
 	CheckProxyActorHealth(ctx context.Context) error
+	WithKubernetesPodProxy(podNamespace, podName string, port int)
 	SetHostIp(hostIp string, port int)
 }
 
-func GetRayHttpProxyClient() RayHttpProxyClientInterface {
-	return &RayHttpProxyClient{}
+func GetRayHttpProxyClientFunc(mgr ctrl.Manager) func() RayHttpProxyClientInterface {
+	return func() RayHttpProxyClientInterface {
+		return &RayHttpProxyClient{
+			mgr: mgr,
+		}
+	}
 }
 
 type RayHttpProxyClient struct {
-	client       http.Client
+	client       *http.Client
 	httpProxyURL string
+
+	mgr ctrl.Manager
 }
 
 func (r *RayHttpProxyClient) InitClient() {
-	r.client = http.Client{
+	r.client = &http.Client{
 		Timeout: 2 * time.Second,
 	}
+}
+
+func (r *RayHttpProxyClient) WithKubernetesPodProxy(podNamespace, podName string, port int) {
+	r.client = r.mgr.GetHTTPClient()
+	r.httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", r.mgr.GetConfig().Host, podNamespace, podName, port)
 }
 
 func (r *RayHttpProxyClient) SetHostIp(hostIp string, port int) {

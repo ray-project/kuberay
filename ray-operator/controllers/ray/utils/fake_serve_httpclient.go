@@ -20,8 +20,11 @@ type FakeRayDashboardClient struct {
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
 func (r *FakeRayDashboardClient) InitClient(url string) {
-	r.client = http.Client{}
+	r.client = &http.Client{}
 	r.dashboardURL = "http://" + url
+}
+
+func (r *FakeRayDashboardClient) WithKubernetesServiceProxy(svcNamespace, svcName string) {
 }
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte) error {

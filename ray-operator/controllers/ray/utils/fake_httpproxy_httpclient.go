@@ -18,6 +18,9 @@ func (r *FakeRayHttpProxyClient) InitClient() {
 	}
 }
 
+func (r *FakeRayHttpProxyClient) WithKubernetesPodProxy(podNamespace, podName string, port int) {
+}
+
 func (r *FakeRayHttpProxyClient) SetHostIp(hostIp string, port int) {
 	r.httpProxyURL = fmt.Sprintf("http://%s:%d", hostIp, port)
 }

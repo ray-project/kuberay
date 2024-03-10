@@ -32,6 +32,7 @@ var (
 
 type RayDashboardClientInterface interface {
 	InitClient(url string)
+	WithKubernetesServiceProxy(serviceNamespace, serviceName string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -46,16 +47,22 @@ type RayDashboardClientInterface interface {
 }
 
 type BaseDashboardClient struct {
-	client       http.Client
+	client       *http.Client
 	dashboardURL string
 }
 
-func GetRayDashboardClient() RayDashboardClientInterface {
-	return &RayDashboardClient{}
+func GetRayDashboardClientFunc(mgr ctrl.Manager) func() RayDashboardClientInterface {
+	return func() RayDashboardClientInterface {
+		return &RayDashboardClient{
+			mgr: mgr,
+		}
+	}
 }
 
 type RayDashboardClient struct {
 	BaseDashboardClient
+
+	mgr ctrl.Manager
 }
 
 // FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
@@ -102,10 +109,16 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 }
 
 func (r *RayDashboardClient) InitClient(url string) {
-	r.client = http.Client{
+	r.client = &http.Client{
 		Timeout: 2 * time.Second,
 	}
+
 	r.dashboardURL = "http://" + url
+}
+
+func (r *RayDashboardClient) WithKubernetesServiceProxy(svcNamespace, svcName string) {
+	r.client = r.mgr.GetHTTPClient()
+	r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, svcNamespace, svcName)
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.

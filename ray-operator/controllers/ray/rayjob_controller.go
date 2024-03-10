@@ -40,15 +40,17 @@ type RayJobReconciler struct {
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
+	useKubernetesProxy  bool
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface) *RayJobReconciler {
+func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, useKubernetesProxy bool) *RayJobReconciler {
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
+		useKubernetesProxy:  useKubernetesProxy,
 	}
 }
 
@@ -60,6 +62,7 @@ func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClie
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
@@ -95,6 +98,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if !rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
 			rayDashboardClient := r.dashboardClientFunc()
 			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+
+			if r.useKubernetesProxy {
+				var rayClusterInstance *rayv1.RayCluster
+				if rayClusterInstance, err = r.getRayClusterInstance(ctx, rayJobInstance); err == nil {
+					headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayClusterInstance.Spec, rayClusterInstance.Name)
+					if err != nil {
+						logger.Info("Failed to generate head service name", "error", err)
+					} else {
+						rayDashboardClient.WithKubernetesServiceProxy(rayClusterInstance.Namespace, headSvcName)
+					}
+				}
+			}
 			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId)
 			if err != nil {
 				logger.Info("Failed to stop job for RayJob", "error", err)
@@ -209,6 +224,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Check the current status of ray jobs
 		rayDashboardClient := r.dashboardClientFunc()
 		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+
+		if r.useKubernetesProxy {
+			headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayClusterInstance.Spec, rayClusterInstance.Name)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			rayDashboardClient.WithKubernetesServiceProxy(rayClusterInstance.Namespace, headSvcName)
+		}
+
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
@@ -637,6 +661,21 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		logger.Info("Disregard changes in RayClusterSpec of RayJob", "RayJob", rayJobInstance.Name)
 	}
 
+	return rayClusterInstance, nil
+}
+
+func (r *RayJobReconciler) getRayClusterInstance(ctx context.Context, rayJobInstance *rayv1.RayJob) (*rayv1.RayCluster, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	rayClusterNamespacedName := common.RayJobRayClusterNamespacedName(rayJobInstance)
+	logger.Info("try to find existing RayCluster instance", "name", rayClusterNamespacedName.Name)
+
+	rayClusterInstance := &rayv1.RayCluster{}
+	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
+		logger.Error(err, "Fail to get RayCluster!")
+		return nil, err
+	}
+
+	logger.Info("Found associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 	return rayClusterInstance, nil
 }
 
