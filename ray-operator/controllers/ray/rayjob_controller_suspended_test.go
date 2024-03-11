@@ -256,12 +256,3 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
-
-func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
-	return func() (rayv1.JobDeploymentStatus, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.JobDeploymentStatus, nil
-	}
-}
