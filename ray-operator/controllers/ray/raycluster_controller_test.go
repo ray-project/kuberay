@@ -18,8 +18,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"log"
-	"reflect"
 	"time"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -602,60 +600,3 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
-
-func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
-	return func() error {
-		return k8sClient.Get(ctx, key, obj)
-	}
-}
-
-func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...client.ListOption) func() (int, error) {
-	return func() (int, error) {
-		if err := k8sClient.List(ctx, workerPods, opt...); err != nil {
-			return -1, err
-		}
-
-		count := 0
-		for _, aPod := range workerPods.Items {
-			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && aPod.DeletionTimestamp == nil {
-				count++
-			}
-		}
-
-		return count, nil
-	}
-}
-
-func getClusterState(ctx context.Context, namespace string, clusterName string) func() rayv1.ClusterState {
-	return func() rayv1.ClusterState {
-		var cluster rayv1.RayCluster
-		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
-			log.Fatal(err)
-		}
-		return cluster.Status.State
-	}
-}
-
-func isAllPodsRunning(ctx context.Context, podlist corev1.PodList, filterLabels client.MatchingLabels, namespace string) bool {
-	err := k8sClient.List(ctx, &podlist, filterLabels, &client.ListOptions{Namespace: namespace})
-	Expect(err).ShouldNot(HaveOccurred(), "failed to list Pods")
-	for _, pod := range podlist.Items {
-		if pod.Status.Phase != corev1.PodRunning {
-			return false
-		}
-	}
-	return true
-}
-
-func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, workerGroupIndex int) {
-	// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. In this function,
-	// we simulate the behavior of the Ray Autoscaler after the scaling process has finished.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		Eventually(
-			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
-			time.Second*9, time.Millisecond*500).Should(BeNil(), "raycluster = %v", rayCluster)
-		rayCluster.Spec.WorkerGroupSpecs[workerGroupIndex].ScaleStrategy.WorkersToDelete = []string{}
-		return k8sClient.Update(ctx, rayCluster)
-	})
-	Expect(err).NotTo(HaveOccurred(), "failed to clean up WorkersToDelete")
-}
