@@ -16,7 +16,14 @@ spec:
     singular: rayservice
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.serviceStatus
+      name: service status
+      type: string
+    - jsonPath: .status.numServeEndpoints
+      name: num serve endpoints
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
