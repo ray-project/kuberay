@@ -106,6 +106,10 @@ head:
   # container command for head Pod.
   command: []
   args: []
+  lifecycle:
+    preStop:
+      exec:
+        command: [ "/bin/sh","-c","ray stop" ]
 
 
 worker:
@@ -166,6 +170,10 @@ worker:
   # container command for worker Pod.
   command: []
   args: []
+  lifecycle:
+    preStop:
+      exec:
+        command: [ "/bin/sh","-c","ray stop" ]
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
@@ -225,6 +233,10 @@ additionalWorkerGroups:
     # container command for worker Pod.
     command: []
     args: []
+    lifecycle:
+      preStop:
+        exec:
+          command: [ "/bin/sh","-c","ray stop" ]
 
 # Configuration for Head's Kubernetes Service
 service:
