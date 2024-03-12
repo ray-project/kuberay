@@ -43,7 +43,7 @@ var (
 	scheme      = runtime.NewScheme()
 	setupLog    = ctrl.Log.WithName("setup")
 	// TODO: include the kuberay version in the user-agent. E.g. ray-operator/v1.1.0
-	userAgent = "ray-operator"
+	userAgent = "kuberay-operator"
 )
 
 func init() {
