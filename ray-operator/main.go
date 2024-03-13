@@ -42,6 +42,8 @@ var (
 	_commitId_  = ""
 	scheme      = runtime.NewScheme()
 	setupLog    = ctrl.Log.WithName("setup")
+	// TODO: include the kuberay version in the user-agent. E.g. ray-operator/v1.1.0
+	userAgent = "kuberay-operator"
 )
 
 func init() {
@@ -208,7 +210,9 @@ func main() {
 	}
 
 	setupLog.Info("Setup manager")
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	restConfig := ctrl.GetConfigOrDie()
+	restConfig.UserAgent = userAgent
+	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
