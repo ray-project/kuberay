@@ -4,6 +4,7 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
+  # Label required for TPU webhook to initialize environments.
   labels:
     app.kubernetes.io/name: kuberay
   name: example-cluster-kuberay
