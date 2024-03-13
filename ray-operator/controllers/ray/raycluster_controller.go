@@ -179,12 +179,12 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 }
 
-func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, namespace string, filterLabels client.MatchingLabels) (active int, pods corev1.PodList, err error) {
+func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, namespace string, filterLabels client.MatchingLabels) (pods corev1.PodList, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	if err = r.List(ctx, &pods, client.InNamespace(namespace), filterLabels); err != nil {
-		return 0, pods, err
+		return pods, err
 	}
-	active = 0
+	active := 0
 	for _, pod := range pods.Items {
 		if pod.DeletionTimestamp.IsZero() {
 			active++
@@ -192,9 +192,9 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, namespace stri
 	}
 	if active > 0 {
 		logger.Info("Deleting all Pods with labels", "filterLabels", filterLabels, "Number of active Pods", active)
-		return active, pods, r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(namespace), filterLabels)
+		return pods, r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(namespace), filterLabels)
 	}
-	return active, pods, nil
+	return pods, nil
 }
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1.RayCluster) (ctrl.Result, error) {
@@ -230,7 +230,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
 
 			// Delete the head Pod if it exists.
-			numDeletedHeads, headPods, err := r.deleteAllPods(ctx, instance.Namespace, client.MatchingLabels{
+			headPods, err := r.deleteAllPods(ctx, instance.Namespace, client.MatchingLabels{
 				utils.RayClusterLabelKey:  instance.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			})
@@ -238,13 +238,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 			// Delete all worker Pods if they exist.
-			if _, _, err = r.deleteAllPods(ctx, instance.Namespace, client.MatchingLabels{
+			if _, err = r.deleteAllPods(ctx, instance.Namespace, client.MatchingLabels{
 				utils.RayClusterLabelKey:  instance.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
 			}); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
-			if numDeletedHeads > 0 {
+			if len(headPods.Items) > 0 {
 				logger.Info(fmt.Sprintf(
 					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
 						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
@@ -632,7 +632,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// if RayCluster is suspended, delete all pods and skip reconcile
 	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
 		clusterLabel := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
-		if _, _, err := r.deleteAllPods(ctx, instance.Namespace, clusterLabel); err != nil {
+		if _, err := r.deleteAllPods(ctx, instance.Namespace, clusterLabel); err != nil {
 			return err
 		}
 
