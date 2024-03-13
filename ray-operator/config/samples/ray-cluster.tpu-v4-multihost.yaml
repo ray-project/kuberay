@@ -4,6 +4,8 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
+  labels:
+    app.kubernetes.io/name: kuberay
   name: example-cluster-kuberay
 spec:
   headGroupSpec:
