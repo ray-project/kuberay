@@ -27,8 +27,6 @@ The [ray-service.high-availability-locust.yaml](/ray-operator/config/samples/ray
 - A RayCluster functioning as locust cluster to simulate users sending requests.
 - A configmap with a locustfile sets user request levels: starts low, spikes, then drops.
 
-
-
 ### Step 4: Use Locust cluster to simulate users sending requests
 ```sh
 # Open a new terminal and log into the locust cluster.
@@ -77,7 +75,6 @@ With the above settings, when serve replicas scale up:
 1. KubeRay creates a new worker Pod. Since no serve replicas are currently running, the readiness probe for the new Pod fails. As a result, the endpoint is not added to the serve service.
 2. Ray then schedules a new serve replica to the newly created worker Pod. Once the serve replica is running, the readiness probe passes, and the endpoint is added to the serve service.
 
-
 When serve replicas scale down:
 1. The proxy actor in the worker Pod that is scaling down changes its stage to `draining`. The readiness probe fails immediately, and the endpoint starts to be removed from the serve service. However, this process takes some time, so incoming requests are still redirected to this worker Pod for a short period.
 2. During the draining stage, the proxy actor can still redirect incoming requests. The proxy actor is only removed and changes to the `drained` stage when the following conditions are met:
@@ -88,8 +85,6 @@ When serve replicas scale down:
 3. Once the worker Pod becomes idle, KubeRay removes it from the cluster.
 
   > Note, the default value of `RAY_SERVE_PROXY_MIN_DRAINING_PERIOD_S` is 30s. You may change it to fit with your k8s cluster.
-
-
 
 ### Step 6: Verify high availability during upgrade
 The locust cluster will continue sending requests for 600s. Before the 600s is up, upgrade the RayService configuration by adding a new environment variable. This will trigger a rolling update. You can verify the high availability by observing the Ray Pod and the failure rate in the locust terminal.
@@ -106,7 +101,6 @@ kubectl patch rayservice rayservice-ha --type='json' -p='[
     ]
   }
 ]'
-
 
 watch -n 1 "kubectl get pod"
 # stage 1: New head pod is created.
@@ -138,10 +132,8 @@ In your locust terminal, You will see the faile rate is 0.00%.
      0(0.00%) |
 ```
 
-
 ### Step 8: Clean up
 ```sh
 kubectl delete -f ./ray-operator/config/samples/ray-service.high-availability-locust.yaml
 kind delete cluster
 ```
-
