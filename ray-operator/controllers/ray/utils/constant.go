@@ -73,7 +73,6 @@ const (
 	RedisPortName                = "redis"
 	DashboardPortName            = "dashboard"
 	MetricsPortName              = "metrics"
-	DashboardAgentListenPortName = "dashboard-agent"
 	ServingPortName              = "serve"
 
 	// The default AppProtocol for Kubernetes service
