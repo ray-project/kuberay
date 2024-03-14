@@ -142,6 +142,7 @@ class RayServiceUpdateCREvent(CREvent):
                     logger.info(f'Ray service has fully moved to cluster "{new_cluster_name}"')
                     return
                 self.query_rule.assert_rule(self.custom_resource_object, self.namespace)
+                time.sleep(0.1)
             
 
 
