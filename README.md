@@ -61,6 +61,7 @@ The KubeRay repository only contains documentation related to the development an
 6. [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023)
 7. [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) Instacart (March 17, 2023)
 8. [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) Spotify (February 1, 2023)
+9. [Best Practices For Ray Cluster On ACK](https://www.alibabacloud.com/blog/best-practices-for-ray-clusters---ray-on-ack_600925) Alibaba Cloud (Mar 12, 2024)
 
 ## Talks
 
