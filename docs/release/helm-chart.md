@@ -32,7 +32,7 @@ You can validate the charts as follows:
     # List all charts
     helm search repo kuberay
 
-    # Install charts
+    # Install charts (If you want to install charts for a release candidate, add `--version vX.Y.Z-rc.0` to the command below.)
     helm install kuberay-operator kuberay/kuberay-operator
     helm install kuberay-apiserver kuberay/kuberay-apiserver
     helm install raycluster kuberay/ray-cluster
