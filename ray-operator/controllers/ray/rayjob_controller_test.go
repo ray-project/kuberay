@@ -305,21 +305,3 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 })
-
-func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayv1.RayJob) func() (string, error) {
-	return func() (string, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.RayClusterName, nil
-	}
-}
-
-func getDashboardURLForRayJob(ctx context.Context, rayJob *rayv1.RayJob) func() (string, error) {
-	return func() (string, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.DashboardURL, nil
-	}
-}
