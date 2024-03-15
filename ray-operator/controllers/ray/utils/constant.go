@@ -165,6 +165,9 @@ const (
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
+	RayNodeHeadGroupLabelValue = "headgroup"
 )
 
 type ServiceType string
