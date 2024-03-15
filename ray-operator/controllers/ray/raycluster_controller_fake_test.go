@@ -2624,12 +2624,12 @@ func TestDeleteAllPods(t *testing.T) {
 	}
 	ctx := context.Background()
 	// The first `deleteAllPods` function call should delete the "alive" Pod.
-	pods, err := testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	pods, err := testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"alive", "deleted"}, []string{pods.Items[0].Name, pods.Items[1].Name})
 	// The second `deleteAllPods` function call should delete no Pods because none are active.
-	pods, err = testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	pods, err = testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(pods.Items))
 	assert.Equal(t, "deleted", pods.Items[0].Name)
