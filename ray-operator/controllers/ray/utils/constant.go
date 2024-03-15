@@ -69,12 +69,11 @@ const (
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
-	ClientPortName               = "client"
-	RedisPortName                = "redis"
-	DashboardPortName            = "dashboard"
-	MetricsPortName              = "metrics"
-	DashboardAgentListenPortName = "dashboard-agent"
-	ServingPortName              = "serve"
+	ClientPortName    = "client"
+	RedisPortName     = "redis"
+	DashboardPortName = "dashboard"
+	MetricsPortName   = "metrics"
+	ServingPortName   = "serve"
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"

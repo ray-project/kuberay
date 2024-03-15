@@ -836,7 +836,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // Serve applications are ready to serve incoming traffic or not. It returns two values:
 //
 // (1) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
-// (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard agent. We should take a look at dashboard agent rather than Ray Serve applications.
+// (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard. We should take a look at dashboard rather than Ray Serve applications.
 
 func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -844,7 +844,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	var err error
 	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 		err = fmt.Errorf(
-			"Failed to get Serve application statuses from the dashboard agent (the head service's port with the name `dashboard-agent`). "+
+			"Failed to get Serve application statuses from the dashboard. "+
 				"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 				"err: %v", err)
 		return false, err
