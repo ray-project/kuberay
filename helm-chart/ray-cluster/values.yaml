@@ -114,6 +114,8 @@ worker:
   # disabled: true
   groupName: workergroup
   replicas: 1
+  minReplicas: 1
+  maxReplicas: 3
   labels: {}
   serviceAccountName: ""
   rayStartParams: {}
