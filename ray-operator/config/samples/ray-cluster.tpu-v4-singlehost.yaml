@@ -1,0 +1,107 @@
+# This template contains a Kuberay cluster using a 2x2x1 TPU v4 PodSlice.
+# To get access to TPU resources, please follow instructions in this link:
+# https://cloud.google.com/kubernetes-engine/docs/how-to/tpus
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: example-cluster-kuberay
+spec:
+  headGroupSpec:
+    rayStartParams:
+      {}
+    template:
+      spec:
+        imagePullSecrets:
+          []
+        containers:
+          - volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+            name: ray-head
+            image: rayproject/ray:2.9.0-py310
+            imagePullPolicy: IfNotPresent
+            resources:
+              limits:
+                cpu: "8"
+                ephemeral-storage: 20Gi
+                memory: 40G
+              requests:
+                cpu: "8"
+                ephemeral-storage: 10Gi
+                memory: 40G
+            securityContext:
+              {}
+            env:
+              - name: RAY_memory_monitor_refresh_ms
+                value: "0"
+              - name: RAY_GRAFANA_IFRAME_HOST
+                value: http://${grafana_host}
+              - name: RAY_GRAFANA_HOST
+                value: http://grafana:80
+              - name: RAY_PROMETHEUS_HOST
+                value: http://frontend:9090
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+              - containerPort: 8000
+                name: serve
+        volumes:
+          - emptyDir: {}
+            name: ray-logs
+      metadata:
+        labels:
+          cloud.google.com/gke-ray-node-type: head
+          app.kubernetes.io/name: kuberay
+          app.kubernetes.io/instance: example-cluster
+
+  workerGroupSpecs:
+  - rayStartParams:
+      {}
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    numOfHosts: 1
+    groupName: workergroup
+    template:
+      spec:
+        imagePullSecrets:
+          []
+        containers:
+          - volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+            name: ray-worker
+            image: rayproject/ray:2.9.0-py310
+            imagePullPolicy: IfNotPresent
+            resources:
+              limits:
+                cpu: "1"
+                ephemeral-storage: 20Gi
+                google.com/tpu: "4"
+                memory: 40G
+              requests:
+                cpu: "1"
+                ephemeral-storage: 10Gi
+                google.com/tpu: "4"
+                memory: 40G
+            securityContext:
+              {}
+            env:
+            ports:
+              null
+        volumes:
+          - emptyDir: {}
+            name: ray-logs
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
+          cloud.google.com/gke-tpu-topology: 2x2x1
+      metadata:
+        labels:
+          cloud.google.com/gke-ray-node-type: worker
+          app.kubernetes.io/name: kuberay
+          app.kubernetes.io/instance: example-cluster
+

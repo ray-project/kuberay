@@ -62,7 +62,8 @@ if __name__ == '__main__':
         'ray-cluster.complete.large.yaml': 'Skip this test because it requires a lot of resources.',
         'ray-cluster.autoscaler.large.yaml':
             'Skip this test because it requires a lot of resources.',
-        'ray-cluster-tpu.yaml': 'Skip this test because it requires TPU resources.',
+        'ray-cluster.tpu-v4-singlehost.yaml': 'Skip this test because it requires TPU resources.',
+        'ray-cluster.tpu-v4-multihost.yaml' : 'Skip this test because it requires TPU resources',
         'ray-cluster.gke-bucket.yaml': 'Skip this test because it requires GKE and k8s service accounts.',
     }
 
