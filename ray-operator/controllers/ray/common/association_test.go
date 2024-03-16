@@ -149,6 +149,113 @@ func TestRayClusterHeadlessServiceListOptions(t *testing.T) {
 	}
 }
 
+func TestRayClusterHeadPodsListOptions(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "myraycluster",
+			Namespace: "test-ns",
+		},
+	}
+	listOptions := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		}),
+	}
+	deleteOptions := make([]client.DeleteAllOfOption, len(listOptions))
+	for i, option := range listOptions {
+		deleteOptions[i] = option.(client.DeleteAllOfOption)
+	}
+	result := RayClusterHeadPodsAssociationOptions(instance)
+	if !reflect.DeepEqual(result.ToListOptions(), listOptions) {
+		t.Errorf("Expected %v, got %v", listOptions, result)
+	}
+	if !reflect.DeepEqual(result.ToDeleteOptions(), deleteOptions) {
+		t.Errorf("Expected %v, got %v", deleteOptions, result)
+	}
+}
+
+func TestRayClusterWorkerPodsListOptions(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "myraycluster",
+			Namespace: "test-ns",
+		},
+	}
+	listOptions := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+		}),
+	}
+	deleteOptions := make([]client.DeleteAllOfOption, len(listOptions))
+	for i, option := range listOptions {
+		deleteOptions[i] = option.(client.DeleteAllOfOption)
+	}
+	result := RayClusterWorkerPodsAssociationOptions(instance)
+	if !reflect.DeepEqual(result.ToListOptions(), listOptions) {
+		t.Errorf("Expected %v, got %v", listOptions, result)
+	}
+	if !reflect.DeepEqual(result.ToDeleteOptions(), deleteOptions) {
+		t.Errorf("Expected %v, got %v", deleteOptions, result)
+	}
+}
+
+func TestRayClusterGroupPodsListOptions(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "myraycluster",
+			Namespace: "test-ns",
+		},
+	}
+	listOptions := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:   instance.Name,
+			utils.RayNodeGroupLabelKey: "mygroup",
+		}),
+	}
+	deleteOptions := make([]client.DeleteAllOfOption, len(listOptions))
+	for i, option := range listOptions {
+		deleteOptions[i] = option.(client.DeleteAllOfOption)
+	}
+	result := RayClusterGroupPodsAssociationOptions(instance, "mygroup")
+	if !reflect.DeepEqual(result.ToListOptions(), listOptions) {
+		t.Errorf("Expected %v, got %v", listOptions, result)
+	}
+	if !reflect.DeepEqual(result.ToDeleteOptions(), deleteOptions) {
+		t.Errorf("Expected %v, got %v", deleteOptions, result)
+	}
+}
+
+func TestRayClusterAllPodsListOptions(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "myraycluster",
+			Namespace: "test-ns",
+		},
+	}
+	listOptions := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey: instance.Name,
+		}),
+	}
+	deleteOptions := make([]client.DeleteAllOfOption, len(listOptions))
+	for i, option := range listOptions {
+		deleteOptions[i] = option.(client.DeleteAllOfOption)
+	}
+	result := RayClusterAllPodsAssociationOptions(instance)
+	if !reflect.DeepEqual(result.ToListOptions(), listOptions) {
+		t.Errorf("Expected %v, got %v", listOptions, result)
+	}
+	if !reflect.DeepEqual(result.ToDeleteOptions(), deleteOptions) {
+		t.Errorf("Expected %v, got %v", deleteOptions, result)
+	}
+}
+
 // TestRayServiceActiveRayClusterNamespacedName tests the function for generating a NamespacedName for a RayService's active RayCluster
 func TestRayServiceActiveRayClusterNamespacedName(t *testing.T) {
 	rayService := &rayv1.RayService{
