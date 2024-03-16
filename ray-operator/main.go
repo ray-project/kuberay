@@ -37,11 +37,8 @@ import (
 )
 
 var (
-	_version_   = "0.2"
-	_buildTime_ = ""
-	_commitId_  = ""
-	scheme      = runtime.NewScheme()
-	setupLog    = ctrl.Log.WithName("setup")
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
 	// TODO: include the kuberay version in the user-agent. E.g. ray-operator/v1.1.0
 	userAgent = "kuberay-operator"
 )
@@ -57,7 +54,6 @@ func init() {
 }
 
 func main() {
-	var version bool
 	var metricsAddr string
 	var enableLeaderElection bool
 	var leaderElectionNamespace string
@@ -70,7 +66,6 @@ func main() {
 	var configFile string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
-	flag.BoolVar(&version, "version", false, "Show the version information.")
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", configapi.DefaultProbeAddr, "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", configapi.DefaultEnableLeaderElection,
@@ -100,12 +95,6 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
-	if version {
-		fmt.Printf("Version:\t%s\n", _version_)
-		fmt.Printf("Commit ID:\t%s\n", _commitId_)
-		fmt.Printf("Build time:\t%s\n", _buildTime_)
-		os.Exit(0)
-	}
 
 	var config configapi.Configuration
 	if configFile != "" {
@@ -161,7 +150,6 @@ func main() {
 		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
 	}
 
-	setupLog.Info("the operator", "version:", os.Getenv("OPERATOR_VERSION"))
 	if ray.ForcedClusterUpgrade {
 		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
 	}

@@ -629,6 +629,13 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 		usageEnv := corev1.EnvVar{Name: utils.RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
 		container.Env = append(container.Env, usageEnv)
 	}
+	if rayNodeType == rayv1.HeadNode {
+		extraTagsEnv := corev1.EnvVar{
+			Name:  utils.RAY_USAGE_STATS_EXTRA_TAGS,
+			Value: fmt.Sprintf("kuberay_version=%s,crd=%s", utils.KUBERAY_VERSION, string(creatorCRDType)),
+		}
+		container.Env = append(container.Env, extraTagsEnv)
+	}
 	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
 		redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
