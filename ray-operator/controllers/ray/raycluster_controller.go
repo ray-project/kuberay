@@ -44,10 +44,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var (
+const (
 	DefaultRequeueDuration = 2 * time.Second
-	ForcedClusterUpgrade   bool
-	EnableBatchScheduler   bool
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
@@ -648,7 +646,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if err := r.List(ctx, &headPods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return err
 	}
-	if EnableBatchScheduler {
+	if cc := getClusterConfig(ctx); cc != nil && cc.EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
 			if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
 				return err
@@ -705,7 +703,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 
-	if ForcedClusterUpgrade {
+	if cc := getClusterConfig(ctx); cc != nil && cc.ForcedClusterUpgrade {
 		if len(headPods.Items) == 1 {
 			// head node amount is exactly 1, but we need to check if it has been changed
 			res := utils.PodNotMatchingTemplate(headPods.Items[0], instance.Spec.HeadGroupSpec.Template)
@@ -1026,7 +1024,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
-	if EnableBatchScheduler {
+	if cc := getClusterConfig(ctx); cc != nil && cc.EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
 			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
@@ -1063,7 +1061,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
-	if EnableBatchScheduler {
+	if cc := getClusterConfig(ctx); cc != nil && cc.EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
 			scheduler.AddMetadataToPod(&instance, worker.GroupName, &pod)
 		} else {
@@ -1223,7 +1221,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 }
 
 // SetupWithManager builds the reconciler.
-func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
+func (r *RayClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, reconcileConcurrency int) error {
 	b := ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCluster{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
@@ -1233,7 +1231,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
-	if EnableBatchScheduler {
+	if cc := getClusterConfig(ctx); cc != nil && cc.EnableBatchScheduler {
 		b = batchscheduler.ConfigureReconciler(b)
 	}
 
@@ -1569,4 +1567,26 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	}
 
 	return totalGPUs
+}
+
+type clusterConfig struct{}
+
+// ClusterConfig holds info about the cluster configuration
+type ClusterConfig struct {
+	ForcedClusterUpgrade bool
+	EnableBatchScheduler bool
+}
+
+// WithClusterConfig stores configuration about the cluster in the context.
+func WithClusterConfig(ctx context.Context, cc ClusterConfig) context.Context {
+	return context.WithValue(ctx, clusterConfig{}, &cc)
+}
+
+// getClusterConfig extracts a configuration value, if present.
+func getClusterConfig(ctx context.Context) *ClusterConfig {
+	r := ctx.Value(clusterConfig{})
+	if r == nil {
+		return nil
+	}
+	return r.(*ClusterConfig)
 }
