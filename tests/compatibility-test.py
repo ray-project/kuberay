@@ -12,6 +12,7 @@ from framework.prototype import (
 )
 
 from framework.utils import (
+    delete_all_cr,
     get_head_pod,
     get_pod,
     pod_exec_command,
@@ -86,8 +87,9 @@ class RayFTTestCase(unittest.TestCase):
     cluster_template = CONST.REPO_ROOT.joinpath("tests/config/ray-cluster.ray-ft.yaml.template")
     ray_cluster_ns = "default"
 
-    @classmethod
-    def setUpClass(cls):
+    # We need to delete the RayCluster at the end of each test case to test cleanup_redis,
+    # therefore, we use setUp, instead of setUpClass, here to re-create RayCluster for each test case.
+    def setUp(self):
         if not utils.is_feature_supported(ray_version, CONST.RAY_FT):
             raise unittest.SkipTest(f"{CONST.RAY_FT} is not supported")
         K8S_CLUSTER_MANAGER.cleanup()
@@ -95,6 +97,13 @@ class RayFTTestCase(unittest.TestCase):
         operator_manager = OperatorManager.instance()
         operator_manager.prepare_operator()
         utils.create_ray_cluster(RayFTTestCase.cluster_template, ray_version, ray_image)
+
+    def cleanup_redis(self):
+        delete_all_cr(CONST.RAY_CLUSTER_CRD, RayFTTestCase.ray_cluster_ns)
+        utils.wait_for_condition(
+            lambda: shell_subprocess_run("test $(kubectl exec deploy/redis -- redis-cli --no-auth-warning -a 5241590000000000 DBSIZE) = '0'") == 0,
+            timeout=300, retry_interval_ms=1000,
+        )
 
     def test_ray_serve(self):
         """Kill GCS process on the head Pod and then test a deployed Ray Serve model."""
@@ -152,6 +161,8 @@ class RayFTTestCase(unittest.TestCase):
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_ray_serve_2.py. The exit code is {exit_code}.")
+
+        self.cleanup_redis()
 
     @unittest.skipIf(
         ray_version == '2.8.0',
@@ -232,6 +243,8 @@ class RayFTTestCase(unittest.TestCase):
         if exit_code != 0:
             show_cluster_info(RayFTTestCase.ray_cluster_ns)
             self.fail(f"Fail to execute test_detached_actor_2.py. The exit code is {exit_code}.")
+
+        self.cleanup_redis()
 
 class KubeRayHealthCheckTestCase(unittest.TestCase):
     """Test KubeRay health check"""
