@@ -38,7 +38,6 @@ const (
 	RayClusterCRD CRDType = "RayCluster"
 	RayJobCRD     CRDType = "RayJob"
 	RayServiceCRD CRDType = "RayService"
-	UnknownCRD    CRDType = "Unknown"
 )
 
 var crdMap = map[string]CRDType{
@@ -51,7 +50,7 @@ func GetCRDType(key string) CRDType {
 	if crdType, exists := crdMap[key]; exists {
 		return crdType
 	}
-	return UnknownCRD
+	return RayClusterCRD
 }
 
 // GetClusterDomainName returns cluster's domain name
