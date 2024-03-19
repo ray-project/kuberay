@@ -632,7 +632,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 	if rayNodeType == rayv1.HeadNode {
 		extraTagsEnv := corev1.EnvVar{
 			Name:  utils.RAY_USAGE_STATS_EXTRA_TAGS,
-			Value: fmt.Sprintf("kuberay_version=%s,crd=%s", utils.KUBERAY_VERSION, string(creatorCRDType)),
+			Value: fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, string(creatorCRDType)),
 		}
 		container.Env = append(container.Env, extraTagsEnv)
 	}
