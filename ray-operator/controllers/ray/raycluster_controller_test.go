@@ -89,8 +89,9 @@ var _ = Context("Inside the default namespace", func() {
 		headPod := corev1.Pod{}
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
-		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -126,17 +127,17 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("Create a head Pod resource with default sidecars", func() {
 			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
-			listOptions := []client.ListOption{
-				client.InNamespace(namespace),
-				headFilterLabels,
-			}
-			err := k8sClient.List(ctx, &headPods, listOptions...)
+			err := k8sClient.List(ctx, &headPods, headGroupFilters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+
+			err = k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
 			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
 
@@ -159,7 +160,10 @@ var _ = Context("Inside the default namespace", func() {
 			}
 
 			Eventually(
-				isAllPodsRunning(ctx, headPods, headFilterLabels, namespace),
+				isAllPodsRunningByFilters(ctx, headPods, headGroupFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
+			Eventually(
+				isAllPodsRunningByFilters(ctx, headPods, headFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
 
 			for _, workerPod := range workerPods.Items {
@@ -168,7 +172,7 @@ var _ = Context("Inside the default namespace", func() {
 			}
 
 			Eventually(
-				isAllPodsRunning(ctx, workerPods, workerFilterLabels, namespace),
+				isAllPodsRunningByFilters(ctx, workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
 		})
 
@@ -185,14 +189,14 @@ var _ = Context("Inside the default namespace", func() {
 		It("Delete a worker Pod, and KubeRay should create a new one", func() {
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -213,10 +217,10 @@ var _ = Context("Inside the default namespace", func() {
 			// The `maxReplicas` is set to 4, so the number of worker Pods should be 4.
 			numWorkerPods := 4
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			Consistently(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*2, time.Millisecond*200).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
@@ -227,7 +231,7 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate("raycluster-autoscaler", namespace)
 		rayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(true)
 		workerPods := corev1.PodList{}
-		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
+		workerFilter := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -271,7 +275,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilter...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -289,7 +293,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			numWorkerPods := 2
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilter...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
@@ -309,7 +313,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			numWorkerPods := 4
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilter...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
@@ -320,8 +324,11 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate("raycluster-suspend", namespace)
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
-		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
+		allPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -345,7 +352,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -363,11 +370,17 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Check that all Pods are deleted
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &headPods, headGroupFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &allPods, allFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("all pods %v", allPods.Items))
 		})
 
 		It("RayCluster's .status.state should be updated to 'suspended' shortly after all Pods are terminated", func() {
@@ -390,11 +403,14 @@ var _ = Context("Inside the default namespace", func() {
 
 			// check that all Pods are created
 			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &headPods, headGroupFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// only update worker Pod statuses so that the head Pod status is still Pending.
@@ -416,11 +432,17 @@ var _ = Context("Inside the default namespace", func() {
 
 			// check that all Pods are deleted
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &headPods, headGroupFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &allPods, allFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("all pods %v", headPods.Items))
 
 			// RayCluster should be in Suspended state.
 			Eventually(
@@ -442,11 +464,14 @@ var _ = Context("Inside the default namespace", func() {
 
 			// check that all pods are created
 			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
+			Eventually(
+				listResourceFunc(ctx, &headPods, headGroupFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// We need to also manually update Pod statuses back to "Running" or else they will always stay as Pending.
@@ -476,7 +501,7 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
 		rayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(true)
 		workerPods := corev1.PodList{}
-		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -501,7 +526,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3 * int(numOfHosts)
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
@@ -520,7 +545,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			numWorkerPods := 2 * int(numOfHosts)
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
@@ -540,24 +565,24 @@ var _ = Context("Inside the default namespace", func() {
 
 			numWorkerPods := 4 * int(numOfHosts)
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("Delete a worker Pod, and KubeRay should create a new one", func() {
 			numWorkerPods := 4 * int(numOfHosts)
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			Consistently(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*2, time.Millisecond*200).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
@@ -568,8 +593,9 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate("raycluster-podtemplate-namespace", namespace)
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
-		workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-		headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Create a RayCluster with PodTemplate referencing a different namespace.", func() {
 			rayCluster.Spec.HeadGroupSpec.Template.ObjectMeta.Namespace = "not-default"
@@ -584,17 +610,16 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check workers are in the same namespace as RayCluster", func() {
 			numWorkerPods := 3
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("Create a head Pod is in the same namespace as RayCluster", func() {
 			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
-			listOptions := []client.ListOption{
-				client.InNamespace(namespace),
-				headFilterLabels,
-			}
-			err := k8sClient.List(ctx, &headPods, listOptions...)
+			err := k8sClient.List(ctx, &headPods, headFilters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+			err = k8sClient.List(ctx, &headPods, headGroupFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
 			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
 		})
