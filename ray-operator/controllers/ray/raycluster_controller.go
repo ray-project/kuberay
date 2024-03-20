@@ -1327,13 +1327,6 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 func (r *RayClusterReconciler) getHeadServiceIP(ctx context.Context, instance *rayv1.RayCluster) (string, error) {
 	runtimeServices := corev1.ServiceList{}
 	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
-
-	// If the head pod's application name label is not the default, such as when it's overridden by the
-	// Helm release's `nameOverride` value, update `filterLabels` to use the override's application name value instead.
-	if val, ok := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[utils.KubernetesApplicationNameLabelKey]; ok {
-		filterLabels[utils.KubernetesApplicationNameLabelKey] = val
-	}
-
 	if err := r.List(ctx, &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
 		return "", err
 	}
