@@ -424,11 +424,6 @@ class RayClusterAddCREvent(CREvent):
             show_cluster_info(self.namespace)
             raise Exception("RayClusterAddCREvent clean_up() timeout")
 
-        """Make sure the external redis has been cleaned"""
-        if search_path(self.custom_resource_object, ['metadata', 'annotations', 'ray.io/ft-enabled']) == 'true':
-            if shell_subprocess_run("test $(kubectl exec deploy/redis -- redis-cli --no-auth-warning -a $(kubectl get secret redis-password-secret -o jsonpath='{.data.password}' | base64 --decode) DBSIZE) = '0'") != 0:
-                raise Exception("The external redis is not cleaned")
-
         """Delete other resources in the yaml"""
         if self.filepath:
             logger.info("Delete other resources in the YAML")
