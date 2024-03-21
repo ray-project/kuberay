@@ -90,7 +90,6 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
@@ -132,12 +131,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("Create a head Pod resource with default sidecars", func() {
-			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
-			err := k8sClient.List(ctx, &headPods, headGroupFilters...)
-			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
-
-			err = k8sClient.List(ctx, &headPods, headFilters...)
+			err := k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
 			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
 
@@ -159,9 +153,6 @@ var _ = Context("Inside the default namespace", func() {
 				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
 			}
 
-			Eventually(
-				isAllPodsRunningByFilters(ctx, headPods, headGroupFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
 			Eventually(
 				isAllPodsRunningByFilters(ctx, headPods, headFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
@@ -326,7 +317,6 @@ var _ = Context("Inside the default namespace", func() {
 		workerPods := corev1.PodList{}
 		allPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
 
@@ -373,9 +363,6 @@ var _ = Context("Inside the default namespace", func() {
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			Eventually(
-				listResourceFunc(ctx, &headPods, headGroupFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
-			Eventually(
 				listResourceFunc(ctx, &headPods, headFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
 			Eventually(
@@ -405,9 +392,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
-			Eventually(
-				listResourceFunc(ctx, &headPods, headGroupFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
 			numWorkerPods := 3
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
@@ -434,9 +418,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			Eventually(
-				listResourceFunc(ctx, &headPods, headGroupFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head %v", headPods.Items))
@@ -465,9 +446,6 @@ var _ = Context("Inside the default namespace", func() {
 			// check that all pods are created
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
-			Eventually(
-				listResourceFunc(ctx, &headPods, headGroupFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head %v", headPods.Items))
 			numWorkerPods := 3
 			Eventually(
@@ -594,7 +572,6 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headGroupFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Create a RayCluster with PodTemplate referencing a different namespace.", func() {
@@ -617,9 +594,6 @@ var _ = Context("Inside the default namespace", func() {
 		It("Create a head Pod is in the same namespace as RayCluster", func() {
 			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
 			err := k8sClient.List(ctx, &headPods, headFilters...)
-			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
-			err = k8sClient.List(ctx, &headPods, headGroupFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
 			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
 		})
