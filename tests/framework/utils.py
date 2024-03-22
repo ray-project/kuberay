@@ -412,6 +412,11 @@ def pod_exec_command(pod_name, namespace, exec_command, check=True):
         f"kubectl exec {pod_name} -n {namespace} -- {exec_command}", check
     )
 
+def delete_all_cr(crd_name, namespace, check=True):
+    return shell_subprocess_run(
+        f"kubectl delete {crd_name} --all -n {namespace}", check
+    )
+
 
 def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
     shell_subprocess_run(

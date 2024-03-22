@@ -1918,99 +1918,129 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 }
 
 func Test_ShouldDeletePod(t *testing.T) {
-	// [Case 1]: The restart policy is `Always` and the Pod is in a terminate state.
-	// The expected behavior is that the controller will not delete the Pod because
-	// the restart policy is `Always`.
 	pod := corev1.Pod{
 		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyAlways,
 			Containers: []corev1.Container{
 				{
 					Name: "ray-head",
 				},
 			},
 		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodFailed,
-		},
 	}
-	shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
-	assert.False(t, shouldDelete)
-
-	// [Case 2]: The restart policy is `Always`, the Pod is not in a terminate state,
-	// and the Ray container has not terminated. The expected behavior is that the
-	// controller will not delete the Pod.
-	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
-	pod.Status.Phase = corev1.PodRunning
-	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+	tests := []struct {
+		name            string
+		restartPolicy   corev1.RestartPolicy
+		phase           corev1.PodPhase
+		containerStatus []corev1.ContainerStatus
+		shouldDelete    bool
+	}{
 		{
-			Name: "ray-head",
-			State: corev1.ContainerState{
-				Running: &corev1.ContainerStateRunning{},
-			},
+			// The restart policy is `Always` and the Pod is in a terminate state.
+			// The expected behavior is that the controller will not delete the Pod because
+			// the restart policy is `Always`.
+			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=false",
+			restartPolicy: corev1.RestartPolicyAlways,
+			phase:         corev1.PodFailed,
+			shouldDelete:  false,
 		},
-	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.False(t, shouldDelete)
-
-	// [Case 3]: The restart policy is `Always`, the Pod is not in a terminate state,
-	// and the Ray container has terminated. The expected behavior is that the controller
-	// will not delete the Pod because the restart policy is `Always`.
-	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
-	pod.Status.Phase = corev1.PodRunning
-	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
 		{
-			Name: "ray-head",
-			State: corev1.ContainerState{
-				Terminated: &corev1.ContainerStateTerminated{},
+			// The restart policy is `Always`, the Pod is not in a terminate state,
+			// and the Ray container has not terminated. The expected behavior is that the
+			// controller will not delete the Pod.
+			name:          "restartPolicy=Always, phase=PodRunning, ray-head=running, shouldDelete=false",
+			restartPolicy: corev1.RestartPolicyAlways,
+			phase:         corev1.PodRunning,
+			containerStatus: []corev1.ContainerStatus{
+				{
+					Name: "ray-head",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
+			shouldDelete: false,
 		},
-	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.False(t, shouldDelete)
-
-	// [Case 4]: The restart policy is `Never` and the Pod is in a terminate state.
-	// The expected behavior is that the controller will delete the Pod.
-	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
-	pod.Status.Phase = corev1.PodFailed
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.True(t, shouldDelete)
-
-	pod.Status.Phase = corev1.PodSucceeded
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.True(t, shouldDelete)
-
-	// [Case 5]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
-	// the Ray container has not terminated. The expected behavior is that the controller will not
-	// delete the Pod.
-	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
-	pod.Status.Phase = corev1.PodRunning
-	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
 		{
-			Name: "ray-head",
-			State: corev1.ContainerState{
-				Running: &corev1.ContainerStateRunning{},
+			// The restart policy is `Always`, the Pod is not in a terminate state,
+			// and the Ray container has terminated. The expected behavior is that the controller
+			// will not delete the Pod because the restart policy is `Always`.
+			name:          "restartPolicy=Always, phase=PodRunning, ray-head=terminated, shouldDelete=false",
+			restartPolicy: corev1.RestartPolicyAlways,
+			phase:         corev1.PodRunning,
+			containerStatus: []corev1.ContainerStatus{
+				{
+					Name: "ray-head",
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{},
+					},
+				},
 			},
+			shouldDelete: false,
 		},
-	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.False(t, shouldDelete)
-
-	// [Case 6]: The restart policy is set to `Never`, the Pod is not in a terminated state, and
-	// the Ray container has terminated. The expected behavior is that the controller will delete
-	// the Pod.
-	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
-	pod.Status.Phase = corev1.PodRunning
-	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
 		{
-			Name: "ray-head",
-			State: corev1.ContainerState{
-				Terminated: &corev1.ContainerStateTerminated{},
+			// The restart policy is `Never` and the Pod is in a terminate state.
+			// The expected behavior is that the controller will delete the Pod.
+			name:          "restartPolicy=Never, phase=PodFailed, shouldDelete=true",
+			restartPolicy: corev1.RestartPolicyNever,
+			phase:         corev1.PodFailed,
+			shouldDelete:  true,
+		},
+		{
+			// The restart policy is `Never` and the Pod terminated successfully.
+			// The expected behavior is that the controller will delete the Pod.
+			name:          "restartPolicy=Never, phase=PodSucceeded, shouldDelete=true",
+			restartPolicy: corev1.RestartPolicyNever,
+			phase:         corev1.PodSucceeded,
+			shouldDelete:  true,
+		},
+		{
+			// The restart policy is set to `Never`, the Pod is not in a terminated state, and
+			// the Ray container has not terminated. The expected behavior is that the controller will not
+			// delete the Pod.
+			name:          "restartPolicy=Never, phase=PodRunning, ray-head=running, shouldDelete=false",
+			restartPolicy: corev1.RestartPolicyNever,
+			phase:         corev1.PodRunning,
+			containerStatus: []corev1.ContainerStatus{
+				{
+					Name: "ray-head",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
+			shouldDelete: false,
+		},
+		{
+			// The restart policy is set to `Never`, the Pod is not in a terminated state, and
+			// the Ray container has terminated. The expected behavior is that the controller will delete
+			// the Pod.
+			name:          "restartPolicy=Never, phase=PodRunning, ray-head=terminated, shouldDelete=true",
+			restartPolicy: corev1.RestartPolicyNever,
+			phase:         corev1.PodRunning,
+			containerStatus: []corev1.ContainerStatus{
+				{
+					Name: "ray-head",
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{},
+					},
+				},
+			},
+			shouldDelete: true,
 		},
 	}
-	shouldDelete, _ = shouldDeletePod(pod, rayv1.HeadNode)
-	assert.True(t, shouldDelete)
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			pod.Spec.RestartPolicy = testCase.restartPolicy
+			pod.Status.Phase = testCase.phase
+			pod.Status.ContainerStatuses = testCase.containerStatus
+
+			shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
+			assert.EqualValues(
+				t, shouldDelete, testCase.shouldDelete,
+				"unexpected value of shouldDelete",
+			)
+		})
+	}
 }
 
 func Test_RedisCleanupFeatureFlag(t *testing.T) {
@@ -2624,12 +2654,12 @@ func TestDeleteAllPods(t *testing.T) {
 	}
 	ctx := context.Background()
 	// The first `deleteAllPods` function call should delete the "alive" Pod.
-	pods, err := testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	pods, err := testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"alive", "deleted"}, []string{pods.Items[0].Name, pods.Items[1].Name})
 	// The second `deleteAllPods` function call should delete no Pods because none are active.
-	pods, err = testRayClusterReconciler.deleteAllPods(ctx, ns, filter)
+	pods, err = testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(pods.Items))
 	assert.Equal(t, "deleted", pods.Items[0].Name)

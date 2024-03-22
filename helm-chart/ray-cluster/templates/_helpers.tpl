@@ -35,7 +35,6 @@ Create chart name and version as used by the chart label.
 Common labels
 */}}
 {{- define "ray-cluster.labels" -}}
-app.kubernetes.io/name: {{ include "ray-cluster.name" . }}
 helm.sh/chart: {{ include "ray-cluster.chart" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Chart.AppVersion }}
