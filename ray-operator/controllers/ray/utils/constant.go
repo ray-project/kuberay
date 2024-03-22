@@ -170,7 +170,7 @@ const (
 	RayNodeHeadGroupLabelValue = "headgroup"
 
 	// Telemetry
-	KUBERAY_VERSION = "nightly"
+	KUBERAY_VERSION = "v1.1.0"
 )
 
 type ServiceType string
