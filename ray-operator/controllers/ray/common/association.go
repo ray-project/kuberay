@@ -33,6 +33,66 @@ func RayClusterHeadlessServiceListOptions(instance *rayv1.RayCluster) []client.L
 	}
 }
 
+type AssociationOption interface {
+	client.ListOption
+	client.DeleteAllOfOption
+}
+
+type AssociationOptions []AssociationOption
+
+func (list AssociationOptions) ToListOptions() (options []client.ListOption) {
+	for _, option := range list {
+		options = append(options, option.(client.ListOption))
+	}
+	return options
+}
+
+func (list AssociationOptions) ToDeleteOptions() (options []client.DeleteAllOfOption) {
+	for _, option := range list {
+		options = append(options, option.(client.DeleteAllOfOption))
+	}
+	return options
+}
+
+func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	}
+}
+
+func RayClusterWorkerPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+		},
+	}
+}
+
+func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group string) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:   instance.Name,
+			utils.RayNodeGroupLabelKey: group,
+		},
+	}
+}
+
+func RayClusterAllPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey: instance.Name,
+		},
+	}
+}
+
 func RayServiceServeServiceNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
 	if rayService.Spec.ServeService != nil && rayService.Spec.ServeService.Name != "" {
 		return types.NamespacedName{
