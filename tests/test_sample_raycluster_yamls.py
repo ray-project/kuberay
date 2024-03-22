@@ -41,7 +41,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     for file in os.scandir(SAMPLE_PATH):
-        if not file.is_file():
+        if not file.is_file() or not file.name.startswith('ray-cluster'):
             continue
         # For local development, skip untracked files.
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
