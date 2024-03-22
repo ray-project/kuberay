@@ -41,7 +41,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     for file in os.scandir(SAMPLE_PATH):
-        if not file.is_file() or not file.name.startswith('ray-cluster'):
+        if not file.is_file():
             continue
         # For local development, skip untracked files.
         if os.path.relpath(file.path, CONST.REPO_ROOT) in untracked_files:
@@ -65,6 +65,7 @@ if __name__ == '__main__':
         'ray-cluster.tpu-v4-singlehost.yaml': 'Skip this test because it requires TPU resources.',
         'ray-cluster.tpu-v4-multihost.yaml' : 'Skip this test because it requires TPU resources',
         'ray-cluster.gke-bucket.yaml': 'Skip this test because it requires GKE and k8s service accounts.',
+        'ray-service.high-availability-locust.yaml': 'Skip this test because the RayCluster here is only used for testing RayService.',
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
