@@ -69,12 +69,11 @@ const (
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
-	ClientPortName               = "client"
-	RedisPortName                = "redis"
-	DashboardPortName            = "dashboard"
-	MetricsPortName              = "metrics"
-	DashboardAgentListenPortName = "dashboard-agent"
-	ServingPortName              = "serve"
+	ClientPortName    = "client"
+	RedisPortName     = "redis"
+	DashboardPortName = "dashboard"
+	MetricsPortName   = "metrics"
+	ServingPortName   = "serve"
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
@@ -103,6 +102,7 @@ const (
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
 	RAY_SERVE_KV_TIMEOUT_S                  = "RAY_SERVE_KV_TIMEOUT_S"
 	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
+	RAY_USAGE_STATS_EXTRA_TAGS              = "RAY_USAGE_STATS_EXTRA_TAGS"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
@@ -165,6 +165,12 @@ const (
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
+	RayNodeHeadGroupLabelValue = "headgroup"
+
+	// Telemetry
+	KUBERAY_VERSION = "nightly"
 )
 
 type ServiceType string

@@ -101,7 +101,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, "headgroup", instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "", instance.Annotations)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -628,6 +628,13 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 	if !utils.EnvVarExists(utils.RAY_USAGE_STATS_KUBERAY_IN_USE, container.Env) {
 		usageEnv := corev1.EnvVar{Name: utils.RAY_USAGE_STATS_KUBERAY_IN_USE, Value: "1"}
 		container.Env = append(container.Env, usageEnv)
+	}
+	if rayNodeType == rayv1.HeadNode {
+		extraTagsEnv := corev1.EnvVar{
+			Name:  utils.RAY_USAGE_STATS_EXTRA_TAGS,
+			Value: fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, string(creatorCRDType)),
+		}
+		container.Env = append(container.Env, extraTagsEnv)
 	}
 	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params

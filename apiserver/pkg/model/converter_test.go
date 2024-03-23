@@ -8,6 +8,7 @@ import (
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -45,7 +46,7 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 				"app.kubernetes.io/name":       "kuberay",
 				"ray.io/cluster":               "boris-cluster",
 				"ray.io/cluster-dashboard":     "boris-cluster-dashboard",
-				"ray.io/group":                 "headgroup",
+				"ray.io/group":                 utils.RayNodeHeadGroupLabelValue,
 				"ray.io/identifier":            "boris-cluster-head",
 				"ray.io/is-ray-node":           "yes",
 				"ray.io/node-type":             "head",

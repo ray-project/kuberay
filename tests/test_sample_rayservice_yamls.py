@@ -76,7 +76,7 @@ class RayServiceUpdateCREvent(CREvent):
         self,
         custom_resource_object,
         rulesets: List[RuleSet] = [],
-        timeout: int = 90,
+        timeout: int = 180,
         namespace: str = "default",
         filepath: Optional[str] = None,
         switch_cluster: bool = False,
@@ -127,9 +127,23 @@ class RayServiceUpdateCREvent(CREvent):
         logger.info("Ray service transitioned to status Running.")
 
         if self.switch_cluster:
-            current_cluster_name = self.get_active_ray_cluster_name()
-            assert current_cluster_name != self.old_cluster_name
-            logger.info(f'Ray service has moved to cluster "{current_cluster_name}"')
+            new_cluster_name = self.get_active_ray_cluster_name()
+            assert new_cluster_name != self.old_cluster_name
+
+            # The old RayCluster will continue to exist for a while to allow the k8s service 
+            # enough time to fully redirect traffic to the new RayCluster. During this period, 
+            # queries might still be processed by either the old or the new RayCluster.
+            custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
+            while time.time() - self.start < self.timeout:
+                rayclusters = custom_api.list_namespaced_custom_object(
+                    group = 'ray.io', version = 'v1', namespace = self.namespace,
+                    plural = 'rayclusters')
+                if len(rayclusters["items"]) == 1 and rayclusters["items"][0]["metadata"]["name"] == new_cluster_name:
+                    logger.info(f'Ray service has fully moved to cluster "{new_cluster_name}"')
+                    return
+                self.query_rule.assert_rule(self.custom_resource_object, self.namespace)
+            
+
 
 class RayServiceDeleteCREvent(CREvent):
     """CREvent for RayService deletion"""

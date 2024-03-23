@@ -106,6 +106,12 @@ head:
   # container command for head Pod.
   command: []
   args: []
+  # Optional, for the user to provide any additional fields to the service.
+  # See https://pkg.go.dev/k8s.io/Kubernetes/pkg/api/v1#Service
+  headService: {}
+    # metadata:
+    #   annotations:
+    #     prometheus.io/scrape: "true"
 
 
 worker:
@@ -114,6 +120,8 @@ worker:
   # disabled: true
   groupName: workergroup
   replicas: 1
+  minReplicas: 1
+  maxReplicas: 3
   labels: {}
   serviceAccountName: ""
   rayStartParams: {}
@@ -228,6 +236,3 @@ additionalWorkerGroups:
 service:
   # This is optional, and the default is ClusterIP.
   type: ClusterIP
-  # Optional, for the user to provide any additional fields to the service.
-  # See https://pkg.go.dev/k8s.io/Kubernetes/pkg/api/v1#Service
-  headService: {}

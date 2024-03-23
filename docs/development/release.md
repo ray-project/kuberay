@@ -65,6 +65,8 @@ Manual testing can be time-consuming, and to relieve the workload, we plan to ad
 
 * Merge a PR into the release branch updating Helm chart versions, Helm chart image tags, and kustomize manifest image tags. For `v0.5.0-rc0`, we did this in [PR #1001](https://github.com/ray-project/kuberay/pull/1001)
 
+* Merge a PR into the release branch to update the `KUBERAY_VERSION` in `constant.go` for telemetry purposes.
+
 * Release `rc0` images using the [release-image-build](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml) workflow on GitHub actions.
 You will be prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
 

@@ -180,7 +180,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := k8sClient.List(ctx, &headPods,
 				client.MatchingLabels{
 					utils.RayClusterLabelKey:   mySuspendedRayCluster.Name,
-					utils.RayNodeGroupLabelKey: "headgroup",
+					utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue,
 				},
 				&client.ListOptions{Namespace: "default"},
 				client.InNamespace(mySuspendedRayCluster.Namespace))
@@ -224,7 +224,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				isAllPodsRunning(ctx, headPods, client.MatchingLabels{
 					utils.RayClusterLabelKey:   mySuspendedRayCluster.Name,
-					utils.RayNodeGroupLabelKey: "headgroup",
+					utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue,
 				}, "default"),
 				time.Second*15, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
 
@@ -256,12 +256,3 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
-
-func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
-	return func() (rayv1.JobDeploymentStatus, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.JobDeploymentStatus, nil
-	}
-}

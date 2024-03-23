@@ -64,7 +64,6 @@ type RayServiceSpec struct {
 }
 
 // RayServiceStatuses defines the observed state of RayService
-// +kubebuilder:printcolumn:name="ServiceStatus",type=string,JSONPath=".status.serviceStatus"
 type RayServiceStatuses struct {
 	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
 	// Pending Service Status indicates a RayCluster will be created or is being created.
@@ -112,6 +111,8 @@ type ServeDeploymentStatus struct {
 // +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="service status",type=string,JSONPath=".status.serviceStatus"
+// +kubebuilder:printcolumn:name="num serve endpoints",type=string,JSONPath=".status.numServeEndpoints"
 // +genclient
 // RayService is the Schema for the rayservices API
 type RayService struct {

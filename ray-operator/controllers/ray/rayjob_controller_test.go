@@ -179,7 +179,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 			// The number of head Pods should be 1.
 			headPods := corev1.PodList{}
-			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: "headgroup"}
+			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head Pod: %v", headPods.Items))
@@ -305,21 +305,3 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 })
-
-func getRayClusterNameForRayJob(ctx context.Context, rayJob *rayv1.RayJob) func() (string, error) {
-	return func() (string, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.RayClusterName, nil
-	}
-}
-
-func getDashboardURLForRayJob(ctx context.Context, rayJob *rayv1.RayJob) func() (string, error) {
-	return func() (string, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
-			return "", err
-		}
-		return rayJob.Status.DashboardURL, nil
-	}
-}
