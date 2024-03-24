@@ -2,7 +2,8 @@ OUTPUT_NAME := kuberay
 BUILD_GOOS = $(shell go env GOOS)
 
 COMMIT := $(shell git rev-parse --short HEAD)
-VERSION := $(shell git describe --tags $(shell git rev-list --tags --max-count=1))
+VERSION := v1.1.0
+
 DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 REPO="github.com/ray-project/kuberay"
 
