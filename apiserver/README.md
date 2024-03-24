@@ -35,8 +35,8 @@ helm version
     # Install the KubeRay helm repo
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-    # Install KubeRay Operator v1.0.0.
-    helm install kuberay-operator kuberay/kuberay-operator --version v1.0.0
+    # Install KubeRay Operator v1.1.0.
+    helm install kuberay-operator kuberay/kuberay-operator --version v1.1.0
 
     # Check the KubeRay Operator Pod in `default` namespace
     kubectl get pods

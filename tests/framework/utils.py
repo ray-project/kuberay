@@ -26,7 +26,7 @@ class CONST:
     __slots__ = ()
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
-    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.0.0"
+    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.1.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
