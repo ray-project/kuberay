@@ -128,9 +128,10 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 
 #### Step 8. Generate release
 
-* Click "Create release" to create release for the tag v0.5.0 ([link](https://github.com/ray-project/kuberay/tags)). 
-   * Run `make release` in cli folder and generate `kuberay-$VERSION-darwin-amd64.zip` and `kuberay-$VERSION-linux-amd64.zip` files. Upload them to the GitHub release.
-   * Follow the [instructions](../release/changelog.md) to generate release notes and add notes in the GitHub release.
+* Click "Create release" to create release for the tag v0.5.0 ([link](https://github.com/ray-project/kuberay/tags)).
+    * Update `VERSION` in the [Makefile](https://github.com/ray-project/kuberay/blob/master/cli/Makefile) to `vX.Y.Z`.
+    * Run `make release` in cli folder and generate `kuberay-$VERSION-darwin-amd64.zip` and `kuberay-$VERSION-linux-amd64.zip` files. Upload them to the GitHub release.
+    * Follow the [instructions](../release/changelog.md) to generate release notes and add notes in the GitHub release.
 
 #### Step 9. Announce the release on the KubeRay slack!
 
