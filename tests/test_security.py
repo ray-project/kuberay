@@ -55,7 +55,7 @@ class PodSecurityTestCase(unittest.TestCase):
                              {PodSecurityTestCase.namespace}.kubernetes.io/enforce-version=latest")
         # Install the KubeRay operator in the namespace pod-security.
         image_dict = {
-            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','kuberay/operator:nightly'),
+            CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE','quay.io/kuberay/operator:nightly'),
         }
         logger.info(image_dict)
         patch = jsonpatch.JsonPatch([{

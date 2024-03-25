@@ -7,7 +7,7 @@ on:
         description: 'Commit reference (branch or SHA) from which to build the images.'
         required: true
       tag:
-        description: 'Desired release version tag (e.g. v1.0.0-rc.1).'
+        description: 'Desired release version tag (e.g. v1.1.0-rc.1).'
         required: true
 
 jobs:

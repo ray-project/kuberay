@@ -9,7 +9,7 @@ We recommend using Quay.io as the primary source for images as there are image-p
 
 ## Stable versions
 
-For stable releases, use version tags (e.g. `quay.io/kuberay/operator:v1.0.0`).
+For stable releases, use version tags (e.g. `quay.io/kuberay/operator:v1.1.0`).
 
 ## Master commits
 
