@@ -30,6 +30,6 @@ We recommend using the latest version of KubeRay. After version 0.5.0, the GCS F
 
 For older version (Kuberay <=0.4.0, ray <=2.1.0). To reduce the chances of a lost worker-head connection, there are two other options:
 
-- Make head more stable: when creating the cluster, allocate sufficient amount of resources on head pod such that it tends to be stable and not easy to crash. You can also set {"num-cpus": "0"} in "rayStartParams" of "headGroupSpec" such that Ray scheduler will skip the head node when scheduling workloads. This also helps to maintain the stability of the head. 
+- Make head more stable: when creating the cluster, allocate sufficient amount of resources on head pod such that it tends to be stable and not easy to crash. You can also set {"num-cpus": "0"} in "rayStartParams" of "headGroupSpec" such that Ray scheduler will skip the head node when scheduling Ray tasks and actors. This also helps to maintain the stability of the head. (Note: For Ray jobs, the job entrypoint will still be scheduled on the head node by default even if `num-cpus` is set to `0`. To force the entrypoint to run on a worker node in this case, you can set `entrypoint_num_cpus`; see the [doc](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/sdk.html#specifying-cpu-and-gpu-resources) for details.)
 
 - Make reconnection shorter: for version <= 1.9.1, you can set this head param --system-config='{"ping_gcs_rpc_server_max_retries": 20}' to reduce the delay from 600s down to 20s before workers reconnect to the new head. 
