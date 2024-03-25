@@ -26,7 +26,7 @@ class CONST:
     __slots__ = ()
     # Docker images
     OPERATOR_IMAGE_KEY = "kuberay-operator-image"
-    KUBERAY_LATEST_RELEASE = "kuberay/operator:v1.1.0"
+    KUBERAY_LATEST_RELEASE = "quay.io/kuberay/operator:v1.1.0"
 
     # Kubernetes API clients
     K8S_CR_CLIENT_KEY = "k8s-cr-api-client"
@@ -231,7 +231,7 @@ class OperatorManager(ABC):
             if namespace == None:
                 namespace = "default"
             DEFAULT_IMAGE_DICT = {
-                CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='kuberay/operator:nightly'),
+                CONST.OPERATOR_IMAGE_KEY: os.getenv('OPERATOR_IMAGE', default='quay.io/kuberay/operator:nightly'),
             }
             default_operator_manager = DefaultOperatorManager(DEFAULT_IMAGE_DICT, namespace, patch, cluster_manager)
             return default_operator_manager
