@@ -63,6 +63,8 @@ func main() {
 	var logFileEncoder string
 	var logStdoutEncoder string
 	var configFile string
+	var EnableBatchScheduler bool
+	var ForcedClusterUpgrade bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -77,7 +79,7 @@ func main() {
 		"watch-namespace",
 		"",
 		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
-	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
+	flag.BoolVar(&ForcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
@@ -85,7 +87,7 @@ func main() {
 		"Encoder to use for log file. Valid values are 'json' and 'console'. Defaults to 'json'")
 	flag.StringVar(&logStdoutEncoder, "log-stdout-encoder", "json",
 		"Encoder to use for logging stdout. Valid values are 'json' and 'console'. Defaults to 'json'")
-	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
+	flag.BoolVar(&EnableBatchScheduler, "enable-batch-scheduler", false,
 		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 
@@ -104,9 +106,8 @@ func main() {
 		config, err = decodeConfig(configData, scheme)
 		exitOnError(err, "failed to decode config file")
 
-		// TODO: remove globally-scoped variables
-		ray.ForcedClusterUpgrade = config.ForcedClusterUpgrade
-		ray.EnableBatchScheduler = config.EnableBatchScheduler
+		ForcedClusterUpgrade = config.ForcedClusterUpgrade
+		EnableBatchScheduler = config.EnableBatchScheduler
 	} else {
 		config.MetricsAddr = metricsAddr
 		config.ProbeAddr = probeAddr
@@ -114,11 +115,11 @@ func main() {
 		config.LeaderElectionNamespace = leaderElectionNamespace
 		config.ReconcileConcurrency = reconcileConcurrency
 		config.WatchNamespace = watchNamespace
-		config.ForcedClusterUpgrade = ray.ForcedClusterUpgrade
+		config.ForcedClusterUpgrade = ForcedClusterUpgrade
 		config.LogFile = logFile
 		config.LogFileEncoder = logFileEncoder
 		config.LogStdoutEncoder = logStdoutEncoder
-		config.EnableBatchScheduler = ray.EnableBatchScheduler
+		config.EnableBatchScheduler = EnableBatchScheduler
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -149,10 +150,10 @@ func main() {
 		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
 	}
 
-	if ray.ForcedClusterUpgrade {
+	if ForcedClusterUpgrade {
 		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
 	}
-	if ray.EnableBatchScheduler {
+	if EnableBatchScheduler {
 		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
 	}
 
@@ -207,7 +208,11 @@ func main() {
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
 	}
 	ctx := ctrl.SetupSignalHandler()
-	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
+	ctx = ray.WithClusterConfig(ctx, ray.ClusterConfig{
+		ForcedClusterUpgrade: config.ForcedClusterUpgrade,
+		EnableBatchScheduler: config.EnableBatchScheduler,
+	})
+	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(ctx, mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
