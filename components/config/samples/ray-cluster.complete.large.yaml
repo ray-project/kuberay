@@ -1,0 +1,117 @@
+# For most use-cases, it makes sense to schedule one Ray pod per Kubernetes node.
+# This is a configuration for a RayCluster with 1 Ray head pod and 1 Ray worker pod.
+# Each pod requests 54 Gi memory and 14 CPU.
+# Each pod can be scheduled on a virtual machine with roughly 64 Gi memory and 16 CPU.
+# (AWS: m5.4xlarge, GCP: e2-standard-16, Azure: Standard_D5_v2)
+# Optimal resource allocation will depend on your Kubernetes infrastructure and might
+# require some experimentation.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+    # A unique identifier for the head node and workers of this cluster.
+  name: raycluster-complete
+spec:
+  rayVersion: '2.9.0'
+  # Ray head pod template
+  headGroupSpec:
+    # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
+    # Refer to https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types.
+    serviceType: ClusterIP
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    # pod template
+    template:
+      metadata:
+        # Custom labels. NOTE: To avoid conflicts with KubeRay operator, do not define custom labels start with `raycluster`.
+        # Refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+        labels: {}
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.9.0
+          # Optimal resource allocation will depend on your Kubernetes infrastructure and might
+          # require some experimentation.
+          # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
+          # resource accounting. K8s requests are not used by Ray.
+          resources:
+            limits:
+              cpu: 14
+              memory: 54Gi
+            requests:
+              cpu: 14
+              memory: 54Gi
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh","-c","ray stop"]
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
+  workerGroupSpecs:
+  # the pod replicas in this group typed worker
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 10
+    # logical group name, for this called large-group, also can be functional
+    groupName: large-group
+    # If worker pods need to be added, we can increment the replicas.
+    # If worker pods need to be removed, we decrement the replicas, and populate the workersToDelete list.
+    # The operator will remove pods from the list until the desired number of replicas is satisfied.
+    # If the difference between the current replica count and the desired replicas is greater than the
+    # number of entries in workersToDelete, random worker pods will be deleted.
+    #scaleStrategy:
+    #  workersToDelete:
+    #  - raycluster-complete-worker-large-group-bdtwh
+    #  - raycluster-complete-worker-large-group-hv457
+    #  - raycluster-complete-worker-large-group-k8tj7
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams: {}
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.9.0
+          # Optimal resource allocation will depend on your Kubernetes infrastructure and might
+          # require some experimentation.
+          # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
+          # resource accounting. K8s requests are not used by Ray.
+          resources:
+            limits:
+              cpu: 14
+              memory: 54Gi
+            requests:
+              cpu: 14
+              memory: 54Gi
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh","-c","ray stop"]
+          # use volumeMounts.Optional.
+          # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+        # use volumes
+        # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
+######################status#################################

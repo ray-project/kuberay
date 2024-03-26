@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-code
+data:
+  sample_code.py: |
+    import ray
+    print("trying to connect to Ray!")
+    ray.init()
+    print("now executing some code with Ray!")
+    import time
+    start = time.time()
+    @ray.remote
+    def f():
+      time.sleep(0.01)
+      return ray._private.services.get_node_ip_address()
+    values=set(ray.get([f.remote() for _ in range(1000)]))
+    print("Ray Nodes: ",str(values))
+    file = open("/tmp/ray_nodes.txt","a")
+    file.write("available nodes: %s\n" % str(values))
+    file.close()
+    end = time.time()
+    print("Execution time = ",end - start)
+---
+# The resource requests and limits in this config are too small for production!
+# For examples with more realistic resource configuration, see
+# ray-cluster.complete.large.yaml and
+# ray-cluster.autoscaler.large.yaml.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+    # An unique identifier for the head node and workers of this cluster.
+  name: raycluster-heterogeneous
+spec:
+  rayVersion: '2.9.0'
+  ######################headGroupSpecs#################################
+  # Ray head pod template
+  headGroupSpec:
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.9.0
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "200m"
+          volumeMounts:
+          - mountPath: /opt
+            name: config
+          - mountPath: /tmp/ray
+            name: ray-logs
+        volumes:
+        # You set volumes at the Pod level, then mount them into containers inside that Pod
+        - name: config
+          configMap:
+            # Provide the name of the ConfigMap you want to mount.
+            name: ray-code
+            # An array of keys from the ConfigMap to create as files
+            items:
+            - key: sample_code.py
+              path: sample_code.py
+        - name: ray-logs
+          emptyDir: {}
+  workerGroupSpecs:
+  # the pod replicas in this group typed worker
+  - replicas: 3
+    minReplicas: 1
+    maxReplicas: 10
+    # logical group name, for this called small-group, also can be functional
+    groupName: small-group
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams: {}
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+          image: rayproject/ray:2.9.0
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "200m"
+        # use volumes
+        # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
+  - replicas: 1
+    minReplicas: 0
+    maxReplicas: 10
+    # logical group name, for this called small-group, also can be functional
+    groupName: medium-group
+    # if worker pods need to be added, we can simply increment the replicas
+    # if worker pods need to be removed, we decrement the replicas, and populate the podsToDelete list
+    # the operator will remove pods from the list until the number of replicas is satisfied
+    # when a pod is confirmed to be deleted, its name will be removed from the list below
+#    scaleStrategy:
+#      workersToDelete:
+      #- raycluster-heterogeneous-worker-medium-group-7bv5h
+    #  - worker-4k2ih
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams: {}
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+          image: rayproject/ray:2.9.0
+          # use volumeMounts.Optional.
+          # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+          volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
+          resources:
+            limits:
+              cpu: "2"
+            requests:
+              cpu: "1000m"
+        # use volumes
+        # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
+######################status#################################
