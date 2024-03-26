@@ -62,6 +62,7 @@ func main() {
 	var logFile string
 	var logFileEncoder string
 	var logStdoutEncoder string
+	var useKubernetesProxy bool
 	var configFile string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
@@ -88,6 +89,8 @@ func main() {
 	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
 		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
+		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -119,6 +122,7 @@ func main() {
 		config.LogFileEncoder = logFileEncoder
 		config.LogStdoutEncoder = logStdoutEncoder
 		config.EnableBatchScheduler = ray.EnableBatchScheduler
+		config.UseKubernetesProxy = useKubernetesProxy
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -209,9 +213,9 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClientFunc(mgr), utils.GetRayHttpProxyClientFunc(mgr), config.UseKubernetesProxy).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, utils.GetRayDashboardClientFunc(mgr), config.UseKubernetesProxy).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
