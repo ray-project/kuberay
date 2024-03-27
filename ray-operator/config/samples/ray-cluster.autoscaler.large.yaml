@@ -26,7 +26,7 @@ spec:
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
-  # The example configuration shown below below represents the DEFAULT values.
+  # The example configuration shown below represents the DEFAULT values.
   # (You may delete autoscalerOptions if the defaults are suitable.)
   autoscalerOptions:
     # upscalingMode is "Default" or "Aggressive."
