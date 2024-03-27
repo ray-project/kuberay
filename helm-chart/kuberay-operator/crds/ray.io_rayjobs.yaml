@@ -34,6 +34,7 @@ spec:
       type: date
     - jsonPath: .status.rayClusterName
       name: ray cluster name
+      priority: 1
       type: string
     name: v1
     schema:
