@@ -17,7 +17,6 @@ package ray
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -167,33 +166,9 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
 			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
-			allPods := []corev1.Pod{}
 
-			// Check whether the number of worker Pods is consistent with RayCluster CR or not.
-			numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
-			workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
-			workerPods := corev1.PodList{}
-			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
-				time.Second*3, time.Millisecond*500).Should(Equal(int(numWorkerPods)), fmt.Sprintf("workerGroup: %v", workerPods.Items))
-
-			// The number of head Pods should be 1.
-			headPods := corev1.PodList{}
-			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
-			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
-				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head Pod: %v", headPods.Items))
-
-			// Update all Pods, including head and worker Pods, to Running and PodReady.
-			allPods = append(allPods, headPods.Items...)
-			allPods = append(allPods, workerPods.Items...)
-
-			for _, pod := range allPods {
-				pod.Status.Phase = corev1.PodRunning
-				// In envtest, if Pod.Status.Phase is set to running, the Pod's PodReady condition becomes true automatically.
-				// Check https://github.com/ray-project/kuberay/issues/1736 for more details.
-				Expect(k8sClient.Status().Update(ctx, &pod)).Should(BeNil())
-			}
+			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 
 			// The RayCluster.Status.State should be Ready.
 			Eventually(
