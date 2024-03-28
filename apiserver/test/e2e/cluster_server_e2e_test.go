@@ -12,6 +12,7 @@ import (
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -667,7 +668,7 @@ func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil {
+		if err00 != nil && !k8sApiErrors.IsNotFound(err00) {
 			return true, err00
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)

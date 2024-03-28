@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base/insecure
+namespace: ray-system
+patchesJson6902:
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+    - op: add
+      path: /spec/template/spec/containers/0/command
+      value: ["/workspace/apiserver/kuberay-apiserver", "-useCodeFlare"]
+  target:
+    kind: Deployment
+    name: kuberay-apiserver
+    version: v1
+- path: cluster-role-patch.yaml
+  target:
+    group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: kuberay-apiserver
+    version: v1
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: latest

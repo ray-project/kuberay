@@ -2,6 +2,8 @@ BUILD_TIME      := $(shell date "+%F %T")
 COMMIT_SHA1     := $(shell git rev-parse HEAD )
 REPO_ROOT	    := $(shell dirname ${PWD})
 REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
+HACK_DIR		:= $(REPO_ROOT)/apiserver/hack
+
 
 # Image URL to use all building/pushing image targets
 IMG_TAG ?=latest
@@ -51,7 +53,7 @@ all: build
 # http://linuxcommand.org/lc3_adv_awk.php
 
 help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Development
 
@@ -76,11 +78,26 @@ lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
 	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019'
 
-build: fmt vet fumpt imports lint ## Build api server binary.
+.PHONY: tidy
+tidy: ## Run go mod tidy
+	go mod tidy
+	
+##@ Build
+
+build: lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
-run: fmt vet fumpt imports lint ## Run the api server from your host.
+.PHONY: clean
+clean: ## Remove api server binary from local file system.
+	rm -f ${REPO_ROOT_BIN}/kuberay-apiserver	
+
+.PHONY: run
+run: lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
+
+.PHONY: run-with-codeflare
+run-with-codeflare: lint ## Run the api server from your host with codeflare AppWrapper support.
+	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger -useCodeFlare
 
 .PHONY: build-swagger
 build-swagger: go-bindata
@@ -94,16 +111,25 @@ test: fmt vet fumpt imports lint  ## Run all unit tests.
 
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
-	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
-	
-.PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 90m  -race -count=1 -parallel 4 
+
+.PHONY: e2e-test-codeflare
+e2e-test-codeflare: ## Run end to end tests using a pre-exiting cluster and using codeflare operator
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 90m  -race -count=1 -parallel 4 --tags codeflare
+
+.PHONY: local-e2e-test 
 local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+
+.PHONY: local-e2e-test-codeflare 
+local-e2e-test-codeflare: operator-image cluster load-operator-image load-codeflare-image deploy-operator deploy-codeflare install-with-codeflare load-ray-test-image e2e-test-codeflare clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed including codeflare.
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
 KIND_CLUSTER_NAME ?= ray-api-server-cluster
 OPERATOR_IMAGE_TAG ?= latest
 SECURITY_IMAGE_TAG ?= latest
+CODEFLARE_OPERATOR_VERSION ?= v1.0.1
+
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
 	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
@@ -150,11 +176,24 @@ endif
 	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 	
 .PHONY: load-ray-test-image
-load-ray-test-image: ## Load the ray test images
+load-ray-test-image: ## Load the ray test images to the cluster
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
 	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
 	$(ENGINE) pull rayproject/ray:latest
 	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
+
+.PHONY: load-codeflare-image
+load-codeflare-image: ## Load the codeflare operator image to the kind cluster.
+	$(ENGINE) pull quay.io/project-codeflare/codeflare-operator:${CODEFLARE_OPERATOR_VERSION}
+	$(KIND) load docker-image quay.io/project-codeflare/codeflare-operator:${CODEFLARE_OPERATOR_VERSION} -n $(KIND_CLUSTER_NAME)
+
+.PHONY: deploy-codeflare
+deploy-codeflare:  ## Deploy the code flare operator into the kind cluster
+	${HACK_DIR}/deploy-code-flare.bash create ${CODEFLARE_OPERATOR_VERSION}
+	
+.PHONY: undeploy-codeflare
+undeploy-codeflare: ## Undeploy the code flare operator from the kind cluster
+	${HACK_DIR}/deploy-code-flare.bash delete ${CODEFLARE_OPERATOR_VERSION}
 
 ##@ Docker Build
 docker-image: test ## Build image for the api server.
@@ -181,6 +220,16 @@ install-secure: kustomize docker-image security-proxy-image load-image load-secu
 .PHONY: uninstall-secure
 uninstall-secure: ## Remove the kuberay api server with security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
+
+.PHONY: install-with-codeflare
+install-with-codeflare: kustomize docker-image load-image ## Install the kuberay api server with codeflare support to the K8s cluster specified in ~/.kube/config using kustomize.
+	cd deploy/local/codeflare && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
+	$(KUSTOMIZE) build deploy/local/codeflare | kubectl create -f -
+
+.PHONY: uninstall-with-codeflare
+uninstall-with-codeflare: kustomize ## Remove the kuberay api server with codeflare support to the K8s cluster specified in ~/.kube/config using kustomize.
+	$(KUSTOMIZE) build deploy/local/codeflare | kubectl delete -f -
+
 
 .PHONY: deploy
 deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 
@@ -213,7 +262,7 @@ KUSTOMIZE_VERSION ?= v3.8.7
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.54.1
-KIND_VERSION ?= v0.19.0
+KIND_VERSION ?= v0.20.0
 GOBINDATA_VERSION ?= v4.0.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"

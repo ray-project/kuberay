@@ -19,7 +19,7 @@ RUN go mod download
 # Build
 USER root
 WORKDIR /workspace/apiserver
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kuberay-apiserver cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -tags strictfipsruntime -a -o kuberay-apiserver cmd/main.go
 
 FROM scratch
 WORKDIR /workspace

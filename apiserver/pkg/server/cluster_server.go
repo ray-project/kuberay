@@ -20,7 +20,7 @@ type ClusterServerOptions struct {
 // implements `type ClusterServiceServer interface` in cluster_grpc.pb.go
 // ClusterServer is the server API for ClusterService service.
 type ClusterServer struct {
-	resourceManager *manager.ResourceManager
+	resourceManager manager.ResourceManager
 	options         *ClusterServerOptions
 	api.UnimplementedClusterServiceServer
 }
@@ -160,6 +160,7 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 	return nil
 }
 
-func NewClusterServer(resourceManager *manager.ResourceManager, options *ClusterServerOptions) *ClusterServer {
+// NewClusterServer creates a cluster server from the supplied arguments
+func NewClusterServer(resourceManager manager.ResourceManager, options *ClusterServerOptions) *ClusterServer {
 	return &ClusterServer{resourceManager: resourceManager, options: options}
 }

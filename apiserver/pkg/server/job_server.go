@@ -17,12 +17,12 @@ type JobServerOptions struct {
 // implements `type RayJobServiceServer interface` in job_grpc.pb.go
 // RayJobServer is the server API for RayJobServer service.
 
-func NewRayJobServer(resourceManager *manager.ResourceManager, options *JobServerOptions) *RayJobServer {
+func NewRayJobServer(resourceManager manager.ResourceManager, options *JobServerOptions) *RayJobServer {
 	return &RayJobServer{resourceManager: resourceManager, options: options}
 }
 
 type RayJobServer struct {
-	resourceManager *manager.ResourceManager
+	resourceManager manager.ResourceManager
 	options         *JobServerOptions
 	api.UnimplementedRayJobServiceServer
 }

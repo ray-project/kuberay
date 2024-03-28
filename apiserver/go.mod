@@ -4,8 +4,11 @@ go 1.20
 
 require (
 	github.com/go-openapi/runtime v0.19.31
+	github.com/golang/protobuf v1.5.3
 	github.com/pkg/errors v0.9.1
+	github.com/project-codeflare/multi-cluster-app-dispatcher v1.38.0
 	github.com/prometheus/client_golang v1.16.0
+	github.com/r3labs/diff/v3 v3.0.1
 	github.com/ray-project/kuberay/proto v0.0.0-20220703232803-3e7749d17400
 	github.com/ray-project/kuberay/ray-operator v0.0.0-20220703232803-3e7749d17400
 	github.com/stretchr/testify v1.8.4
@@ -22,7 +25,6 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.1
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zerologr v1.2.3
-	github.com/golang/protobuf v1.5.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0
@@ -70,6 +72,8 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.5.1 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.20.0 // indirect
