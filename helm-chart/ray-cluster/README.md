@@ -42,7 +42,7 @@ kubectl port-forward svc/raycluster-kuberay-head-svc 8265:8265
 kubectl exec -it ${RAYCLUSTER_HEAD_POD} -- bash
 python -c "import ray; ray.init(); print(ray.cluster_resources())" # (in Ray head Pod)
 
-# Step 9: Check 27.0.0.1:8265/#/job. The status of the job should be "SUCCEEDED".
+# Step 9: Check 127.0.0.1:8265/#/job. The status of the job should be "SUCCEEDED".
 
 # Step 10: Uninstall RayCluster
 helm uninstall raycluster
