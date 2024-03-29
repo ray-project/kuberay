@@ -35,6 +35,6 @@ To preview the KubeRay documentation locally, follow these steps:
 docker run --rm -it -p 8000:8000 -v ${PWD}:/docs squidfunk/mkdocs-material
 ```
 
-- Open your web browser and navigate to <http://0.0.0.0:8000/kuberay/> to view the documentation.
+- Open your web browser and navigate to <http://127.0.0.1:8000/kuberay/> to view the documentation.
 
 If you make any changes to the documentation files, the local preview will automatically update to reflect those changes.
