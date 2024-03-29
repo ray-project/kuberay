@@ -10430,6 +10430,11 @@ spec:
                     type: string
                   state:
                     type: string
+                  stateTransitionTimes:
+                    additionalProperties:
+                      format: date-time
+                      type: string
+                    type: object
                 type: object
               reason:
                 type: string

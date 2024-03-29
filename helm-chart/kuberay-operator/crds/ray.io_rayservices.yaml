@@ -7324,6 +7324,11 @@ spec:
                         type: string
                       state:
                         type: string
+                      stateTransitionTimes:
+                        additionalProperties:
+                          format: date-time
+                          type: string
+                        type: object
                     type: object
                 type: object
               lastUpdateTime:
@@ -7425,6 +7430,11 @@ spec:
                         type: string
                       state:
                         type: string
+                      stateTransitionTimes:
+                        additionalProperties:
+                          format: date-time
+                          type: string
+                        type: object
                     type: object
                 type: object
               serviceStatus:

@@ -1629,6 +1629,7 @@ func TestCalculateStatus(t *testing.T) {
 		},
 		Status: corev1.PodStatus{
 			PodIP: headNodeIP,
+			Phase: corev1.PodRunning,
 		},
 	}
 	runtimeObjects := []runtime.Object{headPod, headService}
@@ -1650,6 +1651,57 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
+	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+}
+
+func TestStateTransitionTimes_NoStateChange(t *testing.T) {
+	setupTest(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	// headService.Spec.cont
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			PodIP: headNodeIP,
+			Phase: corev1.PodRunning,
+		},
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	preUpdateTime := metav1.Now()
+	testRayCluster.Status.State = rayv1.Ready
+	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
+	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	assert.Nil(t, err)
+	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
 
 func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {

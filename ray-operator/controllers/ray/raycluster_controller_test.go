@@ -470,6 +470,15 @@ var _ = Context("Inside the default namespace", func() {
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
+
+		It("RayCluster's .status.stateTransitionTimes should include a time for ready state", func() {
+			Eventually(
+				func() *metav1.Time {
+					status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+					return status.StateTransitionTimes[rayv1.Ready]
+				},
+				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
+		})
 	})
 
 	Describe("RayCluster with a multi-host worker group", func() {

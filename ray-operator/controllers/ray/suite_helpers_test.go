@@ -49,6 +49,16 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 	}
 }
 
+func getClusterStatus(ctx context.Context, namespace string, clusterName string) func() rayv1.RayClusterStatus {
+	return func() rayv1.RayClusterStatus {
+		var cluster rayv1.RayCluster
+		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
+			log.Fatal(err)
+		}
+		return cluster.Status
+	}
+}
+
 func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt ...client.ListOption) bool {
 	err := k8sClient.List(ctx, &podlist, opt...)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "failed to list Pods")

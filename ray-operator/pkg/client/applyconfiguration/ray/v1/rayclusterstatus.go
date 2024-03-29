@@ -11,20 +11,21 @@ import (
 // RayClusterStatusApplyConfiguration represents an declarative configuration of the RayClusterStatus type for use
 // with apply.
 type RayClusterStatusApplyConfiguration struct {
-	State                   *v1.ClusterState            `json:"state,omitempty"`
-	AvailableWorkerReplicas *int32                      `json:"availableWorkerReplicas,omitempty"`
-	DesiredWorkerReplicas   *int32                      `json:"desiredWorkerReplicas,omitempty"`
-	MinWorkerReplicas       *int32                      `json:"minWorkerReplicas,omitempty"`
-	MaxWorkerReplicas       *int32                      `json:"maxWorkerReplicas,omitempty"`
-	DesiredCPU              *resource.Quantity          `json:"desiredCPU,omitempty"`
-	DesiredMemory           *resource.Quantity          `json:"desiredMemory,omitempty"`
-	DesiredGPU              *resource.Quantity          `json:"desiredGPU,omitempty"`
-	DesiredTPU              *resource.Quantity          `json:"desiredTPU,omitempty"`
-	LastUpdateTime          *metav1.Time                `json:"lastUpdateTime,omitempty"`
-	Endpoints               map[string]string           `json:"endpoints,omitempty"`
-	Head                    *HeadInfoApplyConfiguration `json:"head,omitempty"`
-	Reason                  *string                     `json:"reason,omitempty"`
-	ObservedGeneration      *int64                      `json:"observedGeneration,omitempty"`
+	State                   *v1.ClusterState                 `json:"state,omitempty"`
+	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
+	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
+	MinWorkerReplicas       *int32                           `json:"minWorkerReplicas,omitempty"`
+	MaxWorkerReplicas       *int32                           `json:"maxWorkerReplicas,omitempty"`
+	DesiredCPU              *resource.Quantity               `json:"desiredCPU,omitempty"`
+	DesiredMemory           *resource.Quantity               `json:"desiredMemory,omitempty"`
+	DesiredGPU              *resource.Quantity               `json:"desiredGPU,omitempty"`
+	DesiredTPU              *resource.Quantity               `json:"desiredTPU,omitempty"`
+	LastUpdateTime          *metav1.Time                     `json:"lastUpdateTime,omitempty"`
+	StateTransitionTimes    map[v1.ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`
+	Endpoints               map[string]string                `json:"endpoints,omitempty"`
+	Head                    *HeadInfoApplyConfiguration      `json:"head,omitempty"`
+	Reason                  *string                          `json:"reason,omitempty"`
+	ObservedGeneration      *int64                           `json:"observedGeneration,omitempty"`
 }
 
 // RayClusterStatusApplyConfiguration constructs an declarative configuration of the RayClusterStatus type for use with
@@ -110,6 +111,20 @@ func (b *RayClusterStatusApplyConfiguration) WithDesiredTPU(value resource.Quant
 // If called multiple times, the LastUpdateTime field is set to the value of the last call.
 func (b *RayClusterStatusApplyConfiguration) WithLastUpdateTime(value metav1.Time) *RayClusterStatusApplyConfiguration {
 	b.LastUpdateTime = &value
+	return b
+}
+
+// WithStateTransitionTimes puts the entries into the StateTransitionTimes field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the StateTransitionTimes field,
+// overwriting an existing map entries in StateTransitionTimes field with the same key.
+func (b *RayClusterStatusApplyConfiguration) WithStateTransitionTimes(entries map[v1.ClusterState]*metav1.Time) *RayClusterStatusApplyConfiguration {
+	if b.StateTransitionTimes == nil && len(entries) > 0 {
+		b.StateTransitionTimes = make(map[v1.ClusterState]*metav1.Time, len(entries))
+	}
+	for k, v := range entries {
+		b.StateTransitionTimes[k] = v
+	}
 	return b
 }
 
