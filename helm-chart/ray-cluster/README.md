@@ -34,15 +34,15 @@ kubectl get pods
 # raycluster-kuberay-worker-workergroup-2jckt   1/1     Running   0          66s
 
 # Step 6: Forward the port of Dashboard
-kubectl port-forward --address 0.0.0.0 svc/raycluster-kuberay-head-svc 8265:8265
+kubectl port-forward svc/raycluster-kuberay-head-svc 8265:8265
 
-# Step 7: Check ${YOUR_IP}:8265 for the Dashboard (e.g. 127.0.0.1:8265)
+# Step 7: Check 127.0.0.1:8265 for the Dashboard
 
 # Step 8: Log in to Ray head Pod and execute a job.
 kubectl exec -it ${RAYCLUSTER_HEAD_POD} -- bash
 python -c "import ray; ray.init(); print(ray.cluster_resources())" # (in Ray head Pod)
 
-# Step 9: Check ${YOUR_IP}:8265/#/job. The status of the job should be "SUCCEEDED".
+# Step 9: Check 27.0.0.1:8265/#/job. The status of the job should be "SUCCEEDED".
 
 # Step 10: Uninstall RayCluster
 helm uninstall raycluster
