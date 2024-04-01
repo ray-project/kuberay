@@ -2,10 +2,11 @@ package ray
 
 import (
 	"context"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"log"
 	"reflect"
 	"time"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"github.com/onsi/gomega"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
