@@ -232,8 +232,14 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
+			// Get the pending RayCluster instance
+			var pendingRayCluster rayv1.RayCluster
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: pendingRayClusterName, Namespace: "default"}, &pendingRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Failed to get RayCluster instance")
+
 			// Update the status of the head Pod to Running.
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, &pendingRayCluster)
 
 			// Make sure the pending RayCluster becomes the active RayCluster.
 			Eventually(
@@ -303,8 +309,14 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
+			// Get the pending RayCluster instance
+			var pendingRayCluster rayv1.RayCluster
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: pendingRayClusterName, Namespace: "default"}, &pendingRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Failed to get RayCluster instance")
+
 			// Update the status of the head Pod to Running.
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, &pendingRayCluster)
 
 			// Confirm switch to a new Ray Cluster.
 			Eventually(
@@ -421,10 +433,16 @@ var _ = Context("Inside the default namespace", func() {
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*5, time.Millisecond*500).Should(Equal(initialPendingClusterName), "Pending RayCluster name = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 
+			// Get the pending RayCluster instance
+			var initialPendingCluster rayv1.RayCluster
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: initialPendingClusterName, Namespace: "default"}, &initialPendingCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Failed to get RayCluster instance")
+
 			// The pending RayCluster will become the active RayCluster after:
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
-			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
+			updateHeadPodToRunningAndReady(ctx, &initialPendingCluster)
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
@@ -518,10 +536,16 @@ var _ = Context("Inside the default namespace", func() {
 				HaveLen(oldNumWorkerGroupSpecs + 1),
 			)
 
+			// Get the pending RayCluster instance
+			var initialPendingCluster rayv1.RayCluster
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: initialPendingClusterName, Namespace: "default"}, &initialPendingCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Failed to get RayCluster instance")
+
 			// The pending RayCluster will become the active RayCluster after:
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
-			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
+			updateHeadPodToRunningAndReady(ctx, &initialPendingCluster)
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
@@ -660,6 +684,12 @@ var _ = Context("Inside the default namespace", func() {
 
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
+			// Get the pending RayCluster instance
+			var pendingRayCluster rayv1.RayCluster
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: pendingRayClusterName, Namespace: "default"}, &pendingRayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Failed to get RayCluster instance")
+
 			Consistently(
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
@@ -667,7 +697,7 @@ var _ = Context("Inside the default namespace", func() {
 			// The cluster should switch once the deployments are finished updating
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, &pendingRayCluster)
 
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),
