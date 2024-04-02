@@ -4,8 +4,9 @@ REPO_ROOT	    := $(shell dirname ${PWD})
 REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
+IMG_REPO ?= kuberay/apiserver
 IMG_TAG ?=latest
-IMG ?= kuberay/apiserver:$(IMG_TAG)
+IMG ?= $(IMG_REPO):$(IMG_TAG)
 
 # Allow for additional test flags (-v, etc)
 GO_TEST_FLAGS ?= 
@@ -187,7 +188,7 @@ deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified i
 # Note that you should make your KubeRay APIServer image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
 # If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait \
-	--set image.tag=${IMG_TAG} --set image.pullPolicy=IfNotPresent
+	--set image.repository=${IMG_REPO},image.tag=${IMG_TAG} --set image.pullPolicy=IfNotPresent
 
 .PHONY: undeploy
 undeploy: ## Undeploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
