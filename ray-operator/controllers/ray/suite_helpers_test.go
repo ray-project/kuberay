@@ -207,9 +207,14 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func(
 // There's no container runtime or any other K8s controllers.
 // So Pods are created, but no controller updates them from Pending to Running.
 // See https://book.kubebuilder.io/reference/envtest.html for more details.
-func updateHeadPodToRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) {
+func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) {
+	var instance rayv1.RayCluster
+	gomega.Eventually(
+		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: "default"}, &instance),
+		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
+
 	headPods := corev1.PodList{}
-	headLabels := common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()
+	headLabels := common.RayClusterHeadPodsAssociationOptions(&instance).ToListOptions()
 
 	gomega.Eventually(
 		listResourceFunc(ctx, &headPods, headLabels...),
