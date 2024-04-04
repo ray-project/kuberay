@@ -7,7 +7,7 @@ This section walks through how to build and test the operator in a running Kuber
 | software | version  |                                                                link |
 |:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| go       |  v1.20   |                                  [download](https://golang.org/dl/) |
+| go       |  v1.21   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
@@ -18,14 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.20
+### Use go v1.21
 
-Currently, KubeRay uses go v1.20 for development.
+Currently, KubeRay uses go v1.21 for development.
 
 ```bash
-go install golang.org/dl/go1.20.11@latest
-go1.20.11 download
-export GOROOT=$(go1.20.11 env GOROOT)
+go install golang.org/dl/go1.21.3@latest
+go1.21.3 download
+export GOROOT=$(go1.21.3 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -186,7 +186,7 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 KubeRay uses the gofumpt linter.
 
-Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.20. Run this command to download it:
+Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.21. Run this command to download it:
 
 ```bash
 go install mvdan.cc/gofumpt@v0.5.0
@@ -198,17 +198,8 @@ Check that the `gofumpt` version is 0.5.0:
 
 ```bash
 gofumpt --version
-# v0.5.0 (go1.19)
+# v0.5.0 (go1.21.3
 ```
-
-Make sure your `go` version is still 1.20:
-
-```bash
-go version
-# go version go1.20 darwin/amd64
-```
-
-If your `go` version isn’t 1.20 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.20`. It should be back to 1.20.x.
 
 Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
 
