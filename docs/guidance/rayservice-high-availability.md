@@ -33,7 +33,7 @@ The [ray-service.high-availability-locust.yaml](/ray-operator/config/samples/ray
 kubectl exec -it $(kubectl get pods -o=name | grep locust-cluster-head) -- bash
 
 # Install locust and download locust_runner.py.
-# locust_runner.py helps distribute the locust workers accross the RayCluster.
+# locust_runner.py helps distribute the locust workers across the RayCluster.
 pip install locust && wget https://raw.githubusercontent.com/ray-project/serve_workloads/main/microbenchmarks/locust_runner.py
 
 # Start sending requests to the RayService.
@@ -46,7 +46,7 @@ The locust cluster sends requests to the RayService, starting with a low number 
 
 ```sh
 watch -n 1 "kubectl get pod"
-# Satge 1: Low request rate.
+# Stage 1: Low request rate.
 # NAME                                                 READY   STATUS     RESTARTS   AGE
 # rayservice-ha-raycluster-pfh8b-head-58xkr            2/2     Running    0          78s
 # rayservice-ha-raycluster-pfh8b-worker-worker-rd22n   0/1     Init:0/1   0          9s
@@ -123,7 +123,7 @@ Here are the details of the rolling update:
 3. After the serve service is fully updated, KubeRay removes the old RayCluster. The traffic is now fully served by the new RayCluster.
 
 ### Step 7: Examine the locust results
-In your locust terminal, You will see the faile rate is 0.00%.
+In your locust terminal, You will see the failed rate is 0.00%.
 ```sh
       # fails |
 |-------------|
