@@ -1265,18 +1265,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	// validation for the RayStartParam for the state.
-	isValid, err := common.ValidateHeadRayStartParams(ctx, newInstance.Spec.HeadGroupSpec)
-	if err != nil {
-		r.Recorder.Event(newInstance, corev1.EventTypeWarning, string(rayv1.RayConfigError), err.Error())
-	}
-	// only in invalid status that we update the status to unhealthy.
-	if !isValid {
-		newInstance.Status.State = rayv1.Unhealthy
-	} else {
-		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready
-		}
+	if utils.CheckAllPodsRunning(ctx, runtimePods) {
+		newInstance.Status.State = rayv1.Ready
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {

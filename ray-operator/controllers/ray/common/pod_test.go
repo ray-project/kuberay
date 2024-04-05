@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -756,36 +755,6 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
-}
-
-func TestValidateHeadRayStartParams_OK(t *testing.T) {
-	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	input.RayStartParams = map[string]string{"include-dashboard": "true"}
-	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
-	assert.Equal(t, true, isValid)
-	assert.Nil(t, err)
-	command := convertParamMap(input.RayStartParams)
-	assert.True(t, strings.Contains(command, "--include-dashboard=true"))
-}
-
-func TestValidateHeadRayStartParams_ValidWithObjectStoreMemoryError(t *testing.T) {
-	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
-	input.Template.Spec.Containers[0].Env = append(input.Template.Spec.Containers[0].Env, corev1.EnvVar{
-		Name:  AllowSlowStorageEnvVar,
-		Value: "1",
-	})
-	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
-	assert.Equal(t, true, isValid)
-	assert.True(t, errors.IsBadRequest(err))
-}
-
-func TestValidateHeadRayStartParams_InvalidObjectStoreMemory(t *testing.T) {
-	input := instance.Spec.HeadGroupSpec.DeepCopy()
-	input.RayStartParams[ObjectStoreMemoryKey] = "2000000000"
-	isValid, err := ValidateHeadRayStartParams(context.Background(), *input)
-	assert.Equal(t, false, isValid)
-	assert.True(t, errors.IsBadRequest(err))
 }
 
 func splitAndSort(s string) []string {
