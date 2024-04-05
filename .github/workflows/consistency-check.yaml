@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: '1.20'
+          go-version: v1.20
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -44,11 +44,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.19.x
-        uses: actions/setup-go@v2
+      - name: Set up Go
+        uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: '1.19'
+          go-version: v1.20
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -69,10 +69,10 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: '1.20'
+          go-version: v1.20
 
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
