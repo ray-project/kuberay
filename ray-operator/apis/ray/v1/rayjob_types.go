@@ -135,10 +135,10 @@ type RayJobStatus struct {
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="job status",type=string,JSONPath=".status.jobStatus",priority=0
 // +kubebuilder:printcolumn:name="deployment status",type=string,JSONPath=".status.jobDeploymentStatus",priority=0
+// +kubebuilder:printcolumn:name="ray cluster name",type="string",JSONPath=".status.rayClusterName",priority=0
 // +kubebuilder:printcolumn:name="start time",type=string,JSONPath=".status.startTime",priority=0
 // +kubebuilder:printcolumn:name="end time",type=string,JSONPath=".status.endTime",priority=0
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
-// +kubebuilder:printcolumn:name="ray cluster name",type="string",JSONPath=".status.rayClusterName",priority=1
 // +genclient
 // RayJob is the Schema for the rayjobs API
 type RayJob struct {
