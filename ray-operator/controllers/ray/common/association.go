@@ -75,7 +75,7 @@ func RayClusterWorkerPodsAssociationOptions(instance *rayv1.RayCluster) Associat
 	}
 }
 
-func RayClusterRedisPodAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterRedisCleanupPodAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
