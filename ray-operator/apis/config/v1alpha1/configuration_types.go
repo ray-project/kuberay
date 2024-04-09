@@ -32,9 +32,6 @@ type Configuration struct {
 	// If empty, all namespaces will be watched.
 	WatchNamespace string `json:"watchNamespace,omitempty"`
 
-	// ForcedClusterUpgrade enables force upgrading clusters.
-	ForcedClusterUpgrade bool `json:"forcedClusterUpgrade,omitempty"`
-
 	// LogFile is a path to a local file for synchronizing logs.
 	LogFile string `json:"logFile,omitempty"`
 

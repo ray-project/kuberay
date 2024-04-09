@@ -46,7 +46,6 @@ import (
 
 var (
 	DefaultRequeueDuration = 2 * time.Second
-	ForcedClusterUpgrade   bool
 	EnableBatchScheduler   bool
 
 	// Definition of a index field for pod name
@@ -693,42 +692,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		for _, extraHeadPodToDelete := range headPods.Items {
 			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
 				return err
-			}
-		}
-	}
-
-	if ForcedClusterUpgrade {
-		if len(headPods.Items) == 1 {
-			// head node amount is exactly 1, but we need to check if it has been changed
-			res := utils.PodNotMatchingTemplate(headPods.Items[0], instance.Spec.HeadGroupSpec.Template)
-			if res {
-				logger.Info(fmt.Sprintf("need to delete old head pod %s", headPods.Items[0].Name))
-				if err := r.Delete(ctx, &headPods.Items[0]); err != nil {
-					return err
-				}
-				return nil
-			}
-		}
-
-		// check if WorkerGroupSpecs has been changed and we need to kill worker pods
-		for _, worker := range instance.Spec.WorkerGroupSpecs {
-			workerPods := corev1.PodList{}
-			if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName).ToListOptions()...); err != nil {
-				return err
-			}
-			updatedWorkerPods := false
-			for _, item := range workerPods.Items {
-				if utils.PodNotMatchingTemplate(item, worker.Template) {
-					logger.Info(fmt.Sprintf("need to delete old worker pod %s", item.Name))
-					if err := r.Delete(ctx, &item); err != nil {
-						logger.Info(fmt.Sprintf("error deleting worker pod %s", item.Name))
-						return err
-					}
-					updatedWorkerPods = true
-				}
-			}
-			if updatedWorkerPods {
-				return nil
 			}
 		}
 	}
