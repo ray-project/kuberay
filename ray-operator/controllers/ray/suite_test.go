@@ -111,12 +111,12 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 		return fakeRayDashboardClient
 	}, func() utils.RayHttpProxyClientInterface {
 		return fakeRayHttpProxyClient
-	}, false).SetupWithManager(mgr)
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
 	err = NewRayJobReconciler(ctx, mgr, func() utils.RayDashboardClientInterface {
 		return fakeRayDashboardClient
-	}, false).SetupWithManager(mgr)
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {

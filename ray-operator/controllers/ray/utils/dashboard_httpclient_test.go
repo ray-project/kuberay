@@ -3,15 +3,12 @@ package utils
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -37,8 +34,6 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		expectJobId        string
 		errorJobId         string
 		rayDashboardClient *RayDashboardClient
-		testEnv            *envtest.Environment
-		mgr                ctrl.Manager
 	)
 
 	BeforeEach(func() {
@@ -57,17 +52,9 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			},
 		}
 
-		testEnv = &envtest.Environment{}
-
-		cfg, err := testEnv.Start()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg).ToNot(BeNil())
-
-		mgr, err = ctrl.NewManager(cfg, ctrl.Options{})
-		Expect(err).NotTo(HaveOccurred(), "failed to create manager")
-
-		rayDashboardClient = &RayDashboardClient{mgr: mgr}
-		rayDashboardClient.InitClient("127.0.0.1:8090")
+		rayDashboardClient = &RayDashboardClient{}
+		err := rayDashboardClient.InitClient("127.0.0.1:8090", nil)
+		Expect(err).To(BeNil())
 	})
 
 	It("Test ConvertRayJobToReq", func() {
@@ -183,12 +170,5 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
 		Expect(err).To(BeNil())
-	})
-
-	It("Test WithKubernetesServiceProxy", func() {
-		rayDashboardClient.WithKubernetesServiceProxy("test-namespace", "test-svc")
-
-		Expect(rayDashboardClient.dashboardURL).To(Equal(fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, "test-namespace", "test-svc")))
-		Expect(rayDashboardClient.client).To(Equal(mgr.GetHTTPClient()))
 	})
 })

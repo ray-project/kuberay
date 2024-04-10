@@ -57,11 +57,10 @@ type RayServiceReconciler struct {
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
 	httpProxyClientFunc func() utils.RayHttpProxyClientInterface
-	useKubernetesProxy  bool
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface, useKubernetesProxy bool) *RayServiceReconciler {
+func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface) *RayServiceReconciler {
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
@@ -71,7 +70,6 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboard
 
 		dashboardClientFunc: dashboardClientFunc,
 		httpProxyClientFunc: httpProxyClientFunc,
-		useKubernetesProxy:  useKubernetesProxy,
 	}
 }
 
@@ -1033,7 +1031,9 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
+	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+		return err
+	}
 
 	var isReady bool
 	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
@@ -1082,16 +1082,10 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
+
 	rayDashboardClient := r.dashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
-
-	if r.useKubernetesProxy {
-		headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayClusterInstance.Spec, rayClusterInstance.Name)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
-		}
-
-		rayDashboardClient.WithKubernetesServiceProxy(rayServiceInstance.Namespace, headSvcName)
+	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(ctx, rayServiceInstance, rayClusterInstance, rayServiceStatus)
@@ -1140,11 +1134,7 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 
 	rayContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
-	if r.useKubernetesProxy {
-		httpProxyClient.WithKubernetesPodProxy(headPod.Namespace, headPod.Name, servingPort)
-	} else {
-		httpProxyClient.SetHostIp(headPod.Status.PodIP, servingPort)
-	}
+	httpProxyClient.SetHostIp(headPod.Status.PodIP, headPod.Namespace, headPod.Name, servingPort)
 
 	if headPod.Labels == nil {
 		headPod.Labels = make(map[string]string)
