@@ -11,7 +11,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	corev1 "k8s.io/api/core/v1"
@@ -874,52 +873,4 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
-}
-
-// ValidateHeadRayStartParams will validate the head node's RayStartParams.
-// Return a bool indicating the validity of RayStartParams and an err with additional information.
-// If isValid is true, RayStartParams are valid. Any errors will only affect performance.
-// If isValid is false, RayStartParams are invalid will result in an unhealthy or failed Ray cluster.
-func ValidateHeadRayStartParams(ctx context.Context, rayHeadGroupSpec rayv1.HeadGroupSpec) (isValid bool, err error) {
-	log := ctrl.LoggerFrom(ctx)
-
-	// TODO (dxia): if you add more validation, please split checks into separate subroutines.
-	var objectStoreMemory int64
-	rayStartParams := rayHeadGroupSpec.RayStartParams
-	// validation for the object store memory
-	if objectStoreMemoryStr, ok := rayStartParams[ObjectStoreMemoryKey]; ok {
-		objectStoreMemory, err = strconv.ParseInt(objectStoreMemoryStr, 10, 64)
-		if err != nil {
-			isValid = false
-			err = errors.NewBadRequest(fmt.Sprintf("Cannot parse %s %s as an integer: %s", ObjectStoreMemoryKey, objectStoreMemoryStr, err.Error()))
-			return
-		}
-		for _, container := range rayHeadGroupSpec.Template.Spec.Containers {
-			// find the ray container.
-			if container.Name == RayHeadContainer {
-				if shmSize, ok := container.Resources.Requests.Memory().AsInt64(); ok && objectStoreMemory > shmSize {
-					if utils.EnvVarExists(AllowSlowStorageEnvVar, container.Env) {
-						// in ray if this env var is set, it will only affect the performance.
-						isValid = true
-						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+
-							"This will harm performance. Consider deleting files in %s or increasing head node's memory request.", ObjectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath)
-						log.Info(msg)
-						err = errors.NewBadRequest(msg)
-						return
-					} else {
-						// if not set, the head node may crash and result in an unhealthy status.
-						isValid = false
-						msg := fmt.Sprintf("RayStartParams: object store memory exceeds head node container's memory request, %s:%d, memory request:%d\n"+
-							"This will lead to a ValueError in Ray! Consider deleting files in %s or increasing head node's memory request.\n"+
-							"To ignore this warning, set the following environment variable in headGroupSpec: %s=1",
-							ObjectStoreMemoryKey, objectStoreMemory, shmSize, SharedMemoryVolumeMountPath, AllowSlowStorageEnvVar)
-						err = errors.NewBadRequest(msg)
-						return
-					}
-				}
-			}
-		}
-	}
-	// default return
-	return true, nil
 }

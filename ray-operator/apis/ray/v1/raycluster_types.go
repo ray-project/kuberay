@@ -111,7 +111,6 @@ type ClusterState string
 
 const (
 	Ready     ClusterState = "ready"
-	Unhealthy ClusterState = "unhealthy"
 	Failed    ClusterState = "failed"
 	Suspended ClusterState = "suspended"
 )
