@@ -1372,7 +1372,7 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "unexpectedExtraHeadService",
 			Namespace: namespaceStr,
-			Labels:    common.HeadServiceAssociationOptions(testRayCluster)[0].(client.MatchingLabels),
+			Labels:    common.HeadServiceLabels(*testRayCluster),
 		},
 	}
 
