@@ -55,7 +55,7 @@ func (list AssociationOptions) ToDeleteOptions() (options []client.DeleteAllOfOp
 	return options
 }
 
-func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterHeadPodsRelatedAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{

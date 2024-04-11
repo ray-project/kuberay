@@ -229,7 +229,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
 
 			// Delete the head Pod if it exists.
-			headPods, err := r.deleteAllPods(ctx, common.RayClusterHeadPodsAssociationOptions(instance))
+			headPods, err := r.deleteAllPods(ctx, common.RayClusterHeadPodsRelatedAssociationOptions(instance))
 			if err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
@@ -508,7 +508,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
 
-	if err := r.List(ctx, &services, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &services, common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -637,7 +637,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 	// check if all the pods exist
 	headPods := corev1.PodList{}
-	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 	if EnableBatchScheduler {
@@ -1232,11 +1232,11 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 	logger := ctrl.LoggerFrom(ctx)
 
 	runtimePods := corev1.PodList{}
-	if err := r.List(ctx, &runtimePods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &runtimePods, common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return "", err
 	}
 	if len(runtimePods.Items) != 1 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()))
+		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions()))
 		return "", nil
 	}
 	return runtimePods.Items[0].Status.PodIP, nil
@@ -1271,7 +1271,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	if err := r.List(ctx, &rayHeadSvc, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &rayHeadSvc, common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -1296,7 +1296,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 			}
 		}
 	} else {
-		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions())
+		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", common.RayClusterHeadPodsRelatedAssociationOptions(instance).ToListOptions())
 	}
 
 	return nil
