@@ -31,6 +31,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/utils/pointer"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -596,6 +597,93 @@ var _ = Context("Inside the default namespace", func() {
 			err := k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
 			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+		})
+	})
+
+	Describe("RayCluster without resource request", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("no-resource-req", namespace)
+		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		}
+		rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		}
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			// These test are designed based on the following assumptions:
+			// (1) Both head and worker Pods do not have resource requests, but they have resource limits.
+			// (2) There is only one worker group, and its `replicas` is set to 3.
+			Expect(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests).To(BeNil())
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests).To(BeNil())
+			Expect(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
+			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("Create a head Pod", func() {
+			err := k8sClient.List(ctx, &headPods, headFilters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+		})
+
+		It("Update all Pods to Running", func() {
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters(ctx, headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters(ctx, workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
+		})
+
+		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+		})
+
+		It("Check DesiredMemory and DesiredCPU", func() {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+			desiredMemory := resource.MustParse("4Gi")
+			desiredCPU := resource.MustParse("4")
+			Expect(rayCluster.Status.DesiredMemory).To(Equal(desiredMemory))
+			Expect(rayCluster.Status.DesiredCPU).To(Equal(desiredCPU))
 		})
 	})
 })
