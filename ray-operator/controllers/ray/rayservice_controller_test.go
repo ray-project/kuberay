@@ -233,7 +233,7 @@ var _ = Context("Inside the default namespace", func() {
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
 			// Update the status of the head Pod to Running.
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, "default")
 
 			// Make sure the pending RayCluster becomes the active RayCluster.
 			Eventually(
@@ -304,7 +304,7 @@ var _ = Context("Inside the default namespace", func() {
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
 
 			// Update the status of the head Pod to Running.
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, "default")
 
 			// Confirm switch to a new Ray Cluster.
 			Eventually(
@@ -424,7 +424,7 @@ var _ = Context("Inside the default namespace", func() {
 			// The pending RayCluster will become the active RayCluster after:
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
-			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
+			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName, "default")
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
@@ -521,7 +521,7 @@ var _ = Context("Inside the default namespace", func() {
 			// The pending RayCluster will become the active RayCluster after:
 			// (1) The pending RayCluster's head Pod becomes Running and Ready
 			// (2) The pending RayCluster's Serve Deployments are HEALTHY.
-			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName)
+			updateHeadPodToRunningAndReady(ctx, initialPendingClusterName, "default")
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 			Eventually(
@@ -667,7 +667,7 @@ var _ = Context("Inside the default namespace", func() {
 			// The cluster should switch once the deployments are finished updating
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName)
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, "default")
 
 			Eventually(
 				getRayClusterNameFunc(ctx, myRayService),

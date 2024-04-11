@@ -207,10 +207,10 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func(
 // There's no container runtime or any other K8s controllers.
 // So Pods are created, but no controller updates them from Pending to Running.
 // See https://book.kubebuilder.io/reference/envtest.html for more details.
-func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) {
+func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, namespace string) {
 	var instance rayv1.RayCluster
 	gomega.Eventually(
-		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: "default"}, &instance),
+		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, &instance),
 		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
 
 	headPods := corev1.PodList{}
@@ -218,7 +218,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) 
 
 	gomega.Eventually(
 		listResourceFunc(ctx, &headPods, headLabels...),
-		time.Second*15, time.Millisecond*500).Should(gomega.Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
+		time.Second*3, time.Millisecond*500).Should(gomega.Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
 
 	headPod := headPods.Items[0]
 	headPod.Status.Phase = corev1.PodRunning
@@ -228,13 +228,55 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string) 
 			Status: corev1.ConditionTrue,
 		},
 	}
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return k8sClient.Status().Update(ctx, &headPod)
-	})
+	err := k8sClient.Status().Update(ctx, &headPod)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update head Pod status to PodRunning")
 
 	// Make sure the head Pod is updated.
 	gomega.Eventually(
 		isAllPodsRunningByFilters(ctx, headPods, headLabels...),
 		time.Second*15, time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
+}
+
+// Update the status of the worker Pods to Running and Ready. Similar to updateHeadPodToRunningAndReady.
+func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName string, namespace string) {
+	rayCluster := &rayv1.RayCluster{}
+	gomega.Eventually(
+		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, rayCluster),
+		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
+
+	numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	workerPods := corev1.PodList{}
+	workerLabels := common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToListOptions()
+
+	gomega.Eventually(
+		listResourceFunc(ctx, &workerPods, workerLabels...),
+		time.Second*3, time.Millisecond*500).Should(gomega.Equal(int(numWorkerPods)), "workerGroup: %v", workerPods.Items)
+
+	for _, pod := range workerPods.Items {
+		pod.Status.Phase = corev1.PodRunning
+		pod.Status.Conditions = []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
+		}
+		err := k8sClient.Status().Update(ctx, &pod)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update worker Pod status to PodRunning")
+	}
+
+	// Make sure all worker Pods are updated.
+	gomega.Eventually(
+		isAllPodsRunningByFilters(ctx, workerPods, workerLabels...),
+		time.Second*3, time.Millisecond*500).Should(gomega.BeTrue(), "Worker Pods should be running: %v", workerPods.Items)
+}
+
+func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend bool) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
+		if err != nil {
+			return err
+		}
+		rayJob.Spec.Suspend = suspend
+		return k8sClient.Update(ctx, rayJob)
+	})
 }
