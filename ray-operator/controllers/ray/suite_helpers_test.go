@@ -49,10 +49,6 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 	}
 }
 
-func isAllPodsRunning(ctx context.Context, podlist corev1.PodList, filterLabels client.MatchingLabels, namespace string) bool {
-	return isAllPodsRunningByFilters(ctx, podlist, filterLabels, &client.ListOptions{Namespace: namespace})
-}
-
 func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt ...client.ListOption) bool {
 	err := k8sClient.List(ctx, &podlist, opt...)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "failed to list Pods")
