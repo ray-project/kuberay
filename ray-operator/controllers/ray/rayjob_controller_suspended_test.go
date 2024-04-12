@@ -26,7 +26,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Context("RayJob with suspend operation", func() {
@@ -67,7 +66,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			// The actual cluster instance and underlying resources SHOULD be created when suspend == false
 			Eventually(
 				// k8sClient client does not throw error if cluster IS found
-				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+				getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil())
 		})
 
@@ -137,7 +136,7 @@ var _ = Context("RayJob with suspend operation", func() {
 		// ensuring that the RayJob remains in Suspending status once the suspend field is set to true.
 		It("Add finalizer to the RayCluster", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: rayJob.Status.RayClusterName}, rayCluster)
+				err := k8sClient.Get(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster)
 				if err != nil {
 					return err
 				}
@@ -175,7 +174,7 @@ var _ = Context("RayJob with suspend operation", func() {
 
 		It("Remove finalizer from the RayCluster", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: rayJob.Status.RayClusterName}, rayCluster)
+				err := k8sClient.Get(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster)
 				if err != nil {
 					return err
 				}
