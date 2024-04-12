@@ -240,10 +240,10 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, rayCluster),
 		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
 
-	numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 	workerPods := corev1.PodList{}
 	workerLabels := common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToListOptions()
-
+	numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+	
 	gomega.Eventually(
 		listResourceFunc(ctx, &workerPods, workerLabels...),
 		time.Second*3, time.Millisecond*500).Should(gomega.Equal(int(numWorkerPods)), "workerGroup: %v", workerPods.Items)
