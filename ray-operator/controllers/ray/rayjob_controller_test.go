@@ -171,17 +171,15 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 			// Check whether the number of worker Pods is consistent with RayCluster CR or not.
 			numWorkerPods := int(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas)
-			workerFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: rayCluster.Spec.WorkerGroupSpecs[0].GroupName}
 			workerPods := corev1.PodList{}
 			Eventually(
-				listResourceFunc(ctx, &workerPods, workerFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()...),
 				time.Second*3, time.Millisecond*500).Should(Equal(int(numWorkerPods)), fmt.Sprintf("workerGroup: %v", workerPods.Items))
 
 			// The number of head Pods should be 1.
 			headPods := corev1.PodList{}
-			headFilterLabels := client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name, utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue}
 			Eventually(
-				listResourceFunc(ctx, &headPods, headFilterLabels, &client.ListOptions{Namespace: namespace}),
+				listResourceFunc(ctx, &headPods, common.RayClusterGroupPodsAssociationOptions(rayCluster, utils.RayNodeHeadGroupLabelValue).ToListOptions()...),
 				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head Pod: %v", headPods.Items))
 
 			// Update all Pods, including head and worker Pods, to Running and PodReady.
