@@ -338,6 +338,9 @@ func calculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
 		containerResource := container.Resources.Requests
+		if containerResource == nil {
+			containerResource = corev1.ResourceList{}
+		}
 		for name, quantity := range container.Resources.Limits {
 			if _, ok := containerResource[name]; !ok {
 				containerResource[name] = quantity
