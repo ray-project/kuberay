@@ -437,7 +437,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	rayClusterList := rayv1.RayClusterList{}
 
 	var err error
-	if err = r.List(ctx, &rayClusterList, common.GetRayClusterWithRayServiceAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+	if err = r.List(ctx, &rayClusterList, common.RayServiceGetRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
 		logger.Error(err, "Fail to list RayCluster for "+rayServiceInstance.Name)
 		return err
 	}
