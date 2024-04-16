@@ -36,6 +36,7 @@ commonLabels:
   app.kubernetes.io/component: kuberay-operator
 
 patches:
+- path: remove_default_namespace.yaml
 - path: kuberay-operator-image-patch.yaml
   target:
     group: apps
