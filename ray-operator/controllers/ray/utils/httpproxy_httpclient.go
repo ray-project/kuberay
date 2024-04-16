@@ -1,15 +1,18 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type RayHttpProxyClientInterface interface {
 	InitClient()
-	CheckHealth() error
+	CheckProxyActorHealth(ctx context.Context) error
 	SetHostIp(hostIp string, port int)
 }
 
@@ -24,7 +27,7 @@ type RayHttpProxyClient struct {
 
 func (r *RayHttpProxyClient) InitClient() {
 	r.client = http.Client{
-		Timeout: 20 * time.Millisecond,
+		Timeout: 2 * time.Second,
 	}
 }
 
@@ -32,21 +35,21 @@ func (r *RayHttpProxyClient) SetHostIp(hostIp string, port int) {
 	r.httpProxyURL = fmt.Sprintf("http://%s:%d/", hostIp, port)
 }
 
-func (r *RayHttpProxyClient) CheckHealth() error {
-	req, err := http.NewRequest("GET", r.httpProxyURL+RayServeProxyHealthPath, nil)
+// CheckProxyActorHealth checks the health status of the Ray Serve proxy actor.
+func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
+	logger := ctrl.LoggerFrom(ctx)
+	resp, err := r.client.Get(r.httpProxyURL + RayServeProxyHealthPath)
 	if err != nil {
-		return err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
+		logger.Error(err, "CheckProxyActorHealth fails.")
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("RayHttpProxyClient CheckHealth fail: %s %s", resp.Status, string(body))
+	if resp.StatusCode != 200 {
+		err := fmt.Errorf("CheckProxyActorHealth fails: Status code is not 200")
+		logger.Error(err, "CheckProxyActorHealth fails.", "status code", resp.StatusCode, "status", resp.Status, "body", string(body))
+		return err
 	}
 
 	return nil
