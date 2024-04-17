@@ -302,7 +302,7 @@ class TestRayServiceAutoscaling:
 
         yield
 
-        # K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.cleanup()
 
     def test_service_autoscaling(self, set_up_cluster):
         """This test uses a special workload that can allow us to
@@ -345,7 +345,7 @@ class TestRayServiceAutoscaling:
                 namespace=NAMESPACE,
                 filepath=cr_yaml_path,
             ),
-            # RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, cr_yaml_path),
+            RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, cr_yaml_path),
         ]
 
         for cr_event in cr_events:
