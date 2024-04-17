@@ -1,9 +1,9 @@
 """Configuration test framework for KubeRay"""
 import json
-import jsonpatch
-from typing import Dict, List, Optional
-import unittest
 import time
+import unittest
+from typing import Dict, List, Optional
+import jsonpatch
 
 from framework.utils import (
     create_custom_object,
@@ -306,17 +306,20 @@ class CurlServiceRule(Rule):
                 name=custom_resource["metadata"]["name"],
                 namespace=cr_namespace,
                 path=query.get("path").rstrip("/"),
-                json=json.dumps(query["json_args"]),
+                json=json.dumps(query["json_args"])
             )
+
             if self.start_in_background:
-                shell_subprocess_run(f"{cmd} &", hide_output=True)
+                shell_subprocess_run(f"{cmd} &", hide_output=False)
 
             else:
                 output = shell_subprocess_check_output(cmd)
+                logger.info("curl output: %s", output.decode('utf-8'))
                 if hasattr(query.get("expected_output"), "__iter__"):
                     assert output.decode('utf-8') in query["expected_output"]
                 else:
                     assert output.decode('utf-8') == query["expected_output"]
+            time.sleep(1)
 
 class AutoscaleRule(Rule):
     def __init__(

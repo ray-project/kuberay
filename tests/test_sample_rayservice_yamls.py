@@ -1,12 +1,11 @@
 ''' Test sample RayService YAML files to catch invalid and outdated ones. '''
 from copy import deepcopy
-from kubernetes import client
 import logging
 import pytest
 import sys
 from tempfile import NamedTemporaryFile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 import yaml
 
 from framework.prototype import (
@@ -15,10 +14,7 @@ from framework.prototype import (
     EasyJobRule,
     CurlServiceRule,
     AutoscaleRule,
-    get_expected_head_pods,
-    get_expected_worker_pods,
     show_cluster_info,
-    check_pod_running,
 )
 
 from framework.utils import (
