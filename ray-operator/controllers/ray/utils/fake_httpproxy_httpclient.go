@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -21,7 +22,7 @@ func (r *FakeRayHttpProxyClient) SetHostIp(hostIp string, port int) {
 	r.httpProxyURL = fmt.Sprintf("http://%s:%d", hostIp, port)
 }
 
-func (r *FakeRayHttpProxyClient) CheckHealth() error {
+func (r *FakeRayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
 	// TODO: test check return error cases.
 	// Always return successful.
 	return nil
