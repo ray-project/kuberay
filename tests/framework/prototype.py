@@ -288,10 +288,9 @@ class ShutdownJobRule(Rule):
 class CurlServiceRule(Rule):
     """Using curl to access the deployed application(s) on RayService"""
     CURL_CMD_FMT = (
-        "kubectl exec curl -n {namespace} -- sh -c "
-        "\"curl -X POST -H 'Content-Type: application/json' "
-        "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}' "
-        "> /{filename}.output 2>&1\""
+        "kubectl exec curl -n {namespace} -- "
+        "curl -X POST -H 'Content-Type: application/json' "
+        "{name}-serve-svc.{namespace}.svc.cluster.local:8000{path}/ -d '{json}'"
     )
 
     def __init__(self, queries: List[Dict[str, str]], start_in_background: bool = False):
@@ -304,21 +303,19 @@ class CurlServiceRule(Rule):
             start_curl_pod("curl", cr_namespace, timeout_s=30)
 
         for query in self.queries:
-            now = datetime.datetime.now()
-            filename = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
-
             cmd = self.CURL_CMD_FMT.format(
                 name=custom_resource["metadata"]["name"],
                 namespace=cr_namespace,
                 path=query.get("path").rstrip("/"),
-                json=json.dumps(query["json_args"]),
-                filename=filename)
+                json=json.dumps(query["json_args"])
+            )
 
             if self.start_in_background:
                 shell_subprocess_run(f"{cmd} &", hide_output=False)
 
             else:
                 output = shell_subprocess_check_output(cmd)
+                logger.info("curl output: %s", output.decode('utf-8'))
                 if hasattr(query.get("expected_output"), "__iter__"):
                     assert output.decode('utf-8') in query["expected_output"]
                 else:

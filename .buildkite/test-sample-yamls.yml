@@ -50,8 +50,7 @@
     - IMG=kuberay/operator:nightly make docker-image
     - popd
     # Use nightly KubeRay operator image
-    # - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
-    - sleep 14400
+    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
 
 - label: 'Test RayService Sample YAMLs (latest release)'
   instance_size: large
