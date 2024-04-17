@@ -1,6 +1,5 @@
 """Configuration test framework for KubeRay"""
 import json
-import datetime
 import time
 import unittest
 from typing import Dict, List, Optional
