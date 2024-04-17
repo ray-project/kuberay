@@ -298,7 +298,7 @@ class TestRayServiceAutoscaling:
 
         yield
 
-        # K8S_CLUSTER_MANAGER.cleanup()
+        K8S_CLUSTER_MANAGER.cleanup()
 
     def test_service_autoscaling(self, set_up_cluster):
         """This test uses a special workload that can allow us to
