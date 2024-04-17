@@ -323,6 +323,7 @@ class CurlServiceRule(Rule):
                     assert output.decode('utf-8') in query["expected_output"]
                 else:
                     assert output.decode('utf-8') == query["expected_output"]
+            time.sleep(1)
 
 class AutoscaleRule(Rule):
     def __init__(
