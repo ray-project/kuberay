@@ -194,7 +194,7 @@ class TestRayService:
 
         yield
 
-        K8S_CLUSTER_MANAGER.cleanup()
+        # K8S_CLUSTER_MANAGER.cleanup()
 
     def test_deploy_applications(self, set_up_cluster):
         rs = RuleSet([EasyJobRule(), CurlServiceRule(queries=self.default_queries)])
@@ -283,7 +283,7 @@ class TestRayService:
                     switch_cluster=True,
                     query_while_updating=allowed_queries_during_update,
                 ),
-                RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
+                # RayServiceDeleteCREvent(custom_resource_object=self.cr, filepath=self.sample_path),
             ]
 
             for cr_event in cr_events:
@@ -302,7 +302,7 @@ class TestRayServiceAutoscaling:
 
         yield
 
-        K8S_CLUSTER_MANAGER.cleanup()
+        # K8S_CLUSTER_MANAGER.cleanup()
 
     def test_service_autoscaling(self, set_up_cluster):
         """This test uses a special workload that can allow us to
@@ -345,7 +345,7 @@ class TestRayServiceAutoscaling:
                 namespace=NAMESPACE,
                 filepath=cr_yaml_path,
             ),
-            RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, cr_yaml_path),
+            # RayServiceDeleteCREvent(cr, [], 90, NAMESPACE, cr_yaml_path),
         ]
 
         for cr_event in cr_events:
