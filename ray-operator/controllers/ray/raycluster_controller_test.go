@@ -686,4 +686,43 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(rayCluster.Status.DesiredCPU).To(Equal(desiredCPU))
 		})
 	})
+
+	Describe("RayCluster with invalid NumOfHosts", func() {
+		// Some users only upgrade the KubeRay image without upgrading the CRD. For example, when a
+		// user upgrades the KubeRay operator from v1.0.0 to v1.1.0 without upgrading the CRD, the
+		// KubeRay operator will use the zero value of `NumOfHosts` in the CRD. Hence, all worker
+		// Pods will be deleted. This test case is designed to prevent Pods from being deleted.
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-invalid-numofhosts", namespace)
+		numOfHosts := int32(0)
+		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			// These test are designed based on the following assumptions:
+			// (1) There is only one worker group, and its `replicas` is set to 3, and `workersToDelete` is empty.
+			// (2) The worker group has an invalid `numOfHosts` value of 0.
+			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(numOfHosts))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3 * int(numOfHosts)
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+	})
 })
