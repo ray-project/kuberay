@@ -93,7 +93,7 @@ func RayClusterAllPodsAssociationOptions(instance *rayv1.RayCluster) Association
 	}
 }
 
-func RayServiceGetRayClustersAssociationOptions(rayService *rayv1.RayService) AssociationOptions {
+func RayServiceRayClustersAssociationOptions(rayService *rayv1.RayService) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(rayService.Namespace),
 		client.MatchingLabels{
