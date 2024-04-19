@@ -82,9 +82,11 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboard
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
@@ -1029,7 +1031,9 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
+	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+		return err
+	}
 
 	var isReady bool
 	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
@@ -1078,8 +1082,11 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
+
 	rayDashboardClient := r.dashboardClientFunc()
-	rayDashboardClient.InitClient(clientURL)
+	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+	}
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(ctx, rayServiceInstance, rayClusterInstance, rayServiceStatus)
 	if shouldUpdate {
@@ -1127,7 +1134,8 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 
 	rayContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
-	httpProxyClient.SetHostIp(headPod.Status.PodIP, servingPort)
+	httpProxyClient.SetHostIp(headPod.Status.PodIP, headPod.Namespace, headPod.Name, servingPort)
+
 	if headPod.Labels == nil {
 		headPod.Labels = make(map[string]string)
 	}

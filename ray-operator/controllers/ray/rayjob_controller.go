@@ -60,6 +60,7 @@ func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClie
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
@@ -93,11 +94,20 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
 		// the case where JobStatus is JobStatusNew.
 		if !rayv1.IsJobTerminal(rayJobInstance.Status.JobStatus) {
+			rayClusterNamespacedName := common.RayJobRayClusterNamespacedName(rayJobInstance)
+			rayClusterInstance := &rayv1.RayCluster{}
+			if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
+				logger.Error(err, "Failed to get RayCluster")
+			}
+
 			rayDashboardClient := r.dashboardClientFunc()
-			rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
-			err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId)
+			err = rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance)
 			if err != nil {
-				logger.Info("Failed to stop job for RayJob", "error", err)
+				logger.Error(err, "Failed to initialize dashboard client")
+			}
+			err = rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId)
+			if err != nil {
+				logger.Error(err, "Failed to stop job for RayJob")
 			}
 		}
 
@@ -208,7 +218,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of ray jobs
 		rayDashboardClient := r.dashboardClientFunc()
-		rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL)
+		if err := rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.

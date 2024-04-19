@@ -31,7 +31,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(url string)
+	InitClient(url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -46,16 +46,24 @@ type RayDashboardClientInterface interface {
 }
 
 type BaseDashboardClient struct {
-	client       http.Client
+	client       *http.Client
 	dashboardURL string
 }
 
-func GetRayDashboardClient() RayDashboardClientInterface {
-	return &RayDashboardClient{}
+func GetRayDashboardClientFunc(mgr ctrl.Manager, useProxy bool) func() RayDashboardClientInterface {
+	return func() RayDashboardClientInterface {
+		return &RayDashboardClient{
+			mgr:      mgr,
+			useProxy: useProxy,
+		}
+	}
 }
 
 type RayDashboardClient struct {
 	BaseDashboardClient
+
+	mgr      ctrl.Manager
+	useProxy bool
 }
 
 // FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
@@ -101,11 +109,24 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func (r *RayDashboardClient) InitClient(url string) {
-	r.client = http.Client{
+func (r *RayDashboardClient) InitClient(url string, rayCluster *rayv1.RayCluster) error {
+	if r.useProxy {
+		headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+		if err != nil {
+			return err
+		}
+
+		r.client = r.mgr.GetHTTPClient()
+		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
+		return nil
+	}
+
+	r.client = &http.Client{
 		Timeout: 2 * time.Second,
 	}
+
 	r.dashboardURL = "http://" + url
+	return nil
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.

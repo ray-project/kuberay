@@ -13,25 +13,38 @@ import (
 type RayHttpProxyClientInterface interface {
 	InitClient()
 	CheckProxyActorHealth(ctx context.Context) error
-	SetHostIp(hostIp string, port int)
+	SetHostIp(hostIp, podNamespace, podName string, port int)
 }
 
-func GetRayHttpProxyClient() RayHttpProxyClientInterface {
-	return &RayHttpProxyClient{}
+func GetRayHttpProxyClientFunc(mgr ctrl.Manager, useProxy bool) func() RayHttpProxyClientInterface {
+	return func() RayHttpProxyClientInterface {
+		return &RayHttpProxyClient{
+			mgr:      mgr,
+			useProxy: useProxy,
+		}
+	}
 }
 
 type RayHttpProxyClient struct {
-	client       http.Client
+	client       *http.Client
 	httpProxyURL string
+
+	mgr      ctrl.Manager
+	useProxy bool
 }
 
 func (r *RayHttpProxyClient) InitClient() {
-	r.client = http.Client{
+	r.client = &http.Client{
 		Timeout: 2 * time.Second,
 	}
 }
 
-func (r *RayHttpProxyClient) SetHostIp(hostIp string, port int) {
+func (r *RayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, port int) {
+	if r.useProxy {
+		r.client = r.mgr.GetHTTPClient()
+		r.httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", r.mgr.GetConfig().Host, podNamespace, podName, port)
+	}
+
 	r.httpProxyURL = fmt.Sprintf("http://%s:%d/", hostIp, port)
 }
 

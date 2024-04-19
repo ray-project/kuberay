@@ -51,8 +51,10 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				RuntimeEnvYAML: runtimeEnvStr,
 			},
 		}
+
 		rayDashboardClient = &RayDashboardClient{}
-		rayDashboardClient.InitClient("127.0.0.1:8090")
+		err := rayDashboardClient.InitClient("127.0.0.1:8090", nil)
+		Expect(err).To(BeNil())
 	})
 
 	It("Test ConvertRayJobToReq", func() {
