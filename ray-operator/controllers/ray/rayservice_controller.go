@@ -1031,7 +1031,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
 		return err
 	}
 
@@ -1084,7 +1084,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance); err != nil {
+	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 	}
 
