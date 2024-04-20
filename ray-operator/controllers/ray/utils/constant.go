@@ -106,6 +106,8 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+	RAYJOB_BACKOFF_LIMIT_ENV                = "RAYJOB_BACKOFF_LIMIT"
+	RAYJOB_BACKOFF_LIMIT                    = 2
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...

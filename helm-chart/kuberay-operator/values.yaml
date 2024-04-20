@@ -128,3 +128,6 @@ env:
 # Enabling this feature contributes to the robustness of Ray clusters.
 # - name: ENABLE_PROBES_INJECTION
 #   value: "true"
+# BackoffLimit of k8s job started by a RayJob.
+# - name: RAYJOB_BACKOFF_LIMIT
+#   value: 2
