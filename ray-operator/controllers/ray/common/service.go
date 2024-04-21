@@ -62,12 +62,16 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 	defaultNamespace := cluster.Namespace
 	defaultType := cluster.Spec.HeadGroupSpec.ServiceType
 
-	defaultAppProtocol := utils.DefaultServiceAppProtocol
-	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	portsInt := getServicePorts(cluster)
+	// `servicePorts` is a map of port names to port infos, while `ports` is a list of ServicePort objects
+	servicePorts := getServicePorts(cluster)
 	ports := []corev1.ServicePort{}
-	for name, port := range portsInt {
-		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
+	for svc, portInfo := range servicePorts {
+		appProtocol := utils.DefaultServiceAppProtocol
+		if portInfo.AppProtocol != "" {
+			appProtocol = portInfo.AppProtocol
+		}
+
+		svcPort := corev1.ServicePort{Name: svc, Port: portInfo.PortNumber, AppProtocol: &appProtocol}
 		ports = append(ports, svcPort)
 	}
 	if cluster.Spec.HeadGroupSpec.HeadService != nil {
@@ -198,12 +202,17 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	portsInt := getServicePorts(rayCluster)
+	// `servicePorts` is a map of port names to port infos, while `ports` is a list of ServicePort objects
+	servicePorts := getServicePorts(rayCluster)
 	ports := []corev1.ServicePort{}
-	for name, port := range portsInt {
-		if name == utils.ServingPortName {
-			svcPort := corev1.ServicePort{Name: name, Port: port}
+	for svc, portInfo := range servicePorts {
+		if svc == utils.ServingPortName {
+			appProtocol := utils.DefaultServiceAppProtocol
+			if portInfo.AppProtocol != "" {
+				appProtocol = portInfo.AppProtocol
+			}
+
+			svcPort := corev1.ServicePort{Name: name, Port: portInfo.PortNumber, AppProtocol: &appProtocol}
 			ports = append(ports, svcPort)
 			break
 		}
@@ -360,7 +369,7 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 }
 
 // getServicePorts will either user passing ports or default ports to create service.
-func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
+func getServicePorts(cluster rayv1.RayCluster) map[string]portInfo {
 	ports, err := getPortsFromCluster(cluster)
 	// Assign default ports
 	if err != nil || len(ports) == 0 {
@@ -369,35 +378,55 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 
 	// check if metrics port is defined. If not, add default value for it.
 	if _, metricsDefined := ports[utils.MetricsPortName]; !metricsDefined {
-		ports[utils.MetricsPortName] = utils.DefaultMetricsPort
+		ports[utils.MetricsPortName] = portInfo{PortNumber: utils.DefaultMetricsPort, AppProtocol: utils.HTTPProtocol}
 	}
 
 	return ports
 }
 
+type portInfo struct {
+	PortNumber  int32
+	AppProtocol string
+}
+
 // getPortsFromCluster get the ports from head container and directly map them in service
 // It's user's responsibility to maintain rayStartParam ports and container ports mapping
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
-func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
-	svcPorts := map[string]int32{}
+func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]portInfo, error) {
+	svcPorts := make(map[string]portInfo)
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
 	for _, port := range cPorts {
 		if port.Name == "" {
 			port.Name = fmt.Sprint(port.ContainerPort) + "-port"
 		}
-		svcPorts[port.Name] = port.ContainerPort
+		svcPorts[port.Name] = portInfo{PortNumber: port.ContainerPort}
 	}
 
 	return svcPorts, nil
 }
 
-func getDefaultPorts() map[string]int32 {
-	return map[string]int32{
-		utils.ClientPortName:    utils.DefaultClientPort,
-		utils.RedisPortName:     utils.DefaultRedisPort,
-		utils.DashboardPortName: utils.DefaultDashboardPort,
-		utils.MetricsPortName:   utils.DefaultMetricsPort,
-		utils.ServingPortName:   utils.DefaultServingPort,
+func getDefaultPorts() map[string]portInfo {
+	return map[string]portInfo{
+		utils.ClientPortName: {
+			PortNumber:  utils.DefaultClientPort,
+			AppProtocol: utils.GRPCProtocol,
+		},
+		utils.RedisPortName: {
+			PortNumber:  utils.DefaultRedisPort,
+			AppProtocol: utils.GRPCProtocol,
+		},
+		utils.DashboardPortName: {
+			PortNumber:  utils.DefaultDashboardPort,
+			AppProtocol: utils.HTTPProtocol,
+		},
+		utils.MetricsPortName: {
+			PortNumber:  utils.DefaultMetricsPort,
+			AppProtocol: utils.HTTPProtocol,
+		},
+		utils.ServingPortName: {
+			PortNumber:  utils.DefaultServingPort,
+			AppProtocol: utils.HTTPProtocol,
+		},
 	}
 }

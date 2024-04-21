@@ -28,8 +28,8 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) 
 
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := utils.DefaultDashboardPort
-	if port, ok := servicePorts["dashboard"]; ok {
-		dashboardPort = int(port)
+	if portInfo, ok := servicePorts[utils.DashboardPortName]; ok {
+		dashboardPort = int(portInfo.PortNumber)
 	}
 
 	weight := int32(100)

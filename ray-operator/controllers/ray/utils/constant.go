@@ -78,6 +78,9 @@ const (
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
 
+	HTTPProtocol = "http"
+	GRPCProtocol = "grpc"
+
 	// The default application name
 	ApplicationName = "kuberay"
 
