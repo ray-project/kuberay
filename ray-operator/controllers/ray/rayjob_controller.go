@@ -327,11 +327,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			} else {
 				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
 				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
+
 				if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+				if _, err = r.deleteSubmitterJob(ctx, rayJobInstance); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
 		}
+
 		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
 	default:
