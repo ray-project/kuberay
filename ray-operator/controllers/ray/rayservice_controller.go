@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"os"
 	"reflect"
 	"strconv"
@@ -60,7 +61,9 @@ type RayServiceReconciler struct {
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface) *RayServiceReconciler {
+func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, config v1alpha1.Configuration) *RayServiceReconciler {
+	var dashboardClientFunc = utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+	var httpProxyClientFunc = utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
