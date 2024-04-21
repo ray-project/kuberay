@@ -331,7 +331,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
-				if _, err = r.deleteSubmitterJob(ctx, rayJobInstance); err != nil {
+				if err = r.Client.Delete(ctx, rayJobInstance); err != nil {
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 				}
 			}
