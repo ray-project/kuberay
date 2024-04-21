@@ -285,45 +285,45 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
 	userTemplateClusterName := "userTemplateClusterName"
-	template_labels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
-	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, template_labels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
+	templateLabels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
+	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, templateLabels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
 
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
-	default_labels := HeadServiceLabels(*testRayClusterWithHeadService)
+	defaultLabels := HeadServiceLabels(*testRayClusterWithHeadService)
 	// Make sure this test isn't spuriously passing. Check that RayClusterLabelKey is in the default labels.
-	if _, ok := default_labels[utils.RayClusterLabelKey]; !ok {
+	if _, ok := defaultLabels[utils.RayClusterLabelKey]; !ok {
 		t.Errorf("utils.RayClusterLabelKey=%s should be in the default labels", utils.RayClusterLabelKey)
 	}
 	for k, v := range headService.Spec.Selector {
 		// If k is not in the default labels, then the selector field should not contain it.
-		if _, ok := default_labels[k]; !ok {
+		if _, ok := defaultLabels[k]; !ok {
 			t.Errorf("Selector field should not contain key=%s", k)
 		}
 		// If k is in the template labels, then the selector field should contain it with the value from the template labels.
 		// Otherwise, it should contain the value from the default labels.
-		if _, ok := template_labels[k]; ok {
-			if v != template_labels[k] {
-				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, template_labels[k], v)
+		if _, ok := templateLabels[k]; ok {
+			if v != templateLabels[k] {
+				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, templateLabels[k], v)
 			}
 		} else {
-			if v != default_labels[k] {
-				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, default_labels[k], v)
+			if v != defaultLabels[k] {
+				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, defaultLabels[k], v)
 			}
 		}
 	}
 	// The selector field should have every key from the default labels.
-	for k := range default_labels {
+	for k := range defaultLabels {
 		if _, ok := headService.Spec.Selector[k]; !ok {
 			t.Errorf("Selector field should contain key=%s", k)
 		}
 	}
 
 	// Print default labels for debugging
-	for k, v := range default_labels {
+	for k, v := range defaultLabels {
 		fmt.Printf("default label: key=%s, value=%s\n", k, v)
 	}
 
@@ -593,7 +593,7 @@ func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType co
 	}
 }
 
-func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, default_namespace string, userName string, t *testing.T) {
+func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, defaultNamespace string, userName string, t *testing.T) {
 	// Test name and namespace are generated if not specified
 	if svc.ObjectMeta.Name == "" {
 		t.Errorf("Generated service name is empty")
@@ -602,8 +602,8 @@ func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, defaul
 		t.Errorf("Generated service namespace is empty")
 	}
 	// The user-provided namespace should be ignored, but the name should be respected
-	if svc.ObjectMeta.Namespace != default_namespace {
-		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", default_namespace, svc.ObjectMeta.Namespace)
+	if svc.ObjectMeta.Namespace != defaultNamespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", defaultNamespace, svc.ObjectMeta.Namespace)
 	}
 	if svc.ObjectMeta.Name != userName {
 		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)
