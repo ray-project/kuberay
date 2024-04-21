@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -25,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1 "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -44,7 +44,7 @@ type RayJobReconciler struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, config v1alpha1.Configuration) *RayJobReconciler {
+func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, config configv1.Configuration) *RayJobReconciler {
 	var dashboardClientFunc = utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
