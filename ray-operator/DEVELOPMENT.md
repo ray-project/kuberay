@@ -5,7 +5,7 @@ This section walks through how to build and test the operator in a running Kuber
 ## Requirements
 
 | software | version  |                                                                link |
-| :------- | :------: | ------------------------------------------------------------------: |
+|:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
 | go       |  v1.20   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
