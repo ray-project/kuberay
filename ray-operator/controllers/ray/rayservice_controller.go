@@ -36,7 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1 "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -61,7 +61,7 @@ type RayServiceReconciler struct {
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconcilerFromConfig(ctx context.Context, mgr manager.Manager, config configv1.Configuration) *RayServiceReconciler {
+func NewRayServiceReconcilerFromConfig(ctx context.Context, mgr manager.Manager, config configapi.Configuration) *RayServiceReconciler {
 	var dashboardClientFunc = utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 	var httpProxyClientFunc = utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 	return &RayServiceReconciler{
