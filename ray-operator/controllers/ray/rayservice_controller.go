@@ -435,12 +435,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterList := rayv1.RayClusterList{}
-	filterLabels := client.MatchingLabels{
-		utils.RayOriginatedFromCRNameLabelKey: rayServiceInstance.Name,
-		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
-	}
+
 	var err error
-	if err = r.List(ctx, &rayClusterList, client.InNamespace(rayServiceInstance.Namespace), filterLabels); err != nil {
+	if err = r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
 		logger.Error(err, "Fail to list RayCluster for "+rayServiceInstance.Name)
 		return err
 	}
@@ -1237,9 +1234,7 @@ func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 // TODO: Move this function to util.go and always use this function to retrieve the head Pod.
 func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	podList := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
-
-	if err := r.List(ctx, &podList, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return nil, err
 	}
 
