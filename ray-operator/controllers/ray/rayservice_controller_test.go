@@ -249,13 +249,8 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should create more than 1 worker", func() {
-			var instance rayv1.RayCluster
 			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, &instance),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", myRayService.Status.ActiveServiceStatus.RayClusterName)
-
-			Eventually(
-				listResourceFunc(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(&instance, "small-group").ToListOptions()...),
+				listResourceFunc(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(myRayCluster, "small-group").ToListOptions()...),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))
