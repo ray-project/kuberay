@@ -61,9 +61,22 @@ type RayServiceReconciler struct {
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, config configv1.Configuration) *RayServiceReconciler {
+func NewRayServiceReconcilerFromConfig(ctx context.Context, mgr manager.Manager, config configv1.Configuration) *RayServiceReconciler {
 	var dashboardClientFunc = utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 	var httpProxyClientFunc = utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
+	return &RayServiceReconciler{
+		Client:                       mgr.GetClient(),
+		Scheme:                       mgr.GetScheme(),
+		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
+		ServeConfigs:                 cmap.New[string](),
+		RayClusterDeletionTimestamps: cmap.New[time.Time](),
+
+		dashboardClientFunc: dashboardClientFunc,
+		httpProxyClientFunc: httpProxyClientFunc,
+	}
+}
+
+func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface, httpProxyClientFunc func() utils.RayHttpProxyClientInterface) *RayServiceReconciler {
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
