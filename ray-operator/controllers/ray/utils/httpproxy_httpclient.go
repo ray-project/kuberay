@@ -16,11 +16,11 @@ type RayHttpProxyClientInterface interface {
 	SetHostIp(hostIp, podNamespace, podName string, port int)
 }
 
-func GetRayHttpProxyClientFunc(mgr ctrl.Manager, useProxy bool) func() RayHttpProxyClientInterface {
+func GetRayHttpProxyClientFunc(mgr ctrl.Manager, UseKubernetesProxy bool) func() RayHttpProxyClientInterface {
 	return func() RayHttpProxyClientInterface {
 		return &RayHttpProxyClient{
 			mgr:                mgr,
-			UseKubernetesProxy: useProxy,
+			UseKubernetesProxy: UseKubernetesProxy,
 		}
 	}
 }
