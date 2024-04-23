@@ -92,7 +92,7 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headFilters := common.RayClusterHeadPodsRelatedAssociationOptions(rayCluster).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -326,7 +326,7 @@ var _ = Context("Inside the default namespace", func() {
 		workerPods := corev1.PodList{}
 		allPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headFilters := common.RayClusterHeadPodsRelatedAssociationOptions(rayCluster).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		allFilters := common.RayClusterRelatedAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
@@ -581,7 +581,7 @@ var _ = Context("Inside the default namespace", func() {
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
-		headFilters := common.RayClusterHeadPodsRelatedAssociationOptions(rayCluster).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
 		It("Create a RayCluster with PodTemplate referencing a different namespace.", func() {
 			rayCluster.Spec.HeadGroupSpec.Template.ObjectMeta.Namespace = "not-default"

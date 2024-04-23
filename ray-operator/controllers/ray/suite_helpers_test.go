@@ -221,7 +221,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, 
 		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
 
 	headPods := corev1.PodList{}
-	headLabels := common.RayClusterHeadPodsRelatedAssociationOptions(&instance).ToListOptions()
+	headLabels := common.RayClusterHeadPodsAssociationOptions(&instance).ToListOptions()
 
 	gomega.Eventually(
 		listResourceFunc(ctx, &headPods, headLabels...),
