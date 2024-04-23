@@ -422,11 +422,6 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
-	backoffLimit, err := strconv.Atoi(os.Getenv(utils.RAYJOB_BACKOFF_LIMIT_ENV))
-	if err != nil {
-		logger.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d", utils.RAYJOB_BACKOFF_LIMIT_ENV, utils.RAYJOB_BACKOFF_LIMIT))
-		backoffLimit = utils.RAYJOB_BACKOFF_LIMIT
-	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
@@ -442,7 +437,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			// is attempted 3 times at the maximum, but still mitigates the case of unrecoverable
 			// application-level errors, where the maximum number of retries is reached, and the job
 			// completion time increases with no benefits, but wasted resource cycles.
-			BackoffLimit: backoffLimit,
+			BackoffLimit: pointer.Int32(2),
 			Template:     submitterTemplate,
 		},
 	}
