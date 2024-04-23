@@ -59,6 +59,7 @@ func main() {
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
+	var forcedClusterUpgrade bool
 	var logFile string
 	var logFileEncoder string
 	var logStdoutEncoder string
@@ -78,8 +79,8 @@ func main() {
 		"watch-namespace",
 		"",
 		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
-	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
-		"Forced cluster upgrade flag")
+	flag.BoolVar(&forcedClusterUpgrade, "forced-cluster-upgrade", false,
+		"(Deprecated) Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
 	flag.StringVar(&logFileEncoder, "log-file-encoder", "json",
@@ -108,7 +109,6 @@ func main() {
 		exitOnError(err, "failed to decode config file")
 
 		// TODO: remove globally-scoped variables
-		ray.ForcedClusterUpgrade = config.ForcedClusterUpgrade
 		ray.EnableBatchScheduler = config.EnableBatchScheduler
 	} else {
 		config.MetricsAddr = metricsAddr
@@ -117,7 +117,6 @@ func main() {
 		config.LeaderElectionNamespace = leaderElectionNamespace
 		config.ReconcileConcurrency = reconcileConcurrency
 		config.WatchNamespace = watchNamespace
-		config.ForcedClusterUpgrade = ray.ForcedClusterUpgrade
 		config.LogFile = logFile
 		config.LogFileEncoder = logFileEncoder
 		config.LogStdoutEncoder = logStdoutEncoder
@@ -153,8 +152,8 @@ func main() {
 		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
 	}
 
-	if ray.ForcedClusterUpgrade {
-		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
+	if forcedClusterUpgrade {
+		setupLog.Info("Deprecated feature flag forced-cluster-upgrade is enabled, which has no effect.")
 	}
 	if ray.EnableBatchScheduler {
 		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")

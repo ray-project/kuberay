@@ -414,65 +414,6 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 	return true
 }
 
-func PodNotMatchingTemplate(pod corev1.Pod, template corev1.PodTemplateSpec) bool {
-	if pod.Status.Phase == corev1.PodRunning && pod.ObjectMeta.DeletionTimestamp == nil {
-		if len(template.Spec.Containers) != len(pod.Spec.Containers) {
-			return true
-		}
-		cmap := map[string]*corev1.Container{}
-		for _, container := range pod.Spec.Containers {
-			cmap[container.Name] = &container
-		}
-		for _, container1 := range template.Spec.Containers {
-			if container2, ok := cmap[container1.Name]; ok {
-				if container1.Image != container2.Image {
-					// image name do not match
-					return true
-				}
-				if len(container1.Resources.Requests) != len(container2.Resources.Requests) ||
-					len(container1.Resources.Limits) != len(container2.Resources.Limits) {
-					// resource entries do not match
-					return true
-				}
-
-				resources1 := []corev1.ResourceList{
-					container1.Resources.Requests,
-					container1.Resources.Limits,
-				}
-				resources2 := []corev1.ResourceList{
-					container2.Resources.Requests,
-					container2.Resources.Limits,
-				}
-				for i := range resources1 {
-					// we need to make sure all fields match
-					for name, quantity1 := range resources1[i] {
-						if quantity2, ok := resources2[i][name]; ok {
-							if quantity1.Cmp(quantity2) != 0 {
-								// request amount does not match
-								return true
-							}
-						} else {
-							// no such request
-							return true
-						}
-					}
-				}
-
-				// now we consider them equal
-				delete(cmap, container1.Name)
-			} else {
-				// container name do not match
-				return true
-			}
-		}
-		if len(cmap) != 0 {
-			// one or more containers do not match
-			return true
-		}
-	}
-	return false
-}
-
 // CompareJsonStruct This is a way to better compare if two objects are the same when they are json/yaml structs. reflect.DeepEqual will fail in some cases.
 func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	a, err := json.Marshal(objA)
