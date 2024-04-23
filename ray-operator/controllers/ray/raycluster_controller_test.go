@@ -327,7 +327,7 @@ var _ = Context("Inside the default namespace", func() {
 		allPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
-		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+		allFilters := common.RayClusterRelatedAssociationOptions(rayCluster).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:

@@ -247,9 +247,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			}
 
 			// We can start the Redis cleanup process now because the head Pod has been terminated.
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode)}
 			redisCleanupJobs := batchv1.JobList{}
-			if err := r.List(ctx, &redisCleanupJobs, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+			if err := r.List(ctx, &redisCleanupJobs, common.RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()...); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 
@@ -445,8 +444,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headRoutes := routev1.RouteList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
-	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &headRoutes, common.RayClusterRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -477,8 +475,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headIngresses := networkingv1.IngressList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
-	if err := r.List(ctx, &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &headIngresses, common.RayClusterRelatedAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -510,9 +507,8 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 
-	if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &services, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -629,7 +625,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 	// if RayCluster is suspended, delete all pods and skip reconcile
 	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
-		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
+		if _, err := r.deleteAllPods(ctx, common.RayClusterRelatedAssociationOptions(instance)); err != nil {
 			return err
 		}
 
@@ -1186,8 +1182,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &runtimePods, common.RayClusterRelatedAssociationOptions(newInstance).ToListOptions()...); err != nil {
 		return nil, err
 	}
 
@@ -1237,12 +1232,11 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 	logger := ctrl.LoggerFrom(ctx)
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &runtimePods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return "", err
 	}
 	if len(runtimePods.Items) != 1 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
+		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()))
 		return "", nil
 	}
 	return runtimePods.Items[0].Status.PodIP, nil
@@ -1250,16 +1244,15 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
-	if err := r.List(ctx, &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &runtimeServices, common.HeadServiceAssociationOptions(instance).ToListOptions()...); err != nil {
 		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
-		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, common.HeadServiceAssociationOptions(instance).ToListOptions())
 	} else if len(runtimeServices.Items) > 1 {
-		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, common.HeadServiceAssociationOptions(instance).ToListOptions())
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
-		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.HeadServiceAssociationOptions(instance).ToListOptions())
 	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
 		// We return Head Pod IP if the Head service is headless.
 		ip, err := r.getHeadPodIP(ctx, instance)
@@ -1278,11 +1271,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{
-		utils.RayClusterLabelKey:  instance.Name,
-		utils.RayNodeTypeLabelKey: "head",
-	}
-	if err := r.List(ctx, &rayHeadSvc, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &rayHeadSvc, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -1307,7 +1296,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 			}
 		}
 	} else {
-		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", filterLabels)
+		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions())
 	}
 
 	return nil

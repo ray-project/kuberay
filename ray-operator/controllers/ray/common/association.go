@@ -75,6 +75,16 @@ func RayClusterWorkerPodsAssociationOptions(instance *rayv1.RayCluster) Associat
 	}
 }
 
+func RayClusterRedisPodAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+		},
+	}
+}
+
 func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group string) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
@@ -85,7 +95,7 @@ func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group str
 	}
 }
 
-func RayClusterAllPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterRelatedAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
@@ -101,6 +111,13 @@ func RayServiceRayClustersAssociationOptions(rayService *rayv1.RayService) Assoc
 			utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
 			utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
 		},
+	}
+}
+
+func HeadServiceAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(HeadServiceLabels(*instance)),
 	}
 }
 
