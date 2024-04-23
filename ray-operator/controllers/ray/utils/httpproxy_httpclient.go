@@ -20,7 +20,7 @@ func GetRayHttpProxyClientFunc(mgr ctrl.Manager, UseKubernetesProxy bool) func()
 	return func() RayHttpProxyClientInterface {
 		return &RayHttpProxyClient{
 			mgr:                mgr,
-			UseKubernetesProxy: UseKubernetesProxy,
+			useKubernetesProxy: UseKubernetesProxy,
 		}
 	}
 }
@@ -30,7 +30,7 @@ type RayHttpProxyClient struct {
 	httpProxyURL string
 
 	mgr                ctrl.Manager
-	UseKubernetesProxy bool
+	useKubernetesProxy bool
 }
 
 func (r *RayHttpProxyClient) InitClient() {
@@ -40,7 +40,7 @@ func (r *RayHttpProxyClient) InitClient() {
 }
 
 func (r *RayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, port int) {
-	if r.UseKubernetesProxy {
+	if r.useKubernetesProxy {
 		r.client = r.mgr.GetHTTPClient()
 		r.httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", r.mgr.GetConfig().Host, podNamespace, podName, port)
 	}
