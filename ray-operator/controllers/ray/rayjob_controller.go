@@ -101,7 +101,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			rayDashboardClient := r.dashboardClientFunc()
-			err = rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance)
+			err = rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance)
 			if err != nil {
 				logger.Error(err, "Failed to initialize dashboard client")
 			}
@@ -218,7 +218,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of ray jobs
 		rayDashboardClient := r.dashboardClientFunc()
-		if err := rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+		if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 

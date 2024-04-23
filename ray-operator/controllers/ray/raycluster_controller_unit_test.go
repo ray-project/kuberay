@@ -1355,7 +1355,7 @@ func TestGetHeadPodIP(t *testing.T) {
 	}
 }
 
-func TestGetHeadServiceIP(t *testing.T) {
+func TestGetHeadServiceIPAndName(t *testing.T) {
 	setupTest(t)
 
 	headServiceIP := "1.2.3.4"
@@ -1379,21 +1379,25 @@ func TestGetHeadServiceIP(t *testing.T) {
 	tests := map[string]struct {
 		services     []runtime.Object
 		expectedIP   string
+		expectedName string
 		returnsError bool
 	}{
 		"get expected Service IP if there's one head Service": {
 			services:     testServices,
 			expectedIP:   headServiceIP,
+			expectedName: headService.Name,
 			returnsError: false,
 		},
 		"get error if there's no head Service": {
 			services:     []runtime.Object{},
 			expectedIP:   "",
+			expectedName: "",
 			returnsError: true,
 		},
 		"get error if there's more than one head Service": {
 			services:     append(testServices, extraHeadService),
 			expectedIP:   "",
+			expectedName: "",
 			returnsError: true,
 		},
 	}
@@ -1408,15 +1412,15 @@ func TestGetHeadServiceIP(t *testing.T) {
 				Scheme:   scheme.Scheme,
 			}
 
-			ip, err := testRayClusterReconciler.getHeadServiceIP(context.TODO(), testRayCluster)
-
+			ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
 			if tc.returnsError {
-				assert.NotNil(t, err, "getHeadServiceIP should return error")
+				assert.NotNil(t, err, "getHeadServiceIPAndName should return error")
 			} else {
-				assert.Nil(t, err, "getHeadServiceIP should not return error")
+				assert.Nil(t, err, "getHeadServiceIPAndName should not return error")
 			}
 
-			assert.Equal(t, tc.expectedIP, ip, "getHeadServiceIP returned unexpected IP")
+			assert.Equal(t, tc.expectedIP, ip, "getHeadServiceIPAndName returned unexpected IP")
+			assert.Equal(t, tc.expectedName, name, "getHeadServiceIPAndName returned unexpected name")
 		})
 	}
 }
@@ -1645,6 +1649,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
+	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
 }
 
 func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {

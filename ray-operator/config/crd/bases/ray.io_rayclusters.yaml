@@ -7102,6 +7102,8 @@ spec:
                     type: string
                   serviceIP:
                     type: string
+                  serviceName:
+                    type: string
                 type: object
               lastUpdateTime:
                 format: date-time

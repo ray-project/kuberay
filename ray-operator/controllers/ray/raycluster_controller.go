@@ -1309,21 +1309,21 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 	return runtimePods.Items[0].Status.PodIP, nil
 }
 
-func (r *RayClusterReconciler) getHeadServiceIP(ctx context.Context, instance *rayv1.RayCluster) (string, error) {
+func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
 	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
 	if err := r.List(ctx, &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
-		return "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	} else if len(runtimeServices.Items) > 1 {
-		return "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
-		return "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	}
 
-	return runtimeServices.Items[0].Spec.ClusterIP, nil
+	return runtimeServices.Items[0].Spec.ClusterIP, runtimeServices.Items[0].Name, nil
 }
 
 func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1374,10 +1374,11 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 		instance.Status.Head.PodIP = ip
 	}
 
-	if ip, err := r.getHeadServiceIP(ctx, instance); err != nil {
+	if ip, name, err := r.getHeadServiceIPAndName(ctx, instance); err != nil {
 		return err
 	} else {
 		instance.Status.Head.ServiceIP = ip
+		instance.Status.Head.ServiceName = name
 	}
 
 	return nil
