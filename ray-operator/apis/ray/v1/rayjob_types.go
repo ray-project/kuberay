@@ -59,6 +59,10 @@ const (
 	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
 )
 
+type SubmitterConfig struct {
+	SubmitterBackoffLimit *int32 `json:"submitterBackoffLimit,omitempty"`
+}
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -103,7 +107,8 @@ type RayJobSpec struct {
 	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
 	// EntrypointResources specifies the custom resources and quantities to reserve for the
 	// entrypoint command.
-	EntrypointResources string `json:"entrypointResources,omitempty"`
+	EntrypointResources string           `json:"entrypointResources,omitempty"`
+	SubmitterConfig     *SubmitterConfig `json:"submitterConfig,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob

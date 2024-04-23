@@ -160,6 +160,7 @@ _Appears in:_
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |
 | `entrypointNumGpus` _float_ | EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command. |
 | `entrypointResources` _string_ | EntrypointResources specifies the custom resources and quantities to reserve for the entrypoint command. |
+| `submitterConfig` _[SubmitterConfig](#submitterconfig)_ |  |
 
 
 
@@ -212,6 +213,20 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |
+
+
+#### SubmitterConfig
+
+
+
+
+
+_Appears in:_
+- [RayJobSpec](#rayjobspec)
+
+| Field | Description |
+| --- | --- |
+| `submitterBackoffLimit` _integer_ |  |
 
 
 #### UpscalingMode

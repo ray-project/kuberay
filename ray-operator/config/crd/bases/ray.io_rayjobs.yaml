@@ -7075,6 +7075,12 @@ spec:
               submissionMode:
                 default: K8sJobMode
                 type: string
+              submitterConfig:
+                properties:
+                  submitterBackoffLimit:
+                    format: int32
+                    type: integer
+                type: object
               submitterPodTemplate:
                 properties:
                   metadata:

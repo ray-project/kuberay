@@ -422,6 +422,10 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
+	submitterBackoffLimit := pointer.Int32(2)
+	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.SubmitterBackoffLimit != nil {
+		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.SubmitterBackoffLimit
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
@@ -437,7 +441,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			// is attempted 3 times at the maximum, but still mitigates the case of unrecoverable
 			// application-level errors, where the maximum number of retries is reached, and the job
 			// completion time increases with no benefits, but wasted resource cycles.
-			BackoffLimit: pointer.Int32(2),
+			BackoffLimit: submitterBackoffLimit,
 			Template:     submitterTemplate,
 		},
 	}
