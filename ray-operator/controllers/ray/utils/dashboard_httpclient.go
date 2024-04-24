@@ -50,11 +50,11 @@ type BaseDashboardClient struct {
 	dashboardURL string
 }
 
-func GetRayDashboardClientFunc(mgr ctrl.Manager, useProxy bool) func() RayDashboardClientInterface {
+func GetRayDashboardClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func() RayDashboardClientInterface {
 	return func() RayDashboardClientInterface {
 		return &RayDashboardClient{
-			mgr:      mgr,
-			useProxy: useProxy,
+			mgr:                mgr,
+			useKubernetesProxy: useKubernetesProxy,
 		}
 	}
 }
@@ -62,8 +62,8 @@ func GetRayDashboardClientFunc(mgr ctrl.Manager, useProxy bool) func() RayDashbo
 type RayDashboardClient struct {
 	BaseDashboardClient
 
-	mgr      ctrl.Manager
-	useProxy bool
+	mgr                ctrl.Manager
+	useKubernetesProxy bool
 }
 
 // FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
@@ -110,7 +110,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 }
 
 func (r *RayDashboardClient) InitClient(url string, rayCluster *rayv1.RayCluster) error {
-	if r.useProxy {
+	if r.useKubernetesProxy {
 		headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
 		if err != nil {
 			return err
