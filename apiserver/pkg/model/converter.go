@@ -254,6 +254,9 @@ func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {
 	if len(spec.Template.Spec.ImagePullSecrets) > 0 {
 		headNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
 	}
+	if spec.Template.Spec.Containers[0].ImagePullPolicy == corev1.PullAlways {
+		headNodeSpec.ImagePullPolicy = "Always"
+	}
 
 	return headNodeSpec
 }
@@ -298,6 +301,9 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 
 		if len(spec.Template.Spec.ImagePullSecrets) > 0 {
 			workerNodeSpec.ImagePullSecret = spec.Template.Spec.ImagePullSecrets[0].Name
+		}
+		if spec.Template.Spec.Containers[0].ImagePullPolicy == corev1.PullAlways {
+			workerNodeSpec.ImagePullPolicy = "Always"
 		}
 
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
