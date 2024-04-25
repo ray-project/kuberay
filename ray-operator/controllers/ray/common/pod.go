@@ -321,10 +321,6 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
 		addEmptyDir(ctx, &pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
 	}
-	cleanupInvalidVolumeMounts(&pod.Spec.Containers[utils.RayContainerIndex], &pod)
-	if len(pod.Spec.InitContainers) > utils.RayContainerIndex {
-		cleanupInvalidVolumeMounts(&pod.Spec.InitContainers[utils.RayContainerIndex], &pod)
-	}
 
 	var cmd, args string
 	if len(pod.Spec.Containers[utils.RayContainerIndex].Command) > 0 {
@@ -842,23 +838,6 @@ func checkIfVolumeExists(pod *corev1.Pod, volumeName string) bool {
 		}
 	}
 	return false
-}
-
-func cleanupInvalidVolumeMounts(container *corev1.Container, pod *corev1.Pod) {
-	// if a volumeMount is specified in the container,
-	// but has no corresponding pod volume, it is removed
-	k := 0
-	for _, mountedVol := range container.VolumeMounts {
-		for _, podVolume := range pod.Spec.Volumes {
-			if mountedVol.Name == podVolume.Name {
-				// valid mount, moving on...
-				container.VolumeMounts[k] = mountedVol
-				k++
-				break
-			}
-		}
-	}
-	container.VolumeMounts = container.VolumeMounts[:k]
 }
 
 func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {

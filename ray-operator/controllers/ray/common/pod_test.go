@@ -769,32 +769,6 @@ func splitAndSort(s string) []string {
 	return result
 }
 
-func TestCleanupInvalidVolumeMounts(t *testing.T) {
-	ctx := context.Background()
-	cluster := instance.DeepCopy()
-
-	// Test head pod
-	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-
-	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, []corev1.VolumeMount{
-		{
-			Name:      "mock-name1",
-			MountPath: "/mock-path1",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "mock-name2",
-			MountPath: "/mock-path2",
-			ReadOnly:  true,
-		},
-	}...)
-	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 3)
-	cleanupInvalidVolumeMounts(&pod.Spec.Containers[0], &pod)
-	assert.Equal(t, len(pod.Spec.Containers[0].VolumeMounts), 1)
-}
-
 func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	ctx := context.Background()
 
