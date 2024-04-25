@@ -59,6 +59,8 @@ make clean
 
 ### End-to-end local development process on Kind
 
+#### Run the operator inside the cluster
+
 ```bash
 # Step 1: Create a Kind cluster
 kind create cluster --image=kindest/node:v1.24.0
@@ -96,6 +98,24 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
 * The command `make docker-build` (Step 3) will also run `make test` (unit tests).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
+
+#### Run the operator outside the cluster
+
+> Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
+
+```bash
+# Step 1: Create a Kind cluster
+kind create cluster --image=kindest/node:v1.24.0
+
+# Step 2: Install CRDs
+make -C ray-operator install
+
+# Step 3: Compile the source code
+make -C ray-operator build
+
+# Step 4: Run the KubeRay operator
+./ray-operator/bin/manager -leader-election-namespace default -use-kubernetes-proxy
+```
 
 ### Running the tests
 

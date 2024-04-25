@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -136,7 +135,6 @@ func (t *T) StreamKubeRayOperatorLogs() {
 		LabelSelector: "app.kubernetes.io/component=kuberay-operator",
 	})
 	t.Expect(err).ShouldNot(gomega.HaveOccurred())
-	t.Expect(pods.Items).ShouldNot(gomega.BeEmpty())
 	now := metav1.NewTime(time.Now())
 	for _, pod := range pods.Items {
 		go func(pod corev1.Pod, ts *metav1.Time) {
