@@ -1,0 +1,49 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: {{.Name}}
+spec:
+  entrypoint: python -c "import ray; ray.init(); print(ray.cluster_resources())"
+  shutdownAfterJobFinishes: true
+  rayClusterSpec:
+    rayVersion: '2.9.3'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.9.3
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                limits:
+                  cpu: "1"
+                requests:
+                  cpu: "100m"
+    workerGroupSpecs:
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 5
+        groupName: small-group
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: rayproject/ray:2.9.3
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: [ "/bin/sh","-c","ray stop" ]
+                resources:
+                  limits:
+                    cpu: "1"
+                  requests:
+                    cpu: "100m"
