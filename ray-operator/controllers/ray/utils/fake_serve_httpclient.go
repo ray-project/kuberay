@@ -19,7 +19,7 @@ type FakeRayDashboardClient struct {
 
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(url string, rayCluster *rayv1.RayCluster) error {
+func (r *FakeRayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
 	r.client = &http.Client{}
 	r.dashboardURL = "http://" + url
 	return nil

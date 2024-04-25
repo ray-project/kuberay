@@ -46,7 +46,6 @@ import (
 
 var (
 	DefaultRequeueDuration = 2 * time.Second
-	ForcedClusterUpgrade   bool
 	EnableBatchScheduler   bool
 
 	// Definition of a index field for pod name
@@ -697,42 +696,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 
-	if ForcedClusterUpgrade {
-		if len(headPods.Items) == 1 {
-			// head node amount is exactly 1, but we need to check if it has been changed
-			res := utils.PodNotMatchingTemplate(headPods.Items[0], instance.Spec.HeadGroupSpec.Template)
-			if res {
-				logger.Info(fmt.Sprintf("need to delete old head pod %s", headPods.Items[0].Name))
-				if err := r.Delete(ctx, &headPods.Items[0]); err != nil {
-					return err
-				}
-				return nil
-			}
-		}
-
-		// check if WorkerGroupSpecs has been changed and we need to kill worker pods
-		for _, worker := range instance.Spec.WorkerGroupSpecs {
-			workerPods := corev1.PodList{}
-			if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName).ToListOptions()...); err != nil {
-				return err
-			}
-			updatedWorkerPods := false
-			for _, item := range workerPods.Items {
-				if utils.PodNotMatchingTemplate(item, worker.Template) {
-					logger.Info(fmt.Sprintf("need to delete old worker pod %s", item.Name))
-					if err := r.Delete(ctx, &item); err != nil {
-						logger.Info(fmt.Sprintf("error deleting worker pod %s", item.Name))
-						return err
-					}
-					updatedWorkerPods = true
-				}
-			}
-			if updatedWorkerPods {
-				return nil
-			}
-		}
-	}
-
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		// workerReplicas will store the target number of pods for this worker group.
@@ -1309,21 +1272,21 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 	return runtimePods.Items[0].Status.PodIP, nil
 }
 
-func (r *RayClusterReconciler) getHeadServiceIP(ctx context.Context, instance *rayv1.RayCluster) (string, error) {
+func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
 	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
 	if err := r.List(ctx, &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
-		return "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	} else if len(runtimeServices.Items) > 1 {
-		return "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
-		return "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	}
 
-	return runtimeServices.Items[0].Spec.ClusterIP, nil
+	return runtimeServices.Items[0].Spec.ClusterIP, runtimeServices.Items[0].Name, nil
 }
 
 func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1374,10 +1337,11 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 		instance.Status.Head.PodIP = ip
 	}
 
-	if ip, err := r.getHeadServiceIP(ctx, instance); err != nil {
+	if ip, name, err := r.getHeadServiceIPAndName(ctx, instance); err != nil {
 		return err
 	} else {
 		instance.Status.Head.ServiceIP = ip
+		instance.Status.Head.ServiceName = name
 	}
 
 	return nil

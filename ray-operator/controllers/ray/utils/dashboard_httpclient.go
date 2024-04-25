@@ -31,7 +31,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(url string, rayCluster *rayv1.RayCluster) error
+	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -109,11 +109,18 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func (r *RayDashboardClient) InitClient(url string, rayCluster *rayv1.RayCluster) error {
+func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	if r.useProxy {
-		headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-		if err != nil {
-			return err
+		var err error
+		headSvcName := rayCluster.Status.Head.ServiceName
+		if headSvcName == "" {
+			log.Info("RayCluster is missing .status.head.serviceName, calling GenerateHeadServiceName instead...", "RayCluster name", rayCluster.Name, "namespace", rayCluster.Namespace)
+			headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+			if err != nil {
+				return err
+			}
 		}
 
 		r.client = r.mgr.GetHTTPClient()

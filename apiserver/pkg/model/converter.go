@@ -244,7 +244,7 @@ func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {
 
 	// Here we update environment only for a container named 'ray-head'
 	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
-		headNodeSpec.Environment = convert_env_variables(container.Env, true)
+		headNodeSpec.Environment = convertEnvVariables(container.Env, true)
 	}
 
 	if len(spec.Template.Spec.ServiceAccountName) > 1 {
@@ -289,7 +289,7 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 
 		// Here we update environment only for a container named 'ray-worker'
 		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
-			workerNodeSpec.Environment = convert_env_variables(container.Env, false)
+			workerNodeSpec.Environment = convertEnvVariables(container.Env, false)
 		}
 
 		if len(spec.Template.Spec.ServiceAccountName) > 1 {
@@ -306,7 +306,7 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 	return workerNodeSpecs
 }
 
-func convert_env_variables(cenv []corev1.EnvVar, header bool) *api.EnvironmentVariables {
+func convertEnvVariables(cenv []corev1.EnvVar, header bool) *api.EnvironmentVariables {
 	env := api.EnvironmentVariables{
 		Values:     make(map[string]string),
 		ValuesFrom: make(map[string]*api.EnvValueFrom),

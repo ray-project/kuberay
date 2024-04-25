@@ -93,6 +93,16 @@ func RayClusterAllPodsAssociationOptions(instance *rayv1.RayCluster) Association
 	}
 }
 
+func RayServiceRayClustersAssociationOptions(rayService *rayv1.RayService) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(rayService.Namespace),
+		client.MatchingLabels{
+			utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
+			utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+		},
+	}
+}
+
 func RayServiceServeServiceNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
 	if rayService.Spec.ServeService != nil && rayService.Spec.ServeService.Name != "" {
 		return types.NamespacedName{

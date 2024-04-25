@@ -33,40 +33,40 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		labels = make(map[string]string)
 	}
 
-	default_labels := HeadServiceLabels(cluster)
+	defaultLabels := HeadServiceLabels(cluster)
 
-	// selector consists of *only* the keys in default_labels, updated with the values in labels if they exist
+	// selector consists of *only* the keys in defaultLabels, updated with the values in labels if they exist
 	selector := make(map[string]string)
-	for k := range default_labels {
+	for k := range defaultLabels {
 		if _, ok := labels[k]; ok {
 			selector[k] = labels[k]
 		} else {
-			selector[k] = default_labels[k]
+			selector[k] = defaultLabels[k]
 		}
 	}
 
 	// Deep copy the selector to avoid modifying the original object
-	labels_for_service := make(map[string]string)
+	labelsForService := make(map[string]string)
 	for k, v := range selector {
-		labels_for_service[k] = v
+		labelsForService[k] = v
 	}
 
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
 
-	default_name, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	defaultName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
 	if err != nil {
 		return nil, err
 	}
-	default_namespace := cluster.Namespace
-	default_type := cluster.Spec.HeadGroupSpec.ServiceType
+	defaultNamespace := cluster.Namespace
+	defaultType := cluster.Spec.HeadGroupSpec.ServiceType
 
 	defaultAppProtocol := utils.DefaultServiceAppProtocol
-	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	ports_int := getServicePorts(cluster)
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	portsInt := getServicePorts(cluster)
 	ports := []corev1.ServicePort{}
-	for name, port := range ports_int {
+	for name, port := range portsInt {
 		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
 		ports = append(ports, svcPort)
 	}
@@ -97,25 +97,25 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		// Append default ports.
 		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
 
-		setLabelsforUserProvidedService(headService, labels_for_service)
-		setNameforUserProvidedService(ctx, headService, default_name)
-		setNamespaceforUserProvidedService(ctx, headService, default_namespace)
-		setServiceTypeForUserProvidedService(ctx, headService, default_type)
+		setLabelsforUserProvidedService(headService, labelsForService)
+		setNameforUserProvidedService(ctx, headService, defaultName)
+		setNamespaceforUserProvidedService(ctx, headService, defaultNamespace)
+		setServiceTypeForUserProvidedService(ctx, headService, defaultType)
 
 		return headService, nil
 	}
 
 	headService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        default_name,
-			Namespace:   default_namespace,
-			Labels:      labels_for_service,
+			Name:        defaultName,
+			Namespace:   defaultNamespace,
+			Labels:      labelsForService,
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selector,
 			Ports:    ports,
-			Type:     default_type,
+			Type:     defaultType,
 		},
 	}
 
@@ -191,17 +191,17 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		selectorLabels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	}
 
-	default_name := utils.GenerateServeServiceName(name)
-	default_namespace := namespace
-	default_type := rayCluster.Spec.HeadGroupSpec.ServiceType
+	defaultName := utils.GenerateServeServiceName(name)
+	defaultNamespace := namespace
+	defaultType := rayCluster.Spec.HeadGroupSpec.ServiceType
 	if isRayService {
-		default_type = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
+		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	ports_int := getServicePorts(rayCluster)
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	portsInt := getServicePorts(rayCluster)
 	ports := []corev1.ServicePort{}
-	for name, port := range ports_int {
+	for name, port := range portsInt {
 		if name == utils.ServingPortName {
 			svcPort := corev1.ServicePort{Name: name, Port: port}
 			ports = append(ports, svcPort)
@@ -246,9 +246,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
-			setNameforUserProvidedService(ctx, serveService, default_name)
-			setNamespaceforUserProvidedService(ctx, serveService, default_namespace)
-			setServiceTypeForUserProvidedService(ctx, serveService, default_type)
+			setNameforUserProvidedService(ctx, serveService, defaultName)
+			setNamespaceforUserProvidedService(ctx, serveService, defaultNamespace)
+			setServiceTypeForUserProvidedService(ctx, serveService, defaultType)
 
 			return serveService, nil
 		}
@@ -262,14 +262,14 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 
 	serveService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      default_name,
-			Namespace: default_namespace,
+			Name:      defaultName,
+			Namespace: defaultNamespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
 			Ports:    ports,
-			Type:     default_type,
+			Type:     defaultType,
 		},
 	}
 
@@ -305,45 +305,45 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 	return headlessService, nil
 }
 
-func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, default_type corev1.ServiceType) {
+func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type
 	if service.Spec.Type == "" {
 		log.Info("Using default serviceType passed for the user provided service",
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.ObjectMeta.Name", service.ObjectMeta.Name)
-		service.Spec.Type = default_type
+		service.Spec.Type = defaultType
 	} else {
 		log.Info("Overriding default serviceType with user provided serviceType",
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.ObjectMeta.Name", service.ObjectMeta.Name,
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.Spec.Type", service.Spec.Type)
 	}
 }
 
-func setNamespaceforUserProvidedService(ctx context.Context, service *corev1.Service, default_namespace string) {
+func setNamespaceforUserProvidedService(ctx context.Context, service *corev1.Service, defaultNamespace string) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has specified a namespace, ignore it and raise a warning
-	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != default_namespace {
+	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != defaultNamespace {
 		log.Info("Ignoring namespace in user provided service",
 			"provided_namespace", service.ObjectMeta.Namespace,
 			"service_name", service.ObjectMeta.Name,
-			"default_namespace", default_namespace)
+			"default_namespace", defaultNamespace)
 	}
 
-	service.ObjectMeta.Namespace = default_namespace
+	service.ObjectMeta.Namespace = defaultNamespace
 }
 
-func setNameforUserProvidedService(ctx context.Context, service *corev1.Service, default_name string) {
+func setNameforUserProvidedService(ctx context.Context, service *corev1.Service, defaultName string) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a name, use the default name passed
 	if service.ObjectMeta.Name == "" {
-		log.Info("Using default name for user provided service.", "default_name", default_name)
-		service.ObjectMeta.Name = default_name
+		log.Info("Using default name for user provided service.", "default_name", defaultName)
+		service.ObjectMeta.Name = defaultName
 	} else {
 		log.Info("Overriding default name for user provided service with name in service.ObjectMeta.Name.",
-			"default_name", default_name,
+			"default_name", defaultName,
 			"provided_name", service.ObjectMeta.Name)
 	}
 }

@@ -153,8 +153,9 @@ type RayClusterStatus struct {
 
 // HeadInfo gives info about head
 type HeadInfo struct {
-	PodIP     string `json:"podIP,omitempty"`
-	ServiceIP string `json:"serviceIP,omitempty"`
+	PodIP       string `json:"podIP,omitempty"`
+	ServiceIP   string `json:"serviceIP,omitempty"`
+	ServiceName string `json:"serviceName,omitempty"`
 }
 
 // RayNodeType  the type of a ray node: head/worker

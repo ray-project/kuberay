@@ -21,6 +21,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -247,9 +249,8 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("should create more than 1 worker", func() {
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: myRayService.Status.ActiveServiceStatus.RayClusterName, utils.RayNodeGroupLabelKey: "small-group"}
 			Eventually(
-				listResourceFunc(ctx, &workerPods, filterLabels, &client.ListOptions{Namespace: "default"}),
+				listResourceFunc(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(myRayCluster, "small-group").ToListOptions()...),
 				time.Second*15, time.Millisecond*500).Should(Equal(3), fmt.Sprintf("workerGroup %v", workerPods.Items))
 			if len(workerPods.Items) > 0 {
 				Expect(workerPods.Items[0].Status.Phase).Should(Or(Equal(corev1.PodRunning), Equal(corev1.PodPending)))

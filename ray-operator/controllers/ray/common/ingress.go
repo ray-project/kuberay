@@ -27,15 +27,15 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	// Copy other ingress configurations from cluster annotations to provide a generic way
-	// for user to customize their ingress settings. The `exclude_set` is used to avoid setting
+	// for user to customize their ingress settings. The `excludeSet` is used to avoid setting
 	// both IngressClassAnnotationKey annotation which is deprecated and `Spec.IngressClassName`
 	// at the same time.
-	exclude_set := map[string]struct{}{
+	excludeSet := map[string]struct{}{
 		IngressClassAnnotationKey: {},
 	}
 	annotation := map[string]string{}
 	for key, value := range cluster.Annotations {
-		if _, ok := exclude_set[key]; !ok {
+		if _, ok := excludeSet[key]; !ok {
 			annotation[key] = value
 		}
 	}
