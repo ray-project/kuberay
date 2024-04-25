@@ -146,18 +146,18 @@ message EnvironmentVariables {
 
 message AutoscalerOptions {
   // IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
-	// Defaults to 60 (one minute).
-	int32 idleTimeoutSeconds = 1;
-	// UpscalingMode is "Conservative", "Default", or "Aggressive."
-	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
-	// Default: Upscaling is not rate-limited.
-	// Aggressive: An alias for Default; upscaling is not rate-limited.
-	// It is not read by the KubeRay operator but by the Ray autoscaler.
-	string upscalingMode = 2;
+  // Defaults to 60 (one minute).
+  int32 idleTimeoutSeconds = 1;
+  // UpscalingMode is "Conservative", "Default", or "Aggressive."
+  // Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+  // Default: Upscaling is not rate-limited.
+  // Aggressive: An alias for Default; upscaling is not rate-limited.
+  // It is not read by the KubeRay operator but by the Ray autoscaler.
+  string upscalingMode = 2;
   // Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
-	string image = 3;
-	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
-	string imagePullPolicy = 4;
+  string image = 3;
+  // ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
+  string imagePullPolicy = 4;
   // Optional CPUs requirements for autoscaler - default "500m"
   string cpu = 5;
   // Optional memory requirements for autoscaler - default "512Mi"
@@ -189,10 +189,10 @@ message Cluster {
     PRODUCTION = 3;
   }
   Environment environment = 5;
-  
+
   // Required field. This field indicates ray cluster configuration
   ClusterSpec cluster_spec = 6 [(google.api.field_behavior) = REQUIRED];
- 
+
   // Optional. Annotations, for example, "kubernetes.io/ingress.class" to define Ingress class 
   map<string, string> annotations = 7;
 
@@ -210,7 +210,7 @@ message Cluster {
 
   // Output. The list related to the cluster.
   repeated ClusterEvent events = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
-  
+
   // Output. The service endpoint of the cluster
   map<string, string> service_endpoint = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
@@ -222,9 +222,9 @@ message ClusterSpec {
   // Optional. The worker group configurations
   repeated WorkerGroupSpec worker_group_spec = 2;
   // EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
-	bool enableInTreeAutoscaling = 3;
-	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions autoscalerOptions = 4;
+  bool enableInTreeAutoscaling = 3;
+  // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+  AutoscalerOptions autoscalerOptions = 4;
 
 }
 
@@ -242,7 +242,7 @@ message Volume {
   string name = 3;    // volume name
   string source = 4;  // volume source, for example hostpath source, secret or configMap name, etc
   bool read_only = 5; // Read only flag
-  
+
   // If indicate hostpath, we need to let user indicate which type 
   // they would like to use.
   enum HostPathType {
@@ -256,7 +256,7 @@ message Volume {
     HOSTTOCONTAINER = 1;
     BIDIRECTIONAL = 2;
   }
-  MountPropagationMode mount_propagation_mode = 7;  
+  MountPropagationMode mount_propagation_mode = 7;
   // If indicate ephemeral, we need to let user specify volumeClaimTemplate
   string storageClassName = 8;   // If not defined, default is used
   enum AccessMode {
@@ -286,15 +286,17 @@ message HeadGroupSpec {
   repeated Volume volumes = 6;
   // Optional. ServiceAccount used by head pod
   // Note that the service account has to be created prior to usage here
-  string service_account = 7;  
+  string service_account = 7;
   // Optional. image pull secret used by head pod
-  string image_pull_secret = 8;  
+  string image_pull_secret = 8;
   // Optional. Environment variables for head pod
   EnvironmentVariables environment = 9;
   // Optional. Annotations for the head pod
   map<string, string> annotations = 10;
   // Optional. Labels for the head pod
   map<string, string> labels = 11;
+  // Optional image pull policy
+  string imagePullPolicy = 12;
 }
 
 message WorkerGroupSpec {
@@ -304,9 +306,9 @@ message WorkerGroupSpec {
   string compute_template = 2 [(google.api.field_behavior) = REQUIRED];
   // Optional field. This field will be used to retrieve right ray container
   string image = 3;
-  // Required. Desired replicas of the worker group 
+  // Required. Desired replicas of the worker group
   int32 replicas = 4 [(google.api.field_behavior) = REQUIRED];
-  // Optional. Min replicas of the worker group, can't be greater than max_replicas. 
+  // Optional. Min replicas of the worker group, can't be greater than max_replicas.
   int32 min_replicas = 5;
   // Required. Max replicas of the worker group (>0)
   int32 max_replicas = 6 [(google.api.field_behavior) = REQUIRED];
@@ -316,15 +318,17 @@ message WorkerGroupSpec {
   repeated Volume volumes = 8;
   // Optional. ServiceAccount used by worker pod
   // Note that the service account has to be created prior to usage here
-  string service_account = 9;  
+  string service_account = 9;
   // Optional. image pull secret used by worker pod
-  string image_pull_secret = 10;  
+  string image_pull_secret = 10;
   // Optional. Environment variables for worker pod
   EnvironmentVariables environment = 11;
   // Optional. Annotations for the worker pod
   map<string, string> annotations = 12;
   // Optional. Labels for the worker pod
   map<string, string> labels = 13;
+  // Optional image pull policy
+  string imagePullPolicy = 14;
 }
 
 message ClusterEvent {
@@ -334,7 +338,7 @@ message ClusterEvent {
   // Human readable name for event.
   string name = 2;
 
-  // Event creation time. 
+  // Event creation time.
   google.protobuf.Timestamp created_at = 3;
 
   // The first time the event occur.
@@ -351,7 +355,7 @@ message ClusterEvent {
 
   // Type of this event (Normal, Warning), new types could be added in the future
   string type = 8;
-  
+
   // The number of times this event has occurred.
   int32 count = 9;
 }

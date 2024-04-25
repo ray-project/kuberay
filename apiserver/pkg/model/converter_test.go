@@ -69,8 +69,9 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-head",
-					Image: "blublinsky1/ray310:2.5.0",
+					Name:            "ray-head",
+					Image:           "blublinsky1/ray310:2.5.0",
+					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -470,6 +471,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	}
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
+	}
+	if groupSpec.ImagePullPolicy != "Always" {
+		t.Errorf("failed to convert image pull policy")
 	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
