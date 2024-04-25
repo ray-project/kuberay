@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	klog "k8s.io/klog/v2"
 
@@ -151,12 +150,6 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		image = spec.Image
 	}
 
-	// image pull policy
-	imagePullPolicy := corev1.PullIfNotPresent
-	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
-		imagePullPolicy = corev1.PullAlways
-	}
-
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
@@ -177,9 +170,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			Tolerations: []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
-					Name:            "ray-head",
-					Image:           image,
-					ImagePullPolicy: imagePullPolicy,
+					Name:  "ray-head",
+					Image: image,
 					Env: []corev1.EnvVar{
 						{
 							Name: "MY_POD_IP",
@@ -400,12 +392,6 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		image = spec.Image
 	}
 
-	// Image pull policy
-	imagePullPolicy := corev1.PullIfNotPresent
-	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
-		imagePullPolicy = corev1.PullAlways
-	}
-
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
@@ -426,9 +412,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			Tolerations: []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
-					Name:            "ray-worker",
-					Image:           image,
-					ImagePullPolicy: imagePullPolicy,
+					Name:  "ray-worker",
+					Image: image,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "RAY_DISABLE_DOCKER_CPU_WARNING",
@@ -873,11 +858,9 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 	if len(autoscalerOptions.Image) > 0 {
 		options.Image = &autoscalerOptions.Image
 	}
-	if len(autoscalerOptions.ImagePullPolicy) > 0 && strings.ToLower(autoscalerOptions.ImagePullPolicy) == "always" {
-		policy := corev1.PullAlways
-		options.ImagePullPolicy = &policy
+	if len(autoscalerOptions.ImagePullPolicy) > 0 {
+		options.ImagePullPolicy = (*corev1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
 	}
-
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
 			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))

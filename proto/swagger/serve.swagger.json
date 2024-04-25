@@ -501,10 +501,6 @@
             "type": "string"
           },
           "title": "Optional. Labels for the head pod"
-        },
-        "imagePullPolicy": {
-          "type": "string",
-          "title": "Optional image pull policy"
         }
       },
       "title": "Cluster HeadGroup specification",
@@ -895,10 +891,6 @@
             "type": "string"
           },
           "title": "Optional. Labels for the worker pod"
-        },
-        "imagePullPolicy": {
-          "type": "string",
-          "title": "Optional image pull policy"
         }
       },
       "required": [

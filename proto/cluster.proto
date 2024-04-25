@@ -295,8 +295,6 @@ message HeadGroupSpec {
   map<string, string> annotations = 10;
   // Optional. Labels for the head pod
   map<string, string> labels = 11;
-  // Optional image pull policy
-  string imagePullPolicy = 12;
 }
 
 message WorkerGroupSpec {
@@ -327,8 +325,6 @@ message WorkerGroupSpec {
   map<string, string> annotations = 12;
   // Optional. Labels for the worker pod
   map<string, string> labels = 13;
-  // Optional image pull policy
-  string imagePullPolicy = 14;
 }
 
 message ClusterEvent {

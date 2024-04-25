@@ -125,7 +125,6 @@ var testAutoscalerOptions = api.AutoscalerOptions{
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
 	Image:           "bar",
-	ImagePullPolicy: "Always",
 	ServiceType:     "ClusterIP",
 	RayStartParams: map[string]string{
 		"dashboard-host":      "0.0.0.0",
@@ -173,7 +172,6 @@ var workerGroup = api.WorkerGroupSpec{
 	GroupName:       "wg",
 	ComputeTemplate: "foo",
 	Image:           "bar",
-	ImagePullPolicy: "Always",
 	Replicas:        5,
 	MinReplicas:     5,
 	MaxReplicas:     5,
@@ -519,9 +517,6 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
 		t.Errorf("failed to propagate image pull secret")
 	}
-	if (string)(podSpec.Spec.Containers[0].ImagePullPolicy) != "Always" {
-		t.Errorf("failed to propagate image pull policy")
-	}
 	if len(podSpec.Spec.Containers[0].Env) != 6 {
 		t.Errorf("failed to propagate environment")
 	}
@@ -566,7 +561,6 @@ func TestConvertAutoscalerOptions(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, *options.IdleTimeoutSeconds, int32(25))
 	assert.Equal(t, (string)(*options.UpscalingMode), "Default")
-	assert.Equal(t, (string)(*options.ImagePullPolicy), "Always")
 	assert.Equal(t, len(options.Env), 1)
 	assert.Equal(t, len(options.EnvFrom), 2)
 	assert.Equal(t, len(options.VolumeMounts), 2)
@@ -599,9 +593,6 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	}
 	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
 		t.Errorf("failed to propagate image pull secret")
-	}
-	if (string)(podSpec.Spec.Containers[0].ImagePullPolicy) != "Always" {
-		t.Errorf("failed to propagate image pull policy")
 	}
 	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
 		t.Errorf("failed to propagate environment")
