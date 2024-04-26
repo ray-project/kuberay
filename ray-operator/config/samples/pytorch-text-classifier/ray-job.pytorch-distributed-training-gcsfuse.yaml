@@ -1,0 +1,108 @@
+# This RayJob is based on the "Fine-tune a PyTorch Lightning Text Classifier with Ray Data" example in the Ray documentation.
+# See https://docs.ray.io/en/master/train/examples/lightning/lightning_cola_advanced.html for more details.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  generateName: pytorch-text-classifier-
+spec:
+  shutdownAfterJobFinishes: true
+  entrypoint: python ray-operator/config/samples/pytorch-text-classifier/fine-tune-pytorch-text-classifier.py
+  runtimeEnvYAML: |
+    pip:
+      - numpy
+      - datasets
+      - transformers>=4.19.1
+      - pytorch-lightning==1.6.5
+    working_dir: "https://github.com/andrewsykim/kuberay/archive/pytorch-lightning-image-classifier.zip"
+  rayClusterSpec:
+    rayVersion: '2.9.0'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        metadata:
+          annotations:
+            gke-gcsfuse/volumes: "true"
+            gke-gcsfuse/cpu-limit: "0"
+            gke-gcsfuse/memory-limit: 5Gi
+            gke-gcsfuse/ephemeral-storage-limit: 10Gi
+        spec:
+          serviceAccountName: pytorch-distributed-training
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.9.0
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: "8G"
+                requests:
+                  cpu: "1"
+                  memory: "8G"
+              volumeMounts:
+                - mountPath: /tmp/ray
+                  name: ray-logs
+                - mountPath: /mnt/cluster_storage
+                  name: cluster-storage
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+            - name: cluster-storage
+              csi:
+                driver: gcsfuse.csi.storage.gke.io
+                volumeAttributes:
+                  bucketName: andrewsy-gke-bucket
+                  mountOptions: "implicit-dirs,uid=1000,gid=100"
+    workerGroupSpecs:
+      - replicas: 2
+        groupName: gpu-group
+        rayStartParams:
+          dashboard-host: '0.0.0.0'
+        template:
+          metadata:
+            annotations:
+              gke-gcsfuse/volumes: "true"
+              gke-gcsfuse/cpu-limit: "0"
+              gke-gcsfuse/memory-limit: 5Gi
+              gke-gcsfuse/ephemeral-storage-limit: 10Gi
+          spec:
+            serviceAccountName: pytorch-distributed-training
+            tolerations:
+            - key: "nvidia.com/gpu"
+              operator: "Exists"
+              effect: "NoSchedule"
+            containers:
+              - name: ray-worker
+                image: rayproject/ray-ml:2.9.0-gpu
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: [ "/bin/sh","-c","ray stop" ]
+                resources:
+                  limits:
+                    memory: "8G"
+                    nvidia.com/gpu: "1"
+                  requests:
+                    cpu: "1"
+                    memory: "8G"
+                    nvidia.com/gpu: "1"
+                volumeMounts:
+                  - mountPath: /tmp/ray
+                    name: ray-logs
+                  - mountPath: /mnt/cluster_storage
+                    name: cluster-storage
+            volumes:
+              - name: ray-logs
+                emptyDir: {}
+              - name: cluster-storage
+                csi:
+                  driver: gcsfuse.csi.storage.gke.io
+                  volumeAttributes:
+                    bucketName: andrewsy-gke-bucket
+                    mountOptions: "implicit-dirs,uid=1000,gid=100"

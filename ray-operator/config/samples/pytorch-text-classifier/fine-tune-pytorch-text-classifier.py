@@ -101,6 +101,12 @@ def train_func(config):
     # Model
     model = SentimentModel(lr=lr, eps=eps)
 
+    # load model from latest checkpoint if it already exists
+    checkpoint = ray.train.get_checkpoint()
+    if checkpoint:
+        with checkpoint.as_directory() as checkpoint_dir:
+            model.load_from_checkpoint(os.path.join(checkpoint_dir, "checkpoint.ckpt"))
+
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         accelerator="auto",
@@ -131,6 +137,7 @@ if __name__ == "__main__":
     # The checkpoints and metrics are reported by `RayTrainReportCallback`
     run_config = RunConfig(
         name="ptl-sent-classification",
+        storage_path="/mnt/cluster_storage",
         checkpoint_config=CheckpointConfig(
             num_to_keep=2,
             checkpoint_score_attribute="matthews_correlation",

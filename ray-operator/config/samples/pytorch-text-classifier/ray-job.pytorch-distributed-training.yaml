@@ -47,6 +47,10 @@ spec:
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
+                - mountPath: /mnt/cluster_storage
+                  name: cluster-storage
           volumes:
             - name: ray-logs
+              emptyDir: {}
+            - name: cluster-storage
               emptyDir: {}
