@@ -62,13 +62,6 @@ def initialize_model():
     return model
 
 
-def initialize_model_from_checkpoint(checkpoint: Checkpoint):
-    with checkpoint.as_directory() as tmpdir:
-        state_dict = torch.load(os.path.join(tmpdir, "checkpoint.pt"))
-    resnet50 = initialize_model()
-    resnet50.load_state_dict(state_dict["model"])
-    return resnet50
-
 def evaluate(logits, labels):
     _, preds = torch.max(logits, 1)
     corrects = torch.sum(preds == labels).item()
@@ -120,8 +113,8 @@ def train_loop_per_worker(configs):
     start_epoch = 0
     checkpoint = train.get_checkpoint()
     if checkpoint:
-        with checkpoint.as_directory() as tmpdir:
-            state_dict = torch.load(os.path.join(tmpdir, "checkpoint.pt"))
+        with checkpoint.as_directory() as checkpoint_dir:
+            state_dict = torch.load(os.path.join(checkpoint_dir, "checkpoint.pt"))
             model.load_state_dict(state_dict['model'])
 
             start_epoch = state_dict['epoch'] + 1
@@ -189,7 +182,12 @@ def train_loop_per_worker(configs):
                         "model": model.module.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                     }
-                    torch.save(state_dict, os.path.join(tmpdir, "checkpoint.pt"))
+
+                    # In standard DDP training, where the model is the same across all ranks,
+                    # only the global rank 0 worker needs to save and report the checkpoint
+                    if train.get_context().get_world_rank() == 0:
+                        torch.save(state_dict, os.path.join(tmpdir, "checkpoint.pt"))
+
                     train.report(
                         metrics={"loss": epoch_loss, "acc": epoch_acc},
                         checkpoint=Checkpoint.from_directory(tmpdir),
@@ -201,22 +199,20 @@ if __name__ == "__main__":
         num_workers=num_workers, use_gpu=True, resources_per_worker={"CPU": 1, "GPU": 1}
     )
 
-    checkpoint_config = CheckpointConfig(num_to_keep=1)
+    checkpoint_config = CheckpointConfig(num_to_keep=3)
     run_config = RunConfig(
         name="finetune-resnet",
         storage_path="/mnt/cluster_storage",
         checkpoint_config=checkpoint_config,
     )
 
-    checkpoint_dir = os.environ.get('CHECKPOINT_DIR')
-    if checkpoint_dir is not None:
-        checkpoint = Checkpoint.from_directory(checkpoint_dir)
-        trainer = TorchTrainer(
+    experiment_path = os.path.expanduser("/mnt/cluster_storage/finetune-resnet")
+    if TorchTrainer.can_restore(experiment_path):
+        trainer = TorchTrainer.restore(experiment_path,
             train_loop_per_worker=train_loop_per_worker,
             train_loop_config=train_loop_config,
             scaling_config=scaling_config,
             run_config=run_config,
-            resume_from_checkpoint=checkpoint,
         )
     else:
         trainer = TorchTrainer(

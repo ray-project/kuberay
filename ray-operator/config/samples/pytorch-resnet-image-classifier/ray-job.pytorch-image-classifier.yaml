@@ -14,7 +14,7 @@ spec:
       - torch
       - torchvision
       - transformers>=4.19.1
-    working_dir: "https://github.com/andrewsykim/kuberay/archive/pytorch-lightning-image-classifier.zip"
+    working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
     rayVersion: '2.9.0'
     headGroupSpec:
@@ -35,10 +35,6 @@ spec:
               env:
               - name: NUM_WORKERS
                 value: "4"
-              # Set CHECKPOINT_DIR to reload checkpoint from a previous run.
-              # Example: /mnt/cluster_storage/ptl-sent-classification/TorchTrainer_bf43d_00000_0_2024-04-28_19-54-07/checkpoint_000004
-              - name: CHECKPOINT_DIR
-                value: "/mnt/cluster_storage/finetune-resnet/TorchTrainer_cbb82_00000_0_2024-04-29_10-20-37/checkpoint_000009"
               ports:
                 - containerPort: 6379
                   name: gcs-server
