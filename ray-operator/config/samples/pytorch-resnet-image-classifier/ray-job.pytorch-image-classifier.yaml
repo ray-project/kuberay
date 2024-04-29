@@ -3,16 +3,17 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  generateName: pytorch-text-classifier-
+  generateName: pytorch-image-classifier-
 spec:
   shutdownAfterJobFinishes: true
-  entrypoint: python ray-operator/config/samples/pytorch-text-classifier/fine-tune-pytorch-text-classifier.py
+  entrypoint: python ray-operator/config/samples/pytorch-resnet-image-classifier/fine-tune-pytorch-resnet-image-classifier.py
   runtimeEnvYAML: |
     pip:
       - numpy
       - datasets
+      - torch
+      - torchvision
       - transformers>=4.19.1
-      - pytorch-lightning==1.6.5
     working_dir: "https://github.com/andrewsykim/kuberay/archive/pytorch-lightning-image-classifier.zip"
   rayClusterSpec:
     rayVersion: '2.9.0'
@@ -32,10 +33,12 @@ spec:
             - name: ray-head
               image: rayproject/ray:2.9.0
               env:
+              - name: NUM_WORKERS
+                value: "4"
               # Set CHECKPOINT_DIR to reload checkpoint from a previous run.
               # Example: /mnt/cluster_storage/ptl-sent-classification/TorchTrainer_bf43d_00000_0_2024-04-28_19-54-07/checkpoint_000004
-              # - name: CHECKPOINT_DIR
-              #   value: "<your checkpoint dir>"
+              - name: CHECKPOINT_DIR
+                value: "/mnt/cluster_storage/finetune-resnet/TorchTrainer_cbb82_00000_0_2024-04-29_10-20-37/checkpoint_000009"
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -65,7 +68,7 @@ spec:
                   bucketName: andrewsy-gke-bucket
                   mountOptions: "implicit-dirs,uid=1000,gid=100"
     workerGroupSpecs:
-      - replicas: 2
+      - replicas: 4
         groupName: gpu-group
         rayStartParams:
           dashboard-host: '0.0.0.0'

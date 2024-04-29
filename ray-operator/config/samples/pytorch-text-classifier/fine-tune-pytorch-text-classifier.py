@@ -113,15 +113,7 @@ def train_func(config):
     )
 
     trainer = prepare_trainer(trainer)
-
-    # load model from latest checkpoint if it already exists
-    checkpoint = ray.train.get_checkpoint()
-    if checkpoint:
-        with checkpoint.as_directory() as ckpt_dir:
-            ckpt_path = os.path.join(ckpt_dir, "checkpoint.ckpt")
-            trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader, ckpt_path=ckpt_path)
-    else:
-        trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader)
+    trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader)
 
 
 if __name__ == "__main__":
