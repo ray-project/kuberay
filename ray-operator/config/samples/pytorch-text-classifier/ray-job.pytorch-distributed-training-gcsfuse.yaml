@@ -31,6 +31,13 @@ spec:
           containers:
             - name: ray-head
               image: rayproject/ray:2.9.0
+              env:
+              - name: NUM_WORKERS
+                value: "2"
+              # Set CHECKPOINT_DIR to reload checkpoint from a previous run.
+              # Example: /mnt/cluster_storage/ptl-sent-classification/TorchTrainer_bf43d_00000_0_2024-04-28_19-54-07/checkpoint_000004
+              # - name: CHECKPOINT_DIR
+              #   value: "<your checkpoint dir>"
               ports:
                 - containerPort: 6379
                   name: gcs-server

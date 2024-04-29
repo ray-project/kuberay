@@ -1,5 +1,6 @@
 import ray
 import torch
+import os
 import numpy as np
 import pytorch_lightning as pl
 import torch.nn.functional as F
@@ -14,7 +15,7 @@ from ray.train.lightning import (
     RayTrainReportCallback,
 )
 from ray.train.torch import TorchTrainer
-from ray.train import RunConfig, ScalingConfig, CheckpointConfig, DataConfig
+from ray.train import RunConfig, ScalingConfig, CheckpointConfig, DataConfig, Checkpoint
 
 class SentimentModel(pl.LightningModule):
     def __init__(self, lr=2e-5, eps=1e-8):
@@ -101,12 +102,6 @@ def train_func(config):
     # Model
     model = SentimentModel(lr=lr, eps=eps)
 
-    # load model from latest checkpoint if it already exists
-    checkpoint = ray.train.get_checkpoint()
-    if checkpoint:
-        with checkpoint.as_directory() as checkpoint_dir:
-            model.load_from_checkpoint(os.path.join(checkpoint_dir, "checkpoint.ckpt"))
-
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         accelerator="auto",
@@ -119,7 +114,14 @@ def train_func(config):
 
     trainer = prepare_trainer(trainer)
 
-    trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader)
+    # load model from latest checkpoint if it already exists
+    checkpoint = ray.train.get_checkpoint()
+    if checkpoint:
+        with checkpoint.as_directory() as ckpt_dir:
+            ckpt_path = os.path.join(ckpt_dir, "checkpoint.ckpt")
+            trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader, ckpt_path=ckpt_path)
+    else:
+        trainer.fit(model, train_dataloaders=train_ds_loader, val_dataloaders=val_ds_loader)
 
 
 if __name__ == "__main__":
@@ -145,8 +147,8 @@ if __name__ == "__main__":
         ),
     )
 
-    # Schedule 2 workers for DDP training (1 GPU/worker by default)
-    scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+    num_workers = int(os.environ.get("NUM_WORKERS", "1"))
+    scaling_config = ScalingConfig(num_workers=num_workers, use_gpu=True)
 
     trainer = TorchTrainer(
         train_loop_per_worker=train_func,
