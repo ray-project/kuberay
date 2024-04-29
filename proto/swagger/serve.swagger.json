@@ -504,7 +504,7 @@
         },
         "imagePullPolicy": {
           "type": "string",
-          "title": "Optional image pull policy"
+          "title": "Optional image pull policy We only support Always and ifNotPresent"
         }
       },
       "title": "Cluster HeadGroup specification",
@@ -898,7 +898,7 @@
         },
         "imagePullPolicy": {
           "type": "string",
-          "title": "Optional image pull policy We only support Always and if not present"
+          "title": "Optional image pull policy We only support Always and ifNotPresent"
         }
       },
       "required": [

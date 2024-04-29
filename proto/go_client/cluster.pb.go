@@ -1313,7 +1313,7 @@ type HeadGroupSpec struct {
 	Annotations map[string]string `protobuf:"bytes,10,rep,name=annotations,proto3" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Optional. Labels for the head pod
 	Labels map[string]string `protobuf:"bytes,11,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// Optional image pull policy
+	// Optional image pull policy We only support Always and ifNotPresent
 	ImagePullPolicy string `protobuf:"bytes,12,opt,name=imagePullPolicy,proto3" json:"imagePullPolicy,omitempty"`
 }
 
@@ -1465,7 +1465,7 @@ type WorkerGroupSpec struct {
 	Annotations map[string]string `protobuf:"bytes,12,rep,name=annotations,proto3" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Optional. Labels for the worker pod
 	Labels map[string]string `protobuf:"bytes,13,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// Optional image pull policy We only support Always and if not present
+	// Optional image pull policy We only support Always and ifNotPresent
 	ImagePullPolicy string `protobuf:"bytes,14,opt,name=imagePullPolicy,proto3" json:"imagePullPolicy,omitempty"`
 }
 
