@@ -151,7 +151,7 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		image = spec.Image
 	}
 
-	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only 
+	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only
 	// Overwrite it if it is Always
 	imagePullPolicy := corev1.PullIfNotPresent
 	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
@@ -401,7 +401,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		image = spec.Image
 	}
 
-	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only 
+	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only
 	// Overwrite it if it is Always
 	imagePullPolicy := corev1.PullIfNotPresent
 	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
