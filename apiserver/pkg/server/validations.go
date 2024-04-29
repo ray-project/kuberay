@@ -20,6 +20,10 @@ func ValidateClusterSpec(clusterSpec *api.ClusterSpec) error {
 	if len(clusterSpec.HeadGroupSpec.RayStartParams) == 0 {
 		return util.NewInvalidInputError("HeadGroupSpec RayStartParams is empty. Please specify values.")
 	}
+	if len(clusterSpec.HeadGroupSpec.ImagePullPolicy) > 0 &&
+		clusterSpec.HeadGroupSpec.ImagePullPolicy != "Always" && clusterSpec.HeadGroupSpec.ImagePullPolicy != "IfNotPresent" {
+		return util.NewInvalidInputError("HeadGroupSpec unsupported value for Image pull policy. Please specify Always or IfNotPresent")
+	}
 
 	for index, spec := range clusterSpec.WorkerGroupSpec {
 		if len(spec.GroupName) == 0 {
@@ -33,6 +37,9 @@ func ValidateClusterSpec(clusterSpec *api.ClusterSpec) error {
 		}
 		if spec.MinReplicas > spec.MaxReplicas {
 			return util.NewInvalidInputError("WorkerNodeSpec %d MinReplica > MaxReplicas. Please specify a valid value.", index)
+		}
+		if len(spec.ImagePullPolicy) > 0 && spec.ImagePullPolicy != "Always" && spec.ImagePullPolicy != "IfNotPresent" {
+			return util.NewInvalidInputError("Worker GroupSpec unsupported value for Image pull policy. Please specify Always or IfNotPresent")
 		}
 	}
 	return nil
