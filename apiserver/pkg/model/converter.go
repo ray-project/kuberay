@@ -305,7 +305,6 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 		if spec.Template.Spec.Containers[0].ImagePullPolicy == corev1.PullAlways {
 			workerNodeSpec.ImagePullPolicy = "Always"
 		}
-
 		workerNodeSpecs = append(workerNodeSpecs, workerNodeSpec)
 	}
 

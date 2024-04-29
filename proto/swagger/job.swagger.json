@@ -739,7 +739,7 @@
         },
         "imagePullPolicy": {
           "type": "string",
-          "title": "Optional image pull policy"
+          "title": "Optional image pull policy We only support Always and if not present"
         }
       },
       "required": [

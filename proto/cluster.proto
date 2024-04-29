@@ -327,7 +327,7 @@ message WorkerGroupSpec {
   map<string, string> annotations = 12;
   // Optional. Labels for the worker pod
   map<string, string> labels = 13;
-  // Optional image pull policy
+  // Optional image pull policy We only support Always and if not present
   string imagePullPolicy = 14;
 }
 
