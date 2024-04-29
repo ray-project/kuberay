@@ -1530,6 +1530,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	timeNow := metav1.Now()
 	oldStatus := rayv1.RayClusterStatus{
 		State:                   rayv1.Ready,
+		ReadyWorkerReplicas:     1,
 		AvailableWorkerReplicas: 1,
 		DesiredWorkerReplicas:   1,
 		MinWorkerReplicas:       1,
@@ -1564,42 +1565,47 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus.Reason = "new reason"
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 3: `AvailableWorkerReplicas` is different => return true
+	// Case 3: `ReadyWorkerReplicas` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
+	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+
+	// Case 4: `AvailableWorkerReplicas` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 4: `DesiredWorkerReplicas` is different => return true
+	// Case 5: `DesiredWorkerReplicas` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 5: `MinWorkerReplicas` is different => return true
+	// Case 6: `MinWorkerReplicas` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 6: `MaxWorkerReplicas` is different => return true
+	// Case 7: `MaxWorkerReplicas` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 7: `Endpoints` is different => return true
+	// Case 8: `Endpoints` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.Endpoints["fakeEndpoint"] = "10009"
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 8: `Head` is different => return true
+	// Case 9: `Head` is different => return true
 	newStatus = oldStatus.DeepCopy()
 	newStatus.Head.PodIP = "test head pod ip"
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 9: `LastUpdateTime` is different => return false
+	// Case 10: `LastUpdateTime` is different => return false
 	newStatus = oldStatus.DeepCopy()
 	newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
-	// Case 10: `ObservedGeneration` is different => return false
+	// Case 11: `ObservedGeneration` is different => return false
 	newStatus = oldStatus.DeepCopy()
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))

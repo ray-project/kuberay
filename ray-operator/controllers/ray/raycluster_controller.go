@@ -400,13 +400,22 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 			oldStatus.State, newStatus.State, oldStatus.Reason, newStatus.Reason))
 		return true
 	}
-	if oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas || oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
-		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas || oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
+	if oldStatus.ReadyWorkerReplicas != newStatus.ReadyWorkerReplicas ||
+		oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas ||
+		oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
+		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas ||
+		oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
 		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old AvailableWorkerReplicas: %d, new AvailableWorkerReplicas: %d, old DesiredWorkerReplicas: %d, new DesiredWorkerReplicas: %d, "+
-				"old MinWorkerReplicas: %d, new MinWorkerReplicas: %d, old MaxWorkerReplicas: %d, new MaxWorkerReplicas: %d",
-			oldStatus.AvailableWorkerReplicas, newStatus.AvailableWorkerReplicas, oldStatus.DesiredWorkerReplicas, newStatus.DesiredWorkerReplicas,
-			oldStatus.MinWorkerReplicas, newStatus.MinWorkerReplicas, oldStatus.MaxWorkerReplicas, newStatus.MaxWorkerReplicas))
+			"old ReadyWorkerReplicas: %d, new ReadyWorkerReplicas: %d, "+
+				"old AvailableWorkerReplicas: %d, new AvailableWorkerReplicas: %d, "+
+				"old DesiredWorkerReplicas: %d, new DesiredWorkerReplicas: %d, "+
+				"old MinWorkerReplicas: %d, new MinWorkerReplicas: %d, "+
+				"old MaxWorkerReplicas: %d, new MaxWorkerReplicas: %d",
+			oldStatus.ReadyWorkerReplicas, newStatus.ReadyWorkerReplicas,
+			oldStatus.AvailableWorkerReplicas, newStatus.AvailableWorkerReplicas,
+			oldStatus.DesiredWorkerReplicas, newStatus.DesiredWorkerReplicas,
+			oldStatus.MinWorkerReplicas, newStatus.MinWorkerReplicas,
+			oldStatus.MaxWorkerReplicas, newStatus.MaxWorkerReplicas))
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
@@ -1222,6 +1231,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		return nil, err
 	}
 
+	newInstance.Status.ReadyWorkerReplicas = utils.CalculateReadyReplicas(runtimePods)
 	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
 	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
 	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
