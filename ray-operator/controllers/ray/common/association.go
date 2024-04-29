@@ -104,6 +104,16 @@ func RayClusterRelatedAssociationOptions(instance *rayv1.RayCluster) Association
 	}
 }
 
+func RayClusterServicesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	}
+}
+
 func RayServiceRayClustersAssociationOptions(rayService *rayv1.RayService) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(rayService.Namespace),

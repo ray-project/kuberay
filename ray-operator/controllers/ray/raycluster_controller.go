@@ -508,7 +508,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
 
-	if err := r.List(ctx, &services, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &services, common.RayClusterServicesAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -1271,7 +1271,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	if err := r.List(ctx, &rayHeadSvc, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &rayHeadSvc, common.RayClusterServicesAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
 
@@ -1296,7 +1296,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 			}
 		}
 	} else {
-		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions())
+		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", common.RayClusterServicesAssociationOptions(instance).ToListOptions())
 	}
 
 	return nil
