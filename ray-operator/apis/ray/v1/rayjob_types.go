@@ -60,6 +60,7 @@ const (
 )
 
 type SubmitterConfig struct {
+	// +kubebuilder:default:=2
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 

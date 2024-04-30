@@ -7078,6 +7078,7 @@ spec:
               submitterConfig:
                 properties:
                   backoffLimit:
+                    default: 2
                     format: int32
                     type: integer
                 type: object
