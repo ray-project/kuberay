@@ -58,7 +58,7 @@ spec:
               csi:
                 driver: gcsfuse.csi.storage.gke.io
                 volumeAttributes:
-                  bucketName: andrewsy-gke-bucket
+                  bucketName: GCS_BUCKET
                   mountOptions: "implicit-dirs,uid=1000,gid=100"
     workerGroupSpecs:
       - replicas: 2
@@ -105,5 +105,5 @@ spec:
                 csi:
                   driver: gcsfuse.csi.storage.gke.io
                   volumeAttributes:
-                    bucketName: andrewsy-gke-bucket
+                    bucketName: GCS_BUCKET
                     mountOptions: "implicit-dirs,uid=1000,gid=100"

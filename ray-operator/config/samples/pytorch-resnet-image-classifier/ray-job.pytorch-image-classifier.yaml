@@ -1,5 +1,5 @@
-# This RayJob is based on the "Fine-tune a PyTorch Lightning Text Classifier with Ray Data" example in the Ray documentation.
-# See https://docs.ray.io/en/master/train/examples/lightning/lightning_cola_advanced.html for more details.
+# This RayJob is based on the "Finetuning a Pytorch Image Classifier with Ray Train" example in the Ray documentation.
+# See https://docs.ray.io/en/latest/train/examples/pytorch/pytorch_resnet_finetune.html for more details.
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
@@ -61,7 +61,7 @@ spec:
               csi:
                 driver: gcsfuse.csi.storage.gke.io
                 volumeAttributes:
-                  bucketName: andrewsy-gke-bucket
+                  bucketName: GCS_BUCKET
                   mountOptions: "implicit-dirs,uid=1000,gid=100"
     workerGroupSpecs:
       - replicas: 4
@@ -108,5 +108,5 @@ spec:
                 csi:
                   driver: gcsfuse.csi.storage.gke.io
                   volumeAttributes:
-                    bucketName: andrewsy-gke-bucket
+                    bucketName: GCS_BUCKET
                     mountOptions: "implicit-dirs,uid=1000,gid=100"

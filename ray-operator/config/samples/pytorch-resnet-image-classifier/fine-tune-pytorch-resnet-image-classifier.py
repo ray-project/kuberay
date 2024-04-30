@@ -1,4 +1,5 @@
 import os
+import warnings
 from tempfile import TemporaryDirectory
 
 import torch
@@ -76,8 +77,6 @@ train_loop_config = {
 }
 
 def train_loop_per_worker(configs):
-    import warnings
-
     warnings.filterwarnings("ignore")
 
     # Calculate the batch size for a single worker
