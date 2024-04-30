@@ -60,7 +60,7 @@ const (
 )
 
 type SubmitterConfig struct {
-	// +kubebuilder:default:=2
+	// BackoffLimit of the submitter k8s job.
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
@@ -109,6 +109,7 @@ type RayJobSpec struct {
 	// EntrypointResources specifies the custom resources and quantities to reserve for the
 	// entrypoint command.
 	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// Configurations of submitter k8s job.
 	SubmitterConfig *SubmitterConfig `json:"submitterConfig,omitempty"`
 }
 
