@@ -7077,7 +7077,7 @@ spec:
                 type: string
               submitterConfig:
                 properties:
-                  submitterBackoffLimit:
+                  backoffLimit:
                     format: int32
                     type: integer
                 type: object

@@ -60,7 +60,7 @@ const (
 )
 
 type SubmitterConfig struct {
-	SubmitterBackoffLimit *int32 `json:"submitterBackoffLimit,omitempty"`
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
 // RayJobSpec defines the desired state of RayJob
@@ -107,8 +107,8 @@ type RayJobSpec struct {
 	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
 	// EntrypointResources specifies the custom resources and quantities to reserve for the
 	// entrypoint command.
-	EntrypointResources string           `json:"entrypointResources,omitempty"`
-	SubmitterConfig     *SubmitterConfig `json:"submitterConfig,omitempty"`
+	EntrypointResources string `json:"entrypointResources,omitempty"`
+	SubmitterConfig *SubmitterConfig `json:"submitterConfig,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob

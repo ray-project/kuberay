@@ -423,8 +423,8 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	submitterBackoffLimit := pointer.Int32(2)
-	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.SubmitterBackoffLimit != nil {
-		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.SubmitterBackoffLimit
+	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
+		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{

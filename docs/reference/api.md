@@ -226,7 +226,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `submitterBackoffLimit` _integer_ |  |
+| `backoffLimit` _integer_ |  |
 
 
 #### UpscalingMode

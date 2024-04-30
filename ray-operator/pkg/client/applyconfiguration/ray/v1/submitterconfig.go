@@ -5,7 +5,7 @@ package v1
 // SubmitterConfigApplyConfiguration represents an declarative configuration of the SubmitterConfig type for use
 // with apply.
 type SubmitterConfigApplyConfiguration struct {
-	SubmitterBackoffLimit *int32 `json:"submitterBackoffLimit,omitempty"`
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
 // SubmitterConfigApplyConfiguration constructs an declarative configuration of the SubmitterConfig type for use with
@@ -14,10 +14,10 @@ func SubmitterConfig() *SubmitterConfigApplyConfiguration {
 	return &SubmitterConfigApplyConfiguration{}
 }
 
-// WithSubmitterBackoffLimit sets the SubmitterBackoffLimit field in the declarative configuration to the given value
+// WithBackoffLimit sets the BackoffLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SubmitterBackoffLimit field is set to the value of the last call.
-func (b *SubmitterConfigApplyConfiguration) WithSubmitterBackoffLimit(value int32) *SubmitterConfigApplyConfiguration {
-	b.SubmitterBackoffLimit = &value
+// If called multiple times, the BackoffLimit field is set to the value of the last call.
+func (b *SubmitterConfigApplyConfiguration) WithBackoffLimit(value int32) *SubmitterConfigApplyConfiguration {
+	b.BackoffLimit = &value
 	return b
 }
