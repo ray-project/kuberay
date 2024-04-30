@@ -44,17 +44,8 @@ type RayJobReconciler struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconcilerFromConfig(ctx context.Context, mgr manager.Manager, config configapi.Configuration) *RayJobReconciler {
-	var dashboardClientFunc = utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
-	return &RayJobReconciler{
-		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
-		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
-		dashboardClientFunc: dashboardClientFunc,
-	}
-}
-
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, dashboardClientFunc func() utils.RayDashboardClientInterface) *RayJobReconciler {
+func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, provider configapi.ClientProvider) *RayJobReconciler {
+	var dashboardClientFunc = provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
