@@ -50,7 +50,14 @@ env_vars:
 							"resources":      `'{"R1": 4}'`,
 						}).
 						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs")))).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithReplicas(1).
+						WithMinReplicas(1).
+						WithMaxReplicas(1).
+						WithGroupName("small-group").
+						WithRayStartParams(map[string]string{"num-cpus": "1"}).
+						WithTemplate(workerPodTemplateApplyConfiguration()))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
