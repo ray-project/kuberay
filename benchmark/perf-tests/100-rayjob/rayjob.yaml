@@ -38,10 +38,6 @@ spec:
             containers:
               - name: ray-worker
                 image: rayproject/ray:2.9.3
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: [ "/bin/sh","-c","ray stop" ]
                 resources:
                   limits:
                     cpu: "1"
