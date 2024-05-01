@@ -5,7 +5,6 @@ metadata:
 spec:
   rayVersion: '2.9.3'
   headGroupSpec:
-    serviceType: ClusterIP
     rayStartParams:
       dashboard-host: '0.0.0.0'
     template:
@@ -20,10 +19,6 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
@@ -47,10 +42,6 @@ spec:
         containers:
         - name: ray-worker
           image: rayproject/ray:2.9.3
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs

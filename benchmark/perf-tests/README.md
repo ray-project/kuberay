@@ -6,15 +6,17 @@ clusterloader2 is a Kubernetes load testing tool by [SIG Scalability](https://gi
 ## Running clusterloader2 tests
 
 First, install the perf-tests repository and compile the clusterloader2 binary
-```
+
+```sh
 git clone git@github.com:kubernetes/perf-tests.git
 cd perf-tests/clusterloader2
 go build -o clusterloader2 ./cmd
 ```
 
-Run the following command to run clusterloader2 against one of the test folders. In this example we'll run the test configured in the [100-raycluster](./100-raycluster/) folder.
-```
-clusterloader2 --provider=<provider-name> --kubeconfig=<path to kubeconfig> --testconfig=100-raycluster/config.yaml
+Run the following command to run clusterloader2 against one of the test folders. In this example we'll run the test configured in the [100-rayjob](./100-rayjob/) folder.
+
+```sh
+clusterloader2 --provider=<provider-name> --kubeconfig=<path to kubeconfig> --testconfig=100-rayjob/config.yaml
 ```
 
 ## Tests & Results
@@ -24,6 +26,7 @@ for previously executed runs of the tests.
 
 The current lists of tests are:
 * [100 RayCluster test](./100-raycluster/)
+* [100 RayJob test](./100-rayjob/)
 
 
 ## Run a performance test with Kind
@@ -31,16 +34,18 @@ The current lists of tests are:
 You can test clusterloader2 configs using Kind.
 
 First create a kind cluster:
-```
+```sh
 kind create cluster --image=kindest/node:v1.27.3
 ```
 
-Install kuberay;
-```
+Install KubeRay;
+```sh
 helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0
 ```
 
 Run a clusterloader2 test:
+```sh
+clusterloader2 --provider kind --kubeconfig ~/.kube/config --testconfig ./100-rayjob/config.yaml
 ```
-clusterloader2 --provider kind --kubeconfig ~/.kube/config --testconfig ./100-raycluster/config.yaml
-```
+
+Note: If you want to generate a number of RayJob custom resources other than 100, you need to make the following changes: (1) modify `replicasPerNamespace` in the "Creating RayJobs" step of the config.yaml file, and (2) adjust `expect_succeeded` in the `wait-for-rayjobs.sh` file.
