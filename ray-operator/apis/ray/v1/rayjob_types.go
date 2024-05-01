@@ -59,6 +59,11 @@ const (
 	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
 )
 
+type SubmitterConfig struct {
+	// BackoffLimit of the submitter k8s job.
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+}
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -104,6 +109,8 @@ type RayJobSpec struct {
 	// EntrypointResources specifies the custom resources and quantities to reserve for the
 	// entrypoint command.
 	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// Configurations of submitter k8s job.
+	SubmitterConfig *SubmitterConfig `json:"submitterConfig,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
