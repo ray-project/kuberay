@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <testsuite name="ClusterLoaderV2" tests="0" failures="0" errors="0" time="284.804">
+      <testcase name="kuberay overall (100-rayjob/config.yaml)" classname="ClusterLoaderV2" time="284.80261448"></testcase>
+      <testcase name="kuberay: [step: 01] Start measurements [00] - PodStartupLatency" classname="ClusterLoaderV2" time="0.106826602"></testcase>
+      <testcase name="kuberay: [step: 01] Start measurements [01] - WaitForControlledPodsRunning" classname="ClusterLoaderV2" time="0.207335286"></testcase>
+      <testcase name="kuberay: [step: 01] Start measurements [02] - JobLifecycleLatency" classname="ClusterLoaderV2" time="0.106730692"></testcase>
+      <testcase name="kuberay: [step: 02] Creating RayJobs" classname="ClusterLoaderV2" time="1.059487968"></testcase>
+      <testcase name="kuberay: [step: 03] Wait for RayJobs complete [00] - WaitForRayJob" classname="ClusterLoaderV2" time="217.399873864"></testcase>
+      <testcase name="kuberay: [step: 04] Wait for pods to be running [00] - WaitForControlledPodsRunning" classname="ClusterLoaderV2" time="5.011879337"></testcase>
+      <testcase name="kuberay: [step: 05] Measure pod startup latency [00] - PodStartupLatency" classname="ClusterLoaderV2" time="0.04856601"></testcase>
+      <testcase name="kuberay: [step: 06] Measure job finished [00] - JobLifecycleLatency" classname="ClusterLoaderV2" time="1.001760404"></testcase>
+  </testsuite>
+  
