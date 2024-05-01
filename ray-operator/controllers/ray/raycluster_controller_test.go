@@ -175,6 +175,13 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			// Check that the StateTransitionTimes are set.
+			Eventually(
+				func() *metav1.Time {
+					status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+					return status.StateTransitionTimes[rayv1.Ready]
+				},
+				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
 		})
 
 		// The following tests focus on checking whether KubeRay creates the correct number of Pods.
@@ -469,15 +476,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
-		})
-
-		It("RayCluster's .status.stateTransitionTimes should include a time for ready state", func() {
-			Eventually(
-				func() *metav1.Time {
-					status := getClusterStatus(ctx, namespace, rayCluster.Name)()
-					return status.StateTransitionTimes[rayv1.Ready]
-				},
-				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
 		})
 	})
 
