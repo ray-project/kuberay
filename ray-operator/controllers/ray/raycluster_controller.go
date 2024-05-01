@@ -1252,6 +1252,13 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
+	if instance.Status.State != newInstance.Status.State {
+		if newInstance.Status.StateTransitionTimes == nil {
+			newInstance.Status.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time)
+		}
+		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow
+	}
+
 	return newInstance, nil
 }
 

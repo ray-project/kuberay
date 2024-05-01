@@ -6,6 +6,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -263,6 +264,13 @@ func (in *RayClusterStatus) DeepCopyInto(out *RayClusterStatus) {
 	if in.LastUpdateTime != nil {
 		in, out := &in.LastUpdateTime, &out.LastUpdateTime
 		*out = (*in).DeepCopy()
+	}
+	if in.StateTransitionTimes != nil {
+		in, out := &in.StateTransitionTimes, &out.StateTransitionTimes
+		*out = make(map[ClusterState]*metav1.Time, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val.DeepCopy()
+		}
 	}
 	if in.Endpoints != nil {
 		in, out := &in.Endpoints, &out.Endpoints

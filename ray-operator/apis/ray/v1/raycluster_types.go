@@ -140,6 +140,8 @@ type RayClusterStatus struct {
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// StateTransitionTimes indicates the time of the last state transition for each state.
+	StateTransitionTimes map[ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`
 	// Service Endpoints
 	Endpoints map[string]string `json:"endpoints,omitempty"`
 	// Head info
