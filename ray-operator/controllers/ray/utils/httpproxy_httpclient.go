@@ -50,18 +50,15 @@ func (r *RayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, por
 
 // CheckProxyActorHealth checks the health status of the Ray Serve proxy actor.
 func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
-	logger := ctrl.LoggerFrom(ctx)
 	resp, err := r.client.Get(r.httpProxyURL + RayServeProxyHealthPath)
 	if err != nil {
-		logger.Error(err, "CheckProxyActorHealth fails.")
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		err := fmt.Errorf("CheckProxyActorHealth fails: Status code is not 200")
-		logger.Error(err, "CheckProxyActorHealth fails.", "status code", resp.StatusCode, "status", resp.Status, "body", string(body))
+		err := fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
 		return err
 	}
 
