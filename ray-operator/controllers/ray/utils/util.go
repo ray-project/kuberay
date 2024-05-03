@@ -70,7 +70,7 @@ func IsCreated(pod *corev1.Pod) bool {
 
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
-	if pod == nil || pod.Status.Phase != corev1.PodRunning {
+	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}
 	for _, cond := range pod.Status.Conditions {

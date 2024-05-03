@@ -1209,7 +1209,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	if utils.IsRunningAndReady(headPod) && utils.CheckAllPodsRunning(ctx, workerPods) {
+	if utils.CheckAllPodsRunning(ctx, corev1.PodList{Items: append(headPods.Items, workerPods.Items...)}) {
 		newInstance.Status.State = rayv1.Ready
 	}
 
