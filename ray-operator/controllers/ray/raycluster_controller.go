@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -980,10 +979,6 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 	// build the pod then create it
 	pod := r.buildHeadPod(ctx, instance)
-	podIdentifier := types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
-	}
 	if EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
 			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
@@ -994,19 +989,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 	logger.Info("createHeadPod", "head pod with name", pod.GenerateName)
 	if err := r.Create(ctx, &pod); err != nil {
-		if errors.IsAlreadyExists(err) {
-			fetchedPod := corev1.Pod{}
-			// the pod might be in terminating state, we need to check
-			if errPod := r.Get(ctx, podIdentifier, &fetchedPod); errPod == nil {
-				if fetchedPod.DeletionTimestamp != nil {
-					logger.Error(errPod, "create pod error!", "pod is in a terminating state, we will wait until it is cleaned up", podIdentifier)
-					return err
-				}
-			}
-			logger.Info("Creating pod", "Pod already exists", pod.Name)
-		} else {
-			return err
-		}
+		return err
 	}
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created head pod %s", pod.Name)
 	return nil
@@ -1017,10 +1000,6 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	// build the pod then create it
 	pod := r.buildWorkerPod(ctx, instance, worker)
-	podIdentifier := types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
-	}
 	if EnableBatchScheduler {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
 			scheduler.AddMetadataToPod(&instance, worker.GroupName, &pod)
@@ -1031,20 +1010,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	replica := pod
 	if err := r.Create(ctx, &replica); err != nil {
-		if errors.IsAlreadyExists(err) {
-			fetchedPod := corev1.Pod{}
-			// the pod might be in terminating state, we need to check
-			if errPod := r.Get(ctx, podIdentifier, &fetchedPod); errPod == nil {
-				if fetchedPod.DeletionTimestamp != nil {
-					logger.Error(errPod, "create pod error!", "pod is in a terminating state, we will wait until it is cleaned up", podIdentifier)
-					return err
-				}
-			}
-			logger.Info("Creating pod", "Pod already exists", pod.Name)
-		} else {
-			logger.Error(fmt.Errorf("createWorkerPod error"), "error creating pod", "pod", pod, "err = ", err)
-			return err
-		}
+		return err
 	}
 	logger.Info("Created pod", "Pod ", pod.GenerateName)
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created worker pod %s", pod.Name)
