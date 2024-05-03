@@ -15,8 +15,7 @@ spec:
   rayClusterSpec:
     rayVersion: '2.9.0'
     headGroupSpec:
-      rayStartParams:
-        num-cpus: 0
+      rayStartParams: {}
       # Pod template
       template:
         spec:
