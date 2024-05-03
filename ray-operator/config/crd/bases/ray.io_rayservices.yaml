@@ -7302,10 +7302,14 @@ spec:
                         properties:
                           podIP:
                             type: string
+                          ready:
+                            type: boolean
                           serviceIP:
                             type: string
                           serviceName:
                             type: string
+                        required:
+                        - ready
                         type: object
                       lastUpdateTime:
                         format: date-time
@@ -7408,10 +7412,14 @@ spec:
                         properties:
                           podIP:
                             type: string
+                          ready:
+                            type: boolean
                           serviceIP:
                             type: string
                           serviceName:
                             type: string
+                        required:
+                        - ready
                         type: object
                       lastUpdateTime:
                         format: date-time

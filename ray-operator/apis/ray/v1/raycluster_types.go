@@ -158,6 +158,7 @@ type HeadInfo struct {
 	PodIP       string `json:"podIP,omitempty"`
 	ServiceIP   string `json:"serviceIP,omitempty"`
 	ServiceName string `json:"serviceName,omitempty"`
+	Ready       bool   `json:"ready"`
 }
 
 // RayNodeType  the type of a ray node: head/worker

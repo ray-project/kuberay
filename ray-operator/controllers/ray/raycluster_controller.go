@@ -1182,13 +1182,23 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
-	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
+	headPods := corev1.PodList{}
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		return nil, err
+	}
+	var headPod *corev1.Pod
+	if len(headPods.Items) == 1 {
+		headPod = &headPods.Items[0]
+	} else if len(headPods.Items) > 1 {
+		return nil, fmt.Errorf("found %d head pods for RayCluster %s", len(headPods.Items), instance.Name)
+	}
+
+	workerPods := corev1.PodList{}
+	if err := r.List(ctx, &workerPods, common.RayClusterWorkerPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return nil, err
 	}
 
-	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(workerPods)
 	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
 	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
 	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
@@ -1199,11 +1209,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	if utils.CheckAllPodsRunning(ctx, runtimePods) {
+	if utils.IsRunningAndReady(headPod) && utils.CheckAllPodsRunning(ctx, workerPods) {
 		newInstance.Status.State = rayv1.Ready
 	}
 
-	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
+	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(workerPods.Items) == 0 && headPod == nil {
 		newInstance.Status.State = rayv1.Suspended
 	}
 
@@ -1211,7 +1221,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		return nil, err
 	}
 
-	if err := r.updateHeadInfo(ctx, newInstance); err != nil {
+	if err := r.updateHeadInfo(ctx, newInstance, headPod); err != nil {
 		return nil, err
 	}
 
@@ -1303,7 +1313,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	return nil
 }
 
-func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster, headPod *corev1.Pod) error {
 	if ip, err := r.getHeadPodIP(ctx, instance); err != nil {
 		return err
 	} else {
@@ -1316,6 +1326,8 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 		instance.Status.Head.ServiceIP = ip
 		instance.Status.Head.ServiceName = name
 	}
+
+	instance.Status.Head.Ready = (headPod != nil) && utils.IsRunningAndReady(headPod)
 
 	return nil
 }
