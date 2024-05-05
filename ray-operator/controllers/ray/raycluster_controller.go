@@ -1258,7 +1258,7 @@ func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, inst
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
 		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
-		// We return Head Pod IP directly if the Head service is headless.
+		// We return Head Pod IP if the Head service is headless.
 		ip, err := r.getHeadPodIP(ctx, instance)
 		if err != nil {
 			return "", "", err

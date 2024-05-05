@@ -72,7 +72,7 @@ Flags:
       --environment string               environment of the cluster (valid values: DEV, TESTING, STAGING, PRODUCTION) (default "DEV")
       --head-compute-template string     compute template name for ray head
       --head-image string                ray head image
-      --head-service-type string         ray head service type (ClusterIP, NodePort, LoadBalancer) (default "ClusterIP")
+      --head-service-type string         ray head service type (ClusterIP, NodePort, LoadBalancer) (default "ClusterIP", which creates a headless ClusterIP service)
       --name string                      name of the cluster
   -n, --namespace string                 kubernetes namespace where the cluster will be
       --user string                      SSO username of ray cluster creator
