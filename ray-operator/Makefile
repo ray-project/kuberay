@@ -151,7 +151,7 @@ controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessar
 KUSTOMIZE = $(LOCALBIN)/kustomize
 $(KUSTOMIZE): $(LOCALBIN)
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kustomize/kustomize/v5@latest
+	test -s $(KUSTOMIZE) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kustomize/kustomize/v5@v5.3.0
 
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)
