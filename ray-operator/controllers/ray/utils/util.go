@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode"
 
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 
@@ -560,4 +562,9 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 		}
 	}
 	return corev1.EnvVar{}, false
+}
+
+type ClientProvider interface {
+	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }

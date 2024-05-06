@@ -9,11 +9,6 @@ import (
 
 //+kubebuilder:object:root=true
 
-type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface
-	GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface
-}
-
 // Configuration is the Schema for Ray operator config.
 type Configuration struct {
 	metav1.TypeMeta `json:",inline"`
