@@ -18,8 +18,9 @@ package ray
 import (
 	"os"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"testing"
+
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
