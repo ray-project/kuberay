@@ -8,6 +8,7 @@ type HeadInfoApplyConfiguration struct {
 	PodIP       *string `json:"podIP,omitempty"`
 	ServiceIP   *string `json:"serviceIP,omitempty"`
 	ServiceName *string `json:"serviceName,omitempty"`
+	Ready       *bool   `json:"ready,omitempty"`
 }
 
 // HeadInfoApplyConfiguration constructs an declarative configuration of the HeadInfo type for use with
@@ -37,5 +38,13 @@ func (b *HeadInfoApplyConfiguration) WithServiceIP(value string) *HeadInfoApplyC
 // If called multiple times, the ServiceName field is set to the value of the last call.
 func (b *HeadInfoApplyConfiguration) WithServiceName(value string) *HeadInfoApplyConfiguration {
 	b.ServiceName = &value
+	return b
+}
+
+// WithReady sets the Ready field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Ready field is set to the value of the last call.
+func (b *HeadInfoApplyConfiguration) WithReady(value bool) *HeadInfoApplyConfiguration {
+	b.Ready = &value
 	return b
 }

@@ -292,12 +292,9 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 
 // CalculateAvailableReplicas calculates available worker replicas at the cluster level
 // A worker is available if its Pod is running
-func CalculateAvailableReplicas(pods corev1.PodList) int32 {
+func CalculateAvailableReplicas(workerPods corev1.PodList) int32 {
 	count := int32(0)
-	for _, pod := range pods.Items {
-		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1.WorkerNode) {
-			continue
-		}
+	for _, pod := range workerPods.Items {
 		if pod.Status.Phase == corev1.PodRunning {
 			count++
 		}

@@ -268,7 +268,9 @@ var expected = `{
             "desiredMemory": "0",
             "desiredGPU": "0",
             "desiredTPU": "0",
-            "head":{}
+            "head":{
+               "ready":false
+            }
          }
       },
       "pendingServiceStatus":{
@@ -277,7 +279,9 @@ var expected = `{
             "desiredMemory": "0",
             "desiredGPU": "0",
             "desiredTPU": "0",
-            "head":{}
+            "head":{
+               "ready":false
+            }
          }
       }
    }
