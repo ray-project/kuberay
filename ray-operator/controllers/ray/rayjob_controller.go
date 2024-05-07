@@ -44,7 +44,7 @@ type RayJobReconciler struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
-	var dashboardClientFunc = provider.GetDashboardClient(mgr)
+	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
