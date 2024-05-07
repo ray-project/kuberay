@@ -12,6 +12,7 @@ import (
 // with apply.
 type RayClusterStatusApplyConfiguration struct {
 	State                   *v1.ClusterState                 `json:"state,omitempty"`
+	ReadyWorkerReplicas     *int32                           `json:"readyWorkerReplicas,omitempty"`
 	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
 	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
 	MinWorkerReplicas       *int32                           `json:"minWorkerReplicas,omitempty"`
@@ -39,6 +40,14 @@ func RayClusterStatus() *RayClusterStatusApplyConfiguration {
 // If called multiple times, the State field is set to the value of the last call.
 func (b *RayClusterStatusApplyConfiguration) WithState(value v1.ClusterState) *RayClusterStatusApplyConfiguration {
 	b.State = &value
+	return b
+}
+
+// WithReadyWorkerReplicas sets the ReadyWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ReadyWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithReadyWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.ReadyWorkerReplicas = &value
 	return b
 }
 

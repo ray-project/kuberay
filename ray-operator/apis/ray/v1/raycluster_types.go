@@ -121,6 +121,8 @@ type RayClusterStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
 	State ClusterState `json:"state,omitempty"`
+	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
+	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
 	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
 	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.

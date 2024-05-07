@@ -274,6 +274,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
+						},
+					},
 				},
 			},
 			{
@@ -285,6 +291,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionFalse,
+						},
+					},
 				},
 			},
 			{
@@ -300,8 +312,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 			},
 		},
 	}
-	count := CalculateAvailableReplicas(podList)
-	assert.Equal(t, count, int32(1), "expect 1 available replica")
+
+	availableCount := CalculateAvailableReplicas(podList)
+	assert.Equal(t, availableCount, int32(1), "expect 1 available replica")
+
+	readyCount := CalculateReadyReplicas(podList)
+	assert.Equal(t, readyCount, int32(1), "expect 1 ready replica")
 }
 
 func TestFindContainerPort(t *testing.T) {
