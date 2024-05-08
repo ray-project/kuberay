@@ -129,7 +129,7 @@ def train_func_per_worker(config: Dict):
         ray.train.report(metrics={"loss": test_loss, "accuracy": accuracy})
 
 
-def train_fashion_mnist(num_workers=2, use_gpu=False):
+def train_fashion_mnist(num_workers=4, cpus_per_worker=2, use_gpu=False):
     global_batch_size = 32
 
     train_config = {
@@ -142,7 +142,7 @@ def train_fashion_mnist(num_workers=2, use_gpu=False):
     scaling_config = ScalingConfig(
         num_workers=num_workers,
         use_gpu=use_gpu,
-        resources_per_worker={"CPU": 2}
+        resources_per_worker={"CPU": cpus_per_worker}
     )
 
     # Initialize a Ray TorchTrainer
@@ -160,4 +160,6 @@ def train_fashion_mnist(num_workers=2, use_gpu=False):
 
 
 if __name__ == "__main__":
-    train_fashion_mnist(num_workers=4)
+    num_workers = int(os.getenv("NUM_WORKERS", "4"))
+    cpus_per_worker = int(os.getenv("CPUS_PER_WORKER", "2"))
+    train_fashion_mnist(num_workers=num_workers, cpus_per_worker=cpus_per_worker)
