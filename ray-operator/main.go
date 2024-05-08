@@ -212,9 +212,9 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy), utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, config).SetupWithManager(mgr),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {

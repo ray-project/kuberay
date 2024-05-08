@@ -1,8 +1,10 @@
 package v1alpha1
 
 import (
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 //+kubebuilder:object:root=true
@@ -60,4 +62,12 @@ type Configuration struct {
 	// WorkerSidecarContainers includes specification for a sidecar container
 	// to inject into every Worker pod.
 	WorkerSidecarContainers []corev1.Container `json:"workerSidecarContainers,omitempty"`
+}
+
+func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+}
+
+func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
+	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 }

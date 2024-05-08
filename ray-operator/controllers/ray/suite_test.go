@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -50,6 +52,20 @@ var (
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
 )
+
+type TestClientProvider struct{}
+
+func (testProvider TestClientProvider) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
+	return func() utils.RayDashboardClientInterface {
+		return fakeRayDashboardClient
+	}
+}
+
+func (testProvider TestClientProvider) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
+	return func() utils.RayHttpProxyClientInterface {
+		return fakeRayHttpProxyClient
+	}
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -107,16 +123,11 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	err = NewReconciler(ctx, mgr, options).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
-	err = NewRayServiceReconciler(ctx, mgr, func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
-	}, func() utils.RayHttpProxyClientInterface {
-		return fakeRayHttpProxyClient
-	}).SetupWithManager(mgr)
+	testClientProvider := TestClientProvider{}
+	err = NewRayServiceReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
-	err = NewRayJobReconciler(ctx, mgr, func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
-	}).SetupWithManager(mgr)
+	err = NewRayJobReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {
