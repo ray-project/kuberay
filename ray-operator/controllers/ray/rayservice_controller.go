@@ -1109,7 +1109,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 		r.updateRayClusterInfo(ctx, rayServiceInstance, rayClusterInstance.Name)
-		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve applicaton is now running and healthy.")
+		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve application is now running and healthy.")
 	} else {
 		rayServiceInstance.Status.ServiceStatus = rayv1.WaitForServeDeploymentReady
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {

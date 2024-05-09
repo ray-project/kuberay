@@ -1,11 +1,12 @@
 package common
 
 import (
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 // BuildServiceAccount creates a new ServiceAccount for a head pod with autoscaler.

@@ -10,8 +10,9 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -122,7 +123,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := corev1.ContainerPort{
@@ -225,7 +226,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 
 	initTemplateAnnotations(instance, &podTemplate)
 
-	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := corev1.ContainerPort{

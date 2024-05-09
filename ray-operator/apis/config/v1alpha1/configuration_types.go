@@ -1,10 +1,11 @@
 package v1alpha1
 
 import (
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 //+kubebuilder:object:root=true

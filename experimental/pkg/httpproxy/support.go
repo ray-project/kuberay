@@ -16,12 +16,12 @@ type authorization struct {
 	upstream *url.URL
 }
 
-// Create Unauthorised response
+// Create Unauthorized response
 func WriteUnauthorisedResponse(w http.ResponseWriter) {
 	w.WriteHeader(401)
-	_, err := w.Write([]byte("Unauthorised\n"))
+	_, err := w.Write([]byte("Unauthorized\n"))
 	if err != nil {
-		klog.Info("failed writing unauthorised response ", err)
+		klog.Info("failed writing unauthorized response ", err)
 	}
 }
 
