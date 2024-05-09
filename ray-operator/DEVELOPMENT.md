@@ -200,6 +200,12 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 > Note: remember to replace with your own image
 
+## pre-commit hooks
+
+1. Install [golangci-lint](https://github.com/golangci/golangci-lint/releases).
+2. Install [pre-commit](https://pre-commit.com/).
+3. Run `pre-commit install` to install the pre-commit hooks.
+
 ## CI/CD
 
 ### Linting

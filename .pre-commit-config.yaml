@@ -1,0 +1,60 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^helm-chart/|^mkdocs.yml$|^benchmark/perf-tests/
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-vcs-permalinks
+      - id: check-json
+      - id: pretty-format-json
+        args: [--autofix, --no-sort-keys, --no-ensure-ascii]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: no-commit-to-branch
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: golangci-lint-ray-operator
+        name: golangci-lint (ray-operator)
+        entry: bash -c 'cd ray-operator && golangci-lint run --fix --exclude-files _generated.go; cd ..'
+        types: [ go ]
+        language: golang
+        require_serial: true
+        files: ^ray-operator/
+      - id: golangci-lint-apiserver
+        name: golangci-lint (apiserver)
+        entry: bash -c 'cd apiserver && golangci-lint run --fix --exclude='SA1019' --exclude-files _generated.go\|datafile.go; cd ..'
+        types: [ go ]
+        language: golang
+        require_serial: true
+        files: ^apiserver/
+      - id: golangci-lint-cli
+        name: golangci-lint (cli)
+        entry: bash -c 'cd cli && golangci-lint run --fix --exclude-files _generated.go; cd ..'
+        types: [ go ]
+        language: golang
+        require_serial: true
+        files: ^cli/
+      - id: golangci-lint-experimental
+        name: golangci-lint (experimental)
+        entry: bash -c 'cd experimental && golangci-lint run --fix --exclude-files _generated.go; cd ..'
+        types: [ go ]
+        language: golang
+        require_serial: true
+        files: ^experimental/
