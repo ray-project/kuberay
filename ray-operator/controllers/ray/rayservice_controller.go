@@ -232,10 +232,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 }
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
-	logger := ctrl.LoggerFrom(ctx)
 	serveEndPoints := &corev1.Endpoints{}
 	if err := r.Get(ctx, common.RayServiceServeServiceNamespacedName(rayServiceInstance), serveEndPoints); err != nil && !errors.IsNotFound(err) {
-		logger.Error(err, "Fail to retrieve the Kubernetes Endpoints from the cluster!")
 		return err
 	}
 
@@ -440,7 +438,6 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 
 	var err error
 	if err = r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
-		logger.Error(err, "Fail to list RayCluster for "+rayServiceInstance.Name)
 		return err
 	}
 
@@ -465,7 +462,6 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 				if reasonForDeletion != "" {
 					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-						logger.Error(err, "Fail to delete RayCluster "+rayClusterInstance.Name)
 						return err
 					}
 				}
@@ -477,12 +473,10 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context, clusterKey client.ObjectKey) (*rayv1.RayCluster, error) {
-	logger := ctrl.LoggerFrom(ctx)
 	rayCluster := &rayv1.RayCluster{}
 	if clusterKey.Name != "" {
 		// Ignore not found since in that case we should return RayCluster as nil.
 		if err := r.Get(ctx, clusterKey, rayCluster); client.IgnoreNotFound(err) != nil {
-			logger.Error(err, "Fail to get RayCluster "+clusterKey.String())
 			return nil, err
 		}
 	} else {
@@ -605,7 +599,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	} else {
 		clusterAction, err = getClusterAction(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
-			logger.Error(err, "Fail to generate hash for RayClusterSpec")
+			err = fmt.Errorf("Fail to generate hash for RayClusterSpec: %w", err)
 			return nil, err
 		}
 	}
@@ -642,7 +636,7 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 		Name:      rayClusterInstance.Name,
 	})
 	if err != nil {
-		logger.Error(err, "Failed to get the current state of RayCluster", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
+		err = fmt.Errorf("Failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 		return err
 	}
 
@@ -660,7 +654,6 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 
 	// Update the RayCluster
 	if err = r.Update(ctx, currentRayCluster); err != nil {
-		logger.Error(err, "Fail to update RayCluster "+currentRayCluster.Name)
 		return err
 	}
 
@@ -694,7 +687,6 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 		}
 		// if error is `not found`, then continue.
 	} else if !errors.IsNotFound(err) {
-		logger.Error(err, "Get request rayCluster instance error!")
 		return nil, err
 		// if error is `not found`, then continue.
 	}
@@ -702,11 +694,9 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	logger.Info("No pending RayCluster, creating RayCluster.")
 	rayClusterInstance, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, rayClusterKey.Name)
 	if err != nil {
-		logger.Error(err, "unable to construct rayCluster from spec")
 		return nil, err
 	}
 	if err = r.Create(ctx, rayClusterInstance); err != nil {
-		logger.Error(err, "unable to create rayCluster for rayService", "rayCluster", rayClusterInstance)
 		return nil, err
 	}
 	logger.Info("created rayCluster for rayService", "rayCluster", rayClusterInstance)
@@ -993,7 +983,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
 		logger.Info(fmt.Sprintf("Update Kubernetes Service serviceType %v", serviceType))
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
-			logger.Error(updateErr, fmt.Sprintf("Fail to update Kubernetes Service serviceType %v", serviceType), "Error", updateErr)
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
@@ -1006,11 +995,9 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 				logger.Info("The Kubernetes Service already exists, no need to create.")
 				return nil
 			}
-			logger.Error(createErr, fmt.Sprintf("Fail to create Kubernetes Service serviceType %v", serviceType), "Error", createErr)
 			return createErr
 		}
 	} else {
-		logger.Error(err, "Fail to retrieve the Kubernetes Service from the cluster!")
 		return err
 	}
 
@@ -1122,7 +1109,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 }
 
 func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
-	logger := ctrl.LoggerFrom(ctx)
 	headPod, err := r.getHeadPod(ctx, rayClusterInstance)
 	if err != nil {
 		return err
@@ -1153,7 +1139,6 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 
 	if !reflect.DeepEqual(originalLabels, headPod.Labels) {
 		if updateErr := r.Update(ctx, headPod); updateErr != nil {
-			logger.Error(updateErr, "Pod label Update error!", "Pod.Error", updateErr)
 			return updateErr
 		}
 	}

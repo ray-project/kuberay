@@ -215,7 +215,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
 				controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
 				if err := r.Update(ctx, instance); err != nil {
-					logger.Error(err, fmt.Sprintf("Failed to add the finalizer %s to the RayCluster.", utils.GCSFaultToleranceRedisCleanupFinalizer))
+					err = fmt.Errorf("Failed to add the finalizer %s to the RayCluster: %w", utils.GCSFaultToleranceRedisCleanupFinalizer, err)
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
 				// Only start the RayCluster reconciliation after the finalizer is added.
@@ -286,7 +286,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 						logger.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
 						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 					}
-					logger.Error(err, "Failed to create Redis cleanup Job")
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
 				logger.Info("Successfully created Redis cleanup Job", "Job name", redisCleanupJob.Name)
@@ -447,7 +446,6 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	headRoutes := routev1.RouteList{}
 	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
 	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		logger.Error(err, "Route Listing error!", "Route.Error", err)
 		return err
 	}
 
@@ -459,7 +457,6 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	if headRoutes.Items == nil || len(headRoutes.Items) == 0 {
 		route, err := common.BuildRouteForHeadService(*instance)
 		if err != nil {
-			logger.Error(err, "Failed building route!", "Route.Error", err)
 			return err
 		}
 
@@ -469,7 +466,6 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 
 		err = r.createHeadRoute(ctx, route, instance)
 		if err != nil {
-			logger.Error(err, "Failed creating route!", "Route.Error", err)
 			return err
 		}
 	}
@@ -933,7 +929,6 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 			logger.Info("Ingress already exists, no need to create")
 			return nil
 		}
-		logger.Error(err, "Ingress create error!", "Ingress.Error", err)
 		return err
 	}
 	logger.Info("Ingress created successfully", "ingress name", ingress.Name)
@@ -952,7 +947,6 @@ func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *route
 			logger.Info("Route already exists, no need to create")
 			return nil
 		}
-		logger.Error(err, "Route create error!", "Route.Error", err)
 		return err
 	}
 	logger.Info("Route created successfully", "route name", route.Name)
@@ -975,7 +969,6 @@ func (r *RayClusterReconciler) createService(ctx context.Context, raySvc *corev1
 			logger.Info("Pod service already exist, no need to create")
 			return nil
 		}
-		logger.Error(err, "Pod Service create error!", "Pod.Service.Error", err)
 		return err
 	}
 	logger.Info("Pod Service created successfully", "service name", raySvc.Name)
@@ -1245,7 +1238,6 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		logger.Error(err, "Failed to list pods while getting head pod ip.")
 		return "", err
 	}
 	if len(runtimePods.Items) != 1 {
@@ -1375,7 +1367,6 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 				logger.Info("Pod service account already exist, no need to create")
 				return nil
 			}
-			logger.Error(err, "Pod Service Account create error!", "Pod.ServiceAccount.Error", err)
 			return err
 		}
 		logger.Info("Pod ServiceAccount created successfully", "service account name", serviceAccount.Name)
@@ -1417,7 +1408,6 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 				logger.Info("role already exist, no need to create")
 				return nil
 			}
-			logger.Error(err, "Role create error!", "Role.Error", err)
 			return err
 		}
 		logger.Info("Role created successfully", "role name", role.Name)
@@ -1459,7 +1449,6 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 				logger.Info("role binding already exist, no need to create")
 				return nil
 			}
-			logger.Error(err, "Role binding create error!", "RoleBinding.Error", err)
 			return err
 		}
 		logger.Info("RoleBinding created successfully", "role binding name", roleBinding.Name)

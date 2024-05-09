@@ -358,14 +358,10 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 		if errors.IsNotFound(err) {
 			submitterTemplate, err := r.getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
 			if err != nil {
-				logger.Error(err, "failed to get submitter template")
 				return err
 			}
 			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
-
-		// Some other error occurred while trying to get the Job
-		logger.Error(err, "failed to get Kubernetes Job")
 		return err
 	}
 
@@ -449,13 +445,11 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
-		logger.Error(err, "failed to set controller reference")
 		return err
 	}
 
 	// Create the Kubernetes Job
 	if err := r.Client.Create(ctx, job); err != nil {
-		logger.Error(err, "failed to create k8s Job")
 		return err
 	}
 	logger.Info("Kubernetes Job created", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
@@ -481,7 +475,6 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 			isJobDeleted = true
 			logger.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
 		} else {
-			logger.Error(err, "Failed to get Kubernetes Job")
 			return false, err
 		}
 	} else {
@@ -634,16 +627,13 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			logger.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
-				logger.Error(err, "unable to construct a new RayCluster")
 				return nil, err
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
-				logger.Error(err, "unable to create RayCluster for RayJob", "RayCluster", rayClusterInstance)
 				return nil, err
 			}
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created RayCluster %s", rayJobInstance.Status.RayClusterName)
 		} else {
-			logger.Error(err, "Fail to get RayCluster!")
 			return nil, err
 		}
 	}
