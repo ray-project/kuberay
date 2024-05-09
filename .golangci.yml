@@ -1,0 +1,75 @@
+linters-settings:
+  gofmt:
+    simplify: true
+  ginkgolinter:
+    forbid-focus-container: true
+  goimports:
+    local-prefixes: github.com/ray-project/kuberay/ray-operator,github.com/ray-project/kuberay/apiserver,github.com/ray-project/kuberay/cli,github.com/ray-project/kuberay/security
+  misspell:
+    locale: US
+  revive:
+    ignore-generated-header: true
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: var-declaration
+      - name: var-naming
+  gocyclo:
+    min-complexity: 15
+  govet:
+    enable:
+      - fieldalignment
+  lll:
+    line-length: 120
+linters:
+  enable:
+    - asciicheck
+    - errcheck
+#    - errorlint
+#    - ginkgolinter
+#    - gocyclo
+    - gofmt
+    - gofumpt
+    - goimports
+#    - gosec
+    - gosimple
+#    - govet
+    - ineffassign
+#    - lll
+    - makezero
+    - misspell
+    - nilerr
+#    - noctx
+    - predeclared
+#    - revive
+    - staticcheck
+    - typecheck
+#    - unconvert
+#    - unparam
+    - unused
+    - wastedassign
+  disable-all: true
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+run:
+  timeout: 3m
