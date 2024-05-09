@@ -10,8 +10,9 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // Default annotations used by Ray nodes
