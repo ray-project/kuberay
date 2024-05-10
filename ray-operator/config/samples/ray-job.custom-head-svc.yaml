@@ -16,7 +16,7 @@ spec:
       - requests==2.26.0
       - pendulum==2.1.2
     env_vars:
-      counter_name: "test_counter"  
+      counter_name: "test_counter"
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:

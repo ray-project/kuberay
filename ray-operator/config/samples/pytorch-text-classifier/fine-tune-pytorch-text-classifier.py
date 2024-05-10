@@ -144,7 +144,7 @@ if __name__ == "__main__":
     trainer = TorchTrainer(
         train_loop_per_worker=train_func,
         train_loop_config=train_func_config,
-        scaling_config=scaling_config, 
+        scaling_config=scaling_config,
         run_config=run_config,
         datasets={"train": train_dataset, "validation": validation_dataset}, # <- Feed the Ray Datasets here
     )

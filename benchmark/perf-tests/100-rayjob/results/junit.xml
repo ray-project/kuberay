@@ -10,4 +10,3 @@
       <testcase name="kuberay: [step: 05] Measure pod startup latency [00] - PodStartupLatency" classname="ClusterLoaderV2" time="0.04856601"></testcase>
       <testcase name="kuberay: [step: 06] Measure job finished [00] - JobLifecycleLatency" classname="ClusterLoaderV2" time="1.001760404"></testcase>
   </testsuite>
-  

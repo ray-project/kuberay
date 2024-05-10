@@ -126,8 +126,8 @@ class RayServiceUpdateCREvent(CREvent):
             new_cluster_name = self.get_active_ray_cluster_name()
             assert new_cluster_name != self.old_cluster_name
 
-            # The old RayCluster will continue to exist for a while to allow the k8s service 
-            # enough time to fully redirect traffic to the new RayCluster. During this period, 
+            # The old RayCluster will continue to exist for a while to allow the k8s service
+            # enough time to fully redirect traffic to the new RayCluster. During this period,
             # queries might still be processed by either the old or the new RayCluster.
             custom_api = K8S_CLUSTER_MANAGER.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
             while time.time() - self.start < self.timeout:
@@ -138,7 +138,7 @@ class RayServiceUpdateCREvent(CREvent):
                     logger.info(f'Ray service has fully moved to cluster "{new_cluster_name}"')
                     return
                 self.query_rule.assert_rule(self.custom_resource_object, self.namespace)
-            
+
 
 
 class RayServiceDeleteCREvent(CREvent):

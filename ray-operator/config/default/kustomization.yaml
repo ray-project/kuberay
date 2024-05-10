@@ -24,4 +24,3 @@ images:
 - name: kuberay/operator
   newName: quay.io/kuberay/operator
   newTag: nightly
-

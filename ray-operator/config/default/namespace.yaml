@@ -4,4 +4,3 @@ metadata:
   labels:
     control-plane: ray-operator
   name: ray-system
-

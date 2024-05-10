@@ -472,4 +472,3 @@ class ClusterUtils:
             log.error(msg)
             return False
         return True
-

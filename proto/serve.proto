@@ -63,7 +63,7 @@ service RayServeService {
     };
   }
 
-  // Deletes a ray service by its name and namespace 
+  // Deletes a ray service by its name and namespace
   rpc DeleteRayService(DeleteRayServiceRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1/namespaces/{namespace}/services/{name}"
@@ -109,7 +109,7 @@ message ListRayServicesRequest {
 
 message ListRayServicesResponse {
   // List of services
-  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY]; 
+  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The total number of RayServices for the given query.
   int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
@@ -129,7 +129,7 @@ message ListAllRayServicesRequest {
 
 message ListAllRayServicesResponse {
   // A list of services.
-  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY]; 
+  repeated RayService services = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The total number of RayServices for the given query.
   int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
@@ -164,7 +164,7 @@ message RayService {
   RayServiceStatus ray_service_status = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the ray service created.
   google.protobuf.Timestamp created_at = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
-  // Output. The time that the ray service deleted.     
+  // Output. The time that the ray service deleted.
   google.protobuf.Timestamp delete_at = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
@@ -213,7 +213,7 @@ message RayServiceEvent {
   string id = 1;
   // Output. Human readable name for event.
   string name = 2;
-  // Output. The creation time of the event. 
+  // Output. The creation time of the event.
   google.protobuf.Timestamp created_at = 3;
   // Output. The last time the event occur.
   google.protobuf.Timestamp first_timestamp = 4;

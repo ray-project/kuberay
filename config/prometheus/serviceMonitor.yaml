@@ -23,4 +23,3 @@ spec:
     - port: dash-metrics # dashboard metrics
   targetLabels:
   - ray.io/cluster
-

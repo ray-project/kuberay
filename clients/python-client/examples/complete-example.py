@@ -3,8 +3,8 @@ import os
 from os import path
 
 
-""" 
-in case you are working directly with the source, and don't wish to 
+"""
+in case you are working directly with the source, and don't wish to
 install the module with pip install, you can directly import the packages by uncommenting the following code.
 """
 
@@ -65,7 +65,7 @@ def main():
         return
 
     my_kuberay_api.create_ray_cluster(body=cluster2) # this is the api call to create the cluster2 in k8s
-    
+
     # modifying the number of replicas in the workergroup
     cluster_to_patch, succeeded = my_Cluster_utils.update_worker_group_replicas(
         cluster2, group_name="workers", max_replicas=4, min_replicas=1, replicas=2

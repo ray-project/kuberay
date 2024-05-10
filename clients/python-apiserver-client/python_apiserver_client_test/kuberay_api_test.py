@@ -139,7 +139,7 @@ def test_job_submission():
       - requests==2.26.0
       - pendulum==2.1.2
     env_vars:
-      counter_name: test_counter    
+      counter_name: test_counter
     """
     jobRequest = RayJobRequest(entrypoint="python /home/ray/samples/sample_code.py",
                                runtime_env=resource_yaml, num_cpu=.5)
@@ -180,5 +180,3 @@ def test_job_submission():
     status, error = apis.delete_compute_template(ns="default", name="default-template")
     assert status == 200
     assert error is None
-
-

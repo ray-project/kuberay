@@ -52,13 +52,13 @@ to the api server that would allow Kuberay Serve endpoints to work properly
 ```
 
 * Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
-  
+
   ```sh
   # Install the KubeRay helm repo
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
   # Install KubeRay APIServer.
-  helm install kuberay-apiserver kuberay/kuberay-apiserver 
+  helm install kuberay-apiserver kuberay/kuberay-apiserver
 
   # Check the KubeRay APIServer Pod in `default` namespace
   kubectl get pods
@@ -68,7 +68,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
   ```
 
 * Install the nightly version
-  
+
   ```sh
   # Step1: Clone KubeRay repository
 
@@ -80,7 +80,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
   ```
 
 * Install the current (working branch) version
-  
+
   ```sh
   # Step1: Clone KubeRay repository
 
@@ -89,7 +89,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
 
   # Step3: Build docker image, create a local kind cluster and deploy api server (using helm)
   make docker-image cluster load-image deploy
-  ```  
+  ```
 
 ### List the chart
 
@@ -98,8 +98,8 @@ To list the deployments:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0         
-# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0               
+# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0
+# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0
 ```
 
 ### Uninstall the Chart
@@ -157,8 +157,8 @@ The following steps allow you to validate that the KubeRay API Server components
       - containerPort: 31888
         hostPort: 31888
         listenAddress: "0.0.0.0"
-      - containerPort: 31887 
-        hostPort: 31887 
+      - containerPort: 31887
+        hostPort: 31887
         listenAddress: "0.0.0.0"
     - role: worker
       image: kindest/node:v1.23.17@sha256:59c989ff8a517a93127d4a536e7014d28e235fb3529d9fba91b3951d461edfdb
@@ -738,7 +738,7 @@ Examples:
         }
       }
     ]
-  }  
+  }
   ```
 
 #### Get cluster by its name and namespace
@@ -908,7 +908,7 @@ POST {{baseUrl}}/apis/v1/namespaces/<namespace>/jobs
 Examples:
 
 * Request
-  
+
   ```sh
   curl --silent -X 'POST' \
       'http://localhost:31888/apis/v1/namespaces/ray-system/jobs' \
@@ -988,7 +988,7 @@ Examples:
 Start from creating Ray cluster (We assume here that the [template](test/cluster/template/simple) and [configmap](test/job/code.yaml) are already created).
 
 * Request
-  
+
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
@@ -1068,11 +1068,11 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
                "source":"ray-job-code-sample",
                "items":{
                   "sample_code.py":"sample_code.py"
-               }               
+               }
             }
          ],
          "environment":{
-            
+
          }
       },
       "workerGroupSpec":[
@@ -1098,7 +1098,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
                }
             ],
             "environment":{
-               
+
             }
          }
       ]
@@ -1113,7 +1113,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 Once the cluster is created, we can create a job to run on it.
 
 * Request
-  
+
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
@@ -1121,13 +1121,13 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "name": "job-test",
   "namespace": "default",
   "user": "boris",
-  "version": "2.9.0",  
+  "version": "2.9.0",
   "entrypoint": "python /home/ray/samples/sample_code.py",
   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
   "jobSubmitter": {
     "image": "rayproject/ray:2.9.0-py310",
     "cpu": "400m",
-    "memory": "150Mi" 
+    "memory": "150Mi"
   },
   "clusterSelector": {
     "ray.io/cluster": "job-test"
@@ -1160,7 +1160,7 @@ job-test-2hhmf                   0/1     Completed   0          15s
 To see job execution results run:
 
 ```sh
-kubectl logs job-test-2hhmf 
+kubectl logs job-test-2hhmf
 ```
 
 And you should get something similar to:
@@ -1180,7 +1180,7 @@ And you should get something similar to:
 2023-10-18 03:19:52,203 INFO cli.py:292 -- Tailing logs until the job exits (disable with --no-wait):
 2023-10-18 03:20:00,014 INFO worker.py:1329 -- Using address 10.244.0.10:6379 set in the environment variable RAY_ADDRESS
 2023-10-18 03:20:00,014 INFO worker.py:1458 -- Connecting to existing Ray cluster at address: 10.244.0.10:6379...
-2023-10-18 03:20:00,032 INFO worker.py:1633 -- Connected to Ray cluster. View the dashboard at 10.244.0.10:8265 
+2023-10-18 03:20:00,032 INFO worker.py:1633 -- Connected to Ray cluster. View the dashboard at 10.244.0.10:8265
 test_counter got 1
 test_counter got 2
 test_counter got 3
@@ -1200,7 +1200,7 @@ kubectl delete rayjob job-test
 ```
 
 * Request
-  
+
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --header 'Content-Type: application/json' \
@@ -1217,7 +1217,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
   "jobSubmitter": {
     "image": "rayproject/ray:2.9.0-py310"
   }
-}'  
+}'
 ```
 
 * Response
@@ -1309,11 +1309,11 @@ GET {{baseUrl}}/apis/v1/jobs
 Examples:
 
 * Request:
-  
+
   ```sh
   curl --silent -X 'GET' \
   'http://localhost:31888/apis/v1/jobs' \
-  -H 'accept: application/json' 
+  -H 'accept: application/json'
   ```
 
 * Response
@@ -1431,7 +1431,7 @@ Examples:
   ```
 
 * Response
-  
+
   ```json
   {}
   ```
@@ -1505,7 +1505,7 @@ Examples:
             "metrics-export-port":"8080"
          },
          "environment":{
-            
+
          }
       },
       "workerGroupSpec":[
@@ -1520,7 +1520,7 @@ Examples:
                "node-ip-address":"$MY_POD_IP"
             },
             "environment":{
-               
+
             }
          }
       ]
@@ -1630,7 +1630,7 @@ Examples:
    },
    "createdAt":"2024-01-17T09:31:34Z",
    "deleteAt":"1969-12-31T23:59:59Z"
-}  
+}
 ```
 
 #### List all services in a given namespace
@@ -1669,7 +1669,7 @@ Examples
                   "metrics-export-port":"8080"
                },
                "environment":{
-                  
+
                }
             },
             "workerGroupSpec":[
@@ -1684,7 +1684,7 @@ Examples
                      "node-ip-address":"$MY_POD_IP"
                   },
                   "environment":{
-                     
+
                   }
                }
             ]
@@ -1944,7 +1944,7 @@ Examples:
                   "metrics-export-port":"8080"
                },
                "environment":{
-                  
+
                }
             },
             "workerGroupSpec":[
@@ -1959,7 +1959,7 @@ Examples:
                      "node-ip-address":"$MY_POD_IP"
                   },
                   "environment":{
-                     
+
                   }
                }
             ]
@@ -2196,7 +2196,7 @@ Examples:
   ```sh
   curl --silent -X 'GET' \
     'http://localhost:31888/apis/v1/namespaces/default/services/test-v2' \
-    -H 'accept: application/json'  
+    -H 'accept: application/json'
   ```
 
 * Response:
@@ -2217,7 +2217,7 @@ Examples:
             "metrics-export-port":"8080"
          },
          "environment":{
-            
+
          }
       },
       "workerGroupSpec":[
@@ -2232,7 +2232,7 @@ Examples:
                "node-ip-address":"$MY_POD_IP"
             },
             "environment":{
-               
+
             }
          }
       ]
@@ -2467,7 +2467,7 @@ Examples:
   ```sh
   curl --silent -X 'DELETE' \
   'http://localhost:31888/apis/v1/namespaces/default/services/test-v2' \
-  -H 'accept: application/json'  
+  -H 'accept: application/json'
   ```
 
 * Response

@@ -20,7 +20,7 @@ spec:
           min_replicas: 0
           max_replicas: 5
           upscale_delay_s: 3
-          downscale_delay_s: 60  
+          downscale_delay_s: 60
           metrics_interval_s: 2
           look_back_period_s: 10
         max_replicas_per_node: 1
@@ -32,7 +32,7 @@ spec:
     autoscalerOptions:
       idleTimeoutSeconds: 1
     ######################headGroupSpecs#################################
-    # Ray head pod template.   
+    # Ray head pod template.
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
       # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
@@ -40,7 +40,7 @@ spec:
       rayStartParams:
         num-cpus: "0"
         dashboard-host: '0.0.0.0'
-      #pod template      
+      #pod template
       template:
         spec:
           containers:

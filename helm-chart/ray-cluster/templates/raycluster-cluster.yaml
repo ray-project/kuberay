@@ -99,7 +99,7 @@ spec:
 {{ include "ray-cluster.labels" . | indent 10 }}
         {{ else }}
         labels: {{ include "ray-cluster.labels" . | nindent 10 }}
-        {{- end }} 
+        {{- end }}
 
   workerGroupSpecs:
   {{- range $groupName, $values := .Values.additionalWorkerGroups }}
@@ -184,7 +184,7 @@ spec:
 {{ include "ray-cluster.labels" $ | indent 10 }}
         {{ else }}
         labels: {{ include "ray-cluster.labels" $ | nindent 10 }}
-        {{- end }} 
+        {{- end }}
 
   {{- end }}
   {{- end }}

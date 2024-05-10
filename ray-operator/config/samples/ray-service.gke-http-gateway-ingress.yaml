@@ -1,16 +1,16 @@
 # Kubernetes Gateway API - HTTPRoute Example
 # This example usage Kubernetes Gateway API to create a HTTPRoute to RayService Serve Endpoint.
-## Gateway API for Ingress 
+## Gateway API for Ingress
 # https://gateway-api.sigs.k8s.io/#gateway-api-for-ingress
 #
-## GKE GatewayAPI and GatewayClass 
+## GKE GatewayAPI and GatewayClass
 # For more information on GatewayClasses on Google Kubernetes Engine, see:
 # - https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
 # - https://cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities
 ## Enable Gateway API
-# https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway 
+# https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway
 #
-# To test this out: 
+# To test this out:
 # curl --location --request POST 'http://ai.example.com/v1/chat/completions' \
 # --header 'Content-Type: application/json' \
 #--data-raw '{
@@ -48,7 +48,7 @@ spec:
   - kind: Gateway
     name: ray-service-external-http
   rules:
-  - 
+  -
     matches:
     - path:
         type: PathPrefix

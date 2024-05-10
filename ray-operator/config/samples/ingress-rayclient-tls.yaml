@@ -18,4 +18,3 @@ spec:
               number: 10001
         path: /
         pathType: Prefix
-

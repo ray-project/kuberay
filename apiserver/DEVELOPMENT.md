@@ -83,8 +83,8 @@ Examples:
 # To run end to end test using default cluster
 make e2e-test
 
-# To run end to end test in fresh cluster. 
-# Please note that: 
+# To run end to end test in fresh cluster.
+# Please note that:
 # * the cluster created for this test is the same as the cluster created by make cluster.
 # * if the end to end tests fail the cluster will still be up and will have to be explicitly shutdown by executing make clean-cluster
 make local-e2e-test

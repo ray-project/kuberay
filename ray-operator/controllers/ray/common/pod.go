@@ -186,7 +186,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 							fi
 							echo "$SECONDS seconds elapsed: Still waiting for GCS to be ready. For troubleshooting, refer to the FAQ at https://github.com/ray-project/kuberay/blob/master/docs/guidance/FAQ.md."
 						fi
-						sleep 5		
+						sleep 5
 					done
 				`, fqdnRayIP, headPort, fqdnRayIP, headPort),
 			},
