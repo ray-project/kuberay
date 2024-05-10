@@ -112,6 +112,80 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 }
 
 var _ = Context("RayJob in K8sJobMode", func() {
+	Describe("RayJob SubmitterConfig BackoffLimit", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayJobWithDefaultSubmitterConfigBackoffLimit := rayJobTemplate("rayjob-default", namespace)
+		rayJobWithNonDefaultSubmitterConfigBackoffLimit := rayJobTemplate("rayjob-non-default", namespace)
+		rayJobWithNonDefaultSubmitterConfigBackoffLimit.Spec.SubmitterConfig = &rayv1.SubmitterConfig{
+			BackoffLimit: pointer.Int32(88),
+		}
+		rayJobs := make(map[*rayv1.RayJob]int32)
+		rayJobs[rayJobWithDefaultSubmitterConfigBackoffLimit] = int32(2)
+		rayJobs[rayJobWithNonDefaultSubmitterConfigBackoffLimit] = int32(88)
+
+		It("Verify RayJob spec", func() {
+			for rayJob, _ := range rayJobs {
+				// Make sure the submission mode is K8sJobMode.
+				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.K8sJobMode))
+			}
+		})
+
+		It("Create RayJob custom resources", func() {
+			for rayJob, _ := range rayJobs {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob: %v", rayJob.Name)
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+			}
+		})
+
+		It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+			for rayJob, _ := range rayJobs {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			}
+		})
+
+		It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+			for rayJob, _ := range rayJobs {
+				rayCluster := &rayv1.RayCluster{}
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Make RayCluster.Status.State to be rayv1.Ready.
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+
+				// RayJobs's JobDeploymentStatus transitions to Running.
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			}
+		})
+
+		It("Verify K8s Job BackoffLimit", func() {
+			for rayJob, backoffLimit := range rayJobs {
+				// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+				Expect(*(job.Spec.BackoffLimit)).To(Equal(backoffLimit))
+			}
+		})
+	})
+
 	Describe("Successful RayJob in K8sJobMode", func() {
 		ctx := context.Background()
 		namespace := "default"
