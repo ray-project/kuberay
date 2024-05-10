@@ -125,14 +125,14 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		rayJobs[rayJobWithNonDefaultSubmitterConfigBackoffLimit] = int32(88)
 
 		It("Verify RayJob spec", func() {
-			for rayJob, _ := range rayJobs {
+			for rayJob := range rayJobs {
 				// Make sure the submission mode is K8sJobMode.
 				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.K8sJobMode))
 			}
 		})
 
 		It("Create RayJob custom resources", func() {
-			for rayJob, _ := range rayJobs {
+			for rayJob := range rayJobs {
 				err := k8sClient.Create(ctx, rayJob)
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob: %v", rayJob.Name)
 				Eventually(
@@ -142,16 +142,15 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 
 		It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
-			for rayJob, _ := range rayJobs {
+			for rayJob := range rayJobs {
 				Eventually(
 					getRayJobDeploymentStatus(ctx, rayJob),
 					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
-
 			}
 		})
 
 		It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
-			for rayJob, _ := range rayJobs {
+			for rayJob := range rayJobs {
 				rayCluster := &rayv1.RayCluster{}
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
