@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: rayjob-pytorch-mnist
+  name: image-resize
 spec:
   shutdownAfterJobFinishes: false
   entrypoint: python ray-operator/config/samples/ray-data-image-resize/ray_data_image_resize.py
@@ -10,8 +10,7 @@ spec:
       - torch
       - torchvision
       - numpy
-    working_dir: "https://github.com/kevin85421/kuberay/archive/ray-data-image-resize.zip"
-  # working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
+    working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
     rayVersion: '2.9.0'
