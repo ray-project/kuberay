@@ -107,4 +107,3 @@ spec:
           cloud.google.com/gke-ray-node-type: worker
           app.kubernetes.io/name: kuberay
           app.kubernetes.io/instance: example-cluster
-

@@ -22,7 +22,7 @@ KubeRay CLI provides the ability to manage kuberay resources (ray clusters, comp
 
 ## Installation
 
-Please check [release page](https://github.com/ray-project/kuberay/releases) and download the binaries. 
+Please check [release page](https://github.com/ray-project/kuberay/releases) and download the binaries.
 
 ## Prerequisites
 
@@ -83,7 +83,7 @@ Flags:
       --worker-replicas uint32           pod replicas of workers in the first worker group (default 1)
 ```
 
-> Known Limitation: Currently only one worker compute template is supported during creation. 
+> Known Limitation: Currently only one worker compute template is supported during creation.
 
 #### Get a Ray Cluster
 

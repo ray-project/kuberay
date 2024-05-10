@@ -78,7 +78,7 @@ class ClusterManager(ABC):
     @abstractmethod
     def check_cluster_exist(self) -> bool:
         pass
-    
+
     @classmethod
     def instance(cls):
         if cls.EXTERNAL_CLUSTER in os.environ:
@@ -92,7 +92,7 @@ class ExternalClusterManager(ClusterManager):
     def __init__(self) -> None:
         self.k8s_client_dict = {}
         self.cleanup_timeout = 120
-    
+
     def cleanup(self, namespace = "default") -> None:
         if self.CLUSTER_CLEANUP_SCRIPT in os.environ:
             cleanup_script = os.environ[self.CLUSTER_CLEANUP_SCRIPT]
@@ -121,7 +121,7 @@ class ExternalClusterManager(ClusterManager):
                     break
 
                 time.sleep(1)
-                
+
         for _, k8s_client in self.k8s_client_dict.items():
             k8s_client.api_client.rest_client.pool_manager.clear()
             k8s_client.api_client.close()
@@ -148,7 +148,7 @@ class ExternalClusterManager(ClusterManager):
             )
             == 0
         )
-    
+
     def __delete_all_crs(self, group, version, namespace, plural):
         custom_objects_api = self.k8s_client_dict[CONST.K8S_CR_CLIENT_KEY]
         try:
@@ -204,7 +204,7 @@ class KindClusterManager(ClusterManager):
             )
             == 0
         )
-    
+
     def _adjust_kubeconfig_server_address(self) -> None:
         """Modify the server address in kubeconfig to https://docker:6443"""
         if os.getenv(CONST.BUILDKITE_ENV, default="") == "true":
@@ -341,7 +341,7 @@ class ScriptBasedOperatorManager(OperatorManager):
         return_code = shell_subprocess_run(self.installation_script)
         if return_code != 0:
             raise Exception("Operator installation failed with exit code " + str(return_code))
-        
+
 
 def shell_subprocess_run(command, check=True, hide_output=False) -> int:
     """Command will be executed through the shell.

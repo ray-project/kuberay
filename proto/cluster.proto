@@ -66,7 +66,7 @@ service ClusterService {
 message CreateClusterRequest {
   // Required. The cluster to be created.
   Cluster cluster = 1 [(google.api.field_behavior) = REQUIRED];
-  // Required. The namespace of the cluster to be created. 
+  // Required. The namespace of the cluster to be created.
   string namespace = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
@@ -134,7 +134,7 @@ message EnvValueFrom {
   Source source = 1;
   // Name for config map or secret, container name for resource, path for field
   string name = 2;
-  // Key for config map or secret, resource name for resource 
+  // Key for config map or secret, resource name for resource
   string key = 3;
 }
 
@@ -193,7 +193,7 @@ message Cluster {
   // Required field. This field indicates ray cluster configuration
   ClusterSpec cluster_spec = 6 [(google.api.field_behavior) = REQUIRED];
 
-  // Optional. Annotations, for example, "kubernetes.io/ingress.class" to define Ingress class 
+  // Optional. Annotations, for example, "kubernetes.io/ingress.class" to define Ingress class
   map<string, string> annotations = 7;
 
   // Optional input field. Container environment variables from user.
@@ -243,7 +243,7 @@ message Volume {
   string source = 4;  // volume source, for example hostpath source, secret or configMap name, etc
   bool read_only = 5; // Read only flag
 
-  // If indicate hostpath, we need to let user indicate which type 
+  // If indicate hostpath, we need to let user indicate which type
   // they would like to use.
   enum HostPathType {
     DIRECTORY = 0;
@@ -262,7 +262,7 @@ message Volume {
   enum AccessMode {
     RWO = 0;    // ReadWriteOnce
     ROX = 1;    // ReadOnlyMany
-    RWX = 2;    // ReadWriteMany  
+    RWX = 2;    // ReadWriteMany
   }
   AccessMode accessMode = 9;
   string storage = 10;          // For ephemeral - required storage, GB, for empty dir - MB
@@ -280,7 +280,7 @@ message HeadGroupSpec {
   // Optional. Enable Ingress
   // if Ingress is enabled, we might have to specify annotation IngressClassAnnotationKey, for the cluster itself, defining Ingress class
   bool enableIngress = 4;
-  // Required. The ray start params of head node group. 
+  // Required. The ray start params of head node group.
   map<string, string> ray_start_params = 5 [(google.api.field_behavior) = REQUIRED];
   // Optional. The volumes mount to head pod
   repeated Volume volumes = 6;

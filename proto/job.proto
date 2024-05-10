@@ -78,7 +78,7 @@ message GetRayJobRequest {
 }
 
 message ListRayJobsRequest {
-  // Required. The namespace of the job to be retrieved. 
+  // Required. The namespace of the job to be retrieved.
   string namespace = 1 [(google.api.field_behavior) = REQUIRED];
   // TODO: support paganation later
 }
@@ -134,7 +134,7 @@ message RayJob {
   bool shutdown_after_job_finishes = 8;
   // Optional. The label selectors to choose exiting clusters. If not specified, cluster_spec must be set.
   map<string, string> cluster_selector = 9;
-  // Optional. The cluster template, required if the cluster_selector is not specified.    
+  // Optional. The cluster template, required if the cluster_selector is not specified.
   ClusterSpec cluster_spec = 10;
   // Optional. TTLSecondsAfterFinished is the TTL to clean up RayCluster.
   int32 ttl_seconds_after_finished = 11;
@@ -144,12 +144,12 @@ message RayJob {
   float entrypointNumCpus = 18;
   // Optional entrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
   float entrypointNumGpus = 19;
-  // Optional entrypointResources specifies the custom resources and quantities to reserve 
+  // Optional entrypointResources specifies the custom resources and quantities to reserve
   // for the entrypoint command.
   string entrypointResources = 20;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
-  // Output. The time that the job deleted.     
+  // Output. The time that the job deleted.
   google.protobuf.Timestamp delete_at = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The current job status
   string job_status = 14 [(google.api.field_behavior) = OUTPUT_ONLY];

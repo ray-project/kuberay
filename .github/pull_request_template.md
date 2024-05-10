@@ -12,7 +12,7 @@
 
 ## Checks
 
-- [ ] I've made sure the tests are passing. 
+- [ ] I've made sure the tests are passing.
 - Testing Strategy
    - [ ] Unit tests
    - [ ] Manual tests

@@ -69,7 +69,7 @@ if __name__ == '__main__':
     }
 
     rs = RuleSet([HeadPodNameRule(), EasyJobRule(), HeadSvcRule()])
-    
+
     # Build a test plan
     logger.info("Build a test plan ...")
     test_cases = unittest.TestSuite()

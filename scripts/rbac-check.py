@@ -25,6 +25,6 @@ if __name__ == "__main__":
 			diff_files.append(f)
 
 	if diff_files:
-		sys.exit(f"{diff_files} are out of synchronization! RBAC YAML files in" + 
-			"\'helm-chart/kuberay-operator/templates\' and \'ray-operator/config/rbac\'" + 
+		sys.exit(f"{diff_files} are out of synchronization! RBAC YAML files in" +
+			"\'helm-chart/kuberay-operator/templates\' and \'ray-operator/config/rbac\'" +
 			"should be synchronized manually. See DEVELOPMENT.md for more details.")

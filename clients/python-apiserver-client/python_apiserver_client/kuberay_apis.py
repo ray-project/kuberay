@@ -23,7 +23,7 @@ class KubeRayAPIs:
         self.api_base = "/apis/v1/"
 
     """
-        List compute templates across all namespaces of the k8 cluster 
+        List compute templates across all namespaces of the k8 cluster
         Returns:
             http return code
             message - only returned if http return code is not equal to 200
@@ -39,7 +39,7 @@ class KubeRayAPIs:
         return response.status_code, None, templates_decoder(response.json())
 
     """
-        List compute templates across for a given namespaces of the k8 cluster 
+        List compute templates across for a given namespaces of the k8 cluster
         Parameter:
             namespace to query
         Returns:
@@ -109,7 +109,7 @@ class KubeRayAPIs:
         return response.status_code, None
 
     """
-        List clusters across all namespaces of the k8 cluster 
+        List clusters across all namespaces of the k8 cluster
         Returns:
             http return code
             message - only returned if http return code is not equal to 200
@@ -125,7 +125,7 @@ class KubeRayAPIs:
         return response.status_code, None, clusters_decoder(response.json())
 
     """
-        List clusters across for a given namespaces of the k8 cluster 
+        List clusters across for a given namespaces of the k8 cluster
         Parameter:
             namespace to query
         Returns:
@@ -369,4 +369,3 @@ class KubeRayAPIs:
         if response.status_code // 100 != 2:
             return response.status_code, response.json()["message"]
         return response.status_code, None
-

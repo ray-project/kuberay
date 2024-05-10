@@ -6,7 +6,7 @@ class TestDirector(unittest.TestCase):
     def __init__(self, methodName: str = ...) -> None:
         super().__init__(methodName)
         self.director = kuberay_cluster_builder.Director()
-    
+
     def test_build_basic_cluster(self):
         cluster = self.director.build_basic_cluster(name="basic-cluster")
         # testing meta

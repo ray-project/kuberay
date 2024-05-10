@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for investing your time in contributing to KubeRay project! 
+Thank you for investing your time in contributing to KubeRay project!
 
 Read our [Code of Coduct](./CODE_OF_CONDUCT.md) to keep our community approachable and respectable.
 
@@ -27,7 +27,7 @@ Refer to the template for more information on what goes into a PR description.
 
 ### Design Docs
 
-A contributor proposes a design with a PR on the repository to allow for revisions and discussions. If a design needs to be discussed before formulating a document for it, make use of Google doc and GitHub issue to involve the community on the discussion. 
+A contributor proposes a design with a PR on the repository to allow for revisions and discussions. If a design needs to be discussed before formulating a document for it, make use of Google doc and GitHub issue to involve the community on the discussion.
 
 ### GitHub Issues
 
@@ -48,7 +48,7 @@ When filing an issue, please check existing open, or recently closed, issues to 
 
 ### Find interesting issue
 
-If you spot a problem with the problem, [search if an issue already exists](https://github.com/ray-project/kuberay/issues). If a related issue doesn't exist, you can open a new issue using [issue template](https://github.com/ray-project/kuberay/issues/new/choose). 
+If you spot a problem with the problem, [search if an issue already exists](https://github.com/ray-project/kuberay/issues). If a related issue doesn't exist, you can open a new issue using [issue template](https://github.com/ray-project/kuberay/issues/new/choose).
 
 ### Solve an issue
 
@@ -56,7 +56,7 @@ KubeRay has subproject and each of them may have different development and testi
 
 ### Open a Pull request.
 
-When you're done making the changes, open a pull request and fill PR template so we can better review your PR. The template helps reviewers understand your changes and the purpose of your pull request. 
+When you're done making the changes, open a pull request and fill PR template so we can better review your PR. The template helps reviewers understand your changes and the purpose of your pull request.
 
 Don't forget to link PR to issue if you are solving one.
 

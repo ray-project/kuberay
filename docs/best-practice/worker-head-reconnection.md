@@ -2,12 +2,12 @@
 
 ## Problem
 
-For a `RayCluster` with a head and several workers, if a worker is crashed, it will be relaunched immediately and re-join the same cluster quickly; however, when the head is crashed, it will run into the issue [#104](https://github.com/ray-project/kuberay/issues/104) that all worker nodes are lost from the head for a long period of time. 
+For a `RayCluster` with a head and several workers, if a worker is crashed, it will be relaunched immediately and re-join the same cluster quickly; however, when the head is crashed, it will run into the issue [#104](https://github.com/ray-project/kuberay/issues/104) that all worker nodes are lost from the head for a long period of time.
 
 ## Explanation
 
 > **note**
-It was an issue that only happened with old version In the Kuberay version under 0.3.0, we recommand you try the latest version  
+It was an issue that only happened with old version In the Kuberay version under 0.3.0, we recommand you try the latest version
 
 When the head pod was deleted, it will be recreated with a new IP by KubeRay controller，and the GCS server address is changed accordingly. The Raylets of all workers will try to get GCS address from Redis in `ReconnectGcsServer`, but the redis_clients always use the previous head IP, so they will always fail to get new GCS address. The Raylets will not exit until max retries are reached. There are two configurations determining this long delay:
 
@@ -30,6 +30,6 @@ We recommend using the latest version of KubeRay. After version 0.5.0, the GCS F
 
 For older version (Kuberay <=0.4.0, ray <=2.1.0). To reduce the chances of a lost worker-head connection, there are two other options:
 
-- Make head more stable: when creating the cluster, allocate sufficient amount of resources on head pod such that it tends to be stable and not easy to crash. You can also set {"num-cpus": "0"} in "rayStartParams" of "headGroupSpec" such that Ray scheduler will skip the head node when scheduling workloads. This also helps to maintain the stability of the head. 
+- Make head more stable: when creating the cluster, allocate sufficient amount of resources on head pod such that it tends to be stable and not easy to crash. You can also set {"num-cpus": "0"} in "rayStartParams" of "headGroupSpec" such that Ray scheduler will skip the head node when scheduling workloads. This also helps to maintain the stability of the head.
 
-- Make reconnection shorter: for version <= 1.9.1, you can set this head param --system-config='{"ping_gcs_rpc_server_max_retries": 20}' to reduce the delay from 600s down to 20s before workers reconnect to the new head. 
+- Make reconnection shorter: for version <= 1.9.1, you can set this head param --system-config='{"ping_gcs_rpc_server_max_retries": 20}' to reduce the delay from 600s down to 20s before workers reconnect to the new head.

@@ -38,7 +38,7 @@ Use the tools [bootprint-openapi](https://github.com/bootprint/bootprint-monorep
 Third-party proto dependencies are synchronized back to `proto/third_party` for easier development (IDE friendly). Ideally, the directory for searching imports should be specified instead.
 
 ```bash
-protoc -I. 
+protoc -I.
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/ \
     -I/go/src/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger/options/ \

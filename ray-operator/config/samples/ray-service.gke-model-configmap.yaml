@@ -4,8 +4,8 @@ metadata:
   name: ray-service
 spec:
   # More details here on some of the fields: https://docs.ray.io/en/latest/serve/production-guide/kubernetes.html#setting-up-a-rayservice-custom-resource-cr
-  serviceUnhealthySecondThreshold: 720 
-  deploymentUnhealthySecondThreshold: 720 
+  serviceUnhealthySecondThreshold: 720
+  deploymentUnhealthySecondThreshold: 720
   serveConfigV2: |
     applications:
     - name: rayllm-serve
@@ -35,7 +35,7 @@ spec:
                 memory: "8Gi"
             volumeMounts:
             - mountPath: /home/ray/models
-              name: model                
+              name: model
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -51,7 +51,7 @@ spec:
               name: falcon-7b-instruct-config
               items:
               - key: falcon-7b-instruct.yaml
-                path: tiiuae/falcon-7b-instruct.yaml              
+                path: tiiuae/falcon-7b-instruct.yaml
     workerGroupSpecs:
     # Worker with Scale to 0 configuration
     - replicas: 1
@@ -103,7 +103,7 @@ spec:
               name: falcon-7b-instruct-config
               items:
               - key: falcon-7b-instruct.yaml
-                path: tiiuae/falcon-7b-instruct.yaml     
+                path: tiiuae/falcon-7b-instruct.yaml
 ---
 apiVersion: v1
 kind: ConfigMap

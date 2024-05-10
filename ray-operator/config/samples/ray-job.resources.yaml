@@ -9,10 +9,10 @@ spec:
 
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
-  
+
   # RuntimeEnvYAML represents the runtime environment configuration provided as a multi-line YAML string.
   # See https://docs.ray.io/en/latest/ray-core/handling-dependencies.html for details.
-  # (New in KubeRay version 1.0.)  
+  # (New in KubeRay version 1.0.)
   runtimeEnvYAML: |
     pip:
       - requests==2.26.0
@@ -41,7 +41,7 @@ spec:
         num-cpus: "3"
         num-gpus: "2"
         resources: '"{\"resource1\": 2, \"resource2\": 3}"'
-        
+
       #pod template
       template:
         spec:
@@ -106,7 +106,7 @@ spec:
   #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
   #         # Specifying Command is not recommended.
   #         # command: ["ray job submit --address=http://rayjob-sample-raycluster-v6qcq-head-svc.default.svc.cluster.local:8265 -- echo hello world"]
-      
+
 
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
