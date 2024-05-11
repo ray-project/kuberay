@@ -44,7 +44,7 @@ linters:
   enable:
     - asciicheck
     - errcheck
-#    - errorlint
+    - errorlint
 #    - ginkgolinter
 #    - gocyclo
     - gofmt

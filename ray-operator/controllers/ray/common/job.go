@@ -49,7 +49,7 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	constraint, _ := semver.NewConstraint(">= 2.6.0")
 	v, err := semver.NewVersion(rayVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse Ray version: %v: %v", rayVersion, err)
+		return "", fmt.Errorf("failed to parse Ray version: %v: %w", rayVersion, err)
 	}
 	if !constraint.Check(v) {
 		return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
@@ -57,7 +57,7 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	// Convert the metadata map to a JSON string.
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal metadata: %v: %v", metadata, err)
+		return "", fmt.Errorf("failed to marshal metadata: %v: %w", metadata, err)
 	}
 	return string(metadataBytes), nil
 }

@@ -89,34 +89,34 @@ func renderEventContent(keys []string, dataMaps []map[string]string) ([]byte, er
 	// Write headers
 	for _, header := range keys {
 		if _, err := content.WriteString(header); err != nil {
-			return nil, fmt.Errorf("error in writing the header: %v", err)
+			return nil, fmt.Errorf("error in writing the header: %w", err)
 		}
 		if _, err := content.WriteString(getWhitespaceStr(maxStringSizeMap[header] - len(header) + 1)); err != nil {
-			return nil, fmt.Errorf("error in writing headers: %v", err)
+			return nil, fmt.Errorf("error in writing headers: %w", err)
 		}
 		if _, err := content.WriteString(" | "); err != nil {
-			return nil, fmt.Errorf("error in writing headers : %v", err)
+			return nil, fmt.Errorf("error in writing headers : %w", err)
 		}
 	}
 	if _, err := content.WriteString("\n"); err != nil {
-		return nil, fmt.Errorf("error in writing headers '|': %v", err)
+		return nil, fmt.Errorf("error in writing headers '|': %w", err)
 	}
 
 	// Write events
 	for _, dataMap := range dataMaps {
 		for _, key := range keys {
 			if _, err := content.WriteString(dataMap[key]); err != nil {
-				return nil, fmt.Errorf("error in writing events: %v", err)
+				return nil, fmt.Errorf("error in writing events: %w", err)
 			}
 			if _, err := content.WriteString(getWhitespaceStr(maxStringSizeMap[key] - len(dataMap[key]) + 1)); err != nil {
-				return nil, fmt.Errorf("error in writing events: %v", err)
+				return nil, fmt.Errorf("error in writing events: %w", err)
 			}
 			if _, err := content.WriteString(" | "); err != nil {
-				return nil, fmt.Errorf("error in writing events: %v", err)
+				return nil, fmt.Errorf("error in writing events: %w", err)
 			}
 		}
 		if _, err := content.WriteString("\n"); err != nil {
-			return nil, fmt.Errorf("error in writing events: %v", err)
+			return nil, fmt.Errorf("error in writing events: %w", err)
 		}
 	}
 	return content.Bytes(), nil

@@ -805,7 +805,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 	configJson, err := json.Marshal(serveConfig)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal converted serve config into bytes: %v", err)
+		return fmt.Errorf("Failed to marshal converted serve config into bytes: %w", err)
 	}
 	logger.Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
 	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
