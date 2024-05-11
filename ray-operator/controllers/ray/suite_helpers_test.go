@@ -257,7 +257,7 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 
 	gomega.Eventually(
 		listResourceFunc(ctx, &workerPods, workerLabels...),
-		time.Second*3, time.Millisecond*500).Should(gomega.Equal(int(numWorkerPods)), "workerGroup: %v", workerPods.Items)
+		time.Second*3, time.Millisecond*500).Should(gomega.Equal(numWorkerPods), "workerGroup: %v", workerPods.Items)
 
 	for _, pod := range workerPods.Items {
 		pod.Status.Phase = corev1.PodRunning

@@ -63,7 +63,7 @@ linters:
 #    - revive
     - staticcheck
     - typecheck
-#    - unconvert
+    - unconvert
 #    - unparam
     - unused
     - wastedassign
