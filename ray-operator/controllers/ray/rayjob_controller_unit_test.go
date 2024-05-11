@@ -194,8 +194,8 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	tests := map[string]struct {
-		suspend              bool
 		status               rayv1.JobDeploymentStatus
+		suspend              bool
 		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.

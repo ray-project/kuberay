@@ -16,9 +16,9 @@ func Test_decodeConfig(t *testing.T) {
 	testcases := []struct {
 		name           string
 		configData     string
+		errContains    string
 		expectedConfig configapi.Configuration
 		expectErr      bool
-		errContains    string
 	}{
 		{
 			name: "default config file",

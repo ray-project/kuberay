@@ -41,9 +41,9 @@ func AddToScheme(scheme *runtime.Scheme) {
 }
 
 type SchedulerManager struct {
-	sync.Mutex
 	config  *rest.Config
 	plugins map[string]schedulerinterface.BatchScheduler
+	sync.Mutex
 }
 
 func NewSchedulerManager(config *rest.Config) *SchedulerManager {

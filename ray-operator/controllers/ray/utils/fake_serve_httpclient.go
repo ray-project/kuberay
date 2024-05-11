@@ -10,11 +10,10 @@ import (
 )
 
 type FakeRayDashboardClient struct {
-	BaseDashboardClient
 	multiAppStatuses map[string]*ServeApplicationStatus
-	serveDetails     ServeDetails
-
-	GetJobInfoMock atomic.Pointer[func(context.Context, string) (*RayJobInfo, error)]
+	GetJobInfoMock   atomic.Pointer[func(context.Context, string) (*RayJobInfo, error)]
+	BaseDashboardClient
+	serveDetails ServeDetails
 }
 
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)

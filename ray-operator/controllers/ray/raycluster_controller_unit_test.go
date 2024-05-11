@@ -1306,8 +1306,8 @@ func TestGetHeadPodIP(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		pods         []runtime.Object
 		expectedIP   string
+		pods         []runtime.Object
 		returnsError bool
 	}{
 		"get expected Pod IP if there's one head node": {
@@ -1377,9 +1377,9 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		services     []runtime.Object
 		expectedIP   string
 		expectedName string
+		services     []runtime.Object
 		returnsError bool
 	}{
 		"get expected Service IP if there's one head Service": {
