@@ -12,17 +12,19 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/go-logr/logr"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	volcanov1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
-	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 const (

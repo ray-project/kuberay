@@ -19,8 +19,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"k8s.io/client-go/tools/record"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"

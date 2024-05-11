@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func TestCreateK8sJobIfNeed(t *testing.T) {

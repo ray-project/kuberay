@@ -112,6 +112,6 @@ func main() {
 	// Run HTTP proxy
 	err = http.ListenAndServe(":"+http_local_port, nil)
 	if err != nil {
-		klog.Fatal("HTTP server died unexpectidly, error - ", err)
+		klog.Fatal("HTTP server died unexpectedly, error - ", err)
 	}
 }

@@ -9,11 +9,12 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"github.com/onsi/gomega"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
