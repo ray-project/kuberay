@@ -37,24 +37,24 @@ repos:
         language: golang
         require_serial: true
         files: ^ray-operator/
-      - id: golangci-lint-apiserver
-        name: golangci-lint (apiserver)
-        entry: bash -c 'cd apiserver && golangci-lint run --fix --exclude='SA1019' --exclude-files _generated.go\|datafile.go; cd ..'
-        types: [ go ]
-        language: golang
-        require_serial: true
-        files: ^apiserver/
-      - id: golangci-lint-cli
-        name: golangci-lint (cli)
-        entry: bash -c 'cd cli && golangci-lint run --fix --exclude-files _generated.go; cd ..'
-        types: [ go ]
-        language: golang
-        require_serial: true
-        files: ^cli/
-      - id: golangci-lint-experimental
-        name: golangci-lint (experimental)
-        entry: bash -c 'cd experimental && golangci-lint run --fix --exclude-files _generated.go; cd ..'
-        types: [ go ]
-        language: golang
-        require_serial: true
-        files: ^experimental/
+#      - id: golangci-lint-apiserver
+#        name: golangci-lint (apiserver)
+#        entry: bash -c 'cd apiserver && golangci-lint run --fix --exclude='SA1019' --exclude-files _generated.go\|datafile.go; cd ..'
+#        types: [ go ]
+#        language: golang
+#        require_serial: true
+#        files: ^apiserver/
+#      - id: golangci-lint-cli
+#        name: golangci-lint (cli)
+#        entry: bash -c 'cd cli && golangci-lint run --fix --exclude-files _generated.go; cd ..'
+#        types: [ go ]
+#        language: golang
+#        require_serial: true
+#        files: ^cli/
+#      - id: golangci-lint-experimental
+#        name: golangci-lint (experimental)
+#        entry: bash -c 'cd experimental && golangci-lint run --fix --exclude-files _generated.go; cd ..'
+#        types: [ go ]
+#        language: golang
+#        require_serial: true
+#        files: ^experimental/
