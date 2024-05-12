@@ -20,7 +20,6 @@ repos:
         args: [--autofix, --no-sort-keys, --no-ensure-ascii]
       - id: mixed-line-ending
         args: [--fix=lf]
-      - id: no-commit-to-branch
       - id: detect-private-key
 
   - repo: https://github.com/gitleaks/gitleaks
