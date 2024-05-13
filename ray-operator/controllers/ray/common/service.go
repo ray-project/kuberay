@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,15 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
+
+const (
+	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
+	EnableRayHeadClusterIPServiceEnvKey = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
+)
+
+func getEnableRayHeadClusterIPService() bool {
+	return strings.ToLower(os.Getenv(EnableRayHeadClusterIPServiceEnvKey)) == "true"
+}
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
 func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
@@ -118,7 +129,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 			Type:     defaultType,
 		},
 	}
-	if defaultType == "" || defaultType == corev1.ServiceTypeClusterIP {
+	if !getEnableRayHeadClusterIPService() && (defaultType == "" || defaultType == corev1.ServiceTypeClusterIP) {
 		// Use headless service for the Head Pod by default,
 		// since there is no sense for Head Pods to share a same virtual IP.
 		headService.Spec.ClusterIP = corev1.ClusterIPNone

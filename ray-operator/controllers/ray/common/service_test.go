@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -157,6 +158,17 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
 	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
 		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
+}
+
+func TestBuildClusterIPServiceForHeadPod(t *testing.T) {
+	os.Setenv(EnableRayHeadClusterIPServiceEnvKey, "true")
+	defer os.Unsetenv(EnableRayHeadClusterIPServiceEnvKey)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
+	assert.Nil(t, err)
+	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if EnableRayHeadClusterIPServiceEnvKey is set.
+	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
+		t.Fatalf("Not expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
 	}
 }
 
