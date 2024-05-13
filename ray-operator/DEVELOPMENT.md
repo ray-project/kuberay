@@ -208,42 +208,6 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 ## CI/CD
 
-### Linting
-
-KubeRay uses the gofumpt linter.
-
-Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.20. Run this command to download it:
-
-```bash
-go install mvdan.cc/gofumpt@v0.5.0
-```
-
-As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
-
-Check that the `gofumpt` version is 0.5.0:
-
-```bash
-gofumpt --version
-# v0.5.0 (go1.19)
-```
-
-Make sure your `go` version is still 1.20:
-
-```bash
-go version
-# go version go1.20 darwin/amd64
-```
-
-If your `go` version isn’t 1.20 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.20`. It should be back to 1.20.x.
-
-Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
-
-```bash
-gofumpt -w .
-```
-
-The `-w` flag will overwrite any unformatted code.
-
 ### Helm chart linter
 
 We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
