@@ -198,6 +198,7 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, filters common
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Ray cluster started", "cluster name", request.Name, ctrl.LoggerFrom(ctx))
 
 	// Please do NOT modify `originalRayClusterInstance` in the following code.
 	originalRayClusterInstance := instance.DeepCopy()
@@ -346,6 +347,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
 	}
+	logger.Info("Pods are being created for RayCluster", "cluster name", request.Name)
 	if err := r.reconcilePods(ctx, instance); err != nil {
 		if updateErr := r.updateClusterState(ctx, instance, rayv1.Failed); updateErr != nil {
 			logger.Error(updateErr, "RayCluster update state error", "cluster name", request.Name)
@@ -717,6 +719,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
+			logger.Info("reconcilePods", "Worker Pod Name: ", workerPod.Name, " Status: ", workerPod.Status.Phase)
+			if workerPod.Status.Phase != "Running" && workerPod.Status.Message != "" {
+				logger.Info("reconcilePods", "Worker Pod Name: ", workerPod.Name, " Status: ", workerPod.Status.Phase, " Message: ", workerPod.Status.Conditions[0].Message)
+			} else {
+				logger.Info("Pods created for RayCluster")
+			}
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
