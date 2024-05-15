@@ -130,7 +130,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceWithWrongSvc.Name)
+	expectedResult := instanceWithWrongSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -432,7 +432,7 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceWithWrongSvc.Name)
+	expectedResult := instanceWithWrongSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -464,7 +464,7 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceForServeSvc.Name)
+	expectedResult := instanceForServeSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}

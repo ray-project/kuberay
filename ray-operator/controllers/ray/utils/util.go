@@ -473,7 +473,7 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	hashBytes := sha1.Sum(serialObj)
 
 	// Convert to an ASCII string
-	hashStr := string(base32.HexEncoding.EncodeToString(hashBytes[:]))
+	hashStr := base32.HexEncoding.EncodeToString(hashBytes[:])
 
 	return hashStr, nil
 }
