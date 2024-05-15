@@ -12,11 +12,6 @@ import (
 // with apply.
 type RayClusterStatusApplyConfiguration struct {
 	State                   *v1.ClusterState                 `json:"state,omitempty"`
-	ReadyWorkerReplicas     *int32                           `json:"readyWorkerReplicas,omitempty"`
-	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
-	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
-	MinWorkerReplicas       *int32                           `json:"minWorkerReplicas,omitempty"`
-	MaxWorkerReplicas       *int32                           `json:"maxWorkerReplicas,omitempty"`
 	DesiredCPU              *resource.Quantity               `json:"desiredCPU,omitempty"`
 	DesiredMemory           *resource.Quantity               `json:"desiredMemory,omitempty"`
 	DesiredGPU              *resource.Quantity               `json:"desiredGPU,omitempty"`
@@ -26,6 +21,11 @@ type RayClusterStatusApplyConfiguration struct {
 	Endpoints               map[string]string                `json:"endpoints,omitempty"`
 	Head                    *HeadInfoApplyConfiguration      `json:"head,omitempty"`
 	Reason                  *string                          `json:"reason,omitempty"`
+	ReadyWorkerReplicas     *int32                           `json:"readyWorkerReplicas,omitempty"`
+	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
+	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
+	MinWorkerReplicas       *int32                           `json:"minWorkerReplicas,omitempty"`
+	MaxWorkerReplicas       *int32                           `json:"maxWorkerReplicas,omitempty"`
 	ObservedGeneration      *int64                           `json:"observedGeneration,omitempty"`
 }
 
@@ -40,46 +40,6 @@ func RayClusterStatus() *RayClusterStatusApplyConfiguration {
 // If called multiple times, the State field is set to the value of the last call.
 func (b *RayClusterStatusApplyConfiguration) WithState(value v1.ClusterState) *RayClusterStatusApplyConfiguration {
 	b.State = &value
-	return b
-}
-
-// WithReadyWorkerReplicas sets the ReadyWorkerReplicas field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ReadyWorkerReplicas field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithReadyWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
-	b.ReadyWorkerReplicas = &value
-	return b
-}
-
-// WithAvailableWorkerReplicas sets the AvailableWorkerReplicas field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the AvailableWorkerReplicas field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithAvailableWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
-	b.AvailableWorkerReplicas = &value
-	return b
-}
-
-// WithDesiredWorkerReplicas sets the DesiredWorkerReplicas field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the DesiredWorkerReplicas field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithDesiredWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
-	b.DesiredWorkerReplicas = &value
-	return b
-}
-
-// WithMinWorkerReplicas sets the MinWorkerReplicas field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the MinWorkerReplicas field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithMinWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
-	b.MinWorkerReplicas = &value
-	return b
-}
-
-// WithMaxWorkerReplicas sets the MaxWorkerReplicas field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the MaxWorkerReplicas field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithMaxWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
-	b.MaxWorkerReplicas = &value
 	return b
 }
 
@@ -164,6 +124,46 @@ func (b *RayClusterStatusApplyConfiguration) WithHead(value *HeadInfoApplyConfig
 // If called multiple times, the Reason field is set to the value of the last call.
 func (b *RayClusterStatusApplyConfiguration) WithReason(value string) *RayClusterStatusApplyConfiguration {
 	b.Reason = &value
+	return b
+}
+
+// WithReadyWorkerReplicas sets the ReadyWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ReadyWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithReadyWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.ReadyWorkerReplicas = &value
+	return b
+}
+
+// WithAvailableWorkerReplicas sets the AvailableWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AvailableWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithAvailableWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.AvailableWorkerReplicas = &value
+	return b
+}
+
+// WithDesiredWorkerReplicas sets the DesiredWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DesiredWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithDesiredWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.DesiredWorkerReplicas = &value
+	return b
+}
+
+// WithMinWorkerReplicas sets the MinWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MinWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithMinWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.MinWorkerReplicas = &value
+	return b
+}
+
+// WithMaxWorkerReplicas sets the MaxWorkerReplicas field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MaxWorkerReplicas field is set to the value of the last call.
+func (b *RayClusterStatusApplyConfiguration) WithMaxWorkerReplicas(value int32) *RayClusterStatusApplyConfiguration {
+	b.MaxWorkerReplicas = &value
 	return b
 }
 
