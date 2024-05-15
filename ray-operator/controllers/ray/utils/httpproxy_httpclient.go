@@ -50,7 +50,11 @@ func (r *RayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, por
 
 // CheckProxyActorHealth checks the health status of the Ray Serve proxy actor.
 func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
-	resp, err := r.client.Get(r.httpProxyURL + RayServeProxyHealthPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.httpProxyURL+RayServeProxyHealthPath, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
 	}

@@ -58,7 +58,7 @@ linters:
     - makezero
     - misspell
     - nilerr
-#    - noctx
+    - noctx
     - predeclared
 #    - revive
     - staticcheck
