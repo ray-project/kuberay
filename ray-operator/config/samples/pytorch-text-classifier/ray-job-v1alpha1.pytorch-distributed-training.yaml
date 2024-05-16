@@ -36,10 +36,6 @@ spec:
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
-                - mountPath: /data
-                  name: data
           volumes:
             - name: ray-logs
-              emptyDir: {}
-            - name: data
               emptyDir: {}

@@ -84,10 +84,6 @@ spec:
             containers:
               - name: ray-worker
                 image: rayproject/ray-ml:2.9.0-gpu
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: [ "/bin/sh","-c","ray stop" ]
                 resources:
                   limits:
                     memory: "8G"
