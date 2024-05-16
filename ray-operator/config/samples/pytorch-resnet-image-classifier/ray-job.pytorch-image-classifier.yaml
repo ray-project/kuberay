@@ -65,6 +65,8 @@ spec:
                   mountOptions: "implicit-dirs,uid=1000,gid=100"
     workerGroupSpecs:
       - replicas: 4
+        minReplicas: 4
+        maxReplicas: 4
         groupName: gpu-group
         rayStartParams:
           dashboard-host: '0.0.0.0'
