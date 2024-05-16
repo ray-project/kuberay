@@ -13,7 +13,7 @@ steps:
     Params:
       action: start
       labelSelector: app.kubernetes.io/created-by = kuberay-operator
-      threshold: 5m
+      threshold: 30m
   - Identifier: WaitForControlledPodsRunning
     Method: WaitForControlledPodsRunning
     Params:
@@ -27,8 +27,8 @@ steps:
     Params:
       action: start
       labelSelector: app.kubernetes.io/created-by = kuberay-operator
-      threshold: 5m
-- name: Creating RayJobs
+      threshold: 10m
+- name: Creating RayJobs for PyTorch MNIST fine-tuning
   phases:
   - namespaceRange:
       min: 1
@@ -36,14 +36,28 @@ steps:
     replicasPerNamespace: 10
     tuningSet: Uniform100qps
     objectBundle:
-    - basename: rayjob
-      objectTemplatePath: rayjob.yaml
+    - basename: pytorch-mnist
+      objectTemplatePath: pytorch-mnist-rayjob.yaml
+      templateFillMap:
+        Image: "rayproject/ray:2.9.3" # replace with image built from images/ray-pytorch
+- name: Creating RayJobs for Ray Data Image Resizing
+  phases:
+  - namespaceRange:
+      min: 1
+      max: 10
+    replicasPerNamespace: 10
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: ray-data-image-resize
+      objectTemplatePath: ray-data-image-resize.yaml
+      templateFillMap:
+        Image: "rayproject/ray:2.9.3" # replace with image built from images/ray-pytorch
 - name: Wait for RayJobs complete
   measurements:
   - Identifier: WaitForRayJob
     Method: Exec
     Params:
-      timeout: 10m
+      timeout: 30m
       command:
       - "bash"
       - "100-rayjob/wait-for-rayjobs.sh"
