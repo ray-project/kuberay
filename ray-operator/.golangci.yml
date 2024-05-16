@@ -4,7 +4,7 @@ linters-settings:
   ginkgolinter:
     forbid-focus-container: true
   goimports:
-    local-prefixes: github.com/ray-project/kuberay/ray-operator,github.com/ray-project/kuberay/apiserver,github.com/ray-project/kuberay/cli,github.com/ray-project/kuberay/security
+    local-prefixes: github.com/ray-project/kuberay/ray-operator
   misspell:
     locale: US
   revive:
