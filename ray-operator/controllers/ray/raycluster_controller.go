@@ -9,39 +9,36 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
-	batchv1 "k8s.io/api/batch/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-
-	"k8s.io/client-go/tools/record"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	_ "k8s.io/api/apps/v1beta1"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
-
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	controller "sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var (
@@ -50,6 +47,10 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
+
+	controllerGroupKind = schema.GroupKind{Group: "ray.io", Kind: "RayCluster"}
+
+	rayClusterExpectation *expectations.RayClusterExpectations
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -103,7 +104,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		panic(err)
 	}
 	isOpenShift := getClusterType(ctx)
-
+	rayClusterExpectation = expectations.NewRayClusterExpectations(mgr.GetClient())
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -170,6 +171,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// No match found
 	if errors.IsNotFound(err) {
+		rayClusterExpectation.Delete(request.String())
 		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
@@ -653,9 +655,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 	}
-
+	key := expectations.RayClusterKey(instance)
 	// Reconcile head Pod
-	if len(headPods.Items) == 1 {
+	if !rayClusterExpectation.IsHeadSatisfied(key) {
+		logger.Info("reconcilePods", "RayCluster", key, "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
+	} else if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		logger.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
 			"Pod restart policy", headPod.Spec.RestartPolicy,
@@ -667,6 +671,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if err := r.Delete(ctx, &headPod); err != nil {
 				return err
 			}
+			rayClusterExpectation.ExpectDeleteHeadPod(key, headPod.Namespace, headPod.Name)
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
 				"Deleted head Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 				headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod))
@@ -698,11 +703,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
 				return err
 			}
+			rayClusterExpectation.ExpectDeleteHeadPod(key, extraHeadPodToDelete.Namespace, extraHeadPodToDelete.Name)
 		}
 	}
 
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
+		if !rayClusterExpectation.IsGroupSatisfied(key, worker.GroupName) {
+			logger.Info("reconcilePods", "RayCluster", key, "Expectation", fmt.Sprintf("NotSatisfiedHeadExpectations, reconcile group %s later", worker.GroupName))
+			//		continue
+		}
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
 		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
@@ -725,6 +735,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				if err := r.Delete(ctx, &workerPod); err != nil {
 					return err
 				}
+				rayClusterExpectation.ExpectDeleteWorkerPod(key, worker.GroupName, workerPod.Namespace, workerPod.Name)
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
 					"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 					workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
@@ -751,6 +762,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				}
 				logger.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
 			} else {
+				rayClusterExpectation.ExpectDeleteWorkerPod(key, worker.GroupName, pod.Namespace, pod.Name)
 				deletedWorkers[pod.Name] = deleted
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted pod %s", pod.Name)
 			}
@@ -819,6 +831,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 						}
 						logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
 					}
+					rayClusterExpectation.ExpectDeleteWorkerPod(key, worker.GroupName, randomPodToDelete.Namespace, randomPodToDelete.Name)
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted", "Deleted Pod %s", randomPodToDelete.Name)
 				}
 			} else {
@@ -991,9 +1004,12 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	}
 
 	logger.Info("createHeadPod", "head pod with name", pod.GenerateName)
+	key := expectations.RayClusterKey(&instance)
 	if err := r.Create(ctx, &pod); err != nil {
 		return err
 	}
+	rayClusterExpectation.ExpectCreateHeadPod(key, pod.Namespace, pod.Name)
+
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created head pod %s", pod.Name)
 	return nil
 }
@@ -1012,9 +1028,11 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	}
 
 	replica := pod
+	key := expectations.RayClusterKey(&instance)
 	if err := r.Create(ctx, &replica); err != nil {
 		return err
 	}
+	rayClusterExpectation.ExpectCreateWorkerPod(key, worker.GroupName, pod.Namespace, pod.Name)
 	logger.Info("Created pod", "Pod ", pod.GenerateName)
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created worker pod %s", pod.Name)
 	return nil
