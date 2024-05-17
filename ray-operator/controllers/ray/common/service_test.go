@@ -162,11 +162,11 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 }
 
 func TestBuildClusterIPServiceForHeadPod(t *testing.T) {
-	os.Setenv(EnableRayHeadClusterIPServiceEnvKey, "true")
-	defer os.Unsetenv(EnableRayHeadClusterIPServiceEnvKey)
+	os.Setenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE, "true")
+	defer os.Unsetenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)
 	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
 	assert.Nil(t, err)
-	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if EnableRayHeadClusterIPServiceEnvKey is set.
+	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE is set.
 	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
 		t.Fatalf("Not expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
 	}

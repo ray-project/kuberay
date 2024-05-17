@@ -15,13 +15,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-const (
-	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
-	EnableRayHeadClusterIPServiceEnvKey = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
-)
-
 func getEnableRayHeadClusterIPService() bool {
-	return strings.ToLower(os.Getenv(EnableRayHeadClusterIPServiceEnvKey)) == "true"
+	return strings.ToLower(os.Getenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)) == "true"
 }
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
