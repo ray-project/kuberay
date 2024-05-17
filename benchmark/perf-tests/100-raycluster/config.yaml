@@ -13,7 +13,7 @@ steps:
     Params:
       action: start
       labelSelector: app.kubernetes.io/created-by = kuberay-operator
-      threshold: 5m
+      threshold: 30m
   - Identifier: WaitForControlledPodsRunning
     Method: WaitForControlledPodsRunning
     Params:
@@ -33,13 +33,13 @@ steps:
     - basename: raycluster
       objectTemplatePath: raycluster.yaml
       templateFillMap:
-        Replicas: 1
+        Replicas: 3
 - name: Wait for RayClusters ready
   measurements:
   - Identifier: WaitForRayCluster
     Method: Exec
     Params:
-      timeout: 10m
+      timeout: 30m
       command:
       - "bash"
       - "100-raycluster/wait-for-rayclusters.sh"
@@ -49,7 +49,6 @@ steps:
     Method: WaitForControlledPodsRunning
     Params:
       action: gather
-      operationTimeout: 10m
 - name: Measure pod startup latency
   measurements:
   - Identifier: PodStartupLatency
