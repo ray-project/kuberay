@@ -130,8 +130,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		},
 	}
 	if !getEnableRayHeadClusterIPService() && (defaultType == "" || defaultType == corev1.ServiceTypeClusterIP) {
-		// Use headless service for the Head Pod by default,
-		// since there is no sense for Head Pods to share a same virtual IP.
+		// Make the head service headless by default, because a RayCluster should have at most one head Pod.
 		headService.Spec.ClusterIP = corev1.ClusterIPNone
 		headService.Spec.PublishNotReadyAddresses = true // We don't need to hide the Head address if its health checks failed.
 	}
