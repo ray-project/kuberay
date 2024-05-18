@@ -49,7 +49,7 @@ func newCmdCreate() *cobra.Command {
 	cmd.Flags().StringVar(&opts.user, "user", "", "SSO username of ray cluster creator")
 	cmd.Flags().StringVar(&opts.headComputeTemplate, "head-compute-template", "", "compute template name for ray head")
 	cmd.Flags().StringVar(&opts.headImage, "head-image", "", "ray head image")
-	cmd.Flags().StringVar(&opts.headServiceType, "head-service-type", "ClusterIP", "ray head service type (ClusterIP, NodePort, LoadBalancer)")
+	cmd.Flags().StringVar(&opts.headServiceType, "head-service-type", "ClusterIP", "ray head service type (ClusterIP, NodePort, LoadBalancer). Default value is \"ClusterIP\", which creates a headless ClusterIP service.")
 	cmd.Flags().StringVar(&opts.workerGroupName, "worker-group-name", "", "first worker group name")
 	cmd.Flags().StringVar(&opts.workerComputeTemplate, "worker-compute-template", "", "compute template name of worker in the first worker group")
 	cmd.Flags().StringVar(&opts.workerImage, "worker-image", "", "image of worker in the first worker group")

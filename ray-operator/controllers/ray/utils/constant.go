@@ -134,6 +134,9 @@ const (
 	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
 	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
 
+	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
+	ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
