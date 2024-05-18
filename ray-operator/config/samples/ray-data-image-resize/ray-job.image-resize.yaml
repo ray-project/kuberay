@@ -10,7 +10,11 @@ spec:
       - torch
       - torchvision
       - numpy
+      - google-cloud-storage
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
+    env_vars:
+      BUCKET_NAME: ray-images
+      BUCKET_PREFIX: images
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
     rayVersion: '2.9.0'
