@@ -95,7 +95,7 @@ func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group str
 	}
 }
 
-func RayClusterRelatedAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
@@ -104,13 +104,39 @@ func RayClusterRelatedAssociationOptions(instance *rayv1.RayCluster) Association
 	}
 }
 
-func RayClusterServicesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterRoutesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
-			utils.RayClusterLabelKey:  instance.Name,
-			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			utils.RayClusterLabelKey: instance.Name,
 		},
+	}
+}
+
+func RayClusterIngressesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey: instance.Name,
+		},
+	}
+}
+
+func RayClusterServicesAssociationOptions(instance *rayv1.RayCluster, withExtraLabels bool) AssociationOptions {
+	labels := map[string]string{
+		utils.RayClusterLabelKey:  instance.Name,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+	}
+
+	if withExtraLabels {
+		labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(instance.Name, rayv1.HeadNode))
+		labels[utils.KubernetesApplicationNameLabelKey] = utils.ApplicationName
+		labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
+	}
+
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labels),
 	}
 }
 
@@ -121,13 +147,6 @@ func RayServiceRayClustersAssociationOptions(rayService *rayv1.RayService) Assoc
 			utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
 			utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
 		},
-	}
-}
-
-func HeadServiceAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
-	return AssociationOptions{
-		client.InNamespace(instance.Namespace),
-		client.MatchingLabels(HeadServiceLabels(*instance)),
 	}
 }
 
