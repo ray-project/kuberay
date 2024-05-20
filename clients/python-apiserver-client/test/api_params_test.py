@@ -395,7 +395,7 @@ def test_submission():
       - requests==2.26.0
       - pendulum==2.1.2
     env_vars:
-      counter_name: test_counter    
+      counter_name: test_counter
     """
     request = RayJobRequest(entrypoint="python /home/ray/samples/sample_code.py", runtime_env=yaml, num_cpu=0.5)
     print(f"job request: {request.to_string()}")
@@ -415,7 +415,7 @@ def test_submission():
           "env_vars":"map[counter_name:test_counter]",
           "pip":"[requests==2.26.0 pendulum==2.1.2]"
        }
-    }    
+    }
     """
     job_info = RayJobInfo(json.loads(info_json))
     print(job_info.to_string())
