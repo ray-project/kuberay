@@ -33,7 +33,8 @@ From apiserver directory, execute:
 make operator-image cluster load-operator-image deploy-operator docker-image load-image install
 ```
 
-Now you can use the following test files: 
+Now you can use the following test files:
+
 * [parameters_test](test/api_params_test.py) exercise parameter creation
 * [api_test](test/kuberay_api_test.py) exercise overall package functionality and can also be used as a guide for API usage.
 
