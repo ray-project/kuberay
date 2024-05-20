@@ -14,5 +14,5 @@ patchesJson6902:
     version: v1
 images:
 - name: kuberay/apiserver
-  newName: kuberay/apiserver
+  newName: quay.io/kuberay/apiserver
   newTag: latest
