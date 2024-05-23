@@ -75,6 +75,16 @@ func RayClusterWorkerPodsAssociationOptions(instance *rayv1.RayCluster) Associat
 	}
 }
 
+func RayClusterRedisCleanupJobAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+		},
+	}
+}
+
 func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group string) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
@@ -85,12 +95,48 @@ func RayClusterGroupPodsAssociationOptions(instance *rayv1.RayCluster, group str
 	}
 }
 
-func RayClusterAllPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
 			utils.RayClusterLabelKey: instance.Name,
 		},
+	}
+}
+
+func RayClusterRoutesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey: instance.Name,
+		},
+	}
+}
+
+func RayClusterIngressesAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey: instance.Name,
+		},
+	}
+}
+
+func RayClusterServicesAssociationOptions(instance *rayv1.RayCluster, withExtraLabels bool) AssociationOptions {
+	labels := map[string]string{
+		utils.RayClusterLabelKey:  instance.Name,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+	}
+
+	if withExtraLabels {
+		labels[utils.RayIDLabelKey] = utils.CheckLabel(utils.GenerateIdentifier(instance.Name, rayv1.HeadNode))
+		labels[utils.KubernetesApplicationNameLabelKey] = utils.ApplicationName
+		labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
+	}
+
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labels),
 	}
 }
 
