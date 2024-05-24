@@ -72,18 +72,20 @@ func (batch *SchedulerManager) GetScheduler(schedulerName string) (schedulerinte
 	batch.Lock()
 	defer batch.Unlock()
 
-	if plugin, existed := batch.plugins[schedulerName]; existed && plugin != nil {
+	plugin, existed := batch.plugins[schedulerName]
+
+	if existed && plugin != nil {
 		return plugin, nil
-	} else if existed && plugin == nil {
+	}
+	if existed && plugin == nil {
 		return nil, fmt.Errorf(
 			"failed to get scheduler plugin %s, previous initialization has failed", schedulerName)
-	} else {
-		if plugin, err := factory.New(batch.config); err != nil {
-			batch.plugins[schedulerName] = nil
-			return nil, err
-		} else {
-			batch.plugins[schedulerName] = plugin
-			return plugin, nil
-		}
 	}
+	plugin, err := factory.New(batch.config)
+	if err != nil {
+		batch.plugins[schedulerName] = nil
+		return nil, err
+	}
+	batch.plugins[schedulerName] = plugin
+	return plugin, nil
 }

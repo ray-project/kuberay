@@ -75,23 +75,20 @@ func getClusterType(ctx context.Context) bool {
 			if err != nil {
 				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
 				return false
-			} else {
-				for i := 0; i < len(apiGroupList.Groups); i++ {
-					if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
-						logger.Info("We detected being on OpenShift!")
-						return true
-					}
-				}
-				return false
 			}
-		} else {
-			logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
+			for i := 0; i < len(apiGroupList.Groups); i++ {
+				if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
+					logger.Info("We detected being on OpenShift!")
+					return true
+				}
+			}
 			return false
 		}
-	} else {
-		logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
 		return false
 	}
+	logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
+	return false
 }
 
 // NewReconciler returns a new reconcile.Reconciler
@@ -277,20 +274,19 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 							redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
 					}
 					return ctrl.Result{}, nil
-				} else { // the redisCleanupJob is still running
+				}
+				// the redisCleanupJob is still running
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+			}
+			redisCleanupJob := r.buildRedisCleanupJob(ctx, *instance)
+			if err := r.Create(ctx, &redisCleanupJob); err != nil {
+				if errors.IsAlreadyExists(err) {
+					logger.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
-			} else {
-				redisCleanupJob := r.buildRedisCleanupJob(ctx, *instance)
-				if err := r.Create(ctx, &redisCleanupJob); err != nil {
-					if errors.IsAlreadyExists(err) {
-						logger.Info(fmt.Sprintf("Redis cleanup Job already exists. Requeue the RayCluster CR %s.", instance.Name))
-						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
-					}
-					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-				}
-				logger.Info("Successfully created Redis cleanup Job", "Job name", redisCleanupJob.Name)
+				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
+			logger.Info("Successfully created Redis cleanup Job", "Job name", redisCleanupJob.Name)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 		}
 	}
@@ -436,10 +432,9 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	if r.IsOpenShift {
 		// This is open shift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
-	} else {
-		// plain vanilla kubernetes - create ingress
-		return r.reconcileIngressKubernetes(ctx, instance)
 	}
+	// plain vanilla kubernetes - create ingress
+	return r.reconcileIngressKubernetes(ctx, instance)
 }
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -581,9 +576,8 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 			return err
 		}
 		return nil
-	} else {
-		return err
 	}
+	return err
 }
 
 // Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
@@ -608,16 +602,15 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 		if len(services.Items) != 0 {
 			// service exists, do nothing
 			return nil
-		} else {
-			// Create headless tpu worker service if there's no existing one in the cluster.
-			headlessSvc, err := common.BuildHeadlessServiceForRayCluster(*instance)
-			if err != nil {
-				return err
-			}
+		}
+		// Create headless tpu worker service if there's no existing one in the cluster.
+		headlessSvc, err := common.BuildHeadlessServiceForRayCluster(*instance)
+		if err != nil {
+			return err
+		}
 
-			if err := r.createService(ctx, headlessSvc, instance); err != nil {
-				return err
-			}
+		if err := r.createService(ctx, headlessSvc, instance); err != nil {
+			return err
 		}
 	}
 
@@ -1314,18 +1307,18 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 }
 
 func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster) error {
-	if ip, err := r.getHeadPodIP(ctx, instance); err != nil {
+	ip, err := r.getHeadPodIP(ctx, instance)
+	if err != nil {
 		return err
-	} else {
-		instance.Status.Head.PodIP = ip
 	}
+	instance.Status.Head.PodIP = ip
 
-	if ip, name, err := r.getHeadServiceIPAndName(ctx, instance); err != nil {
+	ip, name, err := r.getHeadServiceIPAndName(ctx, instance)
+	if err != nil {
 		return err
-	} else {
-		instance.Status.Head.ServiceIP = ip
-		instance.Status.Head.ServiceName = name
 	}
+	instance.Status.Head.ServiceIP = ip
+	instance.Status.Head.ServiceName = name
 
 	return nil
 }
