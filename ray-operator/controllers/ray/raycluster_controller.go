@@ -726,7 +726,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		// If we delete unhealthy Pods, we will not create new Pods in this reconciliation.
 		if numDeletedUnhealthyWorkerPods > 0 {
-			return fmt.Errorf("Delete %d unhealthy worker Pods.", numDeletedUnhealthyWorkerPods)
+			return fmt.Errorf("Delete %d unhealthy worker Pods", numDeletedUnhealthyWorkerPods)
 		}
 
 		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
