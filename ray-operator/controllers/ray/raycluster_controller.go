@@ -25,7 +25,6 @@ import (
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
-	_ "k8s.io/api/apps/v1beta1"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 
