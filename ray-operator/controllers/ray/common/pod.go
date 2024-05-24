@@ -102,7 +102,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "", instance.Annotations)
+	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -222,7 +222,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, instance.Annotations)
+	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -666,7 +666,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 	}
 }
 
-func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
 	log := ctrl.LoggerFrom(ctx)
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
@@ -777,7 +777,7 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 func addEmptyDir(ctx context.Context, container *corev1.Container, pod *corev1.Pod, volumeName string, volumeMountPath string, storageMedium corev1.StorageMedium) {
 	log := ctrl.LoggerFrom(ctx)
 
-	if checkIfVolumeMounted(container, pod, volumeMountPath) {
+	if checkIfVolumeMounted(container, volumeMountPath) {
 		log.Info("volume already mounted", "volume", volumeName, "path", volumeMountPath)
 		return
 	}
@@ -822,7 +822,7 @@ func makeEmptyDirVolume(container *corev1.Container, volumeName string, storageM
 
 // Checks if the container has a volumeMount with the given mount path and if
 // the pod has a matching Volume.
-func checkIfVolumeMounted(container *corev1.Container, pod *corev1.Pod, volumeMountPath string) bool {
+func checkIfVolumeMounted(container *corev1.Container, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
 		if mountedVol.MountPath == volumeMountPath {
 			return true

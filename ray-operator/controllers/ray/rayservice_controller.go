@@ -60,7 +60,7 @@ type RayServiceReconciler struct {
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayServiceReconciler {
+func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayServiceReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	httpProxyClientFunc := provider.GetHttpProxyClient(mgr)
 	return &RayServiceReconciler{

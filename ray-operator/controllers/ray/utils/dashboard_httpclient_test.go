@@ -91,7 +91,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				body := &RayJobResponse{
 					JobId: expectJobId,
 				}
@@ -99,7 +99,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+expectJobId,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				body := &RayJobInfo{
 					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
@@ -109,7 +109,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+errorJobId,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				// return a string in the body
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
 			})
@@ -133,7 +133,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				body := &RayJobStopResponse{
 					Stopped: true,
 				}
@@ -150,7 +150,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				body := &RayJobStopResponse{
 					Stopped: false,
 				}
@@ -158,7 +158,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				body := &RayJobInfo{
 					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,

@@ -43,7 +43,7 @@ type RayJobReconciler struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
