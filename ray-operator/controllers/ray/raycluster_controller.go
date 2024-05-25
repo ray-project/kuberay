@@ -571,10 +571,7 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 			return err
 		}
 		// create service
-		if err := r.Create(ctx, svc); err != nil {
-			return err
-		}
-		return nil
+		return r.Create(ctx, svc)
 	}
 	return err
 }
