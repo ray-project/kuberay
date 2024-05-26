@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     NAMESPACE = 'default'
     SAMPLE_PATH = CONST.REPO_ROOT.joinpath("ray-operator/config/samples/")
-    YAMLs = ['ray-job.sample.yaml', 'ray-job.shutdown.yaml', 'ray-job.custom-head-svc.yaml', 'ray-job.resources.yaml', 'ray-job.custom-k8s-app.yaml']
+    YAMLs = ['ray-job.sample.yaml', 'ray-job.shutdown.yaml', 'ray-job.custom-head-svc.yaml', 'ray-job.resources.yaml']
 
     sample_yaml_files = []
     for filename in YAMLs:
