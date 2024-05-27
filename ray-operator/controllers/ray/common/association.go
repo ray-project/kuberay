@@ -1,6 +1,7 @@
 package common
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,6 +54,14 @@ func (list AssociationOptions) ToDeleteOptions() (options []client.DeleteAllOfOp
 		options = append(options, option.(client.DeleteAllOfOption))
 	}
 	return options
+}
+
+func (list AssociationOptions) ToMetaV1ListOptions() (options metav1.ListOptions) {
+	listOptions := client.ListOptions{}
+	for _, option := range list {
+		option.(client.ListOption).ApplyToList(&listOptions)
+	}
+	return *listOptions.AsListOptions()
 }
 
 func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {

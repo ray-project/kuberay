@@ -4,7 +4,9 @@ import (
 	"github.com/onsi/gomega"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -60,4 +62,19 @@ func GetRayCluster(t Test, namespace, name string) *rayv1.RayCluster {
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
 	return cluster.Status.State
+}
+
+func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
+	return cluster.Status.DesiredWorkerReplicas
+}
+
+func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) *corev1.Pod {
+	t.T().Helper()
+	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		t.Ctx(),
+		common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
+	)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+	t.Expect(len(pods.Items)).To(gomega.Equal(1))
+	return &pods.Items[0]
 }
