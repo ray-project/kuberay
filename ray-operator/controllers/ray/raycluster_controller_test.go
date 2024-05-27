@@ -281,6 +281,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Note that this test assumes that headPods and workerPods are up-to-date.
 			for _, headPod := range headPods.Items {
 				headPod.Status.Phase = corev1.PodRunning
+				headPod.Status.PodIP = "1.1.1.1" // This should be carried to rayCluster.Status.Head.ServiceIP. We check it later.
 				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
 			}
 
@@ -298,7 +299,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
 		})
 
-		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+		It("RayCluster's .status.state and .status.head.ServiceIP should be updated shortly after all Pods are Running", func() {
 			// Note that RayCluster is `ready` when all Pods are Running and their PodReady conditions are true.
 			// However, in envtest, PodReady conditions are automatically set to true when Pod.Status.Phase is set to Running.
 			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
@@ -312,6 +313,11 @@ var _ = Context("Inside the default namespace", func() {
 					return status.StateTransitionTimes[rayv1.Ready]
 				},
 				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
+
+			Eventually(func() (string, error) {
+				err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)()
+				return rayCluster.Status.Head.ServiceIP, err
+			}, time.Second*3, time.Millisecond*500).Should(Equal("1.1.1.1"), "Should be able to see the rayCluster.Status.Head.ServiceIP: %v", rayCluster.Status.Head.ServiceIP)
 		})
 	})
 
