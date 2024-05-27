@@ -150,6 +150,28 @@ func TestRayClusterHeadlessServiceListOptions(t *testing.T) {
 	}
 }
 
+func TestRayClusterHeadServiceListOptions(t *testing.T) {
+	instance := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster",
+			Namespace: "test-ns",
+		},
+	}
+
+	labels := HeadServiceLabels(instance)
+	delete(labels, utils.KubernetesCreatedByLabelKey)
+	delete(labels, utils.KubernetesApplicationNameLabelKey)
+
+	expected := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labels),
+	}
+	result := RayClusterHeadServiceListOptions(&instance)
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
 // TestRayServiceActiveRayClusterNamespacedName tests the function for generating a NamespacedName for a RayService's active RayCluster
 func TestRayServiceActiveRayClusterNamespacedName(t *testing.T) {
 	rayService := &rayv1.RayService{
