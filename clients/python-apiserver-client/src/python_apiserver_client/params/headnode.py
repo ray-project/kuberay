@@ -1,13 +1,24 @@
-from .volumes import *
-from .environmentvariables import *
+import enum
+from typing import Any
 
-DEFAULT_HEAD_START_PARAMS = {"dashboard-host": "0.0.0.0", "metrics-export-port": "8080"}
+from python_apiserver_client.params import (
+    BaseVolume,
+    EnvironmentVariables,
+    environment_variables_decoder,
+    volume_decoder,
+)
+
+DEFAULT_HEAD_START_PARAMS = {"dashboard-host": "0.0.0.0", "metrics-export-port": "8080", "num-cpus": "0"}
 
 
 class ServiceType(enum.Enum):
-    ClusterIP = "ClusterIP"
-    NodePort = "NodePort"
-    LoadBalancer = "LoadBalancer"
+    """
+    Enumeration of head node service types
+    """
+
+    ClusterIP = "ClusterIP"  # cluster IP
+    NodePort = "NodePort"  # node port
+    LoadBalancer = "LoadBalancer"  # load balancer
 
 
 class HeadNodeSpec:
@@ -28,12 +39,39 @@ class HeadNodeSpec:
         environment - optional, environment variables for head pod
         annotations - optional, annotations for head node
         labels - optional, labels for head node
+        image_pull_policy - optional, head node pull image policy. Default IfNotPresent
     """
-    def __init__(self, compute_template: str, ray_start_params: dict[str, str], image: str = None,
-                 service_type: ServiceType = None, enable_ingress: bool = False,
-                 volumes: list[BaseVolume] = None, service_account: str = None, image_pull_secret: str = None,
-                 environment: EnvironmentVariables = None, annotations: dict[str, str] = None,
-                 labels: dict[str, str] = None) -> None:
+
+    def __init__(
+            self,
+            compute_template: str,
+            image: str,
+            ray_start_params: dict[str, str] = DEFAULT_HEAD_START_PARAMS,
+            service_type: ServiceType = ServiceType.ClusterIP,
+            enable_ingress: bool = False,
+            volumes: list[BaseVolume] = None,
+            service_account: str = None,
+            image_pull_secret: str = None,
+            environment: EnvironmentVariables = None,
+            annotations: dict[str, str] = None,
+            labels: dict[str, str] = None,
+            image_pull_policy: str = None,
+    ):
+        """
+        Initialization
+        :param compute_template: compute template
+        :param ray_start_params:  ray start parameters
+        :param image: node image
+        :param service_type: service type
+        :param enable_ingress: enable ingress flag
+        :param volumes:  volumes for head node
+        :param service_account: service account
+        :param image_pull_secret:  image pull secret
+        :param environment: head node environment
+        :param annotations: head node annotation
+        :param labels: labels
+        :param image_pull_policy: image pull policy
+        """
 
         self.compute_template = compute_template
         self.ray_start_params = ray_start_params
@@ -47,8 +85,13 @@ class HeadNodeSpec:
         self.environment = environment
         self.annotations = annotations
         self.labels = labels
+        self.image_pull_policy = image_pull_policy
 
     def to_string(self) -> str:
+        """
+        Convert to string
+        :return: string representation of the head node
+        """
         val = f"compute template = {self.compute_template}, ray start params = {str(self.ray_start_params)}"
         if self.image is not None:
             val += f", image = {self.image}"
@@ -60,6 +103,8 @@ class HeadNodeSpec:
             val += f", service_account = {self.service_account}"
         if self.image_pull_secret is not None:
             val += f", image_pull_secret = {self.image_pull_secret}"
+        if self.image_pull_policy is not None:
+            val += f", image_pull_policy = {self.image_pull_policy}"
         if self.volumes is not None:
             val = val + ",\n volumes = ["
             first = True
@@ -78,7 +123,11 @@ class HeadNodeSpec:
             val = val + f",\n labels = {str(self.labels)}"
         return val
 
-    def to_dict(self) -> dict[str, any]:
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert to dictionary
+        :return: dictionary representation of the head node
+        """
         dct = {"computeTemplate": self.compute_template, "rayStartParams": self.ray_start_params}
         if self.image is not None:
             dct["image"] = self.image
@@ -90,6 +139,8 @@ class HeadNodeSpec:
             dct["service_account"] = self.service_account
         if self.image_pull_secret is not None:
             dct["image_pull_secret"] = self.image_pull_secret
+        if self.image_pull_policy is not None:
+            dct["imagePullPolicy"] = self.image_pull_policy
         if self.volumes is not None:
             dct["volumes"] = [v.to_dict() for v in self.volumes]
         if self.environment is not None:
@@ -107,7 +158,12 @@ class HeadNodeSpec:
 """
 
 
-def head_node_spec_decoder(dct: dict[str, any]) -> HeadNodeSpec:
+def head_node_spec_decoder(dct: dict[str, Any]) -> HeadNodeSpec:
+    """
+    Create head node spec from dictionary
+    :param dct: dictionary representation of head node spec
+    :return: Head node spec
+    """
     service_type = None
     if "serviceType" in dct:
         service_type = ServiceType(dct.get("serviceType", "ClusterIP"))
@@ -116,11 +172,18 @@ def head_node_spec_decoder(dct: dict[str, any]) -> HeadNodeSpec:
         volumes = [volume_decoder(v) for v in dct["volumes"]]
     environments = None
     if "environment" in dct and len(dct.get("environment")) > 0:
-        environments = environmentvariables_decoder(dct.get("environment"))
-    return HeadNodeSpec(compute_template=dct.get("computeTemplate"), ray_start_params=dct.get("rayStartParams"),
-                        image=dct.get("image"), service_type=service_type,
-                        enable_ingress=dct.get("enableIngress", False),
-                        volumes=volumes, service_account=dct.get("service_account"),
-                        image_pull_secret=dct.get("image_pull_secret"),
-                        environment=environments, annotations=dct.get("annotations"),
-                        labels=dct.get("labels"))
+        environments = environment_variables_decoder(dct.get("environment"))
+    return HeadNodeSpec(
+        compute_template=dct.get("computeTemplate"),
+        ray_start_params=dct.get("rayStartParams"),
+        image=dct.get("image"),
+        service_type=service_type,
+        enable_ingress=dct.get("enableIngress", False),
+        volumes=volumes,
+        service_account=dct.get("service_account", None),
+        image_pull_secret=dct.get("imagePullSecret", None),
+        image_pull_policy=dct.get("imagePullPolicy", None),
+        environment=environments,
+        annotations=dct.get("annotations", None),
+        labels=dct.get("labels", None),
+    )

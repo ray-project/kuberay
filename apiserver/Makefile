@@ -4,7 +4,7 @@ REPO_ROOT	    := $(shell dirname ${PWD})
 REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
-IMG_REPO ?= kuberay/apiserver
+IMG_REPO ?= quay.io/kuberay/apiserver
 IMG_TAG ?=latest
 IMG ?= $(IMG_REPO):$(IMG_TAG)
 
@@ -119,11 +119,11 @@ load-image: ## Load the api server image to the kind cluster created with create
 
 .PHONY: operator-image
 operator-image: ## Build the operator image to be loaded in your kind cluster.
-	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
+	cd ../ray-operator && $(MAKE) docker-image -e IMG=quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
+	cd ../experimental && $(MAKE) docker-image -e IMG=quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
@@ -139,9 +139,9 @@ undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified 
 .PHONY: load-operator-image
 load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
 ifneq (${OPERATOR_IMAGE_TAG}, latest)
-	$(ENGINE) pull kuberay/operator:$(OPERATOR_IMAGE_TAG)
+	$(ENGINE) pull quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 endif
-	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(KIND) load docker-image quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.

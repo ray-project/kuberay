@@ -1,15 +1,24 @@
 import enum
+from typing import Any
 
 
 class TolerationOperation(enum.Enum):
-    Exists = "Exists"
-    Equal = "Equal"
+    """
+    Toleration operation types
+    """
+
+    Exists = "Exists"  # exists
+    Equal = "Equal"  # equal
 
 
 class TolerationEffect(enum.Enum):
-    NoSchedule = "NoSchedule"
-    PreferNoSchedule = "PreferNoSchedule"
-    NoExecute = "NoExecute"
+    """
+    Toleration effect
+    """
+
+    NoSchedule = "NoSchedule"  # not schedule
+    PreferNoSchedule = "PreferNoSchedule"  # prefer not schedule
+    NoExecute = "NoExecute"  # not execute
 
 
 class Toleration:
@@ -24,24 +33,38 @@ class Toleration:
         effect - required, toleration effect supported effects are "NoSchedule", "PreferNoSchedule", "NoExecute"
         value - optional, value
     - to_string() -> str: convert toleration to string for printing
-    - to_dict() -> dict[str, any] convert to dict
+    - to_dict() -> dict[str, Any] convert to dict
     """
 
-    def __init__(self, key: str, operator: TolerationOperation, effect: TolerationEffect,
-                 value: str = None) -> None:
+    def __init__(self, key: str, operator: TolerationOperation, effect: TolerationEffect, value: str = None):
+        """
+        Initialization
+        :param key: key
+        :param operator: operator
+        :param effect: effect
+        :param value: value
+        """
         self.key = key
         self.operator = operator
         self.value = value
         self.effect = effect
 
     def to_string(self) -> str:
+        """
+        Convert to string
+        :return: string representation of toleration
+        """
         val = f"key = {self.key}, operator = {self.operator.name}, effect = {self.effect.name}"
         if self.value is None:
             return val
         else:
             return val + f", value = {self.value}"
 
-    def to_dict(self) -> dict[str, any]:
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert to string
+        :return: string representation of toleration
+        """
         dct = {"key": self.key, "operator": self.operator.value, "effect": self.effect.value}
         if self.value is not None:
             dct["value"] = self.value
@@ -71,11 +94,30 @@ class Template:
         gpu_accelerator - optional, if not defined nvidia.com/gpu is assumed
         tolerations - optional, tolerations for pod placing, default none
     - to_string() -> str: convert toleration to string for printing
-    - to_dict() -> dict[str, any] convert to dict
+    - to_dict() -> dict[str, Any] convert to dict
     - to_json() -> str convert to json string
     """
-    def __init__(self, name: str, namespace: str, cpu: int, memory: int, gpu: int = 0,
-                 gpu_accelerator: str = None, tolerations: list[Toleration] = None) -> None:
+
+    def __init__(
+            self,
+            name: str,
+            namespace: str,
+            cpu: int,
+            memory: int,
+            gpu: int = 0,
+            gpu_accelerator: str = None,
+            tolerations: list[Toleration] = None,
+    ):
+        """
+        Initialization
+        :param name: name
+        :param namespace: namespace
+        :param cpu: cpu
+        :param memory: memory
+        :param gpu: gpu
+        :param gpu_accelerator: accelerator type
+        :param tolerations: tolerations
+        """
         self.name = name
         self.namespace = namespace
         self.cpu = cpu
@@ -85,6 +127,10 @@ class Template:
         self.tolerations = tolerations
 
     def to_string(self) -> str:
+        """
+        Convert to string
+        :return: string representation of template
+        """
         val = f"name = {self.name}, namespace = {self.namespace}, cpu = {self.cpu}, memory = {self.memory}"
         if self.gpu > 0:
             val = val + f", gpu {self.gpu}"
@@ -102,7 +148,11 @@ class Template:
                 val = val + ", {" + tol.to_string() + "}"
         return val + "]"
 
-    def to_dict(self) -> dict[str, any]:
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert to dictionary
+        :return: dictionary representation of template
+        """
         dct = {"name": self.name, "namespace": self.namespace, "cpu": self.cpu, "memory": self.memory}
         if self.gpu > 0:
             dct["gpu"] = self.gpu
@@ -119,19 +169,44 @@ class Template:
 """
 
 
-def toleration_decoder(dct: dict[str, any]) -> Toleration:
-    return Toleration(key=dct.get("key"), operator=TolerationOperation(dct.get("operator", "Exists")),
-                      effect=TolerationEffect(dct.get("effect", "NoSchedule")), value=dct.get("value"))
+def toleration_decoder(dct: dict[str, Any]) -> Toleration:
+    """
+    Create toleration from dictionary
+    :param dct: dictionary representation of toleration
+    :return: toleration
+    """
+    return Toleration(
+        key=dct.get("key"),
+        operator=TolerationOperation(dct.get("operator", "Exists")),
+        effect=TolerationEffect(dct.get("effect", "NoSchedule")),
+        value=dct.get("value"),
+    )
 
 
-def template_decoder(dct: dict[str, any]) -> Template:
+def template_decoder(dct: dict[str, Any]) -> Template:
+    """
+    Create template from dictionary
+    :param dct: dictionary representation of template
+    :return: template
+    """
     tolerations = None
     if "tolerations" in dct:
         tolerations = [toleration_decoder(d) for d in dct["tolerations"]]
-    return Template(name=dct.get("name"), namespace=dct.get("namespace"), cpu=int(dct.get("cpu", "0")),
-                    memory=int(dct.get("memory", "0")), gpu=int(dct.get("gpu", "0")),
-                    gpu_accelerator=dct.get("gpu_accelerator"), tolerations=tolerations)
+    return Template(
+        name=dct.get("name"),
+        namespace=dct.get("namespace"),
+        cpu=int(dct.get("cpu", "0")),
+        memory=int(dct.get("memory", "0")),
+        gpu=int(dct.get("gpu", "0")),
+        gpu_accelerator=dct.get("gpu_accelerator"),
+        tolerations=tolerations,
+    )
 
 
-def templates_decoder(dct: dict[str, any]) -> list[Template]:
+def templates_decoder(dct: dict[str, Any]) -> list[Template]:
+    """
+    Create list of template from dictionary
+    :param dct: dictionary representation of list of template
+    :return: list of template
+    """
     return [template_decoder(tmp) for tmp in dct["computeTemplates"]]

@@ -1,4 +1,5 @@
 import datetime
+from typing import Any
 
 
 class RayJobRequest:
@@ -16,9 +17,27 @@ class RayJobRequest:
         num_gpus - optional, number of gpus for job execution
         resources - optional, dictionary of the resources for job execution
     """
-    def __init__(self, entrypoint: str, submission_id: str = None, runtime_env: str = None,
-                 metadata: dict[str, str] = None, num_cpu: float = -1., num_gpu: float = -1.,
-                 resources: dict[str, str] = None) -> None:
+
+    def __init__(
+            self,
+            entrypoint: str,
+            submission_id: str = None,
+            runtime_env: str = None,
+            metadata: dict[str, str] = None,
+            num_cpu: float = -1.0,
+            num_gpu: float = -1.0,
+            resources: dict[str, str] = None,
+    ):
+        """
+        Initialization see https://docs.ray.io/en/latest/cluster/running-applications/job-submission/api.html
+        :param entrypoint: entrypoint
+        :param submission_id: submission id
+        :param runtime_env: runtime environment
+        :param metadata: submission metadata
+        :param num_cpu: job number cpus
+        :param num_gpu: job number gpus
+        :param resources: job custom resources
+        """
         self.entrypoint = entrypoint
         self.submission_id = submission_id
         self.runtime_env = runtime_env
@@ -28,6 +47,10 @@ class RayJobRequest:
         self.resources = resources
 
     def to_string(self) -> str:
+        """
+        Convert to string
+        :return: string representation of job submission
+        """
         val = f"entrypoint = {self.entrypoint}"
         if self.submission_id is not None:
             val += f", submission_id = {self.submission_id}"
@@ -43,7 +66,11 @@ class RayJobRequest:
             val += f", resources = {self.resources}"
         return val
 
-    def to_dict(self) -> dict[str, any]:
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert to dictionary
+        :return: dictionary representation of job submission
+        """
         dct = {"entrypoint": self.entrypoint}
         if self.submission_id is not None:
             dct["submissionId"] = self.submission_id
@@ -78,29 +105,43 @@ class RayJobInfo:
         error_type - type of error
         metadata - optional, dictionary of the submission metadata
     """
-    def __init__(self, dst: dict[str, any]) -> None:
-        self.entrypoint = dst.get("entrypoint", "")
-        self.job_id = dst.get("jobId", "")
-        self.submission_id = dst.get("submissionId", "")
-        self.status = dst.get("status", "")
-        self.message = dst.get("message", None)
-        self.start_time = int(dst.get("startTime", "0"))
-        self.end_time = int(dst.get("endTime", "0"))
-        self.error_type = dst.get("ErrorType", None)
-        self.metadata = dst.get("Metadata", None)
-        self.runtime_env = dst.get("runtimeEnv", None)
+
+    def __init__(self, dct: dict[str, Any]):
+        """
+        Initialize from dictionary
+        :param dct: dictionary representation of Ray job info
+        """
+        self.entrypoint = dct.get("entrypoint", "")
+        self.job_id = dct.get("jobId", "")
+        self.submission_id = dct.get("submissionId", "")
+        self.status = dct.get("status", "")
+        self.message = dct.get("message", None)
+        self.start_time = int(dct.get("startTime", "0"))
+        self.end_time = int(dct.get("endTime", "0"))
+        self.error_type = dct.get("ErrorType", None)
+        self.metadata = dct.get("Metadata", None)
+        self.runtime_env = dct.get("runtimeEnv", None)
 
     def to_string(self) -> str:
-        val = (f"entrypoint = {self.entrypoint}, job id {self.job_id}, submission id = {self.submission_id},"
-               f" status = {self.status}")
+        """
+        Convert to string
+        :return: string representation of Ray job info
+        """
+        val = (
+            f"entrypoint = {self.entrypoint}, job id {self.job_id}, submission id = {self.submission_id},"
+            f" status = {self.status}"
+        )
         if self.message is not None:
             val += f" message = {self.message}"
         if self.start_time > 0:
-            val += (f" start time = "
-                    f"{datetime.datetime.fromtimestamp(self.start_time /1.e3).strftime('%Y-%m-%d %H:%M:%S')}")
+            val += (
+                f" start time = "
+                f"{datetime.datetime.fromtimestamp(self.start_time /1.e3).strftime('%Y-%m-%d %H:%M:%S')}"
+            )
         if self.end_time > 0:
-            val += (f" end time = "
-                    f"{datetime.datetime.fromtimestamp(self.end_time / 1e3).strftime('%Y-%m-%d %H:%M:%S')}")
+            val += (
+                f" end time = " f"{datetime.datetime.fromtimestamp(self.end_time / 1e3).strftime('%Y-%m-%d %H:%M:%S')}"
+            )
         if self.error_type is not None:
             val += f" error type = {self.error_type}"
         if self.runtime_env is not None:
