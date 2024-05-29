@@ -61,7 +61,7 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 }
 
 func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
-	kubectlCmd := []string{"exec", "-it", pod.Name, "-n", pod.Namespace, "-c", containerName, "--"}
+	kubectlCmd := []string{"exec", pod.Name, "-n", pod.Namespace, "-c", containerName, "--"}
 	kubectlCmd = append(kubectlCmd, cmd...)
 
 	t.T().Logf("Executing command: kubectl %s", kubectlCmd)
