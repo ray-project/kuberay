@@ -8,6 +8,7 @@ name = "python_apiserver_client"
 version = "0.0.1"
 dependencies = [
     "requests",
+    "kubernetes",
 ]
 authors = [
     { name="KubeRay project"},
