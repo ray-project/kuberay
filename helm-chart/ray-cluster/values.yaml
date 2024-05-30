@@ -20,7 +20,7 @@ imagePullSecrets: []
 common:
   # containerEnv specifies environment variables for the Ray head and worker containers.
   # Follows standard K8s container env schema.
-  containerEnv: {}
+  containerEnv: []
   #  - name: BLAH
   #    value: VAL
 head:
