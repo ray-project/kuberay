@@ -258,7 +258,7 @@ var _ = Context("Inside the default namespace", func() {
 				// All the worker Pods should have a port with the name "dashboard-agent"
 				for _, pod := range workerPods.Items {
 					// Worker Pod should have only one container.
-					Expect(len(pod.Spec.Containers)).Should(Equal(1))
+					Expect(pod.Spec.Containers).Should(HaveLen(1))
 					Expect(utils.EnvVarExists(utils.RAY_SERVE_KV_TIMEOUT_S, pod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 				}
 			}
@@ -273,7 +273,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("should create a new head service resource", func() {
 			svc := &corev1.Service{}
 			headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, myRayService.Spec.RayClusterSpec, myRayService.Name)
-			Expect(err).To(BeNil(), "failed to generate head service name")
+			Expect(err).ToNot(HaveOccurred(), "failed to generate head service name")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My head service = %v", svc)
@@ -571,8 +571,7 @@ var _ = Context("Inside the default namespace", func() {
 			// Note: LastUpdateTime/HealthLastUpdateTime will be overwritten via metav1.Now() in rayservice_controller.go.
 			// Hence, we cannot use `newTime` to check whether the status is updated or not.
 			Eventually(
-				checkAllDeploymentStatusesUnhealthy(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
+				checkAllDeploymentStatusesUnhealthy).WithContext(ctx).WithArguments(myRayService).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})

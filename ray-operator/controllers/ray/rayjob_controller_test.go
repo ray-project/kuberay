@@ -200,7 +200,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 
 			// This test assumes that there is only one worker group.
-			Expect(len(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs).To(HaveLen(1))
 		})
 
 		It("Create a RayJob custom resource", func() {
@@ -288,7 +288,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
 			}
 			job.Status.Conditions = conditions
-			Expect(k8sClient.Status().Update(ctx, job)).Should(BeNil())
+			Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
 
 			// RayJob transitions to Complete.
 			Eventually(
@@ -322,7 +322,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 			Expect(rayJob.Spec.ActiveDeadlineSeconds).NotTo(BeNil())
 
 			// This test assumes that there is only one worker group.
-			Expect(len(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs).To(HaveLen(1))
 		})
 
 		It("Create a RayJob custom resource", func() {
