@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -47,8 +46,6 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
-
-	controllerGroupKind = schema.GroupKind{Group: "ray.io", Kind: "RayCluster"}
 
 	rayClusterExpectation *expectations.RayClusterExpectations
 )
