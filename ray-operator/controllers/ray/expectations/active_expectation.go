@@ -294,7 +294,7 @@ func (ae *ActiveExpectation) isSatisfied() (satisfied bool, err error) {
 		}()
 
 		if itemErr != nil && err == nil {
-			err = fmt.Errorf("fail to check satisfication for subject %s, item %s: %s", ae.key, item.(*ActiveExpectationItem).Key, err)
+			err = fmt.Errorf("fail to check satisfication for subject %s, item %s: %s", ae.key, item.(*ActiveExpectationItem).Key, itemErr)
 		}
 
 		satisfied = satisfied && itemSatisfied
