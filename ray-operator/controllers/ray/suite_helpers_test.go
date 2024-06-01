@@ -60,7 +60,7 @@ func getClusterStatus(ctx context.Context, namespace string, clusterName string)
 	}
 }
 
-func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt ...client.ListOption) bool {
+func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt []client.ListOption) bool {
 	err := k8sClient.List(ctx, &podlist, opt...)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "failed to list Pods")
 	for _, pod := range podlist.Items {
@@ -240,8 +240,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, 
 
 	// Make sure the head Pod is updated.
 	gomega.Eventually(
-		isAllPodsRunningByFilters(ctx, headPods, headLabels...),
-		time.Second*15, time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
+		isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headLabels).WithTimeout(time.Second*15).WithPolling(time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
 }
 
 // Update the status of the worker Pods to Running and Ready. Similar to updateHeadPodToRunningAndReady.
@@ -273,8 +272,7 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 
 	// Make sure all worker Pods are updated.
 	gomega.Eventually(
-		isAllPodsRunningByFilters(ctx, workerPods, workerLabels...),
-		time.Second*3, time.Millisecond*500).Should(gomega.BeTrue(), "Worker Pods should be running: %v", workerPods.Items)
+		isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerLabels).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(gomega.BeTrue(), "Worker Pods should be running: %v", workerPods.Items)
 }
 
 func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend bool) error {

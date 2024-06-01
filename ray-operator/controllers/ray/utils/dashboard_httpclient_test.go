@@ -54,13 +54,13 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 		rayDashboardClient = &RayDashboardClient{}
 		err := rayDashboardClient.InitClient(context.Background(), "127.0.0.1:8090", nil)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("Test ConvertRayJobToReq", func() {
 		rayJobRequest, err := ConvertRayJobToReq(rayJob)
-		Expect(err).To(BeNil())
-		Expect(len(rayJobRequest.RuntimeEnv)).To(Equal(4))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(rayJobRequest.RuntimeEnv).To(HaveLen(4))
 		Expect(rayJobRequest.RuntimeEnv["working_dir"]).To(Equal("./"))
 	})
 
@@ -72,7 +72,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				EntrypointNumGpus:   2.2,
 			},
 		})
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(rayJobRequest.NumCpus).To(Equal(float32(1.1)))
 		Expect(rayJobRequest.NumGpus).To(Equal(float32(2.2)))
 		Expect(rayJobRequest.Resources).To(Equal(map[string]float32{"r1": 0.1, "r2": 0.2}))
@@ -115,16 +115,16 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 
 		jobId, err := rayDashboardClient.SubmitJob(context.TODO(), rayJob)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(jobId).To(Equal(expectJobId))
 
 		rayJobInfo, err := rayDashboardClient.GetJobInfo(context.TODO(), jobId)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
 		Expect(rayJobInfo.JobStatus).To(Equal(rayv1.JobStatusRunning))
 
 		_, err = rayDashboardClient.GetJobInfo(context.TODO(), errorJobId)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("GetJobInfo fail"))
 		Expect(err.Error()).To(ContainSubstring("Ray misbehaved"))
 	})
@@ -142,7 +142,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 
 		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("Test stop succeeded job", func() {
@@ -169,6 +169,6 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 
 		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

@@ -45,7 +45,7 @@ linters:
     - asciicheck
     - errcheck
     - errorlint
-#    - ginkgolinter
+    - ginkgolinter
 #    - gocyclo
     - gofmt
     - gofumpt
