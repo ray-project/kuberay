@@ -24,7 +24,17 @@ func RayClusterGroupKey(rayClusterKey, group string) string {
 	return fmt.Sprintf("%s/worker/%s", rayClusterKey, group)
 }
 
-func NewRayClusterExpectations(client client.Client) *RayClusterExpectations {
+type RayClusterExpectationInterface interface {
+	ExpectCreateHeadPod(rayClusterKey, namespace, name string)
+	ExpectCreateWorkerPod(rayClusterKey, group, namespace, name string)
+	ExpectDeleteHeadPod(rayClusterKey, namespace, name string)
+	ExpectDeleteWorkerPod(rayClusterKey, group, namespace, name string)
+	IsHeadSatisfied(rayClusterKey string) bool
+	IsGroupSatisfied(rayClusterKey, group string) bool
+	Delete(rayClusterKey string)
+}
+
+func NewRayClusterExpectations(client client.Client) RayClusterExpectationInterface {
 	return &RayClusterExpectations{
 		groupStore: make(map[string]sets.Set[string]),
 		exp:        NewActiveExpectations(client),
@@ -100,4 +110,33 @@ func (rc *RayClusterExpectations) Delete(rayClusterKey string) {
 		}
 	}
 	delete(rc.groupStore, rayClusterKey)
+}
+
+func NewFakeRayClusterExpectations() RayClusterExpectationInterface {
+	return &FakeRayClusterExpectations{}
+}
+
+type FakeRayClusterExpectations struct{}
+
+func (rc *FakeRayClusterExpectations) ExpectCreateHeadPod(rayClusterKey, namespace, name string) {
+}
+
+func (rc *FakeRayClusterExpectations) ExpectCreateWorkerPod(rayClusterKey, group, namespace, name string) {
+}
+
+func (rc *FakeRayClusterExpectations) ExpectDeleteHeadPod(rayClusterKey, namespace, name string) {
+}
+
+func (rc *FakeRayClusterExpectations) ExpectDeleteWorkerPod(rayClusterKey, group, namespace, name string) {
+}
+
+func (rc *FakeRayClusterExpectations) IsHeadSatisfied(rayClusterKey string) bool {
+	return true
+}
+
+func (rc *FakeRayClusterExpectations) IsGroupSatisfied(rayClusterKey, group string) bool {
+	return true
+}
+
+func (rc *FakeRayClusterExpectations) Delete(string) {
 }

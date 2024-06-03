@@ -47,7 +47,7 @@ var (
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
 
-	rayClusterExpectation *expectations.RayClusterExpectations
+	rayClusterExpectation expectations.RayClusterExpectationInterface
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -707,8 +707,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		if !rayClusterExpectation.IsGroupSatisfied(key, worker.GroupName) {
-			logger.Info("reconcilePods", "RayCluster", key, "Expectation", fmt.Sprintf("NotSatisfiedHeadExpectations, reconcile group %s later", worker.GroupName))
-					continue
+			logger.Info("reconcilePods", "RayCluster", key, "Expectation", fmt.Sprintf("NotSatisfiedGroupExpectations, reconcile group %s later", worker.GroupName))
+			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
@@ -1029,9 +1029,9 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	if err := r.Create(ctx, &replica); err != nil {
 		return err
 	}
-	rayClusterExpectation.ExpectCreateWorkerPod(key, worker.GroupName, pod.Namespace, pod.Name)
-	logger.Info("Created pod", "Pod ", pod.GenerateName)
-	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created worker pod %s", pod.Name)
+	rayClusterExpectation.ExpectCreateWorkerPod(key, worker.GroupName, replica.Namespace, replica.Name)
+	logger.Info("Created pod", "Pod ", replica.GenerateName)
+	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, "Created", "Created worker pod %s", replica.Name)
 	return nil
 }
 
