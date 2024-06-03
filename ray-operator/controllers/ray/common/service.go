@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,10 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
+
+func getEnableRayHeadClusterIPService() bool {
+	return strings.ToLower(os.Getenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)) == "true"
+}
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
 func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
@@ -117,6 +123,11 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 			Ports:    ports,
 			Type:     defaultType,
 		},
+	}
+	if !getEnableRayHeadClusterIPService() && (defaultType == "" || defaultType == corev1.ServiceTypeClusterIP) {
+		// Make the head service headless by default, because a RayCluster should have at most one head Pod.
+		headService.Spec.ClusterIP = corev1.ClusterIPNone
+		headService.Spec.PublishNotReadyAddresses = true // We don't need to hide the Head address if its health checks failed.
 	}
 
 	// This change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order

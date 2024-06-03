@@ -2,6 +2,7 @@ package support
 
 import (
 	"io"
+	"os/exec"
 
 	"github.com/onsi/gomega"
 
@@ -57,4 +58,14 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 
 	containerLogFileName := "pod-" + podName + "-" + containerName
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
+}
+
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
+	kubectlCmd := []string{"exec", pod.Name, "-n", pod.Namespace, "-c", containerName, "--"}
+	kubectlCmd = append(kubectlCmd, cmd...)
+
+	t.T().Logf("Executing command: kubectl %s", kubectlCmd)
+	output, err := exec.Command("kubectl", kubectlCmd...).CombinedOutput()
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+	t.T().Logf("Command output: %s", output)
 }

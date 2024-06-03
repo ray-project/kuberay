@@ -1437,6 +1437,30 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 	}
 }
 
+func TestGetHeadServiceIPAndNameOnHeadlessService(t *testing.T) {
+	setupTest(t)
+
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	if err != nil {
+		t.Errorf("failed to build head service: %v", err)
+	}
+	assert.Equal(t, headService.Spec.ClusterIP, corev1.ClusterIPNone, "BuildServiceForHeadPod returned unexpected ClusterIP")
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(headService).WithRuntimeObjects(testPods...).Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
+
+	assert.Nil(t, err)
+	assert.Equal(t, headNodeIP, ip, "getHeadServiceIPAndName returned unexpected IP")
+	assert.Equal(t, headService.Name, name, "getHeadServiceIPAndName returned unexpected name")
+}
+
 func TestUpdateStatusObservedGeneration(t *testing.T) {
 	setupTest(t)
 
@@ -2194,10 +2218,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
 			if tc.enableGCSFTRedisCleanup == "false" {
-				// No finalizer should be added to the RayCluster. The head service and Ray Pods should be created.
-				// The head service's ClusterIP is empty, so the function `getHeadServiceIP` will return an error
-				// to requeue the request when it tries to update the RayCluster's status.
-				assert.NotNil(t, err)
+				assert.Nil(t, err)
 				podList := corev1.PodList{}
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err)
@@ -2224,11 +2245,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 
 				// Reconcile the RayCluster again. The controller should create Pods.
 				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
-
-				// The head service and Ray Pods should be created. The head service's ClusterIP is empty,
-				// so the function `getHeadServiceIP` will return an error to requeue the request when it
-				// tries to update the RayCluster's status.
-				assert.NotNil(t, err)
+				assert.Nil(t, err)
 
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get Pod list")

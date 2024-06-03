@@ -1265,16 +1265,22 @@ func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels(common.HeadServiceLabels(*instance))
-	if err := r.List(ctx, &runtimeServices, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &runtimeServices, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
 		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
-		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
 	} else if len(runtimeServices.Items) > 1 {
-		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
-		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
+	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
+		// We return Head Pod IP if the Head service is headless.
+		ip, err := r.getHeadPodIP(ctx, instance)
+		if err != nil {
+			return "", "", err
+		}
+		return ip, runtimeServices.Items[0].Name, nil
 	}
 
 	return runtimeServices.Items[0].Spec.ClusterIP, runtimeServices.Items[0].Name, nil

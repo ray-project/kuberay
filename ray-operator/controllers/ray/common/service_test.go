@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -154,6 +155,21 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
 	}
+	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
+	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
+		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
+}
+
+func TestBuildClusterIPServiceForHeadPod(t *testing.T) {
+	os.Setenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE, "true")
+	defer os.Unsetenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
+	assert.Nil(t, err)
+	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE is set.
+	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
+		t.Fatalf("Not expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
 }
 
 func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
@@ -270,6 +286,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", utils.RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
 	userType := corev1.ServiceTypeLoadBalancer
+	// Specify an empty ClusterIP, which differs from the default "None" used by the BuildServeServiceForRayService.
+	userClusterIP := ""
 	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        userName,
@@ -278,9 +296,10 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 			Annotations: userAnnotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports:    userPorts,
-			Selector: userSelector,
-			Type:     userType,
+			Ports:     userPorts,
+			Selector:  userSelector,
+			Type:      userType,
+			ClusterIP: userClusterIP,
 		},
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
@@ -289,6 +308,11 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, templateLabels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
+	}
+
+	// BuildServiceForHeadPod should respect the ClusterIP specified by users.
+	if headService.Spec.ClusterIP != userClusterIP {
+		t.Fatalf("Expected `%v` but got `%v`", userClusterIP, headService.Spec.ClusterIP)
 	}
 
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.

@@ -1,61 +1,53 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: image-resize
+  name: {{.Name}}
+  labels:
+    perf-test: rayjob-pytorch-mnist
 spec:
-  shutdownAfterJobFinishes: false
-  entrypoint: python ray-operator/config/samples/ray-data-image-resize/ray_data_image_resize.py
+  shutdownAfterJobFinishes: true
+  entrypoint: python ray_train_pytorch_mnist.py
   runtimeEnvYAML: |
-    pip:
-      - torch
-      - torchvision
-      - numpy
-      - google-cloud-storage
-    working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     env_vars:
-      BUCKET_NAME: ray-images
-      BUCKET_PREFIX: images
-  # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
+      NUM_WORKERS: "2"
+      CPUS_PER_WORKER: "1"
+      OMP_NUM_THREADS: "1" # Set OMP_NUM_THREADS to avoid KeyErorr race condition.
   rayClusterSpec:
-    rayVersion: '2.9.0'
+    rayVersion: '2.9.3'
     headGroupSpec:
       rayStartParams: {}
-      # Pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: {{.Image}}
               ports:
                 - containerPort: 6379
                   name: gcs-server
-                - containerPort: 8265 # Ray dashboard
+                - containerPort: 8265
                   name: dashboard
                 - containerPort: 10001
                   name: client
               resources:
                 limits:
-                  cpu: "2"
                   memory: "4Gi"
                 requests:
-                  cpu: "2"
+                  cpu: "1"
                   memory: "4Gi"
     workerGroupSpecs:
-      - replicas: 4
+      - replicas: 2
         minReplicas: 1
         maxReplicas: 5
-        groupName: small-group
+        groupName: worker-group
         rayStartParams: {}
-        # Pod template
         template:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.9.0
+                image: {{.Image}}
                 resources:
                   limits:
-                    cpu: "2"
                     memory: "4Gi"
                   requests:
-                    cpu: "2"
+                    cpu: "1"
                     memory: "4Gi"

@@ -620,7 +620,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 		if errors.IsNotFound(err) {
 			logger.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 			if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %v", rayClusterNamespacedName.Name, err)
+				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %w", rayClusterNamespacedName.Name, err)
 				return nil, err
 			}
 

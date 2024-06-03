@@ -92,6 +92,10 @@ spec:
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
+        {{- with .Values.head.podSecurityContext }}
+        securityContext:
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
       metadata:
         annotations: {{- toYaml .Values.head.annotations | nindent 10 }}
         {{- if .Values.head.labels }}
@@ -177,6 +181,10 @@ spec:
         affinity: {{- toYaml $values.affinity | nindent 10 }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
+        {{- with $values.podSecurityContext }}
+        securityContext:
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
       metadata:
         annotations: {{- toYaml $values.annotations | nindent 10 }}
         {{- if $values.labels }}
@@ -262,6 +270,10 @@ spec:
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
+        {{- with .Values.worker.podSecurityContext}}
+        securityContext:
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
       metadata:
         annotations: {{- toYaml .Values.worker.annotations | nindent 10 }}
         {{- if .Values.worker.labels }}

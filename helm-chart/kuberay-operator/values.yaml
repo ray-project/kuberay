@@ -60,6 +60,9 @@ batchScheduler:
 
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
+podSecurityContext: {}
+
+# Set up `securityContext` to improve container security.
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -103,6 +106,9 @@ env:
 # Warning: we highly recommend setting to true and let kuberay handle for you.
 # - name: ENABLE_INIT_CONTAINER_INJECTION
 #   value: "true"
+# If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service. Default to false.
+# - name: ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE
+#   value: "false"
 # If not set or set to "", kuberay will pick up the default k8s cluster domain `cluster.local`
 # Otherwise, kuberay will use your custom domain
 # - name: CLUSTER_DOMAIN

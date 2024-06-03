@@ -163,7 +163,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
 	serveDetails, err := r.GetServeDetails(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get serve details: %v", err)
+		return nil, fmt.Errorf("Failed to get serve details: %w", err)
 	}
 
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
@@ -204,7 +204,7 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 
 	applicationStatuses := map[string]*ServeApplicationStatus{}
 	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %v. Bytes: %s", err, string(detailsJson))
+		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
 	}
 
 	return applicationStatuses, nil
@@ -473,7 +473,7 @@ func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
 	var runtimeEnv RuntimeEnvType
 	err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %v", runtimeEnvYAML, err)
+		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}
 	return runtimeEnv, nil
 }

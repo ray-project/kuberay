@@ -89,6 +89,8 @@ head:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Pod security context.
+  podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
@@ -155,6 +157,8 @@ worker:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Pod security context.
+  podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
@@ -216,6 +220,8 @@ additionalWorkerGroups:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    # Pod security context.
+    podSecurityContext: {}
     # Ray container security context.
     securityContext: {}
     # Optional: The following volumes/volumeMounts configurations are optional but recommended because

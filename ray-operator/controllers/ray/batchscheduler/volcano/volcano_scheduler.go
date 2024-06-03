@@ -152,12 +152,12 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupNam
 func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
 	vkClient, err := volcanoclient.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize volcano client with error %v", err)
+		return nil, fmt.Errorf("failed to initialize volcano client with error %w", err)
 	}
 
 	extClient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize k8s extension client with error %v", err)
+		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
 	}
 
 	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
@@ -170,7 +170,7 @@ func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinter
 			PodGroupName,
 			metav1.GetOptions{},
 		); err != nil {
-			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %s", err)
+			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
 		}
 	}
 	return &VolcanoBatchScheduler{

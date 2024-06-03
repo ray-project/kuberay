@@ -67,6 +67,7 @@ func TestGetClusterAction(t *testing.T) {
 				Replicas:    pointer.Int32(2),
 				MinReplicas: pointer.Int32(1),
 				MaxReplicas: pointer.Int32(4),
+				GroupName:   "worker-group-1",
 			},
 		},
 	}
@@ -85,7 +86,7 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 3: Different WorkerGroupSpecs should lead to RolloutNew.
 	clusterSpec3 := clusterSpec1.DeepCopy()
-	clusterSpec3.WorkerGroupSpecs[0].MinReplicas = pointer.Int32(5)
+	clusterSpec3.WorkerGroupSpecs[0].GroupName = "worker-group-2"
 	action, err = getClusterAction(clusterSpec1, *clusterSpec3)
 	assert.Nil(t, err)
 	assert.Equal(t, RolloutNew, action)
@@ -145,7 +146,7 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 9: Changing an existing WorkerGroupSpec outside of Replicas/WorkersToDelete *and* adding a new WorkerGroupSpec should lead to RolloutNew.
 	clusterSpec9 := clusterSpec1.DeepCopy()
-	clusterSpec9.WorkerGroupSpecs[0].MaxReplicas = pointer.Int32(5)
+	clusterSpec9.WorkerGroupSpecs[0].GroupName = "worker-group-3"
 	clusterSpec9.WorkerGroupSpecs = append(clusterSpec9.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		Replicas:    pointer.Int32(2),
 		MinReplicas: pointer.Int32(1),

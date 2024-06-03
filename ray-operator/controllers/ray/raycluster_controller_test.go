@@ -100,7 +100,7 @@ var _ = Context("Inside the default namespace", func() {
 			// (1) Ray Autoscaler is disabled.
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
 			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
@@ -136,11 +136,11 @@ var _ = Context("Inside the default namespace", func() {
 		It("Create a head Pod resource with default sidecars", func() {
 			err := k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+			Expect(headPods.Items).Should(HaveLen(1), "headPods: %v", headPods.Items)
 
 			headPod = headPods.Items[0]
 			Expect(headPod.Spec.Containers[len(headPod.Spec.Containers)-1].Name).Should(Equal("fluentbit"), "fluentbit sidecar exists")
-			Expect(len(headPod.Spec.Containers)).Should(Equal(2), "Because we disable autoscaling and inject a FluentBit sidecar, the head Pod should have 2 containers")
+			Expect(headPod.Spec.Containers).Should(HaveLen(2), "Because we disable autoscaling and inject a FluentBit sidecar, the head Pod should have 2 containers")
 		})
 
 		It("Update all Pods to Running", func() {
@@ -153,21 +153,19 @@ var _ = Context("Inside the default namespace", func() {
 			// Note that this test assumes that headPods and workerPods are up-to-date.
 			for _, headPod := range headPods.Items {
 				headPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
 			}
 
 			Eventually(
-				isAllPodsRunningByFilters(ctx, headPods, headFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
 
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 			}
 
 			Eventually(
-				isAllPodsRunningByFilters(ctx, workerPods, workerFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
@@ -225,6 +223,101 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*2, time.Millisecond*200).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 	})
+
+	Describe("RayCluster with overridden app.kubernetes.io labels", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-overridden-k8s-labels", namespace)
+		rayCluster.Spec.HeadGroupSpec.Template.Labels = map[string]string{
+			utils.KubernetesApplicationNameLabelKey: "myapp",
+		}
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			// These test are designed based on the following assumptions:
+			// (1) The app.kubernetes.io/name label of the HeadGroupSpec is overridden.
+			// (2) There is only one worker group, and its `replicas` is set to 3.
+			Expect(rayCluster.Spec.HeadGroupSpec.Template.Labels[utils.KubernetesApplicationNameLabelKey]).NotTo(BeEmpty())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of head Pods", func() {
+			numHeadPods := 1
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numHeadPods), fmt.Sprintf("headGroup %v", headPods.Items))
+			for _, head := range headPods.Items {
+				Expect(head.Labels[utils.KubernetesApplicationNameLabelKey]).To(Equal("myapp"))
+			}
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("Update all Pods to Running", func() {
+			// We need to manually update Pod statuses otherwise they'll always be Pending.
+			// envtest doesn't create a full K8s cluster. It's only the control plane.
+			// There's no container runtime or any other K8s controllers.
+			// So Pods are created, but no controller updates them from Pending to Running.
+			// See https://book.kubebuilder.io/reference/envtest.html
+
+			// Note that this test assumes that headPods and workerPods are up-to-date.
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				headPod.Status.PodIP = "1.1.1.1" // This should be carried to rayCluster.Status.Head.ServiceIP. We check it later.
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("RayCluster's .status.state and .status.head.ServiceIP should be updated shortly after all Pods are Running", func() {
+			// Note that RayCluster is `ready` when all Pods are Running and their PodReady conditions are true.
+			// However, in envtest, PodReady conditions are automatically set to true when Pod.Status.Phase is set to Running.
+			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			// Check that the StateTransitionTimes are set.
+			Eventually(
+				func() *metav1.Time {
+					status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+					return status.StateTransitionTimes[rayv1.Ready]
+				},
+				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
+
+			Eventually(func() (string, error) {
+				err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)()
+				return rayCluster.Status.Head.ServiceIP, err
+			}, time.Second*3, time.Millisecond*500).Should(Equal("1.1.1.1"), "Should be able to see the rayCluster.Status.Head.ServiceIP: %v", rayCluster.Status.Head.ServiceIP)
+		})
+	})
+
 	Describe("RayCluster with autoscaling enabled", func() {
 		ctx := context.Background()
 		namespace := "default"
@@ -237,8 +330,8 @@ var _ = Context("Inside the default namespace", func() {
 			// These test are designed based on the following assumptions:
 			// (1) Ray Autoscaler is enabled.
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
-			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(Equal(true))
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(BeTrue())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
@@ -334,7 +427,7 @@ var _ = Context("Inside the default namespace", func() {
 			// (1) Ray Autoscaler is disabled.
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
 			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
@@ -409,7 +502,7 @@ var _ = Context("Inside the default namespace", func() {
 			// only update worker Pod statuses so that the head Pod status is still Pending.
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 			}
 
 			// change suspend to true before all Pods are Running.
@@ -465,11 +558,11 @@ var _ = Context("Inside the default namespace", func() {
 			// This is because we don't run kubelets in the unit tests to update the status subresource.
 			for _, headPod := range headPods.Items {
 				headPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
 			}
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 			}
 		})
 
@@ -495,8 +588,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (1) Ray Autoscaler is enabled.
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `workersToDelete` is empty.
 			// (3) The worker group is a multi-host TPU PodSlice consisting of 4 hosts.
-			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(Equal(true))
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(BeTrue())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(numOfHosts))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
@@ -604,7 +697,7 @@ var _ = Context("Inside the default namespace", func() {
 			// In suite_test.go, we set `RayClusterReconcilerOptions.HeadSidecarContainers` to include a FluentBit sidecar.
 			err := k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+			Expect(headPods.Items).Should(HaveLen(1), "headPods: %v", headPods.Items)
 		})
 	})
 
@@ -633,7 +726,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests).To(BeNil())
 			Expect(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 		})
 
@@ -655,27 +748,25 @@ var _ = Context("Inside the default namespace", func() {
 		It("Create a head Pod", func() {
 			err := k8sClient.List(ctx, &headPods, headFilters...)
 			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
-			Expect(len(headPods.Items)).Should(Equal(1), "headPods: %v", headPods.Items)
+			Expect(headPods.Items).Should(HaveLen(1), "headPods: %v", headPods.Items)
 		})
 
 		It("Update all Pods to Running", func() {
 			for _, headPod := range headPods.Items {
 				headPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
 			}
 
 			Eventually(
-				isAllPodsRunningByFilters(ctx, headPods, headFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(true), "Head Pod should be running.")
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
 
 			for _, workerPod := range workerPods.Items {
 				workerPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(BeNil())
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 			}
 
 			Eventually(
-				isAllPodsRunningByFilters(ctx, workerPods, workerFilters...),
-				time.Second*3, time.Millisecond*500).Should(Equal(true), "All worker Pods should be running.")
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
@@ -712,7 +803,7 @@ var _ = Context("Inside the default namespace", func() {
 			// These test are designed based on the following assumptions:
 			// (1) There is only one worker group, and its `replicas` is set to 3, and `workersToDelete` is empty.
 			// (2) The worker group has an invalid `numOfHosts` value of 0.
-			Expect(len(rayCluster.Spec.WorkerGroupSpecs)).To(Equal(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(numOfHosts))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())

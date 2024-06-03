@@ -1,6 +1,7 @@
 package common
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -34,6 +35,17 @@ func RayClusterHeadlessServiceListOptions(instance *rayv1.RayCluster) []client.L
 	}
 }
 
+func RayClusterHeadServiceListOptions(instance *rayv1.RayCluster) []client.ListOption {
+	return []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(instance.Name, rayv1.HeadNode)),
+		}),
+	}
+}
+
 type AssociationOption interface {
 	client.ListOption
 	client.DeleteAllOfOption
@@ -53,6 +65,14 @@ func (list AssociationOptions) ToDeleteOptions() (options []client.DeleteAllOfOp
 		options = append(options, option.(client.DeleteAllOfOption))
 	}
 	return options
+}
+
+func (list AssociationOptions) ToMetaV1ListOptions() (options metav1.ListOptions) {
+	listOptions := client.ListOptions{}
+	for _, option := range list {
+		option.(client.ListOption).ApplyToList(&listOptions)
+	}
+	return *listOptions.AsListOptions()
 }
 
 func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
