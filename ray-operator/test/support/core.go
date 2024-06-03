@@ -66,6 +66,6 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 
 	t.T().Logf("Executing command: kubectl %s", kubectlCmd)
 	output, err := exec.Command("kubectl", kubectlCmd...).CombinedOutput()
-	t.Expect(err).NotTo(gomega.HaveOccurred())
 	t.T().Logf("Command output: %s", output)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
 }
