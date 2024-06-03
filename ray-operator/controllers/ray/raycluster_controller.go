@@ -708,7 +708,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		if !rayClusterExpectation.IsGroupSatisfied(key, worker.GroupName) {
 			logger.Info("reconcilePods", "RayCluster", key, "Expectation", fmt.Sprintf("NotSatisfiedHeadExpectations, reconcile group %s later", worker.GroupName))
-			//		continue
+					continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
