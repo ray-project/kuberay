@@ -851,14 +851,14 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	oldNumWorkerPods := len(testPods) - numHeadPods
 
 	tests := map[string]struct {
-		ENABLE_RANDOM_POD_DELETE bool
+		enableRandomPodDelete bool
 	}{
-		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
+		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `enableRandomPodDelete`.
 		"Enable random Pod deletion": {
-			ENABLE_RANDOM_POD_DELETE: true,
+			enableRandomPodDelete: true,
 		},
 		"Disable random Pod deletion": {
-			ENABLE_RANDOM_POD_DELETE: false,
+			enableRandomPodDelete: false,
 		},
 	}
 
@@ -881,16 +881,16 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 				Scheme:   scheme.Scheme,
 			}
 
-			if tc.ENABLE_RANDOM_POD_DELETE {
+			if tc.enableRandomPodDelete {
 				os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "true")
 			} else {
 				os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "false")
 			}
 			cluster := testRayCluster.DeepCopy()
-			// Case 1: ENABLE_RANDOM_POD_DELETE is true.
+			// Case 1: enableRandomPodDelete is true.
 			// 	Since the desired state of the workerGroup is 3 replicas, the controller will delete a worker Pod randomly.
 			//  After the deletion, the number of worker Pods should be 3.
-			// Case 2: ENABLE_RANDOM_POD_DELETE is false.
+			// Case 2: enableRandomPodDelete is false.
 			//  Only the Pod in the `workersToDelete` will be deleted. After the deletion, the number of worker Pods should be 4.
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
 			assert.Nil(t, err, "Fail to reconcile Pods")
@@ -901,13 +901,13 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			})
 			assert.Nil(t, err, "Fail to get pod list after reconcile")
 
-			if tc.ENABLE_RANDOM_POD_DELETE {
-				// Case 1: ENABLE_RANDOM_POD_DELETE is true.
+			if tc.enableRandomPodDelete {
+				// Case 1: enableRandomPodDelete is true.
 				assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 				assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
 					"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))
 			} else {
-				// Case 2: ENABLE_RANDOM_POD_DELETE is false.
+				// Case 2: enableRandomPodDelete is false.
 				assert.Equal(t, expectedNumWorkerPods+1, len(podList.Items))
 				assert.Equal(t, expectedNumWorkerPods+1, getNotFailedPodItemNum(podList),
 					"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, getNotFailedPodItemNum(podList))

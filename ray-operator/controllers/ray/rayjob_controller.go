@@ -43,7 +43,7 @@ type RayJobReconciler struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
@@ -325,12 +325,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 				logger.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-			} else {
-				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
-				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
-				if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-				}
+			}
+			// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
+			// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
+			if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
 		// If the RayJob is completed, we should not requeue it.

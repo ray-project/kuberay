@@ -19,6 +19,7 @@ linters-settings:
       - name: error-strings
       - name: errorf
       - name: exported
+        disabled: true
       - name: if-return
       - name: increment-decrement
       - name: indent-error-flow
@@ -33,6 +34,14 @@ linters-settings:
       - name: unused-parameter
       - name: var-declaration
       - name: var-naming
+        exclude:
+          - "**/ray-operator/apis/config/v1alpha1/*.go"
+          - "**/ray-operator/apis/ray/v1alpha1/*.go"
+          - "**/ray-operator/apis/ray/v1/*.go"
+        arguments:
+          - ["ID", "JSON", "HTTP", "IP"] # AllowList
+          - [] # DenyList
+          - - upperCaseConst: true
   gocyclo:
     min-complexity: 15
   govet:
@@ -60,7 +69,7 @@ linters:
     - nilerr
     - noctx
     - predeclared
-#    - revive
+    - revive
     - staticcheck
     - typecheck
     - unconvert

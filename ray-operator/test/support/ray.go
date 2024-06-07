@@ -50,7 +50,7 @@ func RayCluster(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.Ray
 }
 
 func RayClusterOrError(t Test, namespace, name string) func(g gomega.Gomega) (*rayv1.RayCluster, error) {
-	return func(g gomega.Gomega) (*rayv1.RayCluster, error) {
+	return func(_ gomega.Gomega) (*rayv1.RayCluster, error) {
 		return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 	}
 }

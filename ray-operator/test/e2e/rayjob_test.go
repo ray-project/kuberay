@@ -26,7 +26,7 @@ func TestRayJob(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
-	test.T().Run("Successful RayJob", func(t *testing.T) {
+	test.T().Run("Successful RayJob", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -83,7 +83,7 @@ env_vars:
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	test.T().Run("Failing RayJob without cluster shutdown after finished", func(t *testing.T) {
+	test.T().Run("Failing RayJob without cluster shutdown after finished", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("fail", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -128,7 +128,7 @@ env_vars:
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
 
-	test.T().Run("Failing submitter K8s Job", func(t *testing.T) {
+	test.T().Run("Failing submitter K8s Job", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("fail-k8s-job", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -169,7 +169,7 @@ env_vars:
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(t *testing.T) {
+	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(_ *testing.T) {
 		// `stop.py` will sleep for 20 seconds so that the RayJob has enough time to transition to `RUNNING`
 		// and then stop the Ray job. If the Ray job is stopped, the RayJob should transition to `Complete`.
 		rayJobAC := rayv1ac.RayJob("stop", namespace.Name).
@@ -200,7 +200,7 @@ env_vars:
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	test.T().Run("RuntimeEnvYAML is not a valid YAML string", func(t *testing.T) {
+	test.T().Run("RuntimeEnvYAML is not a valid YAML string", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("invalid-yamlstr", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/counter.py").
@@ -216,7 +216,7 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
 	})
 
-	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(t *testing.T) {
+	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).

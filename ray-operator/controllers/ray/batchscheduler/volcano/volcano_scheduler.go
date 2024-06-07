@@ -59,10 +59,7 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 		totalResource = utils.CalculateMinResources(app)
 	}
 
-	if err := v.syncPodGroup(app, minMember, totalResource); err != nil {
-		return err
-	}
-	return nil
+	return v.syncPodGroup(app, minMember, totalResource)
 }
 
 func getAppPodGroupName(app *rayv1.RayCluster) string {
