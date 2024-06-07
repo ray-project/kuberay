@@ -78,3 +78,15 @@ func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) *corev1.Pod {
 	t.Expect(len(pods.Items)).To(gomega.Equal(1))
 	return &pods.Items[0]
 }
+
+func RayService(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayService {
+	return func(g gomega.Gomega) *rayv1.RayService {
+		service, err := t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return service
+	}
+}
+
+func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
+	return service.Status.ServiceStatus
+}
