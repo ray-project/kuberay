@@ -89,7 +89,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-	test.T().Run("Create a RayCluster with autoscaling enabled", func(t *testing.T) {
+	test.T().Run("Create a RayCluster with autoscaling enabled", func(_ *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
 			WithRayVersion(GetRayVersion()).
