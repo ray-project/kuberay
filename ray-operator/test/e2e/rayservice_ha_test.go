@@ -26,7 +26,7 @@ func TestRayService(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-	test.T().Run("Static RayService", func(t *testing.T) {
+	test.T().Run("Static RayService", func(_ *testing.T) {
 		rayServiceAC := rayv1ac.RayService("static-raysvc", namespace.Name).
 			WithSpec(rayv1ac.RayServiceSpec().
 				WithServeConfigV2(`
