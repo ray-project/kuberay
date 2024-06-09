@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -361,4 +362,123 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
+}
+
+func TestYuniKornIntegration(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).Build()
+	rayJobReconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: &record.FakeRecorder{},
+	}
+
+	// ---- case 1
+	// Ray job has no yunikorn related info attached
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+	}
+	useYuniKorn, queue, appID := rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, false)
+	assert.Equal(t, queue, "")
+	assert.Equal(t, appID, "")
+
+	// ---- case 2
+	// Ray job has no yunikorn related info attached
+	rayJob = &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RaySchedulerName:            yunikorn.SchedulerName,
+				yunikorn.RayClusterQueueLabelName: "root.default",
+			},
+		},
+	}
+
+	useYuniKorn, queue, appID = rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, true)
+	assert.Equal(t, queue, "root.default")
+	assert.Equal(t, appID, "") // appID is lazy initiated
+
+	// ---- case 3
+	// Ray job has queue defined but not the scheduler name
+	rayJob = &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels: map[string]string{
+				yunikorn.RayClusterQueueLabelName: "root.default",
+			},
+		},
+	}
+
+	useYuniKorn, queue, appID = rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, false)
+	assert.Equal(t, queue, "")
+	assert.Equal(t, appID, "")
+
+	// ---- case 4
+	// Wrong scheduler name given
+	rayJob = &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RaySchedulerName:            "some-scheduler",
+				yunikorn.RayClusterQueueLabelName: "root.default",
+			},
+		},
+	}
+
+	useYuniKorn, queue, appID = rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, false)
+	assert.Equal(t, queue, "")
+	assert.Equal(t, appID, "")
+
+	// ---- case 4
+	// yunikorn related info attached and appID is found in status
+	rayJob = &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RaySchedulerName:            yunikorn.SchedulerName,
+				yunikorn.RayClusterQueueLabelName: "root.default",
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			JobId: "test-ray-job-ID",
+		},
+	}
+
+	useYuniKorn, queue, appID = rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, true)
+	assert.Equal(t, queue, "root.default")
+	assert.Equal(t, appID, "test-ray-job-ID")
+
+	// ---- case 5
+	// Use yunikorn scheduler but not give a queue name
+	// this is an invalid config, should fail
+	rayJob = &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RaySchedulerName: yunikorn.SchedulerName,
+			},
+		},
+	}
+	useYuniKorn, queue, appID = rayJobReconciler.isScheduledByYuniKorn(rayJob)
+	assert.Equal(t, useYuniKorn, true)
+	assert.Equal(t, queue, "")
+	assert.Equal(t, appID, "")
+	err := rayJobReconciler.createNewK8sJob(context.TODO(), rayJob, corev1.PodTemplateSpec{})
+	assert.Error(t, err, "required field yunikorn.apache.org/queue-name is not found in the metadata")
 }

@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -415,9 +416,56 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 	return submitterTemplate, nil
 }
 
+// scheduledByYuniKorn inspects the RayJob spec and tells if the job is configured to use yunikorn
+// if true, then returns the queue name and the job ID
+func (r *RayJobReconciler) isScheduledByYuniKorn(rayJobInstance *rayv1.RayJob) (bool, string, string) {
+	useYuniKorn := false
+	queueName := ""
+	appID := rayJobInstance.Spec.JobId
+	if rayJobInstance.Labels != nil {
+		if schedulerName, exist := rayJobInstance.Labels[utils.RaySchedulerName]; exist {
+			if schedulerName == yunikorn.SchedulerName {
+				// using yunikorn scheduler
+				useYuniKorn = true
+				if queue, exist := rayJobInstance.Labels[yunikorn.RayClusterQueueLabelName]; exist {
+					queueName = queue
+				}
+			}
+		}
+	}
+
+	// use RayJob jobID as the yunikorn appID to track this job
+	// appID is optional in submission, a generated jobId can be populated to Status object, use that as the ID
+	if len(rayJobInstance.Status.JobId) > 0 {
+		appID = rayJobInstance.Status.JobId
+	}
+
+	return useYuniKorn, queueName, appID
+}
+
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
+
+	// update job spec if using yunikorn
+	if useYuniKorn, queue, appID := r.isScheduledByYuniKorn(rayJobInstance); useYuniKorn {
+		// queue name is required when scheduling with yunikorn
+		// if this field is missing, failed explicitly
+		if queue == "" {
+			return fmt.Errorf("RayJob metadata contains %s = %s, but required field %s is not found in the metadata",
+				utils.RaySchedulerName, yunikorn.SchedulerName, yunikorn.RayClusterQueueLabelName)
+		}
+
+		logger.Info("setup yunikorn required labels to pod template")
+		if submitterTemplate.Labels == nil {
+			submitterTemplate.Labels = make(map[string]string)
+		}
+
+		submitterTemplate.Labels[yunikorn.PodApplicationIDLabelName] = appID
+		submitterTemplate.Labels[yunikorn.PodQueueLabelName] = queue
+		submitterTemplate.Spec.SchedulerName = yunikorn.SchedulerName
+	}
+
 	submitterBackoffLimit := pointer.Int32(2)
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
@@ -662,6 +710,14 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 			Namespace:   rayJobInstance.Namespace,
 		},
 		Spec: *rayJobInstance.Spec.RayClusterSpec.DeepCopy(),
+	}
+
+	// make sure the RayCluster and the RayJob has the same ID
+	if useYuniKorn, _, appID := r.isScheduledByYuniKorn(rayJobInstance); useYuniKorn {
+		if rayCluster.Labels == nil {
+			rayCluster.Labels = make(map[string]string)
+		}
+		rayCluster.Labels[yunikorn.RayClusterApplicationIDLabelName] = appID
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
