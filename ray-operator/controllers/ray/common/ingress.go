@@ -45,8 +45,8 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	pathType := networkingv1.PathTypeExact
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := int32(utils.DefaultDashboardPort)
-	if port, ok := servicePorts["dashboard"]; ok {
-		dashboardPort = port
+	if portInfo, ok := servicePorts["dashboard"]; ok {
+		dashboardPort = portInfo.PortNumber
 	}
 
 	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
