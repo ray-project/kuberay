@@ -27,7 +27,7 @@ func TestRayJobLightWeightMode(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
-	test.T().Run("Successful RayJob", func(t *testing.T) {
+	test.T().Run("Successful RayJob", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
@@ -77,7 +77,7 @@ env_vars:
 		test.Expect(err).To(MatchError(k8serrors.NewNotFound(rayv1.Resource("rayclusters"), rayJob.Status.RayClusterName)))
 	})
 
-	test.T().Run("Failing RayJob without cluster shutdown after finished", func(t *testing.T) {
+	test.T().Run("Failing RayJob without cluster shutdown after finished", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("fail", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
@@ -107,7 +107,7 @@ env_vars:
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
 
-	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(t *testing.T) {
+	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(_ *testing.T) {
 		// `stop.py` will sleep for 20 seconds so that the RayJob has enough time to transition to `RUNNING`
 		// and then stop the Ray job. If the Ray job is stopped, the RayJob should transition to `Complete`.
 		rayJobAC := rayv1ac.RayJob("stop", namespace.Name).

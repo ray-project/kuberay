@@ -50,7 +50,7 @@ func RayCluster(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.Ray
 }
 
 func RayClusterOrError(t Test, namespace, name string) func(g gomega.Gomega) (*rayv1.RayCluster, error) {
-	return func(g gomega.Gomega) (*rayv1.RayCluster, error) {
+	return func(_ gomega.Gomega) (*rayv1.RayCluster, error) {
 		return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 	}
 }
@@ -77,4 +77,26 @@ func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) *corev1.Pod {
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 	t.Expect(len(pods.Items)).To(gomega.Equal(1))
 	return &pods.Items[0]
+}
+
+func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.Pod {
+	t.T().Helper()
+	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		t.Ctx(),
+		common.RayClusterGroupPodsAssociationOptions(rayCluster, group).ToMetaV1ListOptions(),
+	)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+	return pods.Items
+}
+
+func RayService(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayService {
+	return func(g gomega.Gomega) *rayv1.RayService {
+		service, err := t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return service
+	}
+}
+
+func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
+	return service.Status.ServiceStatus
 }

@@ -45,12 +45,12 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 ## KubeRay ecosystem
 
-* [AWS Application Load Balancer](guidance/ingress/#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
-* [Nginx](guidance/ingress/#example-manually-setting-up-nginx-ingress-on-kind)
-* [Prometheus and Grafana](guidance/prometheus-grafana/)
-* [Volcano](guidance/volcano-integration/)
-* [MCAD](guidance/kuberay-with-MCAD/)
-* [Kubeflow](guidance/kubeflow-integration/)
+* [AWS Application Load Balancer](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#aws-application-load-balancer-alb-ingress-support-on-aws-eks)
+* [Nginx](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#manually-setting-up-nginx-ingress-on-kind)
+* [Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
+* [Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html)
+* [MCAD](guidance/kuberay-with-MCAD.md)
+* [Kubeflow](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html)
 
 ## Security
 

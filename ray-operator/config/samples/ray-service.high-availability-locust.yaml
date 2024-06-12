@@ -138,7 +138,7 @@ data:
     import os
 
     class ConstantUser(FastHttpUser):
-        wait_time = constant(float(os.environ.get("LOCUS_WAIT_TIME", "1")))
+        wait_time = constant(float(os.environ.get("LOCUST_WAIT_TIME", "1")))
         network_timeout = None
         connection_timeout = None
         @task

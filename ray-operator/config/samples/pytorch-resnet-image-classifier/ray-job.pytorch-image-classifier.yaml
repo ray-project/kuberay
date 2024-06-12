@@ -88,6 +88,7 @@ spec:
                 image: rayproject/ray-ml:2.9.0-gpu
                 resources:
                   limits:
+                    cpu: "1"
                     memory: "8G"
                     nvidia.com/gpu: "1"
                   requests:

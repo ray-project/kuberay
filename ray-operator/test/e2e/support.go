@@ -126,13 +126,10 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithImage(GetRayImage()).
 				WithPorts(
 					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
 					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
 					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
 				).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),
@@ -150,10 +147,6 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 			WithContainers(corev1ac.Container().
 				WithName("ray-worker").
 				WithImage(GetRayImage()).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),

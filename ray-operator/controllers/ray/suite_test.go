@@ -55,13 +55,13 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func() utils.RayDashboardClientInterface {
 	return func() utils.RayDashboardClientInterface {
 		return fakeRayDashboardClient
 	}
 }
 
-func (testProvider TestClientProvider) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
+func (testProvider TestClientProvider) GetHttpProxyClient(_ manager.Manager) func() utils.RayHttpProxyClientInterface {
 	return func() utils.RayHttpProxyClientInterface {
 		return fakeRayHttpProxyClient
 	}

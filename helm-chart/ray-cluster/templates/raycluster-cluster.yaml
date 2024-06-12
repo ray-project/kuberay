@@ -60,11 +60,8 @@ spec:
             resources: {{- toYaml .Values.head.resources | nindent 14 }}
             securityContext:
             {{- toYaml .Values.head.securityContext | nindent 14 }}
+            {{- with concat .Values.common.containerEnv .Values.head.containerEnv }}
             env:
-            {{- with .Values.common.containerEnv }}
-            {{- toYaml . | nindent 14 }}
-            {{- end }}
-            {{- with .Values.head.containerEnv }}
             {{- toYaml . | nindent 14 }}
             {{- end }}
             {{- with .Values.head.envFrom }}
@@ -90,6 +87,12 @@ spec:
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
+        {{ if .Values.head.priorityClassName }}
+        priorityClassName: {{- toYaml .Values.head.priorityClassName | nindent 10 }}
+        {{- end }}
+        {{ if .Values.head.priority }}
+        priority: {{- toYaml .Values.head.priority | nindent 10 }}
+        {{- end }}
         tolerations: {{- toYaml .Values.head.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 10 }}
         {{- with .Values.head.podSecurityContext }}
@@ -151,12 +154,9 @@ spec:
             resources: {{- toYaml $values.resources | nindent 14 }}
             securityContext:
             {{- toYaml $values.securityContext | nindent 14 }}
+            {{- with concat $.Values.common.containerEnv $values.containerEnv }}
             env:
-            {{- with $.Values.common.containerEnv }}
             {{- toYaml . | nindent 14 }}
-            {{- end }}
-            {{- with $values.containerEnv }}
-            {{- toYaml . | nindent 14}}
             {{- end }}
             {{- if $values.envFrom }}
             envFrom: {{- toYaml $values.envFrom | nindent 14 }}
@@ -179,6 +179,12 @@ spec:
         volumes: {{- toYaml $values.volumes | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
+        {{ if $values.priorityClassName }}
+        priorityClassName: {{- toYaml $values.priorityClassName | nindent 10 }}
+        {{- end }}
+        {{ if $values.priority }}
+        priority: {{- toYaml $values.priority | nindent 10 }}
+        {{- end }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
         {{- with $values.podSecurityContext }}
@@ -240,12 +246,9 @@ spec:
             resources: {{- toYaml .Values.worker.resources | nindent 14 }}
             securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 14 }}
+            {{- with concat .Values.common.containerEnv .Values.worker.containerEnv }}
             env:
-            {{- with .Values.common.containerEnv }}
             {{- toYaml . | nindent 14 }}
-            {{- end }}
-            {{- with .Values.worker.containerEnv }}
-            {{- toYaml . | nindent 14}}
             {{- end }}
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
@@ -268,6 +271,12 @@ spec:
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
+        {{ if .Values.worker.priorityClassName }}
+        priorityClassName: {{- toYaml .Values.worker.priorityClassName | nindent 10 }}
+        {{- end }}
+        {{ if .Values.worker.priority }}
+        priority: {{- toYaml .Values.worker.priority | nindent 10 }}
+        {{- end }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
         {{- with .Values.worker.podSecurityContext}}

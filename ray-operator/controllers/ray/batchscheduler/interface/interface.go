@@ -52,18 +52,18 @@ func (d *DefaultBatchScheduler) Name() string {
 	return GetDefaultPluginName()
 }
 
-func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
 	return nil
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (d *DefaultBatchScheduler) AddMetadataToPod(_ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (df *DefaultBatchSchedulerFactory) New(config *rest.Config) (BatchScheduler, error) {
+func (df *DefaultBatchSchedulerFactory) New(_ *rest.Config) (BatchScheduler, error) {
 	return &DefaultBatchScheduler{}, nil
 }
 
-func (df *DefaultBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
+func (df *DefaultBatchSchedulerFactory) AddToScheme(_ *runtime.Scheme) {
 }
 
 func (df *DefaultBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {

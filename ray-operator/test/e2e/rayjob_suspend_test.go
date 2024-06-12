@@ -27,7 +27,7 @@ func TestRayJobSuspend(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
-	test.T().Run("Suspend the RayJob when its status is 'Running', and then resume it.", func(t *testing.T) {
+	test.T().Run("Suspend the RayJob when its status is 'Running', and then resume it.", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -79,7 +79,7 @@ func TestRayJobSuspend(t *testing.T) {
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	test.T().Run("Create a suspended RayJob, and then resume it.", func(t *testing.T) {
+	test.T().Run("Create a suspended RayJob, and then resume it.", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
