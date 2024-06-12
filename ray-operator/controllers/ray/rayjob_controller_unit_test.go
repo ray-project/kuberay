@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -361,4 +362,11 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			BackoffLimit: ptr.To[int32](-1),
+		},
+	})
+	assert.Error(t, err, "The RayJob is invalid because the backoffLimit must be a positive integer.")
 }

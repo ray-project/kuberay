@@ -50,6 +50,10 @@ spec:
               activeDeadlineSeconds:
                 format: int32
                 type: integer
+              backoffLimit:
+                default: 0
+                format: int32
+                type: integer
               clusterSelector:
                 additionalProperties:
                   type: string
@@ -11387,6 +11391,10 @@ spec:
               endTime:
                 format: date-time
                 type: string
+              failed:
+                default: 0
+                format: int32
+                type: integer
               jobDeploymentStatus:
                 type: string
               jobId:
@@ -11476,6 +11484,10 @@ spec:
               startTime:
                 format: date-time
                 type: string
+              succeeded:
+                default: 0
+                format: int32
+                type: integer
             type: object
         type: object
     served: true

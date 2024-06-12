@@ -86,10 +86,28 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster) {
 
 func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
 	return func() (rayv1.JobDeploymentStatus, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
 			return "", err
 		}
 		return rayJob.Status.JobDeploymentStatus, nil
+	}
+}
+
+func getRayJobSucceededStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Succeeded, nil
+	}
+}
+
+func getRayJobFailedStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Failed, nil
 	}
 }
 
