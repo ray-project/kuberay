@@ -86,13 +86,11 @@ func (rc *RayClusterExpectations) ExpectDeleteWorkerPod(rayClusterKey, group, na
 }
 
 func (rc *RayClusterExpectations) IsHeadSatisfied(rayClusterKey string) bool {
-	ok, _ := rc.exp.IsSatisfied(RayClusterHeadKey(rayClusterKey))
-	return ok
+	return rc.exp.IsSatisfied(RayClusterHeadKey(rayClusterKey))
 }
 
 func (rc *RayClusterExpectations) IsGroupSatisfied(rayClusterKey, group string) bool {
-	ok, _ := rc.exp.IsSatisfied(RayClusterGroupKey(rayClusterKey, group))
-	return ok
+	return rc.exp.IsSatisfied(RayClusterGroupKey(rayClusterKey, group))
 }
 
 func (rc *RayClusterExpectations) Delete(rayClusterKey string) {
@@ -118,23 +116,23 @@ func NewFakeRayClusterExpectations() RayClusterExpectationInterface {
 
 type FakeRayClusterExpectations struct{}
 
-func (rc *FakeRayClusterExpectations) ExpectCreateHeadPod(rayClusterKey, namespace, name string) {
+func (rc *FakeRayClusterExpectations) ExpectCreateHeadPod(_, _, _ string) {
 }
 
-func (rc *FakeRayClusterExpectations) ExpectCreateWorkerPod(rayClusterKey, group, namespace, name string) {
+func (rc *FakeRayClusterExpectations) ExpectCreateWorkerPod(_, _, _, _ string) {
 }
 
-func (rc *FakeRayClusterExpectations) ExpectDeleteHeadPod(rayClusterKey, namespace, name string) {
+func (rc *FakeRayClusterExpectations) ExpectDeleteHeadPod(_, _, _ string) {
 }
 
-func (rc *FakeRayClusterExpectations) ExpectDeleteWorkerPod(rayClusterKey, group, namespace, name string) {
+func (rc *FakeRayClusterExpectations) ExpectDeleteWorkerPod(_, _, _, _ string) {
 }
 
-func (rc *FakeRayClusterExpectations) IsHeadSatisfied(rayClusterKey string) bool {
+func (rc *FakeRayClusterExpectations) IsHeadSatisfied(_ string) bool {
 	return true
 }
 
-func (rc *FakeRayClusterExpectations) IsGroupSatisfied(rayClusterKey, group string) bool {
+func (rc *FakeRayClusterExpectations) IsGroupSatisfied(_, _ string) bool {
 	return true
 }
 

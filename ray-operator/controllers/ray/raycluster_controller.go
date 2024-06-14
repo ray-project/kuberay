@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
-	_ "k8s.io/api/apps/v1beta1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -645,7 +644,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	key := expectations.RayClusterKey(instance)
 	// Reconcile head Pod
 	if !rayClusterExpectation.IsHeadSatisfied(key) {
-		logger.Info("reconcilePods", "RayCluster", key, "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
+		logger.Info("reconcilePods", "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
 	} else if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		logger.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
@@ -697,7 +696,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
 		if !rayClusterExpectation.IsGroupSatisfied(key, worker.GroupName) {
-			logger.Info("reconcilePods", "RayCluster", key, "Expectation", fmt.Sprintf("NotSatisfiedGroupExpectations, reconcile group %s later", worker.GroupName))
+			logger.Info("reconcilePods", "Expectation", fmt.Sprintf("NotSatisfiedGroupExpectations, reconcile group %s later", worker.GroupName))
 			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.

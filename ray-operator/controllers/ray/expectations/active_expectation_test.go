@@ -11,9 +11,7 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var (
-	testPods []runtime.Object
-)
+var testPods []runtime.Object
 
 func TestActiveExpectation_CreateAndDeletePod(t *testing.T) {
 	setupTest()
@@ -24,35 +22,27 @@ func TestActiveExpectation_CreateAndDeletePod(t *testing.T) {
 	// Test expect create
 	err := exp.ExpectCreate(rayClusterKey, Pod, testPods[1].(*corev1.Pod).Namespace, testPods[1].(*corev1.Pod).Name)
 	assert.Nil(t, err, "Fail to set create expectation of pod2")
-	satisfied, err := exp.IsSatisfied(rayClusterKey)
-	assert.Nil(t, err, "Fail to check pod2")
-	assert.Equal(t, satisfied, false)
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), false)
 	err = fakeClient.Create(context.TODO(), testPods[1].(*corev1.Pod))
 	assert.Nil(t, err, "Fail to create pod2")
-	satisfied, err = exp.IsSatisfied(rayClusterKey)
-	assert.Nil(t, err, "Fail to check pod2")
-	assert.Equal(t, satisfied, true)
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), true)
 
 	// Test expect delete
 	err = exp.ExpectDelete(rayClusterKey, Pod, testPods[0].(*corev1.Pod).Namespace, testPods[0].(*corev1.Pod).Name)
 	assert.Nil(t, err, "Fail to set delete expectation of pod1")
 	err = exp.ExpectDelete(rayClusterKey, Pod, testPods[1].(*corev1.Pod).Namespace, testPods[1].(*corev1.Pod).Name)
 	assert.Nil(t, err, "Fail to set delete expectation of pod2")
-	satisfied, err = exp.IsSatisfied(rayClusterKey)
-	assert.Nil(t, err, "Fail to check pod")
-	assert.Equal(t, satisfied, false)
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), false)
 
 	// delete pod1
 	err = fakeClient.Delete(context.TODO(), testPods[0].(*corev1.Pod))
-	satisfied, err = exp.IsSatisfied(rayClusterKey)
-	assert.Nil(t, err, "Fail to check pod")
-	assert.Equal(t, satisfied, false)
+	assert.Nil(t, err, "Fail to delete pod")
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), false)
 
 	// delete pod2
 	err = fakeClient.Delete(context.TODO(), testPods[1].(*corev1.Pod))
-	satisfied, err = exp.IsSatisfied(rayClusterKey)
 	assert.Nil(t, err, "Fail to check pod")
-	assert.Equal(t, satisfied, true)
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), true)
 }
 
 func TestActiveExpectation_DeleteAll(t *testing.T) {
@@ -60,12 +50,11 @@ func TestActiveExpectation_DeleteAll(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods[0]).Build()
 	exp := NewActiveExpectations(fakeClient)
 	rayClusterKey := "defaule/raycluster-test"
-	exp.ExpectCreate(rayClusterKey, Pod, testPods[1].(*corev1.Pod).Namespace, testPods[1].(*corev1.Pod).Name)
-	satisfied, _ := exp.IsSatisfied(rayClusterKey)
-	assert.Equal(t, satisfied, false)
+	err := exp.ExpectCreate(rayClusterKey, Pod, testPods[1].(*corev1.Pod).Namespace, testPods[1].(*corev1.Pod).Name)
+	assert.Nil(t, err, "Fail expect create expectation of pod")
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), false)
 	assert.Nil(t, exp.Delete(rayClusterKey), "Fail to delete all expectations")
-	satisfied, _ = exp.IsSatisfied(rayClusterKey)
-	assert.Equal(t, satisfied, true)
+	assert.Equal(t, exp.IsSatisfied(rayClusterKey), true)
 }
 
 func setupTest() {

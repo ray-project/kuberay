@@ -27,6 +27,7 @@ func TestRayClusterExpectations(t *testing.T) {
 	assert.Equal(t, exp.IsHeadSatisfied(rayClusterKey), false)
 	// delete pod2
 	err = fakeClient.Delete(context.TODO(), testPods[0].(*corev1.Pod))
+	assert.Nil(t, err, "Fail to delete pod")
 	assert.Equal(t, exp.IsHeadSatisfied(rayClusterKey), true)
 
 	// Test expect create worker

@@ -3,7 +3,6 @@ package expectations
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -16,13 +15,9 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-var (
-	ResourceInitializers map[ExpectedResourceType]func() client.Object
-)
+var ResourceInitializers map[ExpectedResourceType]func() client.Object
 
-const (
-	ExpectationsTimeout = 10 * time.Minute
-)
+const ExpectationsTimeout = 10 * time.Minute
 
 type ExpectedResourceType string
 
@@ -36,7 +31,6 @@ type ActiveExpectationAction int
 const (
 	Create ActiveExpectationAction = 0
 	Delete ActiveExpectationAction = 1
-	Update ActiveExpectationAction = 3
 )
 
 func init() {
@@ -53,8 +47,7 @@ func init() {
 type ActiveExpectationsInterface interface {
 	ExpectCreate(key string, kind ExpectedResourceType, namespace, name string) error
 	ExpectDelete(key string, kind ExpectedResourceType, namespace, name string) error
-	ExpectUpdate(key string, kind ExpectedResourceType, namespace, name string, updatedResourceVersion string) error
-	IsSatisfied(key string) (satisfied bool, err error)
+	IsSatisfied(key string) bool
 	DeleteItem(key string, kind ExpectedResourceType, name string) error
 	Delete(key string) error
 }
@@ -82,7 +75,7 @@ func (ae *ActiveExpectations) ExpectDelete(key string, kind ExpectedResourceType
 func (ae *ActiveExpectations) expectCreateOrDelete(key string, kind ExpectedResourceType, action ActiveExpectationAction, namespace, name string) error {
 	expectation, exist, err := ae.subjects.GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("fail to get expectation for active expectations %s when expecting: %s", key, err)
+		return fmt.Errorf("fail to get expectation for active expectations %s when expecting: %w", key, err)
 	}
 
 	if !exist {
@@ -93,63 +86,25 @@ func (ae *ActiveExpectations) expectCreateOrDelete(key string, kind ExpectedReso
 	}
 
 	if err = expectation.(*ActiveExpectation).expectCreateOrDelete(kind, name, action); err != nil {
-		return fmt.Errorf("fail to expect %s/%s for action %d: %s", kind, name, action, err)
+		return fmt.Errorf("fail to expect %s/%s for action %d: %w", kind, name, action, err)
 	}
 
 	return nil
 }
 
-func (ae *ActiveExpectations) ExpectUpdate(key string, kind ExpectedResourceType, namespace, name string, updatedResourceVersion string) error {
-	rv, err := strconv.ParseInt(updatedResourceVersion, 10, 64)
-	if err != nil {
-		panic(fmt.Sprintf("fail to parse resource version %s of resource %s/%s to int64 for subject %s: %s",
-			updatedResourceVersion, kind, name, key, err))
-	}
-
-	if _, exist := ResourceInitializers[kind]; !exist {
-		panic(fmt.Sprintf("kind %s is not supported for Active Expectation", kind))
-	}
-
-	expectation, exist, err := ae.subjects.GetByKey(key)
-	if err != nil {
-		return fmt.Errorf("fail to get expectation for active expectations %s when expecting: %s", key, err)
-	}
-
+func (ae *ActiveExpectations) IsSatisfied(key string) (satisfied bool) {
+	expectation, exist, _ := ae.subjects.GetByKey(key)
 	if !exist {
-		expectation = NewActiveExpectation(ae.Client, namespace, key)
-		if err := ae.subjects.Add(expectation); err != nil {
-			return err
-		}
+		return true
 	}
-
-	if err := expectation.(*ActiveExpectation).expectUpdate(kind, name, rv); err != nil {
-		return fmt.Errorf("fail to expect %s/%s for action %d, %s: %s", kind, name, Update, updatedResourceVersion, err)
-	}
-
-	return nil
-}
-
-func (ae *ActiveExpectations) IsSatisfied(key string) (satisfied bool, err error) {
-	expectation, exist, err := ae.subjects.GetByKey(key)
-	if err != nil {
-		return false, fmt.Errorf("fail to get expectation for active expectations %s when check satisfication: %s", key, err)
-	}
-
-	if !exist {
-		return true, nil
-	}
-
 	defer func() {
 		if satisfied {
-			ae.subjects.Delete(expectation)
+			if err := ae.subjects.Delete(expectation); err != nil {
+				panic(fmt.Errorf("fail to do delete expectation for active expectations %s when deleting: %w", key, err))
+			}
 		}
 	}()
-
-	satisfied, err = expectation.(*ActiveExpectation).isSatisfied()
-	if err != nil {
-		return false, err
-	}
-
+	satisfied = expectation.(*ActiveExpectation).isSatisfied()
 	return
 }
 
@@ -160,7 +115,7 @@ func (ae *ActiveExpectations) DeleteItem(key string, kind ExpectedResourceType, 
 
 	expectation, exist, err := ae.subjects.GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("fail to get expectation for active expectations %s when deleting name %s: %s", key, name, err)
+		return fmt.Errorf("fail to get expectation for active expectations %s when deleting name %s: %w", key, name, err)
 	}
 
 	if !exist {
@@ -168,12 +123,14 @@ func (ae *ActiveExpectations) DeleteItem(key string, kind ExpectedResourceType, 
 	}
 
 	item := expectation.(*ActiveExpectation)
-	if err := item.delete(string(kind), name); err != nil {
-		return fmt.Errorf("fail to delete %s/%s for key %s: %s", kind, name, key, err)
+	if err = item.delete(string(kind), name); err != nil {
+		return fmt.Errorf("fail to delete %s/%s for key %s: %w", kind, name, key, err)
 	}
 
 	if len(item.items.List()) == 0 {
-		ae.subjects.Delete(expectation)
+		if err = ae.subjects.Delete(expectation); err != nil {
+			return fmt.Errorf("fail to do delete expectation for active expectations %s when deleting: %w", key, err)
+		}
 	}
 
 	return nil
@@ -182,7 +139,7 @@ func (ae *ActiveExpectations) DeleteItem(key string, kind ExpectedResourceType, 
 func (ae *ActiveExpectations) Delete(key string) error {
 	expectation, exist, err := ae.subjects.GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("fail to get expectation for active expectations %s when deleting: %s", key, err)
+		return fmt.Errorf("fail to get expectation for active expectations %s when deleting: %w", key, err)
 	}
 
 	if !exist {
@@ -191,7 +148,7 @@ func (ae *ActiveExpectations) Delete(key string) error {
 
 	err = ae.subjects.Delete(expectation)
 	if err != nil {
-		return fmt.Errorf("fail to do delete expectation for active expectations %s when deleting: %s", key, err)
+		return fmt.Errorf("fail to do delete expectation for active expectations %s when deleting: %w", key, err)
 	}
 
 	return nil
@@ -224,21 +181,16 @@ type ActiveExpectation struct {
 }
 
 func (ae *ActiveExpectation) expectCreateOrDelete(kind ExpectedResourceType, name string, action ActiveExpectationAction) error {
-
 	key := fmt.Sprintf("%s/%s", kind, name)
 	item, exist, err := ae.items.GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("fail to get active expectation item for %s when expecting: %s", key, err)
+		return fmt.Errorf("fail to get active expectation item for %s when expecting: %w", key, err)
 	}
 
 	ae.recordTimestamp = time.Now()
 	if !exist {
 		item = &ActiveExpectationItem{Client: ae.Client, Name: name, Kind: kind, Key: key, Action: action, RecordTimestamp: time.Now()}
-		if err := ae.items.Add(item); err != nil {
-			return err
-		}
-
-		return nil
+		return ae.items.Add(item)
 	}
 
 	item.(*ActiveExpectationItem).Action = action
@@ -246,68 +198,34 @@ func (ae *ActiveExpectation) expectCreateOrDelete(kind ExpectedResourceType, nam
 	return nil
 }
 
-func (ae *ActiveExpectation) expectUpdate(kind ExpectedResourceType, name string, resourceVersion int64) error {
-	key := fmt.Sprintf("%s/%s", kind, name)
-	item, exist, err := ae.items.GetByKey(key)
-	if err != nil {
-		return fmt.Errorf("fail to get active expectation item for %s when expecting: %s", key, err)
-	}
-
-	ae.recordTimestamp = time.Now()
-	if !exist {
-		item = &ActiveExpectationItem{Client: ae.Client, Name: name, Kind: kind, Key: key, Action: Update, ResourceVersion: resourceVersion, RecordTimestamp: time.Now()}
-		if err := ae.items.Add(item); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	ea := item.(*ActiveExpectationItem)
-	ea.Action = Update
-	ea.ResourceVersion = resourceVersion
-	ea.RecordTimestamp = time.Now()
-
-	return nil
-}
-
-func (ae *ActiveExpectation) isSatisfied() (satisfied bool, err error) {
+func (ae *ActiveExpectation) isSatisfied() (satisfied bool) {
 	items := ae.items.List()
 
 	satisfied = true
 	for _, item := range items {
-		itemSatisfied, itemErr := func() (satisfied bool, err error) {
+		itemSatisfied := func() (satisfied bool) {
 			defer func() {
 				if satisfied {
-					ae.items.Delete(item)
+					if err := ae.items.Delete(item); err != nil {
+						panic(fmt.Errorf("fail to delete ActiveExpectation item %w", err))
+					}
 				} else if ae.recordTimestamp.Add(ExpectationsTimeout).Before(time.Now()) {
 					panic("expected panic for active expectation")
 				}
 			}()
-
-			satisfied, err = item.(*ActiveExpectationItem).isSatisfied(ae.namespace)
-			if err != nil {
-				return false, err
-			}
-
-			return satisfied, nil
+			satisfied = item.(*ActiveExpectationItem).isSatisfied(ae.namespace)
+			return
 		}()
-
-		if itemErr != nil && err == nil {
-			err = fmt.Errorf("fail to check satisfication for subject %s, item %s: %s", ae.key, item.(*ActiveExpectationItem).Key, itemErr)
-		}
-
 		satisfied = satisfied && itemSatisfied
 	}
-
-	return satisfied, err
+	return satisfied
 }
 
 func (ae *ActiveExpectation) delete(kind, name string) error {
 	key := fmt.Sprintf("%s/%s", kind, name)
 	item, exist, err := ae.items.GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("fail to delete active expectation item for %s: %s", key, err)
+		return fmt.Errorf("fail to delete active expectation item for %s: %w", key, err)
 	}
 
 	if !exist {
@@ -315,7 +233,7 @@ func (ae *ActiveExpectation) delete(kind, name string) error {
 	}
 
 	if err := ae.items.Delete(item); err != nil {
-		return fmt.Errorf("fail to do delete active expectation item for %s: %s", key, err)
+		return fmt.Errorf("fail to do delete active expectation item for %s: %w", key, err)
 	}
 
 	return nil
@@ -332,48 +250,27 @@ type ActiveExpectationItem struct {
 	RecordTimestamp time.Time
 }
 
-func (i *ActiveExpectationItem) isSatisfied(namespace string) (bool, error) {
+func (i *ActiveExpectationItem) isSatisfied(namespace string) bool {
 	switch i.Action {
 	case Create:
 		resource := ResourceInitializers[i.Kind]()
 		if err := i.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: i.Name}, resource); err == nil {
-			return true, nil
-		} else if errors.IsNotFound(err) && i.RecordTimestamp.Add(30*time.Second).Before(time.Now()) {
+			return true
+		} else {
 			// tolerate watch event missing, after 30s
-			return true, nil
+			return errors.IsNotFound(err) && i.RecordTimestamp.Add(30*time.Second).Before(time.Now())
 		}
 	case Delete:
 		resource := ResourceInitializers[i.Kind]()
 		if err := i.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: i.Name}, resource); err != nil {
-			if errors.IsNotFound(err) {
-				return true, nil
-			}
+			return errors.IsNotFound(err)
 		} else {
-			if resource.(metav1.Object).GetDeletionTimestamp() != nil {
-				return true, nil
-			}
-		}
-	case Update:
-		resource := ResourceInitializers[i.Kind]()
-		if err := i.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: i.Name}, resource); err == nil {
-			rv, err := strconv.ParseInt(resource.(metav1.Object).GetResourceVersion(), 10, 64)
-			if err != nil {
-				// true for error
-				return true, nil
-			}
-			if rv >= i.ResourceVersion {
-				return true, nil
-			}
-		} else {
-			if errors.IsNotFound(err) {
-				return true, nil
-			}
+			return resource.(metav1.Object).GetDeletionTimestamp() != nil
 		}
 	}
-	return false, nil
+	return false
 }
 
-// ExpKeyFunc to parse out the key from a ControlleeExpectation
 var ExpKeyFunc = func(obj interface{}) (string, error) {
 	if e, ok := obj.(*ActiveExpectation); ok {
 		return e.key, nil
