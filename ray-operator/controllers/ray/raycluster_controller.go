@@ -352,6 +352,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
+	// Reconciliation was successful, clear the reason
+	if updateErr := r.updateClusterReason(ctx, instance, ""); updateErr != nil {
+		logger.Error(updateErr, "RayCluster update reason error", "cluster name", request.Name)
+	}
+
 	// Calculate the new status for the RayCluster. Note that the function will deep copy `instance` instead of mutating it.
 	newInstance, err := r.calculateStatus(ctx, instance)
 	if err != nil {
