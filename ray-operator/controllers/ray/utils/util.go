@@ -2,7 +2,7 @@ package utils
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // We are not using this for security purposes
 	"encoding/base32"
 	"fmt"
 	"math"
@@ -470,7 +470,7 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 		return "", err
 	}
 
-	hashBytes := sha1.Sum(serialObj)
+	hashBytes := sha1.Sum(serialObj) //nolint:gosec // We are not using this for security purposes
 
 	// Convert to an ASCII string
 	hashStr := base32.HexEncoding.EncodeToString(hashBytes[:])
