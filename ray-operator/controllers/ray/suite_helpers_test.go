@@ -71,14 +71,14 @@ func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt 
 	return true
 }
 
-func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, workerGroupIndex int) {
+func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster) {
 	// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. In this function,
 	// we simulate the behavior of the Ray Autoscaler after the scaling process has finished.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		gomega.Eventually(
 			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
 			time.Second*9, time.Millisecond*500).Should(gomega.BeNil(), "raycluster = %v", rayCluster)
-		rayCluster.Spec.WorkerGroupSpecs[workerGroupIndex].ScaleStrategy.WorkersToDelete = []string{}
+		rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 		return k8sClient.Update(ctx, rayCluster)
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to clean up WorkersToDelete")

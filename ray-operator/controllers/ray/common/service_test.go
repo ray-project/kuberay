@@ -207,8 +207,7 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 }
 
 func TestGetPortsFromCluster(t *testing.T) {
-	svcPorts, err := getPortsFromCluster(*instanceWithWrongSvc)
-	assert.Nil(t, err)
+	svcPorts := getPortsFromCluster(*instanceWithWrongSvc)
 
 	// getPortsFromCluster creates service ports based on the container ports.
 	// It will assign a generated service port name if the container port name

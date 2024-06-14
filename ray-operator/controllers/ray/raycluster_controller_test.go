@@ -390,7 +390,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
 			// Call cleanUpWorkersToDelete to simulate the behavior of the Ray Autoscaler.
-			cleanUpWorkersToDelete(ctx, rayCluster, 0)
+			cleanUpWorkersToDelete(ctx, rayCluster)
 		})
 
 		It("Simulate Ray Autoscaler scales up", func() {
@@ -629,7 +629,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
 			// Call cleanUpWorkersToDelete to simulate the behavior of the Ray Autoscaler.
-			cleanUpWorkersToDelete(ctx, rayCluster, 0)
+			cleanUpWorkersToDelete(ctx, rayCluster)
 		})
 
 		It("Simulate Ray Autoscaler scales up", func() {
