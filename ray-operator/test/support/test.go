@@ -33,8 +33,7 @@ type Option[T any] interface {
 
 type errorOption[T any] func(to T) error
 
-// nolint: unused
-// To be removed when the false-positivity is fixed.
+//nolint:unused // To be removed when the false-positivity is fixed.
 func (o errorOption[T]) applyTo(to T) error {
 	return o(to)
 }
@@ -60,7 +59,7 @@ func With(t *testing.T) Test {
 type T struct {
 	*gomega.WithT
 	t *testing.T
-	// nolint: containedctx
+	//nolint:containedctx //nolint:nolintlint // TODO: The reason for this lint is unknown
 	ctx       context.Context
 	client    Client
 	outputDir string

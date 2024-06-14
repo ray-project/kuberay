@@ -266,7 +266,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 		It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 			// Update fake dashboard client to return job info with "Succeeded" status.
-			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam
+			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
 				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded}, nil
 			}
 			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
