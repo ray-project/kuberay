@@ -382,7 +382,7 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 
-			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
+			cleanUpWorkersToDelete(ctx, myRayCluster)
 		})
 
 		It("Autoscaler updates the pending RayCluster and should not switch to a new RayCluster", func() {
@@ -436,7 +436,7 @@ var _ = Context("Inside the default namespace", func() {
 				getRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(Equal(initialPendingClusterName), "New active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
-			cleanUpWorkersToDelete(ctx, myRayCluster, 0)
+			cleanUpWorkersToDelete(ctx, myRayCluster)
 		})
 		It("should update the active RayCluster in place when WorkerGroupSpecs are modified by the user in RayServiceSpec", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
