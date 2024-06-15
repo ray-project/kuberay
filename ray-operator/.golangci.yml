@@ -7,6 +7,9 @@ linters-settings:
     local-prefixes: github.com/ray-project/kuberay/ray-operator
   misspell:
     locale: US
+  nolintlint:
+    require-explanation: true
+    require-specific: true
   revive:
     ignore-generated-header: true
     rules:
@@ -68,6 +71,7 @@ linters:
     - misspell
     - nilerr
     - noctx
+    - nolintlint
     - predeclared
     - revive
     - staticcheck
