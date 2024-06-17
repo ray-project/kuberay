@@ -1,6 +1,9 @@
 linters-settings:
   gofmt:
     simplify: true
+  gosec:
+    excludes:
+      - G601
   ginkgolinter:
     forbid-focus-container: true
   goimports:
@@ -62,7 +65,7 @@ linters:
     - gofmt
     - gofumpt
     - goimports
-#    - gosec
+    - gosec
     - gosimple
 #    - govet
     - ineffassign
