@@ -56,6 +56,7 @@ head:
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
+  restartPolicy: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'
   # containerEnv specifies environment variables for the Ray container,
@@ -126,6 +127,7 @@ worker:
   maxReplicas: 3
   labels: {}
   serviceAccountName: ""
+  restartPolicy: ""
   rayStartParams: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
@@ -189,6 +191,7 @@ additionalWorkerGroups:
     maxReplicas: 3
     labels: {}
     serviceAccountName: ""
+    restartPolicy: ""
     rayStartParams: {}
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.

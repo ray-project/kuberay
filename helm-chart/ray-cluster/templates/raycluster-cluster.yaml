@@ -42,6 +42,9 @@ spec:
         {{- if .Values.head.serviceAccountName }}
         serviceAccountName: {{ .Values.head.serviceAccountName }}
         {{- end }}
+        {{- if .Values.head.restartPolicy }}
+        restartPolicy: {{ .Values.head.restartPolicy }}
+        {{- end }}
         {{- if .Values.head.initContainers }}
         initContainers: {{- toYaml .Values.head.initContainers | nindent 10 }}
         {{- end }}
@@ -136,6 +139,9 @@ spec:
         {{- if $values.serviceAccountName }}
         serviceAccountName: {{ $values.serviceAccountName }}
         {{- end }}
+        {{- if $values.restartPolicy }}
+        restartPolicy: {{ $values.restartPolicy }}
+        {{- end }}
         {{- if $values.initContainers }}
         initContainers: {{- toYaml $values.initContainers | nindent 10 }}
         {{- end }}
@@ -227,6 +233,9 @@ spec:
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.worker.serviceAccountName }}
         serviceAccountName: {{ .Values.worker.serviceAccountName }}
+        {{- end }}
+        {{- if .Values.worker.restartPolicy }}
+        restartPolicy: {{ .Values.worker.restartPolicy }}
         {{- end }}
         {{- if .Values.worker.initContainers }}
         initContainers: {{- toYaml .Values.worker.initContainers | nindent 10 }}
