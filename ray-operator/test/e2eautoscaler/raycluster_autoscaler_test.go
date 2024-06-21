@@ -1,4 +1,4 @@
-package e2e_autoscaler
+package e2eautoscaler
 
 import (
 	"testing"

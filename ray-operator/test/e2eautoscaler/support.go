@@ -1,4 +1,4 @@
-package e2e_autoscaler
+package e2eautoscaler
 
 import (
 	"embed"
@@ -89,21 +89,6 @@ func mountConfigMap[T rayv1ac.RayClusterSpecApplyConfiguration | corev1ac.PodTem
 		}
 		return t
 	}
-}
-
-func rayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
-	return rayv1ac.RayClusterSpec().
-		WithRayVersion(GetRayVersion()).
-		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
-			WithTemplate(headPodTemplateApplyConfiguration())).
-		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-			WithReplicas(1).
-			WithMinReplicas(1).
-			WithMaxReplicas(1).
-			WithGroupName("small-group").
-			WithRayStartParams(map[string]string{"num-cpus": "1"}).
-			WithTemplate(workerPodTemplateApplyConfiguration()))
 }
 
 func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfiguration {
