@@ -4,6 +4,12 @@ metadata:
   name: run-as-ray-user
 seLinuxContext:
   type: MustRunAs
+defaultAllowPrivilegeEscalation: false
+allowPrivilegeEscalation: false
+seccompProfiles:
+  - runtime/default
+requiredDropCapabilities:
+  - ALL
 runAsUser:
   type: MustRunAs
   uid: 1000
