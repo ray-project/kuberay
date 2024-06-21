@@ -20,8 +20,6 @@ spec:
             - jax[tpu]==0.4.11
             - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
             - fastapi
-            - pillow
-            - ray[serve,default]==2.9.0
   rayClusterConfig:
     rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
@@ -30,8 +28,7 @@ spec:
       # The `rayStartParams` are used to configure the `ray start` command.
       # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams:
-        dashboard-host: '0.0.0.0'
+      rayStartParams: {}
       # Pod template
       template:
         spec:
@@ -86,9 +83,6 @@ spec:
                 google.com/tpu: "4"
                 memory: 80G
           nodeSelector:
+            # https://cloud.google.com/kubernetes-engine/docs/concepts/tpus
             cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
             cloud.google.com/gke-tpu-topology: 2x2x2
-        metadata:
-          labels:
-            cloud.google.com/gke-ray-node-type: worker
-            app.kubernetes.io/name: kuberay
