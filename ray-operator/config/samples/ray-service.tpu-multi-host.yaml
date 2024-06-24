@@ -8,7 +8,7 @@ spec:
       - name: stable_diffusion
         import_path: stable_diffusion.stable_diffusion_tpu:deployment
         runtime_env:
-          working_dir: "https://github.com/ryanaoleary/serve_config_examples/archive/refs/heads/tpu-example.zip"
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
           pip:
             - pydantic<2
             - google-api-python-client
