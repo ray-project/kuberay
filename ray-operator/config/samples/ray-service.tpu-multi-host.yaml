@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: s-d-tpu
+  name: stable-diffusion-tpu
 spec:
   serveConfigV2: |
     applications:
