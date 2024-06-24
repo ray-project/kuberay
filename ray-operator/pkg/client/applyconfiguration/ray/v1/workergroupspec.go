@@ -13,10 +13,10 @@ type WorkerGroupSpecApplyConfiguration struct {
 	Replicas       *int32                                `json:"replicas,omitempty"`
 	MinReplicas    *int32                                `json:"minReplicas,omitempty"`
 	MaxReplicas    *int32                                `json:"maxReplicas,omitempty"`
-	NumOfHosts     *int32                                `json:"numOfHosts,omitempty"`
 	RayStartParams map[string]string                     `json:"rayStartParams,omitempty"`
 	Template       *v1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 	ScaleStrategy  *ScaleStrategyApplyConfiguration      `json:"scaleStrategy,omitempty"`
+	NumOfHosts     *int32                                `json:"numOfHosts,omitempty"`
 }
 
 // WorkerGroupSpecApplyConfiguration constructs an declarative configuration of the WorkerGroupSpec type for use with
@@ -57,14 +57,6 @@ func (b *WorkerGroupSpecApplyConfiguration) WithMaxReplicas(value int32) *Worker
 	return b
 }
 
-// WithNumOfHosts sets the NumOfHosts field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the NumOfHosts field is set to the value of the last call.
-func (b *WorkerGroupSpecApplyConfiguration) WithNumOfHosts(value int32) *WorkerGroupSpecApplyConfiguration {
-	b.NumOfHosts = &value
-	return b
-}
-
 // WithRayStartParams puts the entries into the RayStartParams field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the RayStartParams field,
@@ -92,5 +84,13 @@ func (b *WorkerGroupSpecApplyConfiguration) WithTemplate(value *v1.PodTemplateSp
 // If called multiple times, the ScaleStrategy field is set to the value of the last call.
 func (b *WorkerGroupSpecApplyConfiguration) WithScaleStrategy(value *ScaleStrategyApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
 	b.ScaleStrategy = value
+	return b
+}
+
+// WithNumOfHosts sets the NumOfHosts field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NumOfHosts field is set to the value of the last call.
+func (b *WorkerGroupSpecApplyConfiguration) WithNumOfHosts(value int32) *WorkerGroupSpecApplyConfiguration {
+	b.NumOfHosts = &value
 	return b
 }

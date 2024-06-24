@@ -67,7 +67,7 @@ linters:
     - goimports
     - gosec
     - gosimple
-#    - govet
+    - govet
     - ineffassign
 #    - lll
     - makezero

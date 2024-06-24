@@ -120,10 +120,11 @@ type RayClusterReconciler struct {
 	Scheme            *runtime.Scheme
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
-	IsOpenShift       bool
 
 	headSidecarContainers   []corev1.Container
 	workerSidecarContainers []corev1.Container
+
+	IsOpenShift bool
 }
 
 type RayClusterReconcilerOptions struct {
