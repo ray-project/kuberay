@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: stable-diffusion-tpu
+  name: s-d-tpu
 spec:
   serveConfigV2: |
     applications:
@@ -20,6 +20,11 @@ spec:
             - jax[tpu]==0.4.11
             - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
             - fastapi
+        deployments:
+            - name: StableDiffusion
+              num_replicas: 2
+              ray_actor_options:
+                resources: {"TPU": 4}
   rayClusterConfig:
     rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
