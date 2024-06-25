@@ -67,6 +67,7 @@ spec:
             image: rayproject/ray:2.9.0-py310
             resources:
               limits:
+                # ct4p-hightpu-4t (v4) TPUs have 240 vCPUs, adjust this value based on your resource needs
                 cpu: "100"
                 ephemeral-storage: 20Gi
                 google.com/tpu: "4"
