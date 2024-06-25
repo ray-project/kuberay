@@ -67,15 +67,15 @@ spec:
             image: rayproject/ray:2.9.0-py310
             resources:
               limits:
-                cpu: "1"
+                cpu: "100"
                 ephemeral-storage: 20Gi
                 google.com/tpu: "4"
-                memory: 80G
+                memory: 200G
               requests:
-                cpu: "1"
+                cpu: "100"
                 ephemeral-storage: 20Gi
                 google.com/tpu: "4"
-                memory: 80G
+                memory: 200G
           nodeSelector:
             # https://cloud.google.com/kubernetes-engine/docs/concepts/tpus
             cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
