@@ -10,7 +10,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -1122,13 +1122,13 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			Annotations: pod.Annotations,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: pointer.Int32(0),
+			BackoffLimit: ptr.To[int32](0),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: pod.ObjectMeta,
 				Spec:       pod.Spec,
 			},
 			// make this job be best-effort only for 5 minutes.
-			ActiveDeadlineSeconds: pointer.Int64(300),
+			ActiveDeadlineSeconds: ptr.To[int64](300),
 		},
 	}
 

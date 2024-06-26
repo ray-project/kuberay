@@ -2,7 +2,7 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -30,7 +30,7 @@ func SetDefaults_Configuration(cfg *Configuration) {
 	}
 
 	if cfg.EnableLeaderElection == nil {
-		cfg.EnableLeaderElection = pointer.Bool(DefaultEnableLeaderElection)
+		cfg.EnableLeaderElection = ptr.To(DefaultEnableLeaderElection)
 	}
 
 	if cfg.ReconcileConcurrency == 0 {

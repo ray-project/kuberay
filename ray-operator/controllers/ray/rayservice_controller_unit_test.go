@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -36,9 +36,9 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{},
 					},
-					Replicas:    pointer.Int32(2),
-					MinReplicas: pointer.Int32(1),
-					MaxReplicas: pointer.Int32(4),
+					Replicas:    ptr.To[int32](2),
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
 				},
 			},
 		},
@@ -64,9 +64,9 @@ func TestGetClusterAction(t *testing.T) {
 		RayVersion: "2.9.0",
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32(2),
-				MinReplicas: pointer.Int32(1),
-				MaxReplicas: pointer.Int32(4),
+				Replicas:    ptr.To[int32](2),
+				MinReplicas: ptr.To[int32](1),
+				MaxReplicas: ptr.To[int32](4),
 				GroupName:   "worker-group-1",
 			},
 		},
@@ -94,9 +94,9 @@ func TestGetClusterAction(t *testing.T) {
 	// Test Case 4: Adding a new WorkerGroupSpec should lead to Update.
 	clusterSpec4 := clusterSpec1.DeepCopy()
 	clusterSpec4.WorkerGroupSpecs = append(clusterSpec4.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec4)
 	assert.Nil(t, err)
@@ -111,18 +111,18 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 6: Only changing the number of replicas should lead to DoNothing.
 	clusterSpec6 := clusterSpec1.DeepCopy()
-	clusterSpec6.WorkerGroupSpecs[0].Replicas = pointer.Int32(3)
+	clusterSpec6.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
 	action, err = getClusterAction(clusterSpec1, *clusterSpec6)
 	assert.Nil(t, err)
 	assert.Equal(t, DoNothing, action)
 
 	// Test Case 7: Only changing the number of replicas in an existing WorkerGroupSpec *and* adding a new WorkerGroupSpec should lead to Update.
 	clusterSpec7 := clusterSpec1.DeepCopy()
-	clusterSpec7.WorkerGroupSpecs[0].Replicas = pointer.Int32(3)
+	clusterSpec7.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
 	clusterSpec7.WorkerGroupSpecs = append(clusterSpec7.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec7)
 	assert.Nil(t, err)
@@ -131,14 +131,14 @@ func TestGetClusterAction(t *testing.T) {
 	// Test Case 8: Adding two new WorkerGroupSpecs should lead to Update.
 	clusterSpec8 := clusterSpec1.DeepCopy()
 	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(3),
-		MinReplicas: pointer.Int32(2),
-		MaxReplicas: pointer.Int32(5),
+		Replicas:    ptr.To[int32](3),
+		MinReplicas: ptr.To[int32](2),
+		MaxReplicas: ptr.To[int32](5),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec8)
 	assert.Nil(t, err)
@@ -148,9 +148,9 @@ func TestGetClusterAction(t *testing.T) {
 	clusterSpec9 := clusterSpec1.DeepCopy()
 	clusterSpec9.WorkerGroupSpecs[0].GroupName = "worker-group-3"
 	clusterSpec9.WorkerGroupSpecs = append(clusterSpec9.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
 	assert.Nil(t, err)

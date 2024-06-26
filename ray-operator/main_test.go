@@ -7,7 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 )
@@ -32,7 +32,7 @@ kind: Configuration
 				},
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
 			},
 			expectErr: false,
@@ -53,7 +53,7 @@ reconcileConcurrency: 1
 				},
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
 			},
 			expectErr: false,
@@ -80,7 +80,7 @@ workerSidecarContainers:
 				},
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
 				HeadSidecarContainers: []corev1.Container{
 					{
@@ -114,7 +114,7 @@ unknownfield: 1
 				},
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
 			},
 			expectErr: false,
@@ -135,7 +135,7 @@ reconcileConcurrency: true
 				},
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 0,
 			},
 			expectErr:   true,
@@ -153,7 +153,7 @@ reconcileConcurrency: true
 			expectedConfig: configapi.Configuration{
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
-				EnableLeaderElection: pointer.Bool(true),
+				EnableLeaderElection: ptr.To(true),
 			},
 			expectErr:   true,
 			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,

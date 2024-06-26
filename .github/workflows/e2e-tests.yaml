@@ -42,7 +42,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Set up gotestfmt
         uses: gotesttools/gotestfmt-action@v2

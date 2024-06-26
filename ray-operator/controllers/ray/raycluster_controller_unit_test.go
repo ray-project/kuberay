@@ -41,7 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -323,9 +323,9 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    pointer.Int32(expectReplicaNum),
-					MinReplicas: pointer.Int32(0),
-					MaxReplicas: pointer.Int32(10000),
+					Replicas:    ptr.To[int32](expectReplicaNum),
+					MinReplicas: ptr.To[int32](0),
+					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
 					GroupName:   groupNameStr,
 					RayStartParams: map[string]string{
@@ -2408,7 +2408,7 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 	assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
-	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 
 	tests := map[string]struct {
@@ -2421,22 +2421,22 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
 			// [Note]: It is not possible for `Replicas` to be nil in practice because it has a default value in the CRD.
 			replicas:        nil,
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(10000),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](10000),
 			desiredReplicas: 1,
 		},
 		"Replicas is smaller than MinReplicas": {
 			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
-			replicas:        pointer.Int32(0),
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(10000),
+			replicas:        ptr.To[int32](0),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](10000),
 			desiredReplicas: 1,
 		},
 		"Replicas is larger than MaxReplicas": {
 			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas` Pods.
-			replicas:        pointer.Int32(4),
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(3),
+			replicas:        ptr.To[int32](4),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](3),
 			desiredReplicas: 3,
 		},
 	}
@@ -2496,7 +2496,7 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
 	// Set `NumOfHosts` to 4 to specify multi-host group
-	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
 
@@ -2510,24 +2510,24 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 		"Replicas is nil": {
 			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
 			replicas:        nil,
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(10000),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](10000),
 			desiredReplicas: 1,
 			numOfHosts:      4,
 		},
 		"Replicas is smaller than MinReplicas": {
 			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
-			replicas:        pointer.Int32(0),
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(10000),
+			replicas:        ptr.To[int32](0),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](10000),
 			desiredReplicas: 1,
 			numOfHosts:      4,
 		},
 		"Replicas is larger than MaxReplicas": {
 			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas`*`NumOfHosts` Pods.
-			replicas:        pointer.Int32(4),
-			minReplicas:     pointer.Int32(1),
-			maxReplicas:     pointer.Int32(3),
+			replicas:        ptr.To[int32](4),
+			minReplicas:     ptr.To[int32](1),
+			maxReplicas:     ptr.To[int32](3),
 			desiredReplicas: 3,
 			numOfHosts:      4,
 		},
@@ -2588,9 +2588,9 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
 	// Set `Replicas` to 1 and clear `WorkersToDelete`
-	testRayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
-	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(1)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
 
 	tests := map[string]struct {
 		replicas   *int32
@@ -2598,12 +2598,12 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 	}{
 		"NumOfHosts is 1": {
 			// If `NumOfHosts` is 1, the controller will set the desired state of the workerGroup to `Replicas` Pods.
-			replicas:   pointer.Int32(1),
+			replicas:   ptr.To[int32](1),
 			numOfHosts: 1,
 		},
 		"NumOfHosts is larger than 1": {
 			// If `NumOfHosts` is larger than 1, the controller will set the desired state of the workerGroup to `NumOfHosts` Pods.
-			replicas:   pointer.Int32(1),
+			replicas:   ptr.To[int32](1),
 			numOfHosts: 4,
 		},
 	}
