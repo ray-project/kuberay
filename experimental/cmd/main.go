@@ -59,7 +59,7 @@ func main() {
 		go func() {
 			remote_url := "http://localhost:" + http_remote_port
 			// Client connection
-			cc, err := grpc.Dial(remote_url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient(remote_url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				klog.Fatal("cannot dial server: ", err)
 			}
