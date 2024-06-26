@@ -7,9 +7,9 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -102,7 +102,7 @@ func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []corev1.Event) *a
 		Version:      cluster.Labels[util.RayClusterVersionLabelKey],
 		User:         cluster.Labels[util.RayClusterUserLabelKey],
 		Environment:  api.Cluster_Environment(api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]]),
-		CreatedAt:    &timestamp.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
+		CreatedAt:    &timestamppb.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
 		ClusterState: string(cluster.Status.State),
 	}
 
@@ -118,9 +118,9 @@ func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []corev1.Event) *a
 		clusterEvent := &api.ClusterEvent{
 			Id:             event.Name,
 			Name:           fmt.Sprintf("%s-%s", cluster.Labels[util.RayClusterNameLabelKey], event.Name),
-			CreatedAt:      &timestamp.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
-			FirstTimestamp: &timestamp.Timestamp{Seconds: event.FirstTimestamp.Unix()},
-			LastTimestamp:  &timestamp.Timestamp{Seconds: event.LastTimestamp.Unix()},
+			CreatedAt:      &timestamppb.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
+			FirstTimestamp: &timestamppb.Timestamp{Seconds: event.FirstTimestamp.Unix()},
+			LastTimestamp:  &timestamppb.Timestamp{Seconds: event.LastTimestamp.Unix()},
 			Reason:         event.Reason,
 			Message:        event.Message,
 			Type:           event.Type,
@@ -429,7 +429,7 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		RuntimeEnv:               job.Spec.RuntimeEnvYAML,
 		JobId:                    job.Status.JobId,
 		ShutdownAfterJobFinishes: job.Spec.ShutdownAfterJobFinishes,
-		CreatedAt:                &timestamp.Timestamp{Seconds: job.CreationTimestamp.Unix()},
+		CreatedAt:                &timestamppb.Timestamp{Seconds: job.CreationTimestamp.Unix()},
 		JobStatus:                string(job.Status.JobStatus),
 		JobDeploymentStatus:      string(job.Status.JobDeploymentStatus),
 		Message:                  job.Status.Message,
@@ -447,7 +447,7 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 	pbJob.TtlSecondsAfterFinished = job.Spec.TTLSecondsAfterFinished
 
 	if job.DeletionTimestamp != nil {
-		pbJob.DeleteAt = &timestamp.Timestamp{Seconds: job.DeletionTimestamp.Unix()}
+		pbJob.DeleteAt = &timestamppb.Timestamp{Seconds: job.DeletionTimestamp.Unix()}
 	}
 
 	if job.Spec.SubmitterPodTemplate != nil {
@@ -503,8 +503,8 @@ func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *a
 		ServiceUnhealthySecondThreshold:    PoplulateUnhealthySecondThreshold(service.Spec.ServiceUnhealthySecondThreshold),
 		DeploymentUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(service.Spec.DeploymentUnhealthySecondThreshold),
 		RayServiceStatus:                   PoplulateRayServiceStatus(service.Name, service.Status, events),
-		CreatedAt:                          &timestamp.Timestamp{Seconds: service.CreationTimestamp.Unix()},
-		DeleteAt:                           &timestamp.Timestamp{Seconds: deleteTime},
+		CreatedAt:                          &timestamppb.Timestamp{Seconds: service.CreationTimestamp.Unix()},
+		DeleteAt:                           &timestamppb.Timestamp{Seconds: deleteTime},
 	}
 	return pbService
 }
@@ -563,9 +563,9 @@ func PopulateRayServiceEvent(serviceName string, events []corev1.Event) []*api.R
 		serviceEvent := &api.RayServiceEvent{
 			Id:             event.Name,
 			Name:           fmt.Sprintf("%s-%s", serviceName, event.Name),
-			CreatedAt:      &timestamp.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
-			FirstTimestamp: &timestamp.Timestamp{Seconds: event.FirstTimestamp.Unix()},
-			LastTimestamp:  &timestamp.Timestamp{Seconds: event.LastTimestamp.Unix()},
+			CreatedAt:      &timestamppb.Timestamp{Seconds: event.ObjectMeta.CreationTimestamp.Unix()},
+			FirstTimestamp: &timestamppb.Timestamp{Seconds: event.FirstTimestamp.Unix()},
+			LastTimestamp:  &timestamppb.Timestamp{Seconds: event.LastTimestamp.Unix()},
 			Reason:         event.Reason,
 			Message:        event.Message,
 			Type:           event.Type,
