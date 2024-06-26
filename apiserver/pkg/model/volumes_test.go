@@ -83,7 +83,7 @@ var podTemplateTest = corev1.PodTemplateSpec{
 								},
 							},
 							Spec: corev1.PersistentVolumeClaimSpec{
-								Resources: corev1.ResourceRequirements{
+								Resources: corev1.VolumeResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceStorage: resource.MustParse("5Gi"),
 									},
