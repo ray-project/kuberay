@@ -389,7 +389,7 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	if ok {
 		err := json.Unmarshal([]byte(val), &runtime.Tolerations)
 		if err != nil {
-			klog.Errorf("failed to unmarshall tolerations for compute template ", runtime.Name, " value ",
+			klog.Error("failed to unmarshall tolerations for compute template ", runtime.Name, " value ",
 				runtime.Tolerations, " error ", err)
 		}
 	}
