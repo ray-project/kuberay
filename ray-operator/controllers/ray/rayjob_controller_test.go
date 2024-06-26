@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,7 +32,6 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -89,9 +89,9 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 				},
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						Replicas:       pointer.Int32(3),
-						MinReplicas:    pointer.Int32(0),
-						MaxReplicas:    pointer.Int32(10000),
+						Replicas:       ptr.To[int32](3),
+						MinReplicas:    ptr.To[int32](0),
+						MaxReplicas:    ptr.To[int32](10000),
 						GroupName:      "small-group",
 						RayStartParams: map[string]string{},
 						Template: corev1.PodTemplateSpec{
@@ -118,7 +118,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		rayJobWithDefaultSubmitterConfigBackoffLimit := rayJobTemplate("rayjob-default", namespace)
 		rayJobWithNonDefaultSubmitterConfigBackoffLimit := rayJobTemplate("rayjob-non-default", namespace)
 		rayJobWithNonDefaultSubmitterConfigBackoffLimit.Spec.SubmitterConfig = &rayv1.SubmitterConfig{
-			BackoffLimit: pointer.Int32(88),
+			BackoffLimit: ptr.To[int32](88),
 		}
 		rayJobs := make(map[*rayv1.RayJob]int32)
 		rayJobs[rayJobWithDefaultSubmitterConfigBackoffLimit] = int32(2)
@@ -315,7 +315,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		namespace := "default"
 		activeDeadlineSeconds := int32(3)
 		rayJob := rayJobTemplate("rayjob-deadline", namespace)
-		rayJob.Spec.ActiveDeadlineSeconds = pointer.Int32(activeDeadlineSeconds)
+		rayJob.Spec.ActiveDeadlineSeconds = ptr.To[int32](activeDeadlineSeconds)
 
 		It("Verify RayJob spec", func() {
 			// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).

@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -418,7 +418,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
-	submitterBackoffLimit := pointer.Int32(2)
+	submitterBackoffLimit := ptr.To[int32](2)
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
