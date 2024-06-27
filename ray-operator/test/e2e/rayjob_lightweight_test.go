@@ -22,7 +22,7 @@ func TestRayJobLightWeightMode(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py"))
+	jobsAC := NewConfigMap(namespace.Name, "jobs", Files(test, _files, "counter.py", "fail.py", "stop.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -49,8 +49,8 @@ env_vars:
 							"num-cpus":       "4",
 							"resources":      `'{"R1": 4}'`,
 						}).
-						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+						WithTemplate(podTemplateSpecApplyConfiguration(HeadPodTemplateApplyConfiguration(),
+							MountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -83,7 +83,7 @@ env_vars:
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -114,7 +114,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.HTTPMode).
 				WithEntrypoint("python /home/ray/jobs/stop.py").
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())

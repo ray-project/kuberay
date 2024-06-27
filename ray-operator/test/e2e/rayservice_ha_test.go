@@ -21,7 +21,7 @@ func TestRayService(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "locustfile.py", "locust_runner.py"))
+	scriptsAC := NewConfigMap(namespace.Name, "scripts", Files(test, _files, "locustfile.py", "locust_runner.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -46,7 +46,7 @@ applications:
     ray_actor_options:
       num_cpus: 1
 `).
-				WithRayClusterSpec(newRayClusterSpec()))
+				WithRayClusterSpec(NewRayClusterSpec()))
 
 		rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -61,7 +61,7 @@ applications:
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
-					WithTemplate(apply(headPodTemplateApplyConfiguration(), mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))))
+					WithTemplate(Apply(HeadPodTemplateApplyConfiguration(), MountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))))
 		locustCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), locustClusterAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created Locust RayCluster %s/%s successfully", locustCluster.Namespace, locustCluster.Name)

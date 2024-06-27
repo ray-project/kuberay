@@ -8,6 +8,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/test/e2e"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -19,7 +20,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := e2e.NewConfigMap(namespace.Name, "scripts", e2e.Files(test, _files, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -30,16 +31,16 @@ func TestRayClusterAutoscaler(t *testing.T) {
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
-				WithTemplate(headPodTemplateApplyConfiguration())).
+				WithTemplate(e2e.HeadPodTemplateApplyConfiguration())).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
 				WithGroupName("small-group").
 				WithRayStartParams(map[string]string{"num-cpus": "1"}).
-				WithTemplate(workerPodTemplateApplyConfiguration()))
+				WithTemplate(e2e.WorkerPodTemplateApplyConfiguration()))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+			WithSpec(e2e.Apply(rayClusterSpecAC, e2e.MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -84,7 +85,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := e2e.NewConfigMap(namespace.Name, "scripts", e2e.Files(test, _files, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -95,16 +96,16 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
-				WithTemplate(headPodTemplateApplyConfiguration())).
+				WithTemplate(e2e.HeadPodTemplateApplyConfiguration())).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
 				WithGroupName("gpu-group").
 				WithRayStartParams(map[string]string{"num-cpus": "1", "num-gpus": "1"}).
-				WithTemplate(workerPodTemplateApplyConfiguration()))
+				WithTemplate(e2e.WorkerPodTemplateApplyConfiguration()))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+			WithSpec(e2e.Apply(rayClusterSpecAC, e2e.MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -142,7 +143,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := e2e.NewConfigMap(namespace.Name, "scripts", e2e.Files(test, _files, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -155,16 +156,16 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
-				WithTemplate(headPodTemplateApplyConfiguration())).
+				WithTemplate(e2e.HeadPodTemplateApplyConfiguration())).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
 				WithGroupName(groupName).
 				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `"{\"CustomResource\": 1}"`}).
-				WithTemplate(workerPodTemplateApplyConfiguration()))
+				WithTemplate(e2e.WorkerPodTemplateApplyConfiguration()))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+			WithSpec(e2e.Apply(rayClusterSpecAC, e2e.MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
