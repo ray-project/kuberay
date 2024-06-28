@@ -21,7 +21,7 @@ func TestRayJob(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py", "long_running.py"))
+	jobsAC := NewConfigMap(namespace.Name, "jobs", Files(test, _files, "counter.py", "fail.py", "stop.py", "long_running.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -30,7 +30,7 @@ func TestRayJob(t *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRuntimeEnvYAML(`
 env_vars:
@@ -87,7 +87,7 @@ env_vars:
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("fail", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
@@ -132,7 +132,7 @@ env_vars:
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("fail-k8s-job", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("The command will be overridden by the submitter Job").
 				WithShutdownAfterJobFinishes(true).
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
@@ -176,7 +176,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/stop.py").
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -205,7 +205,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRuntimeEnvYAML(`invalid_yaml_string`).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
@@ -219,7 +219,7 @@ env_vars:
 	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
 				WithShutdownAfterJobFinishes(true).
 				WithTTLSecondsAfterFinished(600).
