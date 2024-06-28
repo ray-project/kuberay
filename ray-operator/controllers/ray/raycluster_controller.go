@@ -49,6 +49,8 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
+
+	podEvictedReason = "Evicted"
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -648,6 +650,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		logger.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
+			"Pod status reason", headPod.Status.Reason,
 			"Pod restart policy", headPod.Spec.RestartPolicy,
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
@@ -828,13 +831,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 // (1) shouldDelete: Whether the Pod should be deleted.
 // (2) reason: The reason why the Pod should or should not be deleted.
 func shouldDeletePod(pod corev1.Pod, nodeType rayv1.RayNodeType) (bool, string) {
-	// If a Pod's restart policy is set to `Always`, KubeRay will not delete
+	// If a Pod's restart policy is set to `Always` and Pod not be evicted, KubeRay will not delete
 	// the Pod and rely on the Pod's restart policy to restart the Pod.
 	isRestartPolicyAlways := pod.Spec.RestartPolicy == corev1.RestartPolicyAlways
+	isPodEvicted := pod.Status.Reason == podEvictedReason
 
 	// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
 	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-		if isRestartPolicyAlways {
+		if isRestartPolicyAlways && !isPodEvicted {
 			// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
 			// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
 			// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
