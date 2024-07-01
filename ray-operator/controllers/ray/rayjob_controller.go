@@ -245,16 +245,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
 		reason := rayv1.JobFailedReason("")
 		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
-
-		failedCount := int32(0)
-		if rayJobInstance.Status.Failed != nil {
-			failedCount = *rayJobInstance.Status.Failed
-		}
-
-		succeededCount := int32(0)
-		if rayJobInstance.Status.Succeeded != nil {
-			succeededCount = *rayJobInstance.Status.Succeeded
-		}
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
@@ -265,19 +255,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if isJobTerminal {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 			if jobInfo.JobStatus == rayv1.JobStatusFailed {
+				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 				reason = rayv1.AppFailed
-				failedCount++
-
-				if rayJobInstance.Spec.BackoffLimit != nil && *rayJobInstance.Spec.BackoffLimit > 0 &&
-					failedCount < *rayJobInstance.Spec.BackoffLimit+1 {
-					jobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
-				} else {
-					jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				}
-			}
-
-			if jobInfo.JobStatus == rayv1.JobStatusSucceeded {
-				succeededCount = 1
 			}
 		}
 
@@ -287,8 +266,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
-		rayJobInstance.Status.Failed = ptr.To[int32](failedCount)
-		rayJobInstance.Status.Succeeded = ptr.To[int32](succeededCount)
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -369,13 +346,54 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
 
-	// This is the only place where we update the RayJob status. Please do NOT add any code
-	// between the above switch statement and the following code.
+	// check for retries and update deployment status to Retrying.
+	// Please do NOT add any code between checkBackoffLimitAndUpdateStatusIfNeeded and the following code.
+	r.checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
+
+	// This is the only place where we update the RayJob status.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+// checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
+// the job's success status, and its failure status. If eligible, sets the JobDeploymentStatus to Retrying.
+func (r *RayJobReconciler) checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	failedCount := int32(0)
+	if rayJob.Status.Failed != nil {
+		failedCount = *rayJob.Status.Failed
+	}
+
+	succeededCount := int32(0)
+	if rayJob.Status.Succeeded != nil {
+		succeededCount = *rayJob.Status.Succeeded
+	}
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		failedCount++
+	}
+
+	if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+		succeededCount++
+	}
+
+	rayJob.Status.Failed = ptr.To[int32](failedCount)
+	rayJob.Status.Succeeded = ptr.To[int32](succeededCount)
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
+		// RayJobs that pass ActiveDeadlineSeconds are not eligible for retry
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
+			return
+		}
+
+		logger.Info("RayJob is eligible for retry, setting JobDeploymentStatus to Retrying",
+			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", rayJob.Status.Failed)
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
+	}
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
@@ -726,6 +744,7 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 	for _, cond := range job.Status.Conditions {
 		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
 			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.", "RayJob", rayJob.Name, "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
 			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
 			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
@@ -735,23 +754,6 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 				rayJob.Status.Reason = rayv1.SubmissionFailed
 				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", cond.Reason, cond.Message)
 			}
-
-			// Increment the failed count in status.
-			failedCount := int32(0)
-			if rayJob.Status.Failed != nil {
-				failedCount = *rayJob.Status.Failed
-			}
-			failedCount++
-			rayJob.Status.Failed = ptr.To[int32](failedCount)
-
-			// Check eligibility for retry based on spec.backoffLimit.
-			if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 &&
-				*rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
-				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
-			} else {
-				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			}
-
 			return true
 		}
 	}
