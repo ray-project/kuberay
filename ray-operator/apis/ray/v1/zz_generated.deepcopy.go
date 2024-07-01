@@ -359,6 +359,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.BackoffLimit != nil {
+		in, out := &in.BackoffLimit, &out.BackoffLimit
+		*out = new(int32)
+		**out = **in
+	}
 	if in.RayClusterSpec != nil {
 		in, out := &in.RayClusterSpec, &out.RayClusterSpec
 		*out = new(RayClusterSpec)
@@ -410,6 +415,16 @@ func (in *RayJobStatus) DeepCopyInto(out *RayJobStatus) {
 	if in.EndTime != nil {
 		in, out := &in.EndTime, &out.EndTime
 		*out = (*in).DeepCopy()
+	}
+	if in.Succeeded != nil {
+		in, out := &in.Succeeded, &out.Succeeded
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Failed != nil {
+		in, out := &in.Failed, &out.Failed
+		*out = new(int32)
+		**out = **in
 	}
 	in.RayClusterStatus.DeepCopyInto(&out.RayClusterStatus)
 }

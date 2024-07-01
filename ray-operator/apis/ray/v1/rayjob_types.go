@@ -41,6 +41,7 @@ const (
 	JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
 	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
+	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
 )
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -69,6 +70,10 @@ type RayJobSpec struct {
 	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
 	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
 	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
+	// Specifies the number of retries before marking this job failed.
+	// Each retry creates a new RayCluster.
+	// +kubebuilder:default:=0
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
@@ -129,8 +134,16 @@ type RayJobStatus struct {
 	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
 	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
 	// or the submitter Job has failed.
-	EndTime          *metav1.Time     `json:"endTime,omitempty"`
+	EndTime *metav1.Time `json:"endTime,omitempty"`
+	// Succeeded is the number of times this job succeeded.
+	// +kubebuilder:default:=0
+	Succeeded *int32 `json:"succeeded,omitempty"`
+	// Failed is the number of times this job failed.
+	// +kubebuilder:default:=0
+	Failed *int32 `json:"failed,omitempty"`
+	// RayClusterStatus is the status of the RayCluster running the job.
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
+
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

@@ -206,6 +206,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
+				// check for retries and update deployment status to Retrying.
+				r.checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 				break
 			}
 		}
@@ -266,7 +268,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
-	case rayv1.JobDeploymentStatusSuspending:
+
+		// check for retries and update deployment status to Retrying.
+		r.checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
+	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -295,9 +300,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
+		rayJobInstance.Status.Reason = ""
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
-		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
+
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
+		}
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+		}
 	case rayv1.JobDeploymentStatusSuspended:
 		if !rayJobInstance.Spec.Suspend {
 			logger.Info("The status is 'Suspended', but the suspend flag is false. Transition the status to 'New'.")
@@ -346,6 +358,39 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+// checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
+// the job's success status, and its failure status. If eligible, sets the JobDeploymentStatus to Retrying.
+func (r *RayJobReconciler) checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	failedCount := int32(0)
+	if rayJob.Status.Failed != nil {
+		failedCount = *rayJob.Status.Failed
+	}
+
+	succeededCount := int32(0)
+	if rayJob.Status.Succeeded != nil {
+		succeededCount = *rayJob.Status.Succeeded
+	}
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		failedCount++
+	}
+
+	if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+		succeededCount++
+	}
+
+	rayJob.Status.Failed = ptr.To[int32](failedCount)
+	rayJob.Status.Succeeded = ptr.To[int32](succeededCount)
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
+		logger.Info("RayJob is eligible for retry, setting JobDeploymentStatus to Retrying",
+			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", rayJob.Status.Failed)
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
+	}
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
@@ -717,6 +762,7 @@ func (r *RayJobReconciler) checkActiveDeadlineAndUpdateStatusIfNeeded(ctx contex
 	if rayJob.Spec.ActiveDeadlineSeconds == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.ActiveDeadlineSeconds)*time.Second)) {
 		return false
 	}
+
 	logger.Info("The RayJob has passed the activeDeadlineSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "ActiveDeadlineSeconds", *rayJob.Spec.ActiveDeadlineSeconds)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
@@ -744,6 +790,9 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
 		return fmt.Errorf("activeDeadlineSeconds must be a positive integer")
+	}
+	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
+		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
 	return nil
 }
