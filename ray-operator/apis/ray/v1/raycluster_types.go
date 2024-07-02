@@ -140,6 +140,14 @@ type RayClusterStatus struct {
 	Head HeadInfo `json:"head,omitempty"`
 	// Reason provides more information about current State
 	Reason string `json:"reason,omitempty"`
+
+	// Represents the latest available observations of a RayCluster's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
 	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
@@ -154,6 +162,15 @@ type RayClusterStatus struct {
 	// RayCluster's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
+
+type RayClusterConditionType string
+
+const (
+	// HeadReady is added in a RayCluster when its Head Pod is ready for requests.
+	HeadReady RayClusterConditionType = "HeadReady"
+	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
+	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
+)
 
 // HeadInfo gives info about head
 type HeadInfo struct {
