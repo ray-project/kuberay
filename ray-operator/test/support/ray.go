@@ -35,6 +35,20 @@ func RayJobReason(job *rayv1.RayJob) rayv1.JobFailedReason {
 	return job.Status.Reason
 }
 
+func RayJobFailed(job *rayv1.RayJob) int32 {
+	if job.Status.Failed == nil {
+		return 0
+	}
+	return *job.Status.Failed
+}
+
+func RayJobSucceeded(job *rayv1.RayJob) int32 {
+	if job.Status.Succeeded == nil {
+		return 0
+	}
+	return *job.Status.Succeeded
+}
+
 func GetRayJobId(t Test, namespace, name string) string {
 	t.T().Helper()
 	job := RayJob(t, namespace, name)(t)
