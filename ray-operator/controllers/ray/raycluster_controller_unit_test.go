@@ -931,6 +931,9 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate head pod get evicted.
+	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err, "Fail to update head Pod restart policy")
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	podList.Items[0].Status.Reason = "Evicted"
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
