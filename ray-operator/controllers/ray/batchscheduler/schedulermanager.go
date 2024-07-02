@@ -11,12 +11,14 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var schedulerContainers = map[string]schedulerinterface.BatchSchedulerFactory{
 	schedulerinterface.GetDefaultPluginName(): &schedulerinterface.DefaultBatchSchedulerFactory{},
 	volcano.GetPluginName():                   &volcano.VolcanoBatchSchedulerFactory{},
+	yunikorn.GetPluginName():                  &yunikorn.YuniKornSchedulerFactory{},
 }
 
 func GetRegisteredNames() []string {
