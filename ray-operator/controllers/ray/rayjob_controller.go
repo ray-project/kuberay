@@ -388,12 +388,12 @@ func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1
 				"RayJob is not eligible for retry due to failure with DeadlineExceeded",
 				"backoffLimit", *rayJob.Spec.BackoffLimit,
 				"succeeded", *rayJob.Status.Succeeded,
-				"failed", rayJob.Status.Failed,
+				"failed", *rayJob.Status.Failed,
 			)
 			return
 		}
 		logger.Info("RayJob is eligible for retry, setting JobDeploymentStatus to Retrying",
-			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", rayJob.Status.Failed)
+			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", *rayJob.Status.Failed)
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
 	}
 }

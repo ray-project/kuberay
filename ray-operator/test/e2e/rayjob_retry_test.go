@@ -75,14 +75,20 @@ func TestRayJobRetry(t *testing.T) {
 	})
 
 	// test.T().Run("Failing submitter K8s Job", func(_ *testing.T) {
-	// 	// TODO: Add a test case to verify that the RayJob has passed ActiveDeadlineSeconds
-	// 	// and ensure that the RayJob transitions to JobDeploymentStatusFailed
-	// 	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
+	// TODO: The K8s submitter Job fails to connect to the RayCluster due to misconfiguration.
+	// This test is similar to the "Failing submitter K8s Job" test in rayjob_test.go. The difference
+	// is that here we set RayJob.BackoffLimit.
 	// })
 
 	// test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
-	// 	// TODO: Add a test case to verify that the RayJob has passed ActiveDeadlineSeconds
-	// 	// and ensure that the RayJob transitions to JobDeploymentStatusFailed
-	// 	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
+	// TODO: Add a test case to verify that the RayJob has passed ActiveDeadlineSeconds
+	// and ensure that the RayJob transitions to JobDeploymentStatusFailed
+	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
+	// })
+
+	// test.T().Run("", func(_ *testing.T) {
+	// TODO: The RayJob in HTTPMode fails and retries. This test is similar to the
+	// "Failing RayJob without cluster shutdown after finished" test in rayjob_lightweight_test.go.
+	// The difference is that here we set RayJob.BackoffLimit.
 	// })
 }
