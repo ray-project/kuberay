@@ -86,7 +86,7 @@ func TestRayJobRetry(t *testing.T) {
 	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
 	// })
 
-	// test.T().Run("", func(_ *testing.T) {
+	// test.T().Run("Failing RayJob in HTTPMode", func(_ *testing.T) {
 	// TODO: The RayJob in HTTPMode fails and retries. This test is similar to the
 	// "Failing RayJob without cluster shutdown after finished" test in rayjob_lightweight_test.go.
 	// The difference is that here we set RayJob.BackoffLimit.
