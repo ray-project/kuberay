@@ -104,7 +104,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 		headSvc.Namespace,
 		domainName,
 		port)
-	log.Info("FetchHeadServiceURL", "head service URL", headServiceURL, "port", defaultPortName)
+	log.Info("FetchHeadServiceURL", "head service URL", headServiceURL)
 	return headServiceURL, nil
 }
 
