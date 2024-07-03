@@ -206,8 +206,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
-				// check for retries and update deployment status to Retrying.
-				r.checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 				break
 			}
 		}
@@ -268,9 +266,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
-
-		// check for retries and update deployment status to Retrying.
-		r.checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -350,9 +345,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
+	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
 	// This is the only place where we update the RayJob status. Please do NOT add any code
-	// between the above switch statement and the following code.
+	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -362,7 +358,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 // checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
 // the job's success status, and its failure status. If eligible, sets the JobDeploymentStatus to Retrying.
-func (r *RayJobReconciler) checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) {
+func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	failedCount := int32(0)
@@ -387,8 +383,17 @@ func (r *RayJobReconciler) checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.
 	rayJob.Status.Succeeded = ptr.To[int32](succeededCount)
 
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
+			logger.Info(
+				"RayJob is not eligible for retry due to failure with DeadlineExceeded",
+				"backoffLimit", *rayJob.Spec.BackoffLimit,
+				"succeeded", *rayJob.Status.Succeeded,
+				"failed", *rayJob.Status.Failed,
+			)
+			return
+		}
 		logger.Info("RayJob is eligible for retry, setting JobDeploymentStatus to Retrying",
-			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", rayJob.Status.Failed)
+			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", *rayJob.Status.Failed)
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
 	}
 }
