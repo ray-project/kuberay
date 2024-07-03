@@ -1,0 +1,72 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  entrypoint: python /home/ray/samples/sample_code.py
+  runtimeEnvYAML: |
+    pip:
+      - modin[all]==0.31.0
+  rayClusterSpec:
+    rayVersion: "2.31.0"
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.31.0
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                limits:
+                  cpu: "1"
+                requests:
+                  cpu: "200m"
+              volumeMounts:
+                - mountPath: /home/ray/samples
+                  name: code-sample
+          volumes:
+            - name: code-sample
+              configMap:
+                name: ray-job-code-sample
+                items:
+                  - key: sample_code.py
+                    path: sample_code.py
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-job-code-sample
+data:
+  sample_code.py: |
+    import time
+    import urllib.request
+    import ray
+    import numpy as np
+    import modin.pandas as pd
+    import modin.config as modin_cfg
+    from modin.config import BenchmarkMode
+
+    ray.init()
+
+    print("Modin Engine:", modin_cfg.Engine.get())
+    BenchmarkMode.put(True)
+
+    url_path = "https://modin-datasets.intel.com/green-taxi/green_tripdata_2015-01.csv"
+    df = pd.read_csv(url_path, parse_dates=["tpep_pickup_datetime", "tpep_dropoff_datetime"], quoting=3)
+    t0 = time.perf_counter()
+
+    isnull = df.isnull()
+    t1 = time.perf_counter()
+
+    rounded_trip_distance = df[["pickup_longitude"]].applymap(round)
+    t2 = time.perf_counter()
+
+    print("Time to compute isnull:", t1 - t0)
+    print("Time to compute rounded_trip_distance:", t2 - t1)
