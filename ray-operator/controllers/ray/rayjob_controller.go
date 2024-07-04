@@ -3,6 +3,8 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -333,9 +335,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
-			// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
-			// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
-			if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
+			if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
+				err = r.Client.Delete(ctx, rayJobInstance)
+				logger.Info("RayJob is deleted")
+			} else {
+				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
+				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
+				_, err = r.deleteClusterResources(ctx, rayJobInstance)
+				logger.Info("RayCluster is deleted", "RayCluster", rayJobInstance.Status.RayClusterName)
+			}
+			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
