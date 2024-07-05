@@ -372,9 +372,9 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
-	ports, err := getPortsFromCluster(cluster)
+	ports := getPortsFromCluster(cluster)
 	// Assign default ports
-	if err != nil || len(ports) == 0 {
+	if len(ports) == 0 {
 		ports = getDefaultPorts()
 	}
 
@@ -389,7 +389,7 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 // getPortsFromCluster get the ports from head container and directly map them in service
 // It's user's responsibility to maintain rayStartParam ports and container ports mapping
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
-func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
+func getPortsFromCluster(cluster rayv1.RayCluster) map[string]int32 {
 	svcPorts := map[string]int32{}
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
@@ -400,7 +400,7 @@ func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 		svcPorts[port.Name] = port.ContainerPort
 	}
 
-	return svcPorts, nil
+	return svcPorts
 }
 
 func getDefaultPorts() map[string]int32 {

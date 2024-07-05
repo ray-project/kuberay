@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var myRayCluster = &RayCluster{
@@ -55,9 +55,9 @@ var myRayCluster = &RayCluster{
 		},
 		WorkerGroupSpecs: []WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32(3),
-				MinReplicas: pointer.Int32(0),
-				MaxReplicas: pointer.Int32(10000),
+				Replicas:    ptr.To[int32](3),
+				MinReplicas: ptr.To[int32](0),
+				MaxReplicas: ptr.To[int32](10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
 					"port":                        "6379",

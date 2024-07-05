@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -48,7 +48,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -72,7 +72,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator

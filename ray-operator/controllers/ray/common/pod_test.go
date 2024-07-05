@@ -16,9 +16,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -65,9 +65,9 @@ var instance = rayv1.RayCluster{
 		},
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32(3),
-				MinReplicas: pointer.Int32(0),
-				MaxReplicas: pointer.Int32(10000),
+				Replicas:    ptr.To[int32](3),
+				MinReplicas: ptr.To[int32](0),
+				MaxReplicas: ptr.To[int32](10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
 					"port":     "6379",
@@ -787,7 +787,8 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	assert.Equal(t, worker, expectedWorker)
 }
 
-func containerPortExists(ports []corev1.ContainerPort, name string, containerPort int32) error {
+func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {
+	name := utils.MetricsPortName
 	for _, port := range ports {
 		if port.Name == name {
 			if port.ContainerPort != containerPort {
@@ -808,7 +809,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, int32(utils.DefaultMetricsPort)); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
 	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
@@ -819,7 +820,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, customMetricsPort); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -835,7 +836,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, int32(utils.DefaultMetricsPort)); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)); err != nil {
 		t.Fatal(err)
 	}
 	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
@@ -846,7 +847,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, utils.MetricsPortName, customMetricsPort); err != nil {
+	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort); err != nil {
 		t.Fatal(err)
 	}
 }

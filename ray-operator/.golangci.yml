@@ -1,12 +1,18 @@
 linters-settings:
   gofmt:
     simplify: true
+  gosec:
+    excludes:
+      - G601
   ginkgolinter:
     forbid-focus-container: true
   goimports:
     local-prefixes: github.com/ray-project/kuberay/ray-operator
   misspell:
     locale: US
+  nolintlint:
+    require-explanation: true
+    require-specific: true
   revive:
     ignore-generated-header: true
     rules:
@@ -59,21 +65,22 @@ linters:
     - gofmt
     - gofumpt
     - goimports
-#    - gosec
+    - gosec
     - gosimple
-#    - govet
+    - govet
     - ineffassign
 #    - lll
     - makezero
     - misspell
     - nilerr
     - noctx
+    - nolintlint
     - predeclared
     - revive
     - staticcheck
     - typecheck
     - unconvert
-#    - unparam
+    - unparam
     - unused
     - wastedassign
   disable-all: true

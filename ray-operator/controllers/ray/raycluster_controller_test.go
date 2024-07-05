@@ -20,24 +20,21 @@ import (
 	"fmt"
 	"time"
 
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
-
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -63,9 +60,9 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:       pointer.Int32(3),
-					MinReplicas:    pointer.Int32(0),
-					MaxReplicas:    pointer.Int32(4),
+					Replicas:       ptr.To[int32](3),
+					MinReplicas:    ptr.To[int32](0),
+					MaxReplicas:    ptr.To[int32](4),
 					GroupName:      "small-group",
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
@@ -101,8 +98,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
 			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(ptr.To[int32](4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
 		})
 
@@ -192,7 +189,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			pod := workerPods.Items[0]
-			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
+			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
@@ -205,7 +202,7 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster: %v", rayCluster)
-				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(5)
+				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](5)
 
 				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
 				// We need to handle conflict error and retry the update.
@@ -242,7 +239,7 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) There is only one worker group, and its `replicas` is set to 3.
 			Expect(rayCluster.Spec.HeadGroupSpec.Template.Labels[utils.KubernetesApplicationNameLabelKey]).NotTo(BeEmpty())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
 		})
 
 		It("Create a RayCluster custom resource", func() {
@@ -322,7 +319,7 @@ var _ = Context("Inside the default namespace", func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-autoscaler", namespace)
-		rayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(true)
+		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 		workerPods := corev1.PodList{}
 		workerFilter := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
@@ -332,8 +329,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
 			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(BeTrue())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(ptr.To[int32](4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
 		})
 
@@ -378,7 +375,7 @@ var _ = Context("Inside the default namespace", func() {
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil())
 				podToDelete := workerPods.Items[0]
-				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
+				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](2)
 				rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
 				return k8sClient.Update(ctx, rayCluster)
 			})
@@ -391,7 +388,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
 			// Call cleanUpWorkersToDelete to simulate the behavior of the Ray Autoscaler.
-			cleanUpWorkersToDelete(ctx, rayCluster, 0)
+			cleanUpWorkersToDelete(ctx, rayCluster)
 		})
 
 		It("Simulate Ray Autoscaler scales up", func() {
@@ -399,7 +396,7 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil())
-				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(4)
+				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](4)
 				return k8sClient.Update(ctx, rayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster custom resource")
@@ -428,8 +425,8 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, and `workersToDelete` is empty.
 			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(pointer.Int32(4)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(ptr.To[int32](4)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
 		})
 
@@ -579,7 +576,7 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
 		numOfHosts := int32(4)
 		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
-		rayCluster.Spec.EnableInTreeAutoscaling = pointer.Bool(true)
+		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
@@ -591,7 +588,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(*rayCluster.Spec.EnableInTreeAutoscaling).To(BeTrue())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(numOfHosts))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
 		})
 
@@ -615,7 +612,7 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil())
-				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(2)
+				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](2)
 				rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{
 					workerPods.Items[0].Name, workerPods.Items[1].Name, workerPods.Items[2].Name, workerPods.Items[3].Name,
 				}
@@ -630,7 +627,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Ray Autoscaler should clean up WorkersToDelete after scaling process has finished.
 			// Call cleanUpWorkersToDelete to simulate the behavior of the Ray Autoscaler.
-			cleanUpWorkersToDelete(ctx, rayCluster, 0)
+			cleanUpWorkersToDelete(ctx, rayCluster)
 		})
 
 		It("Simulate Ray Autoscaler scales up", func() {
@@ -638,7 +635,7 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 					time.Second*3, time.Millisecond*500).Should(BeNil())
-				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = pointer.Int32(4)
+				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](4)
 				return k8sClient.Update(ctx, rayCluster)
 			})
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster custom resource")
@@ -656,7 +653,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			pod := workerPods.Items[0]
-			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
+			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
@@ -727,7 +724,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits).NotTo(BeNil())
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
 		})
 
 		It("Create a RayCluster custom resource", func() {
@@ -805,7 +802,7 @@ var _ = Context("Inside the default namespace", func() {
 			// (2) The worker group has an invalid `numOfHosts` value of 0.
 			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(numOfHosts))
-			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(pointer.Int32(3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
 			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
 		})
 

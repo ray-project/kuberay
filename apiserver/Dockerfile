@@ -1,5 +1,5 @@
 # Build the backend service
-FROM registry.access.redhat.com/ubi9/go-toolset:1.20.10 as builder
+FROM golang:1.22.4-bullseye as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests

@@ -26,10 +26,9 @@ func GetRayHttpProxyClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func()
 }
 
 type RayHttpProxyClient struct {
-	client       *http.Client
-	httpProxyURL string
-
+	client             *http.Client
 	mgr                ctrl.Manager
+	httpProxyURL       string
 	useKubernetesProxy bool
 }
 

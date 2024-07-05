@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,10 +118,11 @@ type RayClusterReconciler struct {
 	Scheme            *runtime.Scheme
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
-	IsOpenShift       bool
 
 	headSidecarContainers   []corev1.Container
 	workerSidecarContainers []corev1.Container
+
+	IsOpenShift bool
 }
 
 type RayClusterReconcilerOptions struct {
@@ -1136,13 +1137,13 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			Annotations: pod.Annotations,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: pointer.Int32(0),
+			BackoffLimit: ptr.To[int32](0),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: pod.ObjectMeta,
 				Spec:       pod.Spec,
 			},
 			// make this job be best-effort only for 5 minutes.
-			ActiveDeadlineSeconds: pointer.Int64(300),
+			ActiveDeadlineSeconds: ptr.To[int64](300),
 		},
 	}
 

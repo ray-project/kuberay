@@ -11,22 +11,22 @@ import (
 
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
+	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	// Suspend indicates whether a RayCluster should be suspended.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	Suspend                *bool             `json:"suspend,omitempty"`
+	HeadServiceAnnotations map[string]string `json:"headServiceAnnotations,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// HeadGroupSpecs are the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
-	// WorkerGroupSpecs are the specs for the worker pods
-	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
 	RayVersion string `json:"rayVersion,omitempty"`
-	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
-	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
-	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
-	// Suspend indicates whether a RayCluster should be suspended.
-	// A suspended RayCluster will have head pods and worker pods deleted.
-	Suspend *bool `json:"suspend,omitempty"`
+	// WorkerGroupSpecs are the specs for the worker pods
+	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -79,12 +79,6 @@ type AutoscalerOptions struct {
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
 	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
-	// Optional list of environment variables to set in the autoscaler container.
-	Env []corev1.EnvVar `json:"env,omitempty"`
-	// Optional list of sources to populate environment variables in the autoscaler container.
-	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
-	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
-	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 	// SecurityContext defines the security options the container should be run with.
 	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -98,6 +92,12 @@ type AutoscalerOptions struct {
 	// Aggressive: An alias for Default; upscaling is not rate-limited.
 	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
+	// Optional list of environment variables to set in the autoscaler container.
+	Env []corev1.EnvVar `json:"env,omitempty"`
+	// Optional list of sources to populate environment variables in the autoscaler container.
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative
@@ -115,10 +115,27 @@ const (
 
 // RayClusterStatus defines the observed state of RayCluster
 type RayClusterStatus struct {
+	// LastUpdateTime indicates last update timestamp for this cluster status.
+	// +nullable
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Service Endpoints
+	Endpoints map[string]string `json:"endpoints,omitempty"`
+	// DesiredCPU indicates total desired CPUs for the cluster
+	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
+	// DesiredMemory indicates total desired memory for the cluster
+	DesiredMemory resource.Quantity `json:"desiredMemory,omitempty"`
+	// DesiredGPU indicates total desired GPUs for the cluster
+	DesiredGPU resource.Quantity `json:"desiredGPU,omitempty"`
+	// DesiredTPU indicates total desired TPUs for the cluster
+	DesiredTPU resource.Quantity `json:"desiredTPU,omitempty"`
+	// Head info
+	Head HeadInfo `json:"head,omitempty"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
 	State ClusterState `json:"state,omitempty"`
+	// Reason provides more information about current State
+	Reason string `json:"reason,omitempty"`
 	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
@@ -129,23 +146,6 @@ type RayClusterStatus struct {
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
 	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
-	// DesiredCPU indicates total desired CPUs for the cluster
-	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
-	// DesiredMemory indicates total desired memory for the cluster
-	DesiredMemory resource.Quantity `json:"desiredMemory,omitempty"`
-	// DesiredGPU indicates total desired GPUs for the cluster
-	DesiredGPU resource.Quantity `json:"desiredGPU,omitempty"`
-	// DesiredTPU indicates total desired TPUs for the cluster
-	DesiredTPU resource.Quantity `json:"desiredTPU,omitempty"`
-	// LastUpdateTime indicates last update timestamp for this cluster status.
-	// +nullable
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// Service Endpoints
-	Endpoints map[string]string `json:"endpoints,omitempty"`
-	// Head info
-	Head HeadInfo `json:"head,omitempty"`
-	// Reason provides more information about current State
-	Reason string `json:"reason,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
 	// RayCluster's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

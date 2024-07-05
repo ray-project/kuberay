@@ -742,7 +742,7 @@ func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
 								},
 							},
 							Spec: corev1.PersistentVolumeClaimSpec{
-								Resources: corev1.ResourceRequirements{
+								Resources: corev1.VolumeResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceStorage: resource.MustParse(rayVol.Storage),
 									},
@@ -813,7 +813,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
 		t, err := json.Marshal(runtime.Tolerations)
 		if err != nil {
-			klog.Errorf("failed to marshall tolerations ", runtime.Tolerations, " for compute template ", runtime.Name,
+			klog.Error("failed to marshall tolerations ", runtime.Tolerations, " for compute template ", runtime.Name,
 				" error ", err)
 		} else {
 			dmap["tolerations"] = string(t)
