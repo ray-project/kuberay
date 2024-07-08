@@ -1195,6 +1195,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	if utils.CheckAllPodsRunning(ctx, runtimePods) {
 		newInstance.Status.State = rayv1.Ready
+	} else {
+		newInstance.Status.State = rayv1.Failed
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
