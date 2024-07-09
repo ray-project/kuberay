@@ -74,11 +74,58 @@ func TestRayJobRetry(t *testing.T) {
 		test.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
 
-	// test.T().Run("Failing submitter K8s Job", func(_ *testing.T) {
-	// TODO: The K8s submitter Job fails to connect to the RayCluster due to misconfiguration.
-	// This test is similar to the "Failing submitter K8s Job" test in rayjob_test.go. The difference
-	// is that here we set RayJob.BackoffLimit.
-	// })
+	test.T().Run("Failing submitter K8s Job", func(_ *testing.T) {
+		// RayJob: Set RayJob.BackoffLimit to 2 & SubmitterConfig.BackoffLimit to 0 to test RayJob level backoffLimit
+		rayJobAC := rayv1ac.RayJob("fail-submitter-k8s-job", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithBackoffLimit(2).
+				WithSubmitterConfig(rayv1ac.SubmitterConfig().
+					WithBackoffLimit(0)).
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("The command will be overridden by the submitter Job").
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		// In this test, we try to simulate the case where the submitter Job can't connect to the RayCluster successfully.
+		// Hence, KubeRay can't get the Ray job information from the RayCluster. When the RayJob reaches the backoff
+		// limit, it will be marked as failed. Then, the RayJob should transition to `Failed`.
+		rayJobAC.Spec.SubmitterPodTemplate.Spec.Containers[0].WithCommand("ray", "job", "submit", "--address", "http://do-not-exist:8265", "--", "echo 123")
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+
+		// Ensure JobDeploymentStatus transit to Failed
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		// Ensure JobStatus is empty
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
+		// Ensure Reason is SubmissionFailed
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.SubmissionFailed)))
+
+		// Check whether the controller respects the backoffLimit.
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobFailed, Equal(int32(3))))
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+
+		// Refresh the RayJob status
+		rayJob = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+
+		// Assert the RayCluster has been deleted because ShutdownAfterJobFinishes is true.
+		test.Eventually(NotFound(RayClusterOrError(test, namespace.Name, rayJob.Status.RayClusterName)), TestTimeoutMedium).
+			Should(BeTrue())
+		// Asset submitter Job is not deleted yet
+		test.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
 
 	// test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
 	// TODO: Add a test case to verify that the RayJob has passed ActiveDeadlineSeconds
