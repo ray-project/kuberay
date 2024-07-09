@@ -21,6 +21,7 @@ type RayClusterStatusApplyConfiguration struct {
 	Endpoints               map[string]string                `json:"endpoints,omitempty"`
 	Head                    *HeadInfoApplyConfiguration      `json:"head,omitempty"`
 	Reason                  *string                          `json:"reason,omitempty"`
+	Conditions              []metav1.Condition               `json:"conditions,omitempty"`
 	ReadyWorkerReplicas     *int32                           `json:"readyWorkerReplicas,omitempty"`
 	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
 	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
@@ -124,6 +125,16 @@ func (b *RayClusterStatusApplyConfiguration) WithHead(value *HeadInfoApplyConfig
 // If called multiple times, the Reason field is set to the value of the last call.
 func (b *RayClusterStatusApplyConfiguration) WithReason(value string) *RayClusterStatusApplyConfiguration {
 	b.Reason = &value
+	return b
+}
+
+// WithConditions adds the given value to the Conditions field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Conditions field.
+func (b *RayClusterStatusApplyConfiguration) WithConditions(values ...metav1.Condition) *RayClusterStatusApplyConfiguration {
+	for i := range values {
+		b.Conditions = append(b.Conditions, values[i])
+	}
 	return b
 }
 
