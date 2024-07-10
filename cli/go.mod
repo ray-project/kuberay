@@ -10,7 +10,7 @@ require (
 	github.com/ray-project/kuberay/proto v0.0.0-20220119062608-4054f1bf1765
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.64.1
 	k8s.io/klog/v2 v2.130.1
 )
 
