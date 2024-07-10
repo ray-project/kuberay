@@ -329,7 +329,7 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatuses(ctx context.Contex
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayService{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
@@ -340,6 +340,7 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
 		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
 				logger := ctrl.Log.WithName("controllers").WithName("RayService")
 				if request != nil {

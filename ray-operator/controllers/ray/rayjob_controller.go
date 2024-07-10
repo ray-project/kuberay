@@ -575,13 +575,14 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayJob{}).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
 		Owns(&batchv1.Job{}).
 		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
 				logger := ctrl.Log.WithName("controllers").WithName("RayJob")
 				if request != nil {
