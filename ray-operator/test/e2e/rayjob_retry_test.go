@@ -134,10 +134,6 @@ func TestRayJobRetry(t *testing.T) {
 	// })
 
 	test.T().Run("Failing RayJob in HTTPMode", func(_ *testing.T) {
-		// TODO: The RayJob in HTTPMode fails and retries. This test is similar to the
-		// "Failing RayJob without cluster shutdown after finished" test in rayjob_lightweight_test.go.
-		// The difference is that here we set RayJob.BackoffLimit.
-
 		// Set up the RayJob with HTTP mode and a BackoffLimit
 		rayJobAC := rayv1ac.RayJob("failing-rayjob-in-httpmode", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
