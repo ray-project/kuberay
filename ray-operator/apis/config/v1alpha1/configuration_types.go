@@ -63,6 +63,9 @@ type Configuration struct {
 	// ingress traffic to the Ray cluster from other pods or Kuberay is running in a network without
 	// connectivity to Pods.
 	UseKubernetesProxy bool `json:"useKubernetesProxy,omitempty"`
+
+	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
+	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {

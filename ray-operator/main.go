@@ -122,6 +122,7 @@ func main() {
 		config.LogStdoutEncoder = logStdoutEncoder
 		config.EnableBatchScheduler = ray.EnableBatchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
+		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
