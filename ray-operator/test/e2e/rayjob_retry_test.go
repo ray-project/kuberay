@@ -133,7 +133,7 @@ func TestRayJobRetry(t *testing.T) {
 	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
 	// })
 
-	test.T().Run("Failing RayJob in HTTPMode", func(_ *testing.T) {
+	test.T().Run("Failing RayJob with HttpMode submission mode", func(_ *testing.T) {
 		// Set up the RayJob with HTTP mode and a BackoffLimit
 		rayJobAC := rayv1ac.RayJob("failing-rayjob-in-httpmode", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -148,16 +148,16 @@ func TestRayJobRetry(t *testing.T) {
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
 		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
-		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
 
-		// Assert the Ray job has failed
+		// Assert that the RayJob deployment status has been updated.
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		
+		// Assert the Ray job has failed.
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
-
-		// Assert that the RayJob deployment status and RayJob reason have been updated accordingly.
-		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		
+		// Check the RayJob reason has been updated.
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 
@@ -166,8 +166,6 @@ func TestRayJobRetry(t *testing.T) {
 			Should(WithTransform(RayJobFailed, Equal(int32(3)))) // 2 retries + 1 initial attempt = 3 failures
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
-		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 
 		// Clean up
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
