@@ -152,11 +152,11 @@ func TestRayJobRetry(t *testing.T) {
 		// Assert that the RayJob deployment status has been updated.
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
-		
+
 		// Assert the Ray job has failed.
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
-		
+
 		// Check the RayJob reason has been updated.
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
