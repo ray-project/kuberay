@@ -133,9 +133,43 @@ func TestRayJobRetry(t *testing.T) {
 	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
 	// })
 
-	// test.T().Run("Failing RayJob in HTTPMode", func(_ *testing.T) {
-	// TODO: The RayJob in HTTPMode fails and retries. This test is similar to the
-	// "Failing RayJob without cluster shutdown after finished" test in rayjob_lightweight_test.go.
-	// The difference is that here we set RayJob.BackoffLimit.
-	// })
+	test.T().Run("Failing RayJob with HttpMode submission mode", func(_ *testing.T) {
+		// Set up the RayJob with HTTP mode and a BackoffLimit
+		rayJobAC := rayv1ac.RayJob("failing-rayjob-in-httpmode", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.HTTPMode).
+				WithBackoffLimit(2).
+				WithEntrypoint("python /home/ray/jobs/fail.py").
+				WithShutdownAfterJobFinishes(false).
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		test.T().Logf("Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+
+		// Assert that the RayJob deployment status has been updated.
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+
+		// Assert the Ray job has failed.
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
+
+		// Check the RayJob reason has been updated.
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
+
+		// Check whether the controller respects the backoffLimit.
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobFailed, Equal(int32(3)))) // 2 retries + 1 initial attempt = 3 failures
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+
+		// Clean up
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
 }
