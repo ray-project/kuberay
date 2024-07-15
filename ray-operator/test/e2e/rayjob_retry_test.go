@@ -127,11 +127,38 @@ func TestRayJobRetry(t *testing.T) {
 		test.T().Logf("Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	// test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
-	// TODO: Add a test case to verify that the RayJob has passed ActiveDeadlineSeconds
-	// and ensure that the RayJob transitions to JobDeploymentStatusFailed
-	// regardless of the value of backoffLimit. Refer to rayjob_test.go for an example.
-	// })
+	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
+		// RayJob will transition to JobDeploymentStatusFailed
+		// regardless of the value of backoffLimit.
+		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithBackoffLimit(2).
+				WithSubmitterConfig(rayv1ac.SubmitterConfig().
+					WithBackoffLimit(0)).
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithTTLSecondsAfterFinished(600).
+				WithActiveDeadlineSeconds(5).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		test.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// The RayJob will transition to `Failed` because it has passed `ActiveDeadlineSeconds`.
+		test.T().Logf("Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
+
+		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobFailed, Equal(int32(1))))
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+	})
 
 	test.T().Run("Failing RayJob with HttpMode submission mode", func(_ *testing.T) {
 		// Set up the RayJob with HTTP mode and a BackoffLimit
