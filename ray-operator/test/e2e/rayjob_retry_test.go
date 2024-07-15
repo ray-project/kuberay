@@ -146,12 +146,18 @@ func TestRayJobRetry(t *testing.T) {
 		test.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// The RayJob will transition to `Complete` because it has passed `ActiveDeadlineSeconds`.
-		test.T().Logf("Waiting for RayJob %s/%s to be 'Complete'", rayJob.Namespace, rayJob.Name)
+		// The RayJob will transition to `Failed` because it has passed `ActiveDeadlineSeconds`.
+		test.T().Logf("Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
+
 		test.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobFailed, Equal(int32(1))))
+		test.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
 	})
 
 	// test.T().Run("Failing RayJob in HTTPMode", func(_ *testing.T) {
