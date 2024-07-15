@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,6 +34,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -65,6 +67,7 @@ func main() {
 	var logStdoutEncoder string
 	var useKubernetesProxy bool
 	var configFile string
+	var featureGates string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -92,6 +95,7 @@ func main() {
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
+	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -159,6 +163,11 @@ func main() {
 	if ray.EnableBatchScheduler {
 		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
 	}
+
+	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {
+		exitOnError(err, "Unable to set flag gates for known features")
+	}
+	features.LogFeatureGates(setupLog)
 
 	// Manager options
 	options := ctrl.Options{
