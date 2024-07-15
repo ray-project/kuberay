@@ -24,8 +24,7 @@ jobs:
   build_apiserver:
     env:
       working-directory: ./apiserver
-      cli-working-directory: ./cli
-    name: Build Apiserver, CLI Binaries and Docker Images
+    name: Build Apiserver and Docker Images
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -97,10 +96,6 @@ jobs:
           docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:nightly;
           docker push quay.io/kuberay/apiserver:nightly
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
-
-      - name: Build CLI
-        run: go build -o kuberay -a main.go
-        working-directory: ${{env.cli-working-directory}}
 
   build_security_proxy:
     env:
