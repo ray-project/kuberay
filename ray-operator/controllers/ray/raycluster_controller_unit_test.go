@@ -1496,7 +1496,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
+	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
@@ -1676,7 +1676,7 @@ func TestCalculateStatus(t *testing.T) {
 	}
 
 	// Test head information
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
@@ -1729,7 +1729,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	preUpdateTime := metav1.Now()
 	testRayCluster.Status.State = rayv1.Ready
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
