@@ -19,6 +19,8 @@ type RayJobStatusApplyConfiguration struct {
 	Message             *string                             `json:"message,omitempty"`
 	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
 	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
+	Succeeded           *int32                              `json:"succeeded,omitempty"`
+	Failed              *int32                              `json:"failed,omitempty"`
 	RayClusterStatus    *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
 	ObservedGeneration  *int64                              `json:"observedGeneration,omitempty"`
 }
@@ -98,6 +100,22 @@ func (b *RayJobStatusApplyConfiguration) WithStartTime(value metav1.Time) *RayJo
 // If called multiple times, the EndTime field is set to the value of the last call.
 func (b *RayJobStatusApplyConfiguration) WithEndTime(value metav1.Time) *RayJobStatusApplyConfiguration {
 	b.EndTime = &value
+	return b
+}
+
+// WithSucceeded sets the Succeeded field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Succeeded field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithSucceeded(value int32) *RayJobStatusApplyConfiguration {
+	b.Succeeded = &value
+	return b
+}
+
+// WithFailed sets the Failed field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Failed field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithFailed(value int32) *RayJobStatusApplyConfiguration {
+	b.Failed = &value
 	return b
 }
 

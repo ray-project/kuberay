@@ -28,9 +28,6 @@ type Configuration struct {
 	// resources live. Defaults to the pod namesapce if not set.
 	LeaderElectionNamespace string `json:"leaderElectionNamespace,omitempty"`
 
-	// ReconcileConcurrency is the max concurrency for each reconciler.
-	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
-
 	// WatchNamespace specifies a list of namespaces to watch for custom resources, separated by commas.
 	// If empty, all namespaces will be watched.
 	WatchNamespace string `json:"watchNamespace,omitempty"`
@@ -46,6 +43,17 @@ type Configuration struct {
 	// Defaults to `json` if empty.
 	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
 
+	// HeadSidecarContainers includes specification for a sidecar container
+	// to inject into every Head pod.
+	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
+
+	// WorkerSidecarContainers includes specification for a sidecar container
+	// to inject into every Worker pod.
+	WorkerSidecarContainers []corev1.Container `json:"workerSidecarContainers,omitempty"`
+
+	// ReconcileConcurrency is the max concurrency for each reconciler.
+	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
+
 	// EnableBatchScheduler enables the batch scheduler. Currently this is supported
 	// by Volcano to support gang scheduling.
 	EnableBatchScheduler bool `json:"enableBatchScheduler,omitempty"`
@@ -56,13 +64,8 @@ type Configuration struct {
 	// connectivity to Pods.
 	UseKubernetesProxy bool `json:"useKubernetesProxy,omitempty"`
 
-	// HeadSidecarContainers includes specification for a sidecar container
-	// to inject into every Head pod.
-	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
-
-	// WorkerSidecarContainers includes specification for a sidecar container
-	// to inject into every Worker pod.
-	WorkerSidecarContainers []corev1.Container `json:"workerSidecarContainers,omitempty"`
+	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
+	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {

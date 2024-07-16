@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -438,29 +438,29 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 	}{
 		"Both groups' Replicas are nil": {
 			group1Replicas:    nil,
-			group1MinReplicas: pointer.Int32(1),
-			group1MaxReplicas: pointer.Int32(5),
+			group1MinReplicas: ptr.To[int32](1),
+			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    nil,
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            3,
 		},
 		"Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.": {
-			group1Replicas:    pointer.Int32(0),
-			group1MinReplicas: pointer.Int32(2),
-			group1MaxReplicas: pointer.Int32(5),
-			group2Replicas:    pointer.Int32(6),
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group1Replicas:    ptr.To[int32](0),
+			group1MinReplicas: ptr.To[int32](2),
+			group1MaxReplicas: ptr.To[int32](5),
+			group2Replicas:    ptr.To[int32](6),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            7,
 		},
 		"Group1's Replicas is more than MaxReplicas.": {
-			group1Replicas:    pointer.Int32(6),
-			group1MinReplicas: pointer.Int32(2),
-			group1MaxReplicas: pointer.Int32(5),
-			group2Replicas:    pointer.Int32(3),
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group1Replicas:    ptr.To[int32](6),
+			group1MinReplicas: ptr.To[int32](2),
+			group1MaxReplicas: ptr.To[int32](5),
+			group2Replicas:    ptr.To[int32](3),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            8,
 		},
 	}

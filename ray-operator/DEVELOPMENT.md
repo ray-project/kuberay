@@ -18,14 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.20
+### Use go v1.22
 
-Currently, KubeRay uses go v1.20 for development.
+Currently, KubeRay uses go v1.22 for development.
 
 ```bash
-go install golang.org/dl/go1.20.11@latest
-go1.20.11 download
-export GOROOT=$(go1.20.11 env GOROOT)
+go install golang.org/dl/go1.22.4@latest
+go1.22.4 download
+export GOROOT=$(go1.22.4 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 

@@ -13,12 +13,12 @@ type AutoscalerOptionsApplyConfiguration struct {
 	Resources          *v1.ResourceRequirements `json:"resources,omitempty"`
 	Image              *string                  `json:"image,omitempty"`
 	ImagePullPolicy    *v1.PullPolicy           `json:"imagePullPolicy,omitempty"`
-	Env                []v1.EnvVar              `json:"env,omitempty"`
-	EnvFrom            []v1.EnvFromSource       `json:"envFrom,omitempty"`
-	VolumeMounts       []v1.VolumeMount         `json:"volumeMounts,omitempty"`
 	SecurityContext    *v1.SecurityContext      `json:"securityContext,omitempty"`
 	IdleTimeoutSeconds *int32                   `json:"idleTimeoutSeconds,omitempty"`
 	UpscalingMode      *rayv1.UpscalingMode     `json:"upscalingMode,omitempty"`
+	Env                []v1.EnvVar              `json:"env,omitempty"`
+	EnvFrom            []v1.EnvFromSource       `json:"envFrom,omitempty"`
+	VolumeMounts       []v1.VolumeMount         `json:"volumeMounts,omitempty"`
 }
 
 // AutoscalerOptionsApplyConfiguration constructs an declarative configuration of the AutoscalerOptions type for use with
@@ -51,6 +51,30 @@ func (b *AutoscalerOptionsApplyConfiguration) WithImagePullPolicy(value v1.PullP
 	return b
 }
 
+// WithSecurityContext sets the SecurityContext field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SecurityContext field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithSecurityContext(value v1.SecurityContext) *AutoscalerOptionsApplyConfiguration {
+	b.SecurityContext = &value
+	return b
+}
+
+// WithIdleTimeoutSeconds sets the IdleTimeoutSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithIdleTimeoutSeconds(value int32) *AutoscalerOptionsApplyConfiguration {
+	b.IdleTimeoutSeconds = &value
+	return b
+}
+
+// WithUpscalingMode sets the UpscalingMode field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the UpscalingMode field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithUpscalingMode(value rayv1.UpscalingMode) *AutoscalerOptionsApplyConfiguration {
+	b.UpscalingMode = &value
+	return b
+}
+
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
@@ -78,29 +102,5 @@ func (b *AutoscalerOptionsApplyConfiguration) WithVolumeMounts(values ...v1.Volu
 	for i := range values {
 		b.VolumeMounts = append(b.VolumeMounts, values[i])
 	}
-	return b
-}
-
-// WithSecurityContext sets the SecurityContext field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SecurityContext field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithSecurityContext(value v1.SecurityContext) *AutoscalerOptionsApplyConfiguration {
-	b.SecurityContext = &value
-	return b
-}
-
-// WithIdleTimeoutSeconds sets the IdleTimeoutSeconds field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithIdleTimeoutSeconds(value int32) *AutoscalerOptionsApplyConfiguration {
-	b.IdleTimeoutSeconds = &value
-	return b
-}
-
-// WithUpscalingMode sets the UpscalingMode field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the UpscalingMode field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithUpscalingMode(value rayv1.UpscalingMode) *AutoscalerOptionsApplyConfiguration {
-	b.UpscalingMode = &value
 	return b
 }

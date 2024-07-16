@@ -3,6 +3,8 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -11,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -266,7 +268,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
-	case rayv1.JobDeploymentStatusSuspending:
+	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -295,9 +297,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
+		rayJobInstance.Status.Reason = ""
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
-		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
+
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
+		}
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+		}
 	case rayv1.JobDeploymentStatusSuspended:
 		if !rayJobInstance.Spec.Suspend {
 			logger.Info("The status is 'Suspended', but the suspend flag is false. Transition the status to 'New'.")
@@ -326,9 +335,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
-			// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
-			// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
-			if _, err = r.deleteClusterResources(ctx, rayJobInstance); err != nil {
+			if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
+				err = r.Client.Delete(ctx, rayJobInstance)
+				logger.Info("RayJob is deleted")
+			} else {
+				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
+				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
+				_, err = r.deleteClusterResources(ctx, rayJobInstance)
+				logger.Info("RayCluster is deleted", "RayCluster", rayJobInstance.Status.RayClusterName)
+			}
+			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
@@ -338,14 +354,57 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	}
+	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
 	// This is the only place where we update the RayJob status. Please do NOT add any code
-	// between the above switch statement and the following code.
+	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+// checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
+// the job's success status, and its failure status. If eligible, sets the JobDeploymentStatus to Retrying.
+func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	failedCount := int32(0)
+	if rayJob.Status.Failed != nil {
+		failedCount = *rayJob.Status.Failed
+	}
+
+	succeededCount := int32(0)
+	if rayJob.Status.Succeeded != nil {
+		succeededCount = *rayJob.Status.Succeeded
+	}
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		failedCount++
+	}
+
+	if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete {
+		succeededCount++
+	}
+
+	rayJob.Status.Failed = ptr.To[int32](failedCount)
+	rayJob.Status.Succeeded = ptr.To[int32](succeededCount)
+
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
+			logger.Info(
+				"RayJob is not eligible for retry due to failure with DeadlineExceeded",
+				"backoffLimit", *rayJob.Spec.BackoffLimit,
+				"succeeded", *rayJob.Status.Succeeded,
+				"failed", *rayJob.Status.Failed,
+			)
+			return
+		}
+		logger.Info("RayJob is eligible for retry, setting JobDeploymentStatus to Retrying",
+			"backoffLimit", *rayJob.Spec.BackoffLimit, "succeeded", *rayJob.Status.Succeeded, "failed", *rayJob.Status.Failed)
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRetrying
+	}
 }
 
 // createK8sJobIfNeed creates a Kubernetes Job for the RayJob if it doesn't exist.
@@ -418,7 +477,7 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
-	submitterBackoffLimit := pointer.Int32(2)
+	submitterBackoffLimit := ptr.To[int32](2)
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
@@ -525,13 +584,14 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayJob{}).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
 		Owns(&batchv1.Job{}).
 		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
 				logger := ctrl.Log.WithName("controllers").WithName("RayJob")
 				if request != nil {
@@ -717,6 +777,7 @@ func (r *RayJobReconciler) checkActiveDeadlineAndUpdateStatusIfNeeded(ctx contex
 	if rayJob.Spec.ActiveDeadlineSeconds == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.ActiveDeadlineSeconds)*time.Second)) {
 		return false
 	}
+
 	logger.Info("The RayJob has passed the activeDeadlineSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "ActiveDeadlineSeconds", *rayJob.Spec.ActiveDeadlineSeconds)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
@@ -744,6 +805,9 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
 		return fmt.Errorf("activeDeadlineSeconds must be a positive integer")
+	}
+	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
+		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
 	return nil
 }

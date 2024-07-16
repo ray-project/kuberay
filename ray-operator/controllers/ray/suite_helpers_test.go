@@ -71,14 +71,14 @@ func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt 
 	return true
 }
 
-func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, workerGroupIndex int) {
+func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster) {
 	// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. In this function,
 	// we simulate the behavior of the Ray Autoscaler after the scaling process has finished.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		gomega.Eventually(
 			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
 			time.Second*9, time.Millisecond*500).Should(gomega.BeNil(), "raycluster = %v", rayCluster)
-		rayCluster.Spec.WorkerGroupSpecs[workerGroupIndex].ScaleStrategy.WorkersToDelete = []string{}
+		rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 		return k8sClient.Update(ctx, rayCluster)
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to clean up WorkersToDelete")
@@ -86,10 +86,28 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, w
 
 func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
 	return func() (rayv1.JobDeploymentStatus, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
 			return "", err
 		}
 		return rayJob.Status.JobDeploymentStatus, nil
+	}
+}
+
+func getRayJobSucceededStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Succeeded, nil
+	}
+}
+
+func getRayJobFailedStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Failed, nil
 	}
 }
 
