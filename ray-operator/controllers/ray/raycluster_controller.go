@@ -332,18 +332,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	// Calculate the new status for the RayCluster. Note that the function will deep copy `instance` instead of mutating it.
 	newInstance, calculateErr := r.calculateStatus(ctx, instance, reconcileErr)
+	var updateErr error
 	if calculateErr != nil {
 		logger.Info("Got error when calculating new status", "cluster name", request.Name, "error", calculateErr)
-	}
-
-	// Check if the status needs to be updated.
-	var updateErr error
-	if calculateErr == nil && r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status) {
-		logger.Info("rayClusterReconcile", "Update CR status", request.Name, "status", newInstance.Status)
-		updateErr = r.Status().Update(ctx, newInstance)
-		if updateErr != nil {
-			logger.Info("Got error when updating status", "cluster name", request.Name, "error", updateErr, "RayCluster", newInstance)
-		}
+	} else {
+		updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
 
 	// Return error based on order.
@@ -1451,24 +1444,17 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 	return nil
 }
 
-func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance *rayv1.RayCluster, clusterState rayv1.ClusterState) error {
+func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Status.State == clusterState {
+	if !r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status) {
 		return nil
 	}
-	instance.Status.State = clusterState
-	logger.Info("updateClusterState", "Update CR Status.State", clusterState)
-	return r.Status().Update(ctx, instance)
-}
-
-func (r *RayClusterReconciler) updateClusterReason(ctx context.Context, instance *rayv1.RayCluster, clusterReason string) error {
-	logger := ctrl.LoggerFrom(ctx)
-	if instance.Status.Reason == clusterReason {
-		return nil
+	logger.Info("updateRayClusterStatus", "name", originalRayClusterInstance.Name, "old status", originalRayClusterInstance.Status, "new status", newInstance.Status)
+	err := r.Status().Update(ctx, newInstance)
+	if err != nil {
+		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	}
-	instance.Status.Reason = clusterReason
-	logger.Info("updateClusterReason", "Update CR Status.Reason", clusterReason)
-	return r.Status().Update(ctx, instance)
+	return err
 }
 
 // sumGPUs sums the GPUs in the given resource list.

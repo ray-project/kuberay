@@ -1257,7 +1257,9 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	}
 	reason := "test reason"
 
-	err = testRayClusterReconciler.updateClusterReason(ctx, testRayCluster, reason)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.Reason = reason
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster reason")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
@@ -1532,7 +1534,9 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	}
 
 	state := rayv1.Ready
-	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.State = state
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
