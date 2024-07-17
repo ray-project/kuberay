@@ -10,6 +10,6 @@ metadata:
   labels: {{ include "kuberay-operator.labels" $ | nindent 4 }}
   name: {{ include "kuberay-operator.fullname" $ }}
   namespace: {{ $namespace }}
-{{ include "role.consistencyRules" (dict "batchSchedulerEnabled" $.Values.batchScheduler.enabled) }}
+{{ include "role.consistentRules" (dict "batchSchedulerEnabled" $.Values.batchScheduler.enabled) }}
 {{- end }}
 {{- end }}
