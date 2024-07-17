@@ -56,7 +56,7 @@ Create the name of the service account to use
 {{- end -}}
 
 {{/*
-Create a template for role consistency rules.
+Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistencyRules" -}}
 rules:
