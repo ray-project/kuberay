@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +33,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -119,7 +120,7 @@ var _ reconcile.Reconciler = &RayClusterReconciler{}
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
+	Scheme            *k8sruntime.Scheme
 	Recorder          record.EventRecorder
 	BatchSchedulerMgr *batchscheduler.SchedulerManager
 
@@ -306,26 +307,14 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		r.reconcileIngress,
 		r.reconcileHeadService,
 		r.reconcileHeadlessService,
-		// reconcileServeService
-		func(ctx context.Context, instance *rayv1.RayCluster) error {
-			// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
-			if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
-				return r.reconcileServeService(ctx, instance)
-			}
-			return nil
-		},
-		// reconcilePods
-		func(ctx context.Context, instance *rayv1.RayCluster) error {
-			err := r.reconcilePods(ctx, instance)
-			if err != nil {
-				r.Recorder.Event(instance, corev1.EventTypeWarning, string(rayv1.PodReconciliationError), err.Error())
-			}
-			return err
-		},
+		r.reconcileServeService,
+		r.reconcilePods,
 	}
 
 	for _, fn := range reconcileFuncs {
 		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
+			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
 			break
 		}
 	}
@@ -538,6 +527,11 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 
 // Return nil only when the serve service successfully created or already exists.
 func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
+	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
+	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; !exist || enableServeServiceValue != utils.EnableServeServiceTrue {
+		return nil
+	}
+
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
 	svc := &corev1.Service{}
 	err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), svc)
