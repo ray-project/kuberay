@@ -7,7 +7,6 @@ on:
       - 'release-*'
     paths-ignore:
       - 'apiserver/**'
-      - 'cli/**'
       - 'docs/**'
       - '**.adoc'
       - '**.md'
@@ -18,7 +17,6 @@ on:
       - 'release-*'
     paths-ignore:
       - 'apiserver/**'
-      - 'cli/**'
       - 'docs/**'
       - '**.adoc'
       - '**.md'
