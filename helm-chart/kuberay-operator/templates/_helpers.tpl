@@ -58,7 +58,7 @@ Create the name of the service account to use
 {{/*
 Create a template to ensure consistency for Role and ClusterRole.
 */}}
-{{- define "role.consistencyRules" -}}
+{{- define "role.consistentRules" -}}
 rules:
 - apiGroups:
   - batch
