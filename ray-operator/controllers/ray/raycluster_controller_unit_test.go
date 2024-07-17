@@ -1257,7 +1257,9 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	}
 	reason := "test reason"
 
-	err = testRayClusterReconciler.updateClusterReason(ctx, testRayCluster, reason)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.Reason = reason
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster reason")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
@@ -1496,7 +1498,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
+	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
@@ -1532,7 +1534,9 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	}
 
 	state := rayv1.Ready
-	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.State = state
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
@@ -1676,7 +1680,7 @@ func TestCalculateStatus(t *testing.T) {
 	}
 
 	// Test head information
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
@@ -1729,7 +1733,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	preUpdateTime := metav1.Now()
 	testRayCluster.Status.State = rayv1.Ready
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
