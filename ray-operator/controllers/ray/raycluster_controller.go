@@ -199,6 +199,16 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// Please do NOT modify `originalRayClusterInstance` in the following code.
 	originalRayClusterInstance := instance.DeepCopy()
 
+	isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, instance)
+	if err != nil {
+		logger.Info(("Failed to check whether the head Pod is running and ready"), "error", err)
+	}
+	if !isRunningAndReady {
+		logger.Info("The head Pod is not running and ready, requeue the RayCluster CR after 5 seconds.")
+	} else {
+		logger.Info("The head Pod is running and ready, start to reconcile the RayCluster CR.")
+	}
+
 	// The `enableGCSFTRedisCleanup` is a feature flag introduced in KubeRay v1.0.0. It determines whether
 	// the Redis cleanup job should be activated. Users can disable the feature by setting the environment
 	// variable `ENABLE_GCS_FT_REDIS_CLEANUP` to `false`, and undertake the Redis storage namespace cleanup
@@ -435,6 +445,51 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	}
 	// plain vanilla kubernetes - create ingress
 	return r.reconcileIngressKubernetes(ctx, instance)
+}
+
+type AssociationOption interface {
+	client.ListOption
+	client.DeleteAllOfOption
+}
+
+type AssociationOptions []AssociationOption
+
+func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			"ray.io/cluster":   instance.Name,
+			"ray.io/node-type": string(rayv1.HeadNode),
+		},
+	}
+}
+
+func (list AssociationOptions) ToListOptions() (options []client.ListOption) {
+	for _, option := range list {
+		options = append(options, option.(client.ListOption))
+	}
+	return options
+}
+
+func (r *RayClusterReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
+	podList := corev1.PodList{}
+	if err := r.List(ctx, &podList, RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		return nil, err
+	}
+
+	if len(podList.Items) != 1 {
+		return nil, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+	}
+
+	return &podList.Items[0], nil
+}
+
+func (r *RayClusterReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
+	headPod, err := r.getHeadPod(ctx, instance)
+	if err != nil {
+		return false, err
+	}
+	return utils.IsRunningAndReady(headPod), nil
 }
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1192,6 +1247,12 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
+	// logger := ctrl.LoggerFrom(ctx)
+	// condition := metav1.Condition{
+	// 	Type: string(rayv1.HeadReady),
+	// }
+	// newInstance.Status.Conditions = append(newInstance.Status.Conditions, condition)
+	// logger.Info(fmt.Sprintf("Going to append condition %v for ray cluster %v", condition, newInstance.Name))
 
 	if utils.CheckAllPodsRunning(ctx, runtimePods) {
 		newInstance.Status.State = rayv1.Ready
@@ -1455,6 +1516,16 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 
 	return nil
 }
+
+// func (r *RayClusterReconciler) updateClusterConditions(ctx context.Context, instance *rayv1.RayCluster, clusterCondition rayv1.RayClusterConditionType) error {
+// 	logger := ctrl.LoggerFrom(ctx)
+// 	if instance.Status.Conditions == clusterCondition {
+// 		return nil
+// 	}
+// 	instance.Status.State = clusterState
+// 	logger.Info("updateClusterState", "Update CR Status.State", clusterState)
+// 	return r.Status().Update(ctx, instance)
+// }
 
 func (r *RayClusterReconciler) updateClusterState(ctx context.Context, instance *rayv1.RayCluster, clusterState rayv1.ClusterState) error {
 	logger := ctrl.LoggerFrom(ctx)
