@@ -220,20 +220,25 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	var isRunningAndReady bool
-	isRunningAndReady, err = r.isHeadPodRunningAndReady(ctx, instance)
-	if err != nil {
-		logger.Info(("Failed to check whether the head Pod is running and ready"), "error", err)
-	}
-	if !isRunningAndReady {
-		logger.Info("The head Pod is not running and ready, requeue the RayCluster CR after 5 seconds.")
-	} else {
-		replicaHeadReadyCondition.Status = metav1.ConditionTrue
-		replicaHeadReadyCondition.Reason = "HeadPodRunningAndReady"
-		replicaHeadReadyCondition.Message = "The head Pod is running and ready."
-		logger.Info("The head Pod is running and ready, start to reconcile the RayCluster CR.")
-	}
 
 	defer func() {
+		// Question:
+		// 1. where should we check the head pod is running and ready?
+		isRunningAndReady, err = r.isHeadPodRunningAndReady(ctx, instance)
+		if err != nil {
+			logger.Info(("Failed to check whether the head Pod is running and ready"), "error", err)
+		}
+		if !isRunningAndReady {
+			replicaHeadReadyCondition.Status = metav1.ConditionFalse
+			replicaHeadReadyCondition.Reason = "Not Running yet"
+			replicaHeadReadyCondition.Message = "The head Pod is not running and ready."
+			logger.Info("The head Pod is not running and ready, requeue the RayCluster CR after 5 seconds.")
+		} else {
+			replicaHeadReadyCondition.Status = metav1.ConditionTrue
+			replicaHeadReadyCondition.Reason = "HeadPodRunningAndReady"
+			replicaHeadReadyCondition.Message = "The head Pod is running and ready."
+			logger.Info("The head Pod is running and ready, start to reconcile the RayCluster CR.")
+		}
 		if newInstance == nil { // calculate a new RayCluster instance if we don't have one.
 			newInstance, err = r.calculateStatus(ctx, instance, nil)
 			if err != nil {
@@ -370,7 +375,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	// Return error based on order.
-	// var err error
 	if reconcileErr != nil {
 		err = reconcileErr
 	} else if calculateErr != nil {
@@ -450,33 +454,9 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	return r.reconcileIngressKubernetes(ctx, instance)
 }
 
-type AssociationOption interface {
-	client.ListOption
-	client.DeleteAllOfOption
-}
-
-type AssociationOptions []AssociationOption
-
-func RayClusterHeadPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
-	return AssociationOptions{
-		client.InNamespace(instance.Namespace),
-		client.MatchingLabels{
-			"ray.io/cluster":   instance.Name,
-			"ray.io/node-type": string(rayv1.HeadNode),
-		},
-	}
-}
-
-func (list AssociationOptions) ToListOptions() (options []client.ListOption) {
-	for _, option := range list {
-		options = append(options, option.(client.ListOption))
-	}
-	return options
-}
-
 func (r *RayClusterReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	podList := corev1.PodList{}
-	if err := r.List(ctx, &podList, RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return nil, err
 	}
 

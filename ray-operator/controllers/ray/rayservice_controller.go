@@ -22,15 +22,17 @@ import (
 	fmtErrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -1055,13 +1057,12 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
 	// This is not an issue since `UpdateDeployments` is an idempotent operation.
 	logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
-	if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
-		if err != nil {
-			logger.Error(err, "Failed to check if head Pod is running and ready!")
-		} else {
-			logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
-		}
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+
+	// check the latest condition of the head Pod to see if it is ready.
+	condition := meta.FindStatusCondition(rayClusterInstance.Status.Conditions, string(rayv1.HeadReady))
+	if condition == nil || condition.Status != metav1.ConditionTrue {
+		logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
 	}
 
 	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, error.
