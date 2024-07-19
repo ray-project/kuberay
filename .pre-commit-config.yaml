@@ -36,3 +36,13 @@ repos:
         language: golang
         require_serial: true
         files: ^ray-operator/
+
+  - repo: local
+    hooks:
+      - id: golangci-lint-kubectl-plugin
+        name: golangci-lint (kubectl-plugin)
+        entry: bash -c 'cd kubectl-plugin && golangci-lint run --fix --timeout 10m0s; status=$?; cd ..; exit $status'
+        types: [ go ]
+        language: golang
+        require_serial: true
+        files: ^kubectl-plugin/

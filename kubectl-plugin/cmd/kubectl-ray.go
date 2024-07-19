@@ -1,11 +1,10 @@
 package main
 
 import (
-	flag "github.com/spf13/pflag"
-
 	"os"
 
 	cmd "github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd"
+	flag "github.com/spf13/pflag"
 )
 
 func main() {
