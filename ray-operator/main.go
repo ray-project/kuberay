@@ -126,7 +126,7 @@ func main() {
 		config.LogStdoutEncoder = logStdoutEncoder
 		config.EnableBatchScheduler = ray.EnableBatchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
-		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
+		config.DeleteRayJobAfterJobFinishes = strings.ToLower(os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)) == "true"
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -220,11 +220,12 @@ func main() {
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
 	}
 	ctx := ctrl.SetupSignalHandler()
+	rayClientProvider := &utils.RayClientProvider{Configuration: config}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, rayClientProvider).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayClientProvider, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {

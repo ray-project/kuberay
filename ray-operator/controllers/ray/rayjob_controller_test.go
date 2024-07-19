@@ -17,7 +17,6 @@ package ray
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -423,8 +422,11 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 
 		It("If DELETE_RAYJOB_CR_AFTER_JOB_FINISHES environement variable is set, RayJob should be deleted.", func() {
-			os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
-			defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+			rayJobReconciler.deleteRayJobAfterJobFinishes = true
+			defer func() {
+				rayJobReconciler.deleteRayJobAfterJobFinishes = false
+			}()
+
 			Eventually(
 				func() bool {
 					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)())
