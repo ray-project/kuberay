@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	errstd "errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -10,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -391,6 +394,12 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 			oldStatus.Endpoints, newStatus.Endpoints, oldStatus.Head, newStatus.Head))
 		return true
 	}
+	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
+		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
+			"old Conditions: %v, new Conditions: %v",
+			oldStatus.Conditions, newStatus.Conditions))
+		return true
+	}
 	return false
 }
 
@@ -591,7 +600,17 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 	return nil
 }
 
+// reconcilePodsErr is a marker used by the calculateStatus() for setting the RayClusterReplicaFailure condition.
+var reconcilePodsErr = errstd.New("reconcile pods error")
+
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
+	if err := r.doReconcilePods(ctx, instance); err != nil {
+		return fmt.Errorf("%w: %w", reconcilePodsErr, err)
+	}
+	return nil
+}
+
+func (r *RayClusterReconciler) doReconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// if RayCluster is suspended, delete all pods and skip reconcile
@@ -1148,6 +1167,22 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1.RayCluster, reconcileErr error) (*rayv1.RayCluster, error) {
 	// Deep copy the instance, so we don't mutate the original object.
 	newInstance := instance.DeepCopy()
+
+	if features.Enabled(features.RayClusterStatusConditions) {
+		if reconcileErr != nil {
+			if errstd.Is(reconcileErr, reconcilePodsErr) {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterReplicaFailure),
+					Status:  metav1.ConditionTrue,
+					Reason:  "FailedReconcilePods",
+					Message: reconcileErr.Error(),
+				})
+			}
+		} else {
+			// if reconcileErr == nil, we can safely remove the RayClusterReplicaFailure condition.
+			meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure))
+		}
+	}
 
 	if reconcileErr != nil {
 		newInstance.Status.State = rayv1.Failed
