@@ -605,7 +605,7 @@ var reconcilePodsErr = errstd.New("reconcile pods error")
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	if err := r.doReconcilePods(ctx, instance); err != nil {
-		return fmt.Errorf("%w: %w", reconcilePodsErr, err)
+		return errstd.Join(reconcilePodsErr, err)
 	}
 	return nil
 }
