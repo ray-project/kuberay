@@ -1587,7 +1587,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Case 1: `State` is different => return true
 	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Failed
+	newStatus.State = rayv1.Suspended
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
 	// Case 2: `Reason` is different => return true

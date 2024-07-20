@@ -1165,6 +1165,12 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 }
 
 func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1.RayCluster, reconcileErr error) (*rayv1.RayCluster, error) {
+	// TODO: Replace this log and use reconcileErr to set the condition field.
+	logger := ctrl.LoggerFrom(ctx)
+	if reconcileErr != nil {
+		logger.Info("Reconciliation error", "error", reconcileErr)
+	}
+
 	// Deep copy the instance, so we don't mutate the original object.
 	newInstance := instance.DeepCopy()
 
@@ -1184,46 +1190,41 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 	}
 
-	if reconcileErr != nil {
-		newInstance.Status.State = rayv1.Failed
-		newInstance.Status.Reason = reconcileErr.Error()
-	} else {
-		// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
-		newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
+	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
+	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
-		runtimePods := corev1.PodList{}
-		filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
-		if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
-			return nil, err
-		}
+	runtimePods := corev1.PodList{}
+	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
+	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
+		return nil, err
+	}
 
-		newInstance.Status.ReadyWorkerReplicas = utils.CalculateReadyReplicas(runtimePods)
-		newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
-		newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
-		newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
-		newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
+	newInstance.Status.ReadyWorkerReplicas = utils.CalculateReadyReplicas(runtimePods)
+	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
+	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
+	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
+	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 
-		totalResources := utils.CalculateDesiredResources(newInstance)
-		newInstance.Status.DesiredCPU = totalResources[corev1.ResourceCPU]
-		newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
-		newInstance.Status.DesiredGPU = sumGPUs(totalResources)
-		newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
+	totalResources := utils.CalculateDesiredResources(newInstance)
+	newInstance.Status.DesiredCPU = totalResources[corev1.ResourceCPU]
+	newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
+	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
+	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready
-		}
+	if utils.CheckAllPodsRunning(ctx, runtimePods) {
+		newInstance.Status.State = rayv1.Ready
+	}
 
-		if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
-			newInstance.Status.State = rayv1.Suspended
-		}
+	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
+		newInstance.Status.State = rayv1.Suspended
+	}
 
-		if err := r.updateEndpoints(ctx, newInstance); err != nil {
-			return nil, err
-		}
+	if err := r.updateEndpoints(ctx, newInstance); err != nil {
+		return nil, err
+	}
 
-		if err := r.updateHeadInfo(ctx, newInstance); err != nil {
-			return nil, err
-		}
+	if err := r.updateHeadInfo(ctx, newInstance); err != nil {
+		return nil, err
 	}
 
 	timeNow := metav1.Now()
