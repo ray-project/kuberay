@@ -16,10 +16,9 @@ import (
 )
 
 type ClusterOptions struct {
-	configFlags *genericclioptions.ConfigFlags
-
-	AllNamespaces bool
+	configFlags   *genericclioptions.ConfigFlags
 	args          []string
+	AllNamespaces bool
 }
 
 func NewClusterOptions() *ClusterOptions {
@@ -44,10 +43,7 @@ func NewClusterGetCommand() *cobra.Command {
 				return err
 			}
 			// running cmd.Execute or cmd.ExecuteE sets the context, which will be done by root
-			if err := options.Run(cmd.Context()); err != nil {
-				return err
-			}
-			return nil
+			return options.Run(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVarP(&options.AllNamespaces, "all-namespaces", "A", options.AllNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
@@ -68,7 +64,7 @@ func (options *ClusterOptions) Validate() error {
 	// Overrides and binds the kube config then retrieves the merged result
 	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
-		return fmt.Errorf("Error retriving raw config: %v", err)
+		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
 	if len(config.CurrentContext) == 0 {
 		return fmt.Errorf("no context is currently set, use %q to select a new one", "kubectl config use-context <context>")
@@ -101,7 +97,7 @@ func (options *ClusterOptions) Run(ctx context.Context) error {
 
 	var rayclustersList *unstructured.UnstructuredList
 
-	var listopts = v1.ListOptions{}
+	listopts := v1.ListOptions{}
 	if len(options.args) == 1 {
 		listopts = v1.ListOptions{
 			FieldSelector: fmt.Sprintf("metadata.name=%s", options.args[0]),
