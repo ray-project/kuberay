@@ -16,6 +16,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -1188,17 +1189,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	// Check if the head node is running and ready with proper reason and message
-	isRayHeadRunning, reason, message := utils.CheckRayHeadRunningAndReady(ctx, runtimePods)
-	replicaHeadReadyCondition := metav1.Condition{
-		Type:    string(rayv1.HeadReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  reason,
-		Message: message,
+	if features.Enabled(features.RayClusterStatusConditions) {
+		isRayHeadRunning, reason, message := utils.CheckRayHeadRunningAndReady(ctx, runtimePods)
+		replicaHeadReadyCondition := metav1.Condition{
+			Type:    string(rayv1.HeadReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  reason,
+			Message: message,
+		}
+		if isRayHeadRunning {
+			replicaHeadReadyCondition.Status = metav1.ConditionStatus(corev1.ConditionTrue)
+		}
+		meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition)
 	}
-	if isRayHeadRunning {
-		replicaHeadReadyCondition.Status = metav1.ConditionStatus(corev1.ConditionTrue)
-	}
-	meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition)
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
 		newInstance.Status.State = rayv1.Suspended

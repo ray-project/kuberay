@@ -15,6 +15,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	cmap "github.com/orcaman/concurrent-map/v2"
 
@@ -1059,10 +1060,21 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
 
 	// check the latest condition of the head Pod to see if it is ready.
-	condition := meta.FindStatusCondition(rayClusterInstance.Status.Conditions, string(rayv1.HeadReady))
-	if condition == nil || condition.Status != metav1.ConditionTrue {
-		logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
+	if features.Enabled(features.RayClusterStatusConditions) {
+		condition := meta.FindStatusCondition(rayClusterInstance.Status.Conditions, string(rayv1.HeadReady))
+		if condition == nil || condition.Status != metav1.ConditionTrue {
+			logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
+		}
+	} else {
+		if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
+			if err != nil {
+				logger.Error(err, "Failed to check if head Pod is running and ready!")
+			} else {
+				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
+			}
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+		}
 	}
 
 	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, error.
