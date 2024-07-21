@@ -94,7 +94,7 @@ func CheckRayHeadRunningAndReady(ctx context.Context, pods corev1.PodList) (bool
 		log.Info("No head pod found in the pod list")
 		return false, "HeadPodNotFound", "No head pod found in the pod list"
 	}
-	log.Info("Head pod is running and ready !!!")
+	log.Info("Head pod is running and ready")
 	return true, "HeadPodRunningAndReady", "Head pod is running and ready"
 }
 

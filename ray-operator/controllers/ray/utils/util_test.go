@@ -201,6 +201,31 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
+func createRayHeadPodWithPhaseAndCOndition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-head",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/node-type": string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   typ,
+					Status: status,
+				},
+			},
+		},
+	}
+}
+
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
 	tests := map[string]struct {
 		input *rayv1.RayCluster
@@ -520,6 +545,45 @@ env_vars:
 			} else {
 				assert.NotNil(t, err)
 			}
+		})
+	}
+}
+
+func TestCheckRayHeadRunningAndReady(t *testing.T) {
+	tests := map[string]struct {
+		pods     corev1.PodList
+		expected bool
+	}{
+		"should return true if Ray head pod is running and ready": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCOndition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+				},
+			},
+			expected: true,
+		},
+		"should return false if Ray head pod is not running": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCOndition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+				},
+			},
+			expected: false,
+		},
+		"should return false if Ray head pod is not ready": {
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCOndition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			isRunning, _, _ := CheckRayHeadRunningAndReady(context.Background(), tc.pods)
+			assert.Equal(t, tc.expected, isRunning)
 		})
 	}
 }

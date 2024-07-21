@@ -25,6 +25,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -1664,6 +1666,12 @@ func TestCalculateStatus(t *testing.T) {
 		Status: corev1.PodStatus{
 			PodIP: headNodeIP,
 			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
 		},
 	}
 	runtimeObjects := []runtime.Object{headPod, headService}
@@ -1687,6 +1695,47 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+
+	// Test empty conditions with feature gate disabled
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.Empty(t, newInstance.Status.Conditions)
+
+	// enable feature gate for the following tests
+	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+
+	// Test CheckRayHeadRunningAndReady with head pod running and ready
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionTrue))
+	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.Equal(t, "HeadPodRunningAndReady", condition.Reason)
+	assert.Equal(t, "Head pod is running and ready", condition.Message)
+
+	// Test CheckRayHeadRunningAndReady with head pod not ready
+	headPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.Equal(t, "HeadPodNotReady", condition.Reason)
+	assert.Equal(t, "Head pod is not ready", condition.Message)
+
+	// Test CheckRayHeadRunningAndReady with head pod not running
+	headPod.Status.Phase = corev1.PodFailed
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.Equal(t, "HeadPodNotRunning", condition.Reason)
+	assert.Equal(t, "Head pod is not running", condition.Message)
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {

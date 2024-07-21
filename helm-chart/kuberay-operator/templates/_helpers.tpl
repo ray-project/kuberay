@@ -54,3 +54,18 @@ Create the name of the service account to use
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
+
+
+{{/*
+FeatureGates
+*/}}
+{{- define "kuberay.featureGates" -}}
+{{- $features := "" }}
+{{- range .Values.featureGates }}
+  {{- $str := printf "%s=%t," .name .enabled }}
+  {{- $features = print $features $str }}
+{{- end }}
+{{- with .Values.featureGates }}
+--feature-gates={{ $features | trimSuffix "," }}
+{{- end }}
+{{- end }}

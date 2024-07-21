@@ -58,6 +58,11 @@ readinessProbe:
 batchScheduler:
   enabled: false
 
+featureGates:
+  - name: RayClusterStatusConditions
+    enabled: false
+
+
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
 podSecurityContext: {}
