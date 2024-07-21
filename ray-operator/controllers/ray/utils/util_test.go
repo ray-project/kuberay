@@ -201,7 +201,7 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
-func createRayHeadPodWithPhaseAndCOndition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -557,7 +557,7 @@ func TestCheckRayHeadRunningAndReady(t *testing.T) {
 		"should return true if Ray head pod is running and ready": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCOndition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
 				},
 			},
 			expected: true,
@@ -565,7 +565,7 @@ func TestCheckRayHeadRunningAndReady(t *testing.T) {
 		"should return false if Ray head pod is not running": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCOndition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
 				},
 			},
 			expected: false,
@@ -573,7 +573,7 @@ func TestCheckRayHeadRunningAndReady(t *testing.T) {
 		"should return false if Ray head pod is not ready": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCOndition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
 				},
 			},
 			expected: false,
