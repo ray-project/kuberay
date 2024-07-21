@@ -71,6 +71,33 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
+// CheckRayHeadRunningAndReady returns (isRayHeadRunning, reason, message) tuple.
+func CheckRayHeadRunningAndReady(ctx context.Context, pods corev1.PodList) (bool, string, string) {
+	log := ctrl.LoggerFrom(ctx)
+	headPodFound := false
+	for _, pod := range pods.Items {
+		if pod.Labels[RayNodeTypeLabelKey] == string(rayv1.HeadNode) {
+			headPodFound = true
+			if pod.Status.Phase != corev1.PodRunning {
+				log.Info(fmt.Sprintf("Head pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+				return false, "HeadPodNotRunning", "Head pod is not running"
+			}
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
+					log.Info(fmt.Sprintf("Head pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+					return false, "HeadPodNotReady", "Head pod is not ready"
+				}
+			}
+		}
+	}
+	if !headPodFound {
+		log.Info("No head pod found in the pod list")
+		return false, "HeadPodNotFound", "No head pod found in the pod list"
+	}
+	log.Info("Head pod is running and ready !!!")
+	return true, "HeadPodRunningAndReady", "Head pod is running and ready"
+}
+
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {

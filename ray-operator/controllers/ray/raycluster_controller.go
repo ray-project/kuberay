@@ -213,47 +213,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	var err error
 	var newInstance *rayv1.RayCluster
 
-	// replicaHeadReadyCondition, a default HeadReady condition with Status = False.
-	replicaHeadReadyCondition := metav1.Condition{
-		Type:   string(rayv1.HeadReady),
-		Status: metav1.ConditionFalse,
-	}
-
-	var isRunningAndReady bool
-
-	defer func() {
-		// Question:
-		// 1. where should we check the head pod is running and ready?
-		isRunningAndReady, err = r.isHeadPodRunningAndReady(ctx, instance)
-		if err != nil {
-			logger.Info(("Failed to check whether the head Pod is running and ready"), "error", err)
-		}
-		if !isRunningAndReady {
-			replicaHeadReadyCondition.Status = metav1.ConditionFalse
-			replicaHeadReadyCondition.Reason = "Not Running yet"
-			replicaHeadReadyCondition.Message = "The head Pod is not running and ready."
-			logger.Info("The head Pod is not running and ready, requeue the RayCluster CR after 5 seconds.")
-		} else {
-			replicaHeadReadyCondition.Status = metav1.ConditionTrue
-			replicaHeadReadyCondition.Reason = "HeadPodRunningAndReady"
-			replicaHeadReadyCondition.Message = "The head Pod is running and ready."
-			logger.Info("The head Pod is running and ready, start to reconcile the RayCluster CR.")
-		}
-		if newInstance == nil { // calculate a new RayCluster instance if we don't have one.
-			newInstance, err = r.calculateStatus(ctx, instance, nil)
-			if err != nil {
-				logger.Info("Got error when calculating new status", "cluster name", request.Name, "error", err)
-				return
-			}
-		}
-		if meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition) {
-			if err := r.Status().Update(ctx, newInstance); err != nil {
-				logger.Info("Got error when updating status", "cluster name", request.Name, "error", err, "RayCluster", newInstance)
-				return
-			}
-		}
-	}()
-
 	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
@@ -436,6 +395,12 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 			oldStatus.Endpoints, newStatus.Endpoints, oldStatus.Head, newStatus.Head))
 		return true
 	}
+	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
+		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
+			"old Conditions: %v, new Conditions: %v",
+			oldStatus.Conditions, newStatus.Conditions))
+		return true
+	}
 	return false
 }
 
@@ -452,27 +417,6 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 	}
 	// plain vanilla kubernetes - create ingress
 	return r.reconcileIngressKubernetes(ctx, instance)
-}
-
-func (r *RayClusterReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
-	podList := corev1.PodList{}
-	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
-		return nil, err
-	}
-
-	if len(podList.Items) != 1 {
-		return nil, fmt.Errorf("found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
-	}
-
-	return &podList.Items[0], nil
-}
-
-func (r *RayClusterReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	headPod, err := r.getHeadPod(ctx, instance)
-	if err != nil {
-		return false, err
-	}
-	return utils.IsRunningAndReady(headPod), nil
 }
 
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1245,6 +1189,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	if utils.CheckAllPodsRunning(ctx, runtimePods) {
 		newInstance.Status.State = rayv1.Ready
 	}
+
+	// Check if the head node is running and ready with proper reason and message
+	isRayHeadRunning, reason, message := utils.CheckRayHeadRunningAndReady(ctx, runtimePods)
+	replicaHeadReadyCondition := metav1.Condition{
+		Type:    string(rayv1.HeadReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: message,
+	}
+	if isRayHeadRunning {
+		replicaHeadReadyCondition.Status = metav1.ConditionStatus(corev1.ConditionTrue)
+	}
+	meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition)
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
 		newInstance.Status.State = rayv1.Suspended
