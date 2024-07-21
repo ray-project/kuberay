@@ -210,9 +210,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// manually after the RayCluster CR deletion.
 	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
-	var err error
-	var newInstance *rayv1.RayCluster
-
 	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
@@ -324,8 +321,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	// Calculate the new status for the RayCluster. Note that the function will deep copy `instance` instead of mutating it.
-	var calculateErr error
-	newInstance, calculateErr = r.calculateStatus(ctx, instance, reconcileErr)
+	newInstance, calculateErr := r.calculateStatus(ctx, instance, reconcileErr)
 	var updateErr error
 	if calculateErr != nil {
 		logger.Info("Got error when calculating new status", "cluster name", request.Name, "error", calculateErr)
@@ -334,6 +330,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	// Return error based on order.
+	var err error
 	if reconcileErr != nil {
 		err = reconcileErr
 	} else if calculateErr != nil {
