@@ -25,6 +25,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -1637,6 +1639,11 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus = oldStatus.DeepCopy()
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+
+	// Case 12: `Conditions` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestCalculateStatus(t *testing.T) {
@@ -1687,6 +1694,17 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+
+	// Test reconcilePodsErr with the feature gate disabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.Empty(t, newInstance.Status.Conditions)
+
+	// Test reconcilePodsErr with the feature gate enabled
+	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
