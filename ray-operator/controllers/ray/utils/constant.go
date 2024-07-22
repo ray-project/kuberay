@@ -1,9 +1,6 @@
 package utils
 
-import (
-	"errors"
-	"go.uber.org/multierr"
-)
+import "errors"
 
 const (
 
@@ -211,12 +208,11 @@ var (
 )
 
 func RayClusterReplicaFailureReason(err error) string {
-	errs := multierr.Errors(err)
-	if len(errs) < 2 {
-		return ""
+	if e, ok := err.(interface{ Unwrap() []error }); ok {
+		errs := e.Unwrap()
+		if len(errs) >= 2 && errors.Is(errs[0], ErrRayClusterReplicaFailure) {
+			return errs[1].Error()
+		}
 	}
-	if !errors.Is(errs[0], ErrRayClusterReplicaFailure) {
-		return ""
-	}
-	return errs[1].Error()
+	return ""
 }
