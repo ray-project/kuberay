@@ -395,9 +395,7 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old Conditions: %v, new Conditions: %v",
-			oldStatus.Conditions, newStatus.Conditions))
+		logger.Info("inconsistentRayClusterStatus", "old conditions", oldStatus.Conditions, "new conditions", newStatus.Conditions)
 		return true
 	}
 	return false
