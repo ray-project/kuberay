@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-func NewClusterCommand() *cobra.Command {
+func NewClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "cluster",
 		Short:        "Manage ray cluster resources",
@@ -21,6 +22,6 @@ func NewClusterCommand() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewClusterGetCommand())
+	cmd.AddCommand(NewClusterGetCommand(streams))
 	return cmd
 }
