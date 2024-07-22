@@ -75,8 +75,7 @@ securityContext:
 
 
 # enabled by default, disable leader election to solve k8s api timeout when leader election occur and 1 replica exist.
-leaderElection:
-  enabled: true
+leaderElectionEnabled: true
 
 # If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
