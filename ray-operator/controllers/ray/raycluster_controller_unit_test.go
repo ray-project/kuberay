@@ -1639,6 +1639,11 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus = oldStatus.DeepCopy()
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+
+	// Case 12: `Conditions` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestCalculateStatus(t *testing.T) {
@@ -1700,6 +1705,11 @@ func TestCalculateStatus(t *testing.T) {
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Empty(t, newInstance.Status.Conditions)
 
+	// Test reconcilePodsErr with the feature gate disabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.Empty(t, newInstance.Status.Conditions)
+
 	// enable feature gate for the following tests
 	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
 
@@ -1736,6 +1746,11 @@ func TestCalculateStatus(t *testing.T) {
 	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
 	assert.Equal(t, "HeadPodNotRunning", condition.Reason)
 	assert.Equal(t, "Head pod is not running", condition.Message)
+
+	// Test reconcilePodsErr with the feature gate enabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {

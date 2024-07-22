@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -586,4 +587,13 @@ func TestCheckRayHeadRunningAndReady(t *testing.T) {
 			assert.Equal(t, tc.expected, isRunning)
 		})
 	}
+}
+
+func TestErrRayClusterReplicaFailureReason(t *testing.T) {
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteAllPods), "FailedDeleteAllPods")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod), "FailedDeleteHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateHeadPod), "FailedCreateHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod), "FailedDeleteWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod), "FailedCreateWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
 }

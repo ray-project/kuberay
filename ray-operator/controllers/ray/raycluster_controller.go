@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	errstd "errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -33,7 +35,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -394,9 +395,7 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old Conditions: %v, new Conditions: %v",
-			oldStatus.Conditions, newStatus.Conditions))
+		logger.Info("inconsistentRayClusterStatus", "old conditions", oldStatus.Conditions, "new conditions", newStatus.Conditions)
 		return true
 	}
 	return false
@@ -605,7 +604,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// if RayCluster is suspended, delete all pods and skip reconcile
 	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
-			return err
+			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
 
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
@@ -640,7 +639,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		logger.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
-				return err
+				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
 			}
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
 				"Deleted head Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
@@ -653,7 +652,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
-			return err
+			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
@@ -671,7 +670,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		// delete all the extra head pod pods
 		for _, extraHeadPodToDelete := range headPods.Items {
 			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
-				return err
+				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
 			}
 		}
 	}
@@ -698,7 +697,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				numDeletedUnhealthyWorkerPods++
 				deletedWorkers[workerPod.Name] = deleted
 				if err := r.Delete(ctx, &workerPod); err != nil {
-					return err
+					return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 				}
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "Deleted",
 					"Deleted worker Pod %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
@@ -722,7 +721,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if err := r.Delete(ctx, &pod); err != nil {
 				if !errors.IsNotFound(err) {
 					logger.Info("reconcilePods", "Fail to delete Pod", pod.Name, "error", err)
-					return err
+					return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 				}
 				logger.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
 			} else {
@@ -757,7 +756,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			for i = 0; i < diff; i++ {
 				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
 				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
-					return err
+					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 				}
 			}
 		} else if diff == 0 {
@@ -790,7 +789,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
 						if !errors.IsNotFound(err) {
-							return err
+							return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 						}
 						logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
 					}
@@ -1162,6 +1161,22 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	// Deep copy the instance, so we don't mutate the original object.
 	newInstance := instance.DeepCopy()
+
+	if features.Enabled(features.RayClusterStatusConditions) {
+		if reconcileErr != nil {
+			if reason := utils.RayClusterReplicaFailureReason(reconcileErr); reason != "" {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterReplicaFailure),
+					Status:  metav1.ConditionTrue,
+					Reason:  reason,
+					Message: reconcileErr.Error(),
+				})
+			}
+		} else {
+			// if reconcileErr == nil, we can safely remove the RayClusterReplicaFailure condition.
+			meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure))
+		}
+	}
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
