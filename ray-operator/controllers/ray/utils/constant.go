@@ -1,5 +1,10 @@
 package utils
 
+import (
+	"errors"
+	"go.uber.org/multierr"
+)
+
 const (
 
 	// Default application name
@@ -193,4 +198,25 @@ const (
 // This is also the only function to construct label filter of resources originated from a given CRDType.
 func RayOriginatedFromCRDLabelValue(crdType CRDType) string {
 	return string(crdType)
+}
+
+// These are markers used by the calculateStatus() for setting the RayClusterReplicaFailure condition.
+var (
+	ErrRayClusterReplicaFailure = errors.New("RayClusterReplicaFailure")
+	ErrFailedDeleteAllPods      = errors.Join(ErrRayClusterReplicaFailure, errors.New("FailedDeleteAllPods"))
+	ErrFailedDeleteHeadPod      = errors.Join(ErrRayClusterReplicaFailure, errors.New("FailedDeleteHeadPod"))
+	ErrFailedCreateHeadPod      = errors.Join(ErrRayClusterReplicaFailure, errors.New("FailedCreateHeadPod"))
+	ErrFailedDeleteWorkerPod    = errors.Join(ErrRayClusterReplicaFailure, errors.New("FailedDeleteWorkerPod"))
+	ErrFailedCreateWorkerPod    = errors.Join(ErrRayClusterReplicaFailure, errors.New("FailedCreateWorkerPod"))
+)
+
+func RayClusterReplicaFailureReason(err error) string {
+	errs := multierr.Errors(err)
+	if len(errs) < 2 {
+		return ""
+	}
+	if !errors.Is(errs[0], ErrRayClusterReplicaFailure) {
+		return ""
+	}
+	return errs[1].Error()
 }
