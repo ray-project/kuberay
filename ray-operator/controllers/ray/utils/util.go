@@ -83,6 +83,7 @@ func FindHeadPodReadyCondition(pods corev1.PodList) metav1.Condition {
 	replicaHeadReadyCondition := metav1.Condition{
 		Type:   string(rayv1.HeadReady),
 		Status: metav1.ConditionFalse,
+		Reason: "HeadPodNotReady",
 	}
 
 	if headPod != nil {
@@ -93,13 +94,6 @@ func FindHeadPodReadyCondition(pods corev1.PodList) metav1.Condition {
 						Type:    string(rayv1.HeadReady),
 						Status:  metav1.ConditionTrue,
 						Reason:  "HeadPodRunningAndReady",
-						Message: cond.Message,
-					}
-				} else {
-					replicaHeadReadyCondition = metav1.Condition{
-						Type:    string(rayv1.HeadReady),
-						Status:  metav1.ConditionTrue,
-						Reason:  "HeadPodNotReady",
 						Message: cond.Message,
 					}
 				}
