@@ -71,6 +71,46 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
+func FindHeadPodReadyCondition(pods corev1.PodList) metav1.Condition {
+	var headPod *corev1.Pod
+	for _, pod := range pods.Items {
+		if pod.Labels[RayNodeTypeLabelKey] == string(rayv1.HeadNode) {
+			headPod = &pod
+			break
+		}
+	}
+
+	replicaHeadReadyCondition := metav1.Condition{
+		Type:   string(rayv1.HeadReady),
+		Status: metav1.ConditionFalse,
+	}
+
+	if headPod != nil {
+		for _, cond := range headPod.Status.Conditions {
+			if cond.Type == corev1.PodReady {
+				if cond.Status == corev1.ConditionTrue {
+					replicaHeadReadyCondition = metav1.Condition{
+						Type:    string(rayv1.HeadReady),
+						Status:  metav1.ConditionTrue,
+						Reason:  "HeadPodRunningAndReady",
+						Message: cond.Message,
+					}
+				} else {
+					replicaHeadReadyCondition = metav1.Condition{
+						Type:    string(rayv1.HeadReady),
+						Status:  metav1.ConditionTrue,
+						Reason:  "HeadPodNotReady",
+						Message: cond.Message,
+					}
+				}
+				break
+			}
+		}
+	}
+
+	return replicaHeadReadyCondition
+}
+
 // CheckRayHeadRunningAndReady returns (isRayHeadRunning, reason, message) tuple.
 func CheckRayHeadRunningAndReady(ctx context.Context, pods corev1.PodList) (bool, string, string) {
 	log := ctrl.LoggerFrom(ctx)
@@ -79,12 +119,12 @@ func CheckRayHeadRunningAndReady(ctx context.Context, pods corev1.PodList) (bool
 		if pod.Labels[RayNodeTypeLabelKey] == string(rayv1.HeadNode) {
 			headPodFound = true
 			if pod.Status.Phase != corev1.PodRunning {
-				log.Info(fmt.Sprintf("Head pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+				log.Info("Head pod is not running", "Pod Name", pod.Name, "Pod Status.Phase", pod.Status.Phase)
 				return false, "HeadPodNotRunning", "Head pod is not running"
 			}
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
-					log.Info(fmt.Sprintf("Head pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+					log.Info("Head pod is not ready", "Pod Name", pod.Name, "Pod Status.Conditions[PodReady]", cond)
 					return false, "HeadPodNotReady", "Head pod is not ready"
 				}
 			}

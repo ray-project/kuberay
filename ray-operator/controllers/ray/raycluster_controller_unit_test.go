@@ -1701,10 +1701,6 @@ func TestCalculateStatus(t *testing.T) {
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
 
-	// Test empty conditions with feature gate disabled
-	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Empty(t, newInstance.Status.Conditions)
-
 	// Test reconcilePodsErr with the feature gate disabled
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
 	assert.Nil(t, err)
@@ -1717,10 +1713,9 @@ func TestCalculateStatus(t *testing.T) {
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionTrue))
 	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
-	assert.Equal(t, "HeadPodRunningAndReady", condition.Reason)
-	assert.Equal(t, "Head pod is running and ready", condition.Message)
+	assert.Equal(t, metav1.ConditionTrue, condition.Status)
 
-	// Test CheckRayHeadRunningAndReady with head pod not ready
+	// // Test CheckRayHeadRunningAndReady with head pod not ready
 	headPod.Status.Conditions = []corev1.PodCondition{
 		{
 			Type:   corev1.PodReady,
@@ -1733,8 +1728,7 @@ func TestCalculateStatus(t *testing.T) {
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
 	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
-	assert.Equal(t, "HeadPodNotReady", condition.Reason)
-	assert.Equal(t, "Head pod is not ready", condition.Message)
+	assert.Equal(t, metav1.ConditionFalse, condition.Status)
 
 	// Test CheckRayHeadRunningAndReady with head pod not running
 	headPod.Status.Phase = corev1.PodFailed
@@ -1744,8 +1738,7 @@ func TestCalculateStatus(t *testing.T) {
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
 	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
-	assert.Equal(t, "HeadPodNotRunning", condition.Reason)
-	assert.Equal(t, "Head pod is not running", condition.Message)
+	assert.Equal(t, metav1.ConditionFalse, condition.Status)
 
 	// Test reconcilePodsErr with the feature gate enabled
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)

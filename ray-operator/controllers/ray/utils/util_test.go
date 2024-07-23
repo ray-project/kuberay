@@ -550,41 +550,50 @@ env_vars:
 	}
 }
 
-func TestCheckRayHeadRunningAndReady(t *testing.T) {
+func TestFindHeadPodReadyCondition(t *testing.T) {
 	tests := map[string]struct {
+		expected metav1.Condition
 		pods     corev1.PodList
-		expected bool
 	}{
-		"should return true if Ray head pod is running and ready": {
+		"condition true if Ray head pod is running and ready": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
 				},
 			},
-			expected: true,
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadReady),
+				Status: metav1.ConditionTrue,
+			},
 		},
-		"should return false if Ray head pod is not running": {
+		"condition false if Ray head pod is not running": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
 				},
 			},
-			expected: false,
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadReady),
+				Status: metav1.ConditionFalse,
+			},
 		},
-		"should return false if Ray head pod is not ready": {
+		"condition false if Ray head pod is not ready": {
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
 				},
 			},
-			expected: false,
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadReady),
+				Status: metav1.ConditionFalse,
+			},
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			isRunning, _, _ := CheckRayHeadRunningAndReady(context.Background(), tc.pods)
-			assert.Equal(t, tc.expected, isRunning)
+			replicaHeadReadyCondition := FindHeadPodReadyCondition(tc.pods)
+			assert.Equal(t, tc.expected.Status, replicaHeadReadyCondition.Status)
 		})
 	}
 }

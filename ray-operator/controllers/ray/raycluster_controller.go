@@ -1203,18 +1203,9 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		newInstance.Status.State = rayv1.Ready
 	}
 
-	// Check if the head node is running and ready with proper reason and message
+	// Check if the head node is running and ready by checking the head pod's status.
 	if features.Enabled(features.RayClusterStatusConditions) {
-		isRayHeadRunning, reason, message := utils.CheckRayHeadRunningAndReady(ctx, runtimePods)
-		replicaHeadReadyCondition := metav1.Condition{
-			Type:    string(rayv1.HeadReady),
-			Status:  metav1.ConditionFalse,
-			Reason:  reason,
-			Message: message,
-		}
-		if isRayHeadRunning {
-			replicaHeadReadyCondition.Status = metav1.ConditionStatus(corev1.ConditionTrue)
-		}
+		replicaHeadReadyCondition := utils.FindHeadPodReadyCondition(runtimePods)
 		meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition)
 	}
 
