@@ -14,10 +14,10 @@ import (
 
 const (
 	SchedulerName                    string = "yunikorn"
-	PodApplicationIDLabelName               = "applicationId"
-	PodQueueLabelName                       = "queue"
-	RayClusterApplicationIDLabelName        = "yunikorn.apache.org/application-id"
-	RayClusterQueueLabelName                = "yunikorn.apache.org/queue-name"
+	PodApplicationIDLabelName        string = "applicationId"
+	PodQueueLabelName                string = "queue"
+	RayClusterApplicationIDLabelName string = "yunikorn.apache.org/application-id"
+	RayClusterQueueLabelName         string = "yunikorn.apache.org/queue-name"
 )
 
 type YuniKornScheduler struct {
@@ -34,42 +34,35 @@ func (y *YuniKornScheduler) Name() string {
 	return SchedulerName
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
 }
 
 func (y *YuniKornScheduler) populatePodLabels(app *rayv1.RayCluster, pod *v1.Pod, sourceKey string, targetKey string) {
-	// check labels
-	if value, exist := app.Labels[sourceKey]; exist {
-		y.log.Info("Updating pod label based on RayCluster labels",
-			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
-		pod.Labels[targetKey] = value
-	}
-
 	// check annotations
-	if value, exist := app.Annotations[sourceKey]; exist {
+	if value, exist := app.Labels[sourceKey]; exist {
 		y.log.Info("Updating pod label based on RayCluster annotations",
 			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
 		pod.Labels[targetKey] = value
 	}
 }
 
-func (y *YuniKornScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupName string, pod *v1.Pod) {
+func (y *YuniKornScheduler) AddMetadataToPod(app *rayv1.RayCluster, _ string, pod *v1.Pod) {
 	y.populatePodLabels(app, pod, RayClusterApplicationIDLabelName, PodApplicationIDLabelName)
 	y.populatePodLabels(app, pod, RayClusterQueueLabelName, PodQueueLabelName)
 	pod.Spec.SchedulerName = y.Name()
 }
 
-func (yf *YuniKornSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
+func (yf *YuniKornSchedulerFactory) New(_ *rest.Config) (schedulerinterface.BatchScheduler, error) {
 	return &YuniKornScheduler{
 		log: logf.Log.WithName(SchedulerName),
 	}, nil
 }
 
-func (yf *YuniKornSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
-	return
+func (yf *YuniKornSchedulerFactory) AddToScheme(_ *runtime.Scheme) {
+	// No extra scheme needs to be registered
 }
 
 func (yf *YuniKornSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
