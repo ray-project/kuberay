@@ -148,7 +148,7 @@ const (
 	LOCAL_HOST = "127.0.0.1"
 	// Ray FT default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
-	DefaultReadinessProbeTimeoutSeconds      = 1
+	DefaultReadinessProbeTimeoutSeconds      = 2
 	DefaultReadinessProbePeriodSeconds       = 5
 	DefaultReadinessProbeSuccessThreshold    = 1
 	DefaultReadinessProbeFailureThreshold    = 10
@@ -156,7 +156,7 @@ const (
 
 	// Ray FT default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 30
-	DefaultLivenessProbeTimeoutSeconds      = 1
+	DefaultLivenessProbeTimeoutSeconds      = 2
 	DefaultLivenessProbePeriodSeconds       = 5
 	DefaultLivenessProbeSuccessThreshold    = 1
 	DefaultLivenessProbeFailureThreshold    = 120
@@ -169,7 +169,7 @@ const (
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
-	BaseWgetHealthCommand     = "wget -T 2 -q -O- http://localhost:%d/%s | grep success"
+	BaseWgetHealthCommand     = "wget -T %d -q -O- http://localhost:%d/%s | grep success"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"

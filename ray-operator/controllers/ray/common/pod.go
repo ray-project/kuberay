@@ -240,8 +240,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
-	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
+	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultReadinessProbeTimeoutSeconds, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
+	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultReadinessProbeFailureThreshold, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
 
 	// Generally, the liveness and readiness probes perform the same checks.
 	// For head node => Check GCS and Raylet status.
