@@ -110,7 +110,8 @@ type UpscalingMode string
 type ClusterState string
 
 const (
-	Ready     ClusterState = "ready"
+	Ready ClusterState = "ready"
+	// Failed is deprecated, but we keep it to avoid compilation errors in projects that import the KubeRay Golang module.
 	Failed    ClusterState = "failed"
 	Suspended ClusterState = "suspended"
 )

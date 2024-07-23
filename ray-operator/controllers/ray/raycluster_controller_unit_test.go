@@ -25,6 +25,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -1257,7 +1259,9 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	}
 	reason := "test reason"
 
-	err = testRayClusterReconciler.updateClusterReason(ctx, testRayCluster, reason)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.Reason = reason
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster reason")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
@@ -1496,7 +1500,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
+	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
@@ -1532,7 +1536,9 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	}
 
 	state := rayv1.Ready
-	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.State = state
+	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
@@ -1581,7 +1587,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Case 1: `State` is different => return true
 	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Failed
+	newStatus.State = rayv1.Suspended
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
 	// Case 2: `Reason` is different => return true
@@ -1633,6 +1639,11 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus = oldStatus.DeepCopy()
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+
+	// Case 12: `Conditions` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestCalculateStatus(t *testing.T) {
@@ -1676,13 +1687,24 @@ func TestCalculateStatus(t *testing.T) {
 	}
 
 	// Test head information
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+
+	// Test reconcilePodsErr with the feature gate disabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.Empty(t, newInstance.Status.Conditions)
+
+	// Test reconcilePodsErr with the feature gate enabled
+	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	assert.Nil(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
@@ -1729,7 +1751,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	preUpdateTime := metav1.Now()
 	testRayCluster.Status.State = rayv1.Ready
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
