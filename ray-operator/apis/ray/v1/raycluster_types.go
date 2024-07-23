@@ -177,6 +177,7 @@ const (
 type HeadInfo struct {
 	PodIP       string `json:"podIP,omitempty"`
 	ServiceIP   string `json:"serviceIP,omitempty"`
+	PodName     string `json:"podName,omitempty"`
 	ServiceName string `json:"serviceName,omitempty"`
 }
 

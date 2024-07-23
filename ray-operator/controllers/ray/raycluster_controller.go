@@ -1229,19 +1229,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 }
 
 // Best effort to obtain the ip of the head node.
-func (r *RayClusterReconciler) getHeadPodIP(ctx context.Context, instance *rayv1.RayCluster) (string, error) {
+func (r *RayClusterReconciler) getHeadPodIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	runtimePods := corev1.PodList{}
 	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
 	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(runtimePods.Items) != 1 {
 		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
-		return "", nil
+		return "", "", nil
 	}
-	return runtimePods.Items[0].Status.PodIP, nil
+	return runtimePods.Items[0].Status.PodIP, runtimePods.Items[0].Name, nil
 }
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
@@ -1257,7 +1257,7 @@ func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, inst
 		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
 	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
 		// We return Head Pod IP if the Head service is headless.
-		ip, err := r.getHeadPodIP(ctx, instance)
+		ip, _, err := r.getHeadPodIPAndName(ctx, instance)
 		if err != nil {
 			return "", "", err
 		}
@@ -1309,13 +1309,14 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 }
 
 func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster) error {
-	ip, err := r.getHeadPodIP(ctx, instance)
+	ip, name, err := r.getHeadPodIPAndName(ctx, instance)
 	if err != nil {
 		return err
 	}
 	instance.Status.Head.PodIP = ip
+	instance.Status.Head.PodName = name
 
-	ip, name, err := r.getHeadServiceIPAndName(ctx, instance)
+	ip, name, err = r.getHeadServiceIPAndName(ctx, instance)
 	if err != nil {
 		return err
 	}
