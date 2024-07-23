@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -1223,14 +1224,12 @@ func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 
 // TODO: Move this function to util.go and always use this function to retrieve the head Pod.
 func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
-	podList := corev1.PodList{}
-	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
-		return nil, err
+	if instance.Status.Head.PodName != "" {
+		pod := &corev1.Pod{}
+		if err := r.Get(ctx, types.NamespacedName{Namespace: instance.Namespace, Name: instance.Status.Head.PodName}, pod); err != nil {
+			return nil, err
+		}
+		return pod, nil
 	}
-
-	if len(podList.Items) != 1 {
-		return nil, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
-	}
-
-	return &podList.Items[0], nil
+	return nil, fmt.Errorf("Found 0 head pods for RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
 }

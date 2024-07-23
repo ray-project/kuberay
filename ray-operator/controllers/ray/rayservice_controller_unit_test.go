@@ -266,6 +266,11 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 			Name:      "test-cluster",
 			Namespace: "default",
 		},
+		Status: rayv1.RayClusterStatus{
+			Head: rayv1.HeadInfo{
+				PodName: "head-pod",
+			},
+		},
 	}
 
 	headPod := &corev1.Pod{
