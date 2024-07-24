@@ -25,6 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -71,38 +72,33 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
-func FindHeadPodReadyCondition(pods corev1.PodList) metav1.Condition {
-	var headPod *corev1.Pod
-	for _, pod := range pods.Items {
-		if pod.Labels[RayNodeTypeLabelKey] == string(rayv1.HeadNode) {
-			headPod = &pod
-			break
-		}
-	}
-
-	replicaHeadReadyCondition := metav1.Condition{
-		Type:   string(rayv1.HeadReady),
+func FindPodReadyCondition(pod *corev1.Pod, condType rayv1.RayClusterConditionType) metav1.Condition {
+	replicaPodReadyCondition := metav1.Condition{
+		Type:   string(condType),
 		Status: metav1.ConditionFalse,
-		Reason: "HeadPodNotReady",
 	}
 
-	if headPod != nil {
-		for _, cond := range headPod.Status.Conditions {
-			if cond.Type == corev1.PodReady {
-				if cond.Status == corev1.ConditionTrue {
-					replicaHeadReadyCondition = metav1.Condition{
-						Type:    string(rayv1.HeadReady),
-						Status:  metav1.ConditionTrue,
-						Reason:  "HeadPodRunningAndReady",
-						Message: cond.Message,
-					}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			if cond.Status == corev1.ConditionTrue {
+				replicaPodReadyCondition = metav1.Condition{
+					Type:    string(condType),
+					Status:  metav1.ConditionTrue,
+					Reason:  v1.PodRunningAndReady, // metav1.Condition.Reason requires a non-empty value
+					Message: cond.Message,
+				}
+			} else {
+				replicaPodReadyCondition = metav1.Condition{
+					Type:    string(condType),
+					Status:  metav1.ConditionFalse,
+					Reason:  cond.Reason, // PodReady condition comes with a reason when it's not ready, e.g. ContainersNotReady
+					Message: cond.Message,
 				}
 				break
 			}
 		}
 	}
-
-	return replicaHeadReadyCondition
+	return replicaPodReadyCondition
 }
 
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.

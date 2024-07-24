@@ -1711,8 +1711,8 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Test CheckRayHeadRunningAndReady with head pod running and ready
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionTrue))
-	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
 	assert.Equal(t, metav1.ConditionTrue, condition.Status)
 
 	// // Test CheckRayHeadRunningAndReady with head pod not ready
@@ -1726,8 +1726,8 @@ func TestCalculateStatus(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
-	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
 	assert.Equal(t, metav1.ConditionFalse, condition.Status)
 
 	// Test CheckRayHeadRunningAndReady with head pod not running
@@ -1736,8 +1736,8 @@ func TestCalculateStatus(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse))
-	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadReady))
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
 	assert.Equal(t, metav1.ConditionFalse, condition.Status)
 
 	// Test reconcilePodsErr with the feature gate enabled

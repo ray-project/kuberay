@@ -1204,9 +1204,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	// Check if the head node is running and ready by checking the head pod's status.
+	headPod, _ := r.getHeadPod(ctx, newInstance)
+
 	if features.Enabled(features.RayClusterStatusConditions) {
-		replicaHeadReadyCondition := utils.FindHeadPodReadyCondition(runtimePods)
-		meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadReadyCondition)
+		replicaHeadPodReadyCondition := utils.FindPodReadyCondition(headPod, rayv1.HeadPodReady)
+		meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadPodReadyCondition)
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
@@ -1492,4 +1494,18 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	}
 
 	return totalGPUs
+}
+
+// TODO this should be replace by other implementation
+func (r *RayClusterReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
+	podList := corev1.PodList{}
+	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		return nil, err
+	}
+
+	if len(podList.Items) != 1 {
+		return nil, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
+	}
+
+	return &podList.Items[0], nil
 }

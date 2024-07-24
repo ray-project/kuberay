@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -552,39 +553,27 @@ env_vars:
 
 func TestFindHeadPodReadyCondition(t *testing.T) {
 	tests := map[string]struct {
+		pod      *corev1.Pod
 		expected metav1.Condition
-		pods     corev1.PodList
 	}{
 		"condition true if Ray head pod is running and ready": {
-			pods: corev1.PodList{
-				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
-				},
-			},
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
 			expected: metav1.Condition{
-				Type:   string(rayv1.HeadReady),
+				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionTrue,
 			},
 		},
 		"condition false if Ray head pod is not running": {
-			pods: corev1.PodList{
-				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
-				},
-			},
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
-				Type:   string(rayv1.HeadReady),
+				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
 			},
 		},
 		"condition false if Ray head pod is not ready": {
-			pods: corev1.PodList{
-				Items: []corev1.Pod{
-					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
-				},
-			},
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
-				Type:   string(rayv1.HeadReady),
+				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
 			},
 		},
@@ -592,8 +581,8 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			replicaHeadReadyCondition := FindHeadPodReadyCondition(tc.pods)
-			assert.Equal(t, tc.expected.Status, replicaHeadReadyCondition.Status)
+			replicaHeadPodReadyCondition := FindPodReadyCondition(tc.pod, v1.HeadPodReady)
+			assert.Equal(t, tc.expected.Status, replicaHeadPodReadyCondition.Status)
 		})
 	}
 }

@@ -1061,7 +1061,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	// check the latest condition of the head Pod to see if it is ready.
 	if features.Enabled(features.RayClusterStatusConditions) {
-		if meta.IsStatusConditionPresentAndEqual(rayClusterInstance.Status.Conditions, string(rayv1.HeadReady), metav1.ConditionFalse) {
+		if meta.IsStatusConditionPresentAndEqual(rayClusterInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse) {
 			logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
 		}
