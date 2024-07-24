@@ -1225,7 +1225,7 @@ func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 // TODO: Move this function to util.go and always use this function to retrieve the head Pod.
 func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	if instance.Status.Head.PodName == "" {
-		return nil, fmt.Errorf("Found 0 head pods for RayCluster %s in the namespace %s", instance.Name, instance.Namespace)
+		return nil, fmt.Errorf("RayCluster %s in the namespace %s did not contain .Status.Head.PodName", instance.Name, instance.Namespace)
 	}
 	pod := &corev1.Pod{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: instance.Namespace, Name: instance.Status.Head.PodName}, pod); err != nil {
