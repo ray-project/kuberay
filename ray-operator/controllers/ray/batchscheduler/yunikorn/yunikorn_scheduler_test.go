@@ -1,11 +1,13 @@
 package yunikorn
 
 import (
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestPopulatePodLabels(t *testing.T) {
@@ -26,10 +28,10 @@ func TestPopulatePodLabels(t *testing.T) {
 	)
 
 	rayPod := createPod("my-pod-1", "test")
-	yk.populatePodLabels(rayCluster1, rayPod, RayClusterApplicationIDLabelName, PodApplicationIDLabelName)
-	yk.populatePodLabels(rayCluster1, rayPod, RayClusterQueueLabelName, PodQueueLabelName)
-	assert.Equal(t, podLabelsContains(rayPod, PodApplicationIDLabelName, job1), true)
-	assert.Equal(t, podLabelsContains(rayPod, PodQueueLabelName, queue1), true)
+	yk.populatePodLabels(rayCluster1, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	yk.populatePodLabels(rayCluster1, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, job1), true)
+	assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, queue1), true)
 
 	// --- case 2
 	// Ray Cluster CR has nothing
@@ -40,13 +42,13 @@ func TestPopulatePodLabels(t *testing.T) {
 	rayCluster2 := createRayClusterWithLabels(
 		"ray-cluster-without-labels",
 		"test",
-		nil, // empty annotations
+		nil, // empty labels
 	)
 	rayPod3 := createPod("my-pod-2", "test")
-	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterApplicationIDLabelName, PodApplicationIDLabelName)
-	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterQueueLabelName, PodQueueLabelName)
-	assert.Equal(t, podLabelsContains(rayPod3, PodApplicationIDLabelName, job2), false)
-	assert.Equal(t, podLabelsContains(rayPod3, PodQueueLabelName, queue2), false)
+	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	assert.Equal(t, podLabelsContains(rayPod3, YuniKornPodApplicationIDLabelName, job2), false)
+	assert.Equal(t, podLabelsContains(rayPod3, YuniKornPodQueueLabelName, queue2), false)
 }
 
 func createRayClusterWithLabels(name string, namespace string, labels map[string]string) *rayv1.RayCluster {

@@ -2,22 +2,24 @@ package yunikorn
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 )
 
 const (
-	SchedulerName                    string = "yunikorn"
-	PodApplicationIDLabelName        string = "applicationId"
-	PodQueueLabelName                string = "queue"
-	RayClusterApplicationIDLabelName string = "yunikorn.apache.org/application-id"
-	RayClusterQueueLabelName         string = "yunikorn.apache.org/queue-name"
+	SchedulerName                     string = "yunikorn"
+	YuniKornPodApplicationIDLabelName string = "applicationId"
+	YuniKornPodQueueLabelName         string = "queue"
+	RayClusterApplicationIDLabelName  string = "yunikorn.apache.org/application-id"
+	RayClusterQueueLabelName          string = "yunikorn.apache.org/queue-name"
 )
 
 type YuniKornScheduler struct {
@@ -31,7 +33,7 @@ func GetPluginName() string {
 }
 
 func (y *YuniKornScheduler) Name() string {
-	return SchedulerName
+	return GetPluginName()
 }
 
 func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
@@ -40,8 +42,8 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *
 	return nil
 }
 
-func (y *YuniKornScheduler) populatePodLabels(app *rayv1.RayCluster, pod *v1.Pod, sourceKey string, targetKey string) {
-	// check annotations
+func (y *YuniKornScheduler) populatePodLabels(app *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
+	// check labels
 	if value, exist := app.Labels[sourceKey]; exist {
 		y.log.Info("Updating pod label based on RayCluster annotations",
 			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
@@ -49,9 +51,9 @@ func (y *YuniKornScheduler) populatePodLabels(app *rayv1.RayCluster, pod *v1.Pod
 	}
 }
 
-func (y *YuniKornScheduler) AddMetadataToPod(app *rayv1.RayCluster, _ string, pod *v1.Pod) {
-	y.populatePodLabels(app, pod, RayClusterApplicationIDLabelName, PodApplicationIDLabelName)
-	y.populatePodLabels(app, pod, RayClusterQueueLabelName, PodQueueLabelName)
+func (y *YuniKornScheduler) AddMetadataToPod(app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+	y.populatePodLabels(app, pod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	y.populatePodLabels(app, pod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
 	pod.Spec.SchedulerName = y.Name()
 }
 
