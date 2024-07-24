@@ -271,17 +271,16 @@ func TestGetRayClusterHeadPod(t *testing.T) {
 			Name:      "test-cluster",
 			Namespace: "default",
 		},
-		Status: rayv1.RayClusterStatus{
-			Head: rayv1.HeadInfo{
-				PodName: "head-pod",
-			},
-		},
 	}
 
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "head-pod",
 			Namespace: cluster.ObjectMeta.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  cluster.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
 		},
 	}
 

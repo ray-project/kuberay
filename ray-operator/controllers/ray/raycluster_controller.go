@@ -1228,26 +1228,6 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	return newInstance, nil
 }
 
-// Best effort to obtain the ip of the head node.
-func (r *RayClusterReconciler) getHeadPodIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	runtimePods := corev1.PodList{}
-	filterLabels := common.RayClusterHeadPodsAssociationOptions(instance)
-	if err := r.List(ctx, &runtimePods, filterLabels.ToListOptions()...); err != nil {
-		return "", "", err
-	}
-	if len(runtimePods.Items) == 0 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
-		return "", "", nil
-	}
-	if len(runtimePods.Items) > 1 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
-		return "", "", fmt.Errorf("found multiple heads. cluster name %s, filter labels %v", instance.Name, filterLabels)
-	}
-	return runtimePods.Items[0].Status.PodIP, runtimePods.Items[0].Name, nil
-}
-
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
 	if err := r.List(ctx, &runtimeServices, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
@@ -1261,11 +1241,14 @@ func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, inst
 		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
 	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
 		// We return Head Pod IP if the Head service is headless.
-		ip, _, err := r.getHeadPodIPAndName(ctx, instance)
+		head, err := common.GetRayClusterHeadPod(ctx, r, instance)
 		if err != nil {
 			return "", "", err
 		}
-		return ip, runtimeServices.Items[0].Name, nil
+		if head != nil {
+			return head.Status.PodIP, runtimeServices.Items[0].Name, nil
+		}
+		return "", runtimeServices.Items[0].Name, nil
 	}
 
 	return runtimeServices.Items[0].Spec.ClusterIP, runtimeServices.Items[0].Name, nil
@@ -1313,14 +1296,16 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 }
 
 func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster) error {
-	ip, name, err := r.getHeadPodIPAndName(ctx, instance)
+	head, err := common.GetRayClusterHeadPod(ctx, r, instance)
 	if err != nil {
 		return err
 	}
-	instance.Status.Head.PodIP = ip
-	instance.Status.Head.PodName = name
+	if head != nil {
+		instance.Status.Head.PodIP = head.Status.PodIP
+		instance.Status.Head.PodName = head.Name
+	}
 
-	ip, name, err = r.getHeadServiceIPAndName(ctx, instance)
+	ip, name, err := r.getHeadServiceIPAndName(ctx, instance)
 	if err != nil {
 		return err
 	}

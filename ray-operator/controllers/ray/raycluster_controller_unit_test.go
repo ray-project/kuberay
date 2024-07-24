@@ -1296,7 +1296,7 @@ func TestUpdateEndpoints(t *testing.T) {
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }
 
-func TestGetHeadPodIPAndName(t *testing.T) {
+func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 	setupTest(t)
 
 	extraHeadPod := &corev1.Pod{
@@ -1345,22 +1345,21 @@ func TestGetHeadPodIPAndName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
 
-			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+			ip, name := "", ""
+			head, err := common.GetRayClusterHeadPod(context.TODO(), fakeClient, testRayCluster)
+			if head != nil {
+				ip = head.Status.PodIP
+				name = head.Name
 			}
-
-			ip, name, err := testRayClusterReconciler.getHeadPodIPAndName(context.TODO(), testRayCluster)
 
 			if tc.returnsError {
-				assert.NotNil(t, err, "getHeadPodIPAndName should return error")
+				assert.NotNil(t, err, "GetRayClusterHeadPod should return error")
 			} else {
-				assert.Nil(t, err, "getHeadPodIPAndName should not return error")
+				assert.Nil(t, err, "GetRayClusterHeadPod should not return error")
 			}
 
-			assert.Equal(t, tc.expectedIP, ip, "getHeadPodIPAndName returned unexpected IP")
-			assert.Equal(t, tc.expectedName, name, "getHeadPodIPAndName returned unexpected name")
+			assert.Equal(t, tc.expectedIP, ip, "GetRayClusterHeadPod returned unexpected IP")
+			assert.Equal(t, tc.expectedName, name, "GetRayClusterHeadPod returned unexpected name")
 		})
 	}
 }

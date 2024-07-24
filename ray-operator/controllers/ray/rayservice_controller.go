@@ -1114,6 +1114,9 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 	if err != nil {
 		return err
 	}
+	if headPod == nil {
+		return fmt.Errorf("found 0 head. cluster name %s, namespace %v", rayClusterInstance.Name, rayClusterInstance.Namespace)
+	}
 
 	httpProxyClient := r.httpProxyClientFunc()
 	httpProxyClient.InitClient()
@@ -1213,6 +1216,9 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, instance)
 	if err != nil {
 		return false, err
+	}
+	if headPod == nil {
+		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
 }
