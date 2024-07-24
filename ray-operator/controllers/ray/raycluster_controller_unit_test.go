@@ -1331,7 +1331,7 @@ func TestGetHeadPodIPAndName(t *testing.T) {
 		"no error if there's more than one head node": {
 			pods:         append(testPods, extraHeadPod),
 			expectedIP:   "",
-			returnsError: false,
+			returnsError: true,
 		},
 		"no error if head pod ip is not yet set": {
 			pods:         testPodsNoHeadIP,

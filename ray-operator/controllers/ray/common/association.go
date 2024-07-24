@@ -1,6 +1,10 @@
 package common
 
 import (
+	"context"
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -158,4 +162,15 @@ func RayJobRayClusterNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
 		Name:      rayJob.Status.RayClusterName,
 		Namespace: rayJob.Namespace,
 	}
+}
+
+func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *rayv1.RayCluster) (*corev1.Pod, error) {
+	if instance.Status.Head.PodName == "" {
+		return nil, fmt.Errorf("RayCluster %s in the namespace %s did not contain .Status.Head.PodName", instance.Name, instance.Namespace)
+	}
+	pod := &corev1.Pod{}
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: instance.Namespace, Name: instance.Status.Head.PodName}, pod); err != nil {
+		return nil, err
+	}
+	return pod, nil
 }

@@ -1233,13 +1233,17 @@ func (r *RayClusterReconciler) getHeadPodIPAndName(ctx context.Context, instance
 	logger := ctrl.LoggerFrom(ctx)
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	filterLabels := common.RayClusterHeadPodsAssociationOptions(instance)
+	if err := r.List(ctx, &runtimePods, filterLabels.ToListOptions()...); err != nil {
 		return "", "", err
 	}
-	if len(runtimePods.Items) != 1 {
+	if len(runtimePods.Items) == 0 {
 		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
 		return "", "", nil
+	}
+	if len(runtimePods.Items) > 1 {
+		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
+		return "", "", fmt.Errorf("found multiple heads. cluster name %s, filter labels %v", instance.Name, filterLabels)
 	}
 	return runtimePods.Items[0].Status.PodIP, runtimePods.Items[0].Name, nil
 }

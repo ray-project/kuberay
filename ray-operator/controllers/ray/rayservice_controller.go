@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -1111,7 +1110,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 }
 
 func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
-	headPod, err := r.getHeadPod(ctx, rayClusterInstance)
+	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
 	}
@@ -1211,7 +1210,7 @@ func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayCluste
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
 func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	headPod, err := r.getHeadPod(ctx, instance)
+	headPod, err := common.GetRayClusterHeadPod(ctx, r, instance)
 	if err != nil {
 		return false, err
 	}
@@ -1220,16 +1219,4 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 
 func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
-}
-
-// TODO: Move this function to util.go and always use this function to retrieve the head Pod.
-func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
-	if instance.Status.Head.PodName == "" {
-		return nil, fmt.Errorf("RayCluster %s in the namespace %s did not contain .Status.Head.PodName", instance.Name, instance.Namespace)
-	}
-	pod := &corev1.Pod{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: instance.Namespace, Name: instance.Status.Head.PodName}, pod); err != nil {
-		return nil, err
-	}
-	return pod, nil
 }
