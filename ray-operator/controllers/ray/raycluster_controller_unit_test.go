@@ -67,6 +67,7 @@ var (
 	testRayCluster          *rayv1.RayCluster
 	headSelector            labels.Selector
 	headNodeIP              string
+	headNodeName            string
 	testServices            []runtime.Object
 	workerSelector          labels.Selector
 	workersToDelete         []string
@@ -83,10 +84,11 @@ func setupTest(t *testing.T) {
 	expectNumOfHostNum = 1
 	workersToDelete = []string{"pod1", "pod2"}
 	headNodeIP = "1.2.3.4"
+	headNodeName = "headNode"
 	testPods = []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "headNode",
+				Name:      headNodeName,
 				Namespace: namespaceStr,
 				Labels: map[string]string{
 					utils.RayNodeLabelKey:      "yes",
@@ -270,7 +272,7 @@ func setupTest(t *testing.T) {
 	testPodsNoHeadIP = []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "headNode",
+				Name:      headNodeName,
 				Namespace: namespaceStr,
 				Labels: map[string]string{
 					utils.RayNodeLabelKey:      "yes",
@@ -1294,7 +1296,7 @@ func TestUpdateEndpoints(t *testing.T) {
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }
 
-func TestGetHeadPodIP(t *testing.T) {
+func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 	setupTest(t)
 
 	extraHeadPod := &corev1.Pod{
@@ -1311,12 +1313,14 @@ func TestGetHeadPodIP(t *testing.T) {
 
 	tests := map[string]struct {
 		expectedIP   string
+		expectedName string
 		pods         []runtime.Object
 		returnsError bool
 	}{
 		"get expected Pod IP if there's one head node": {
 			pods:         testPods,
 			expectedIP:   headNodeIP,
+			expectedName: headNodeName,
 			returnsError: false,
 		},
 		"no error if there's no head node": {
@@ -1327,11 +1331,12 @@ func TestGetHeadPodIP(t *testing.T) {
 		"no error if there's more than one head node": {
 			pods:         append(testPods, extraHeadPod),
 			expectedIP:   "",
-			returnsError: false,
+			returnsError: true,
 		},
 		"no error if head pod ip is not yet set": {
 			pods:         testPodsNoHeadIP,
 			expectedIP:   "",
+			expectedName: headNodeName,
 			returnsError: false,
 		},
 	}
@@ -1340,21 +1345,21 @@ func TestGetHeadPodIP(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
 
-			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+			ip, name := "", ""
+			headPod, err := common.GetRayClusterHeadPod(context.TODO(), fakeClient, testRayCluster)
+			if headPod != nil {
+				ip = headPod.Status.PodIP
+				name = headPod.Name
 			}
-
-			ip, err := testRayClusterReconciler.getHeadPodIP(context.TODO(), testRayCluster)
 
 			if tc.returnsError {
-				assert.NotNil(t, err, "getHeadPodIP should return error")
+				assert.NotNil(t, err, "GetRayClusterHeadPod should return error")
 			} else {
-				assert.Nil(t, err, "getHeadPodIP should not return error")
+				assert.Nil(t, err, "GetRayClusterHeadPod should not return error")
 			}
 
-			assert.Equal(t, tc.expectedIP, ip, "getHeadPodIP returned unexpected IP")
+			assert.Equal(t, tc.expectedIP, ip, "GetRayClusterHeadPod returned unexpected IP")
+			assert.Equal(t, tc.expectedName, name, "GetRayClusterHeadPod returned unexpected name")
 		})
 	}
 }
