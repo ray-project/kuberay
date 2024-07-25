@@ -7,6 +7,7 @@ package v1
 type HeadInfoApplyConfiguration struct {
 	PodIP       *string `json:"podIP,omitempty"`
 	ServiceIP   *string `json:"serviceIP,omitempty"`
+	PodName     *string `json:"podName,omitempty"`
 	ServiceName *string `json:"serviceName,omitempty"`
 }
 
@@ -29,6 +30,14 @@ func (b *HeadInfoApplyConfiguration) WithPodIP(value string) *HeadInfoApplyConfi
 // If called multiple times, the ServiceIP field is set to the value of the last call.
 func (b *HeadInfoApplyConfiguration) WithServiceIP(value string) *HeadInfoApplyConfiguration {
 	b.ServiceIP = &value
+	return b
+}
+
+// WithPodName sets the PodName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PodName field is set to the value of the last call.
+func (b *HeadInfoApplyConfiguration) WithPodName(value string) *HeadInfoApplyConfiguration {
+	b.PodName = &value
 	return b
 }
 

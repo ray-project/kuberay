@@ -1,8 +1,13 @@
 package common
 
 import (
+	"context"
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -158,4 +163,24 @@ func RayJobRayClusterNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
 		Name:      rayJob.Status.RayClusterName,
 		Namespace: rayJob.Namespace,
 	}
+}
+
+// GetRayClusterHeadPod gets a *corev1.Pod from a *rayv1.RayCluster. Note that it returns (nil, nil) in the case of no head pod exists.
+func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *rayv1.RayCluster) (*corev1.Pod, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	runtimePods := corev1.PodList{}
+	filterLabels := RayClusterHeadPodsAssociationOptions(instance)
+	if err := reader.List(ctx, &runtimePods, filterLabels.ToListOptions()...); err != nil {
+		return nil, err
+	}
+	if len(runtimePods.Items) == 0 {
+		logger.Info("Found 0 head pod", "filter labels", filterLabels)
+		return nil, nil
+	}
+	if len(runtimePods.Items) > 1 {
+		logger.Info("Found multiple head pods", "count", len(runtimePods.Items), "filter labels", filterLabels)
+		return nil, fmt.Errorf("found multiple heads. filter labels %v", filterLabels)
+	}
+	return &runtimePods.Items[0], nil
 }

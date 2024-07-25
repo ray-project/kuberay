@@ -8040,6 +8040,8 @@ spec:
                         properties:
                           podIP:
                             type: string
+                          podName:
+                            type: string
                           serviceIP:
                             type: string
                           serviceName:
@@ -8187,6 +8189,8 @@ spec:
                       head:
                         properties:
                           podIP:
+                            type: string
+                          podName:
                             type: string
                           serviceIP:
                             type: string
