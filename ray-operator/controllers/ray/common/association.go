@@ -165,7 +165,7 @@ func RayJobRayClusterNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
 	}
 }
 
-// GetRayClusterHeadPod get a *corev1.Pod from a *rayv1.RayCluster. Note that it returns (nil, nil) in the case of no head pod exists.
+// GetRayClusterHeadPod gets a *corev1.Pod from a *rayv1.RayCluster. Note that it returns (nil, nil) in the case of no head pod exists.
 func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -175,12 +175,12 @@ func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *r
 		return nil, err
 	}
 	if len(runtimePods.Items) == 0 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
+		logger.Info("Found 0 head pod", "filter labels", filterLabels)
 		return nil, nil
 	}
 	if len(runtimePods.Items) > 1 {
-		logger.Info(fmt.Sprintf("Found %d head pods. cluster name %s, filter labels %v", len(runtimePods.Items), instance.Name, filterLabels))
-		return nil, fmt.Errorf("found multiple heads. cluster name %s, filter labels %v", instance.Name, filterLabels)
+		logger.Info("Found multiple head pods", "count", len(runtimePods.Items), "filter labels", filterLabels)
+		return nil, fmt.Errorf("found multiple heads. filter labels %v", filterLabels)
 	}
 	return &runtimePods.Items[0], nil
 }

@@ -1346,10 +1346,10 @@ func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
 
 			ip, name := "", ""
-			head, err := common.GetRayClusterHeadPod(context.TODO(), fakeClient, testRayCluster)
-			if head != nil {
-				ip = head.Status.PodIP
-				name = head.Name
+			headPod, err := common.GetRayClusterHeadPod(context.TODO(), fakeClient, testRayCluster)
+			if headPod != nil {
+				ip = headPod.Status.PodIP
+				name = headPod.Name
 			}
 
 			if tc.returnsError {
