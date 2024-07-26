@@ -59,7 +59,7 @@ steps:
       command:
       - "bash"
       - "5000-rayjob/wait-for-rayjobs.sh"
-- name: Wait for pods to be running
+- name: Measure wait for pods to be running
   measurements:
   - Identifier: WaitForControlledPodsRunning
     Method: WaitForControlledPodsRunning

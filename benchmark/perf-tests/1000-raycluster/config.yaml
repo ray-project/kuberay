@@ -53,7 +53,7 @@ steps:
       command:
       - "bash"
       - "1000-raycluster/wait-for-rayclusters.sh"
-- name: Wait for pods to be running
+- name: Measure wait for pods to be running
   measurements:
   - Identifier: WaitForControlledPodsRunning
     Method: WaitForControlledPodsRunning
