@@ -97,25 +97,88 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	}
 }
 
-func TestCheckName(t *testing.T) {
-	// test 1 -> change
-	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
-	str = CheckName(str)
-	if str != "rca41-e903-fc3ae634b18e-lazer090scholar-director-s" {
-		t.Fail()
-	}
-	// test 2 -> change
-	str = "--------566666--------444433-----------222222----------4444"
-	str = CheckName(str)
-	if str != "r6666--------444433-----------222222----------4444" {
-		t.Fail()
+func TestPodGenerateName(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   string
+		nodeType rayv1.RayNodeType
+		expected string
+	}{
+		{
+			name:     "short cluster name, head pod",
+			prefix:   "ray-cluster-01",
+			nodeType: rayv1.HeadNode,
+			expected: "ray-cluster-01-head-",
+		},
+		{
+			name:     "short cluster name, worker pod",
+			prefix:   "ray-cluster-group-name-01",
+			nodeType: rayv1.WorkerNode,
+			expected: "ray-cluster-group-name-01-worker-",
+		},
+		{
+			name:     "long cluster name, head pod",
+			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
+			nodeType: rayv1.HeadNode,
+			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
+		},
+		{
+			name:     "long cluster name, worker pod",
+			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333-group-name",
+			nodeType: rayv1.WorkerNode,
+			expected: "ray-cluster-00000000000000000000000111111111222222-worker-",
+		},
 	}
 
-	// test 3 -> keep
-	str = "acceptable-name-head-12345"
-	str = CheckName(str)
-	if str != "acceptable-name-head-12345" {
-		t.Fail()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := PodGenerateName(test.prefix, test.nodeType)
+			if str != test.expected {
+				t.Logf("expected: %q", test.expected)
+				t.Logf("actual: %q", str)
+				t.Error("PodGenerateName returned an unexpected string")
+			}
+
+			// 63 (max pod name length) - 5 random hexadecimal characters from generateName
+			if len(str) > 58 {
+				t.Error("Generated pod name is too long")
+			}
+		})
+	}
+}
+
+func TestCheckName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "shorten long string starting with numeric character",
+			input:    "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s",
+			expected: "rca41-e903-fc3ae634b18e-lazer090scholar-director-s",
+		},
+		{
+			name:     "shorten long string starting with special character",
+			input:    "--------566666--------444433-----------222222----------4444",
+			expected: "r6666--------444433-----------222222----------4444",
+		},
+		{
+			name:     "unchanged",
+			input:    "acceptable-name-head-12345",
+			expected: "acceptable-name-head-12345",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := CheckName(test.input)
+			if str != test.expected {
+				t.Logf("expected: %q", test.expected)
+				t.Logf("actual: %q", str)
+				t.Error("CheckName returned an unexpected string")
+			}
+		})
 	}
 }
 
