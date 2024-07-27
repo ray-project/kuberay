@@ -173,7 +173,7 @@ const (
 
 const (
 	// HeadPodReady is added in a RayCluster when its Head Pod is ready for requests.
-	HeadPodReady RayClusterConditionType = "Ready"
+	HeadPodReady RayClusterConditionType = "HeadPodReady"
 	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
 	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
 )

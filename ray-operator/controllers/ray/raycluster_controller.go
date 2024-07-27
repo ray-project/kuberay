@@ -1209,8 +1209,18 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		if err != nil {
 			return nil, err
 		}
-		replicaHeadPodReadyCondition := utils.FindPodReadyCondition(headPod, rayv1.HeadPodReady)
-		meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadPodReadyCondition)
+		// GetRayClusterHeadPod can return nil, nil when pod is not found, we handle it separately.
+		if headPod == nil {
+			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.HeadPodReady),
+				Status:  metav1.ConditionFalse,
+				Reason:  "HeadPodNotFound",
+				Message: "Head Pod not found",
+			})
+		} else {
+			replicaHeadPodReadyCondition := utils.FindPodReadyCondition(headPod, rayv1.HeadPodReady)
+			meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadPodReadyCondition)
+		}
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
