@@ -1720,7 +1720,7 @@ func TestCalculateStatus(t *testing.T) {
 	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
 	assert.Equal(t, metav1.ConditionTrue, condition.Status)
 
-	// // Test CheckRayHeadRunningAndReady with head pod not ready
+	// Test CheckRayHeadRunningAndReady with head pod not ready
 	headPod.Status.Conditions = []corev1.PodCondition{
 		{
 			Type:   corev1.PodReady,

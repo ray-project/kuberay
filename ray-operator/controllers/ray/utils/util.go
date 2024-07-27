@@ -25,7 +25,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -84,7 +83,7 @@ func FindPodReadyCondition(pod *corev1.Pod, condType rayv1.RayClusterConditionTy
 				replicaPodReadyCondition = metav1.Condition{
 					Type:    string(condType),
 					Status:  metav1.ConditionTrue,
-					Reason:  v1.PodRunningAndReady, // metav1.Condition.Reason requires a non-empty value
+					Reason:  rayv1.PodRunningAndReady, // metav1.Condition.Reason requires a non-empty value
 					Message: cond.Message,
 				}
 			} else {
@@ -94,8 +93,8 @@ func FindPodReadyCondition(pod *corev1.Pod, condType rayv1.RayClusterConditionTy
 					Reason:  cond.Reason, // PodReady condition comes with a reason when it's not ready, e.g. ContainersNotReady
 					Message: cond.Message,
 				}
-				break
 			}
+			break
 		}
 	}
 	return replicaPodReadyCondition

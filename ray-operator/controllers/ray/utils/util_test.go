@@ -12,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -644,7 +643,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			replicaHeadPodReadyCondition := FindPodReadyCondition(tc.pod, v1.HeadPodReady)
+			replicaHeadPodReadyCondition := FindPodReadyCondition(tc.pod, rayv1.HeadPodReady)
 			assert.Equal(t, tc.expected.Status, replicaHeadPodReadyCondition.Status)
 		})
 	}
