@@ -79,16 +79,26 @@ func FindPodReadyCondition(pod *corev1.Pod, condType rayv1.RayClusterConditionTy
 	}
 
 	for _, cond := range pod.Status.Conditions {
-		if cond.Type == corev1.PodReady {
-			reason := cond.Reason
-			if reason == "" && cond.Status == corev1.ConditionTrue {
-				// when the pod is running and ready, we will get an empty reason, but metav1.Condition.Reason requires a non-empty string, so we set it to rayv1.PodRunningAndReady
-				reason = rayv1.PodRunningAndReady
-			}
-			replicaPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
-			replicaPodReadyCondition.Reason = reason
-			replicaPodReadyCondition.Message = cond.Message
+		if cond.Type != corev1.PodReady {
+			continue
 		}
+		// Set the status based on the PodReady condition
+		replicaPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
+		replicaPodReadyCondition.Message = cond.Message
+
+		// Determine the reason; default to PodRunningAndReady if the pod is ready but no specific reason is provided
+		reason := cond.Reason
+		if cond.Status == corev1.ConditionTrue && reason == "" {
+			reason = rayv1.PodRunningAndReady
+		}
+
+		// Update the reason if it's not empty
+		if reason != "" {
+			replicaPodReadyCondition.Reason = reason
+		}
+
+		// Since we're only interested in the PodReady condition, break after processing it
+		break
 	}
 	return replicaPodReadyCondition
 }
