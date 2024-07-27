@@ -166,9 +166,12 @@ type RayClusterStatus struct {
 
 type RayClusterConditionType string
 
+// Custom Reason for RayClusterCondition
 const (
 	// PodRunningAndReady says that the pod is running and ready.
 	PodRunningAndReady = "PodRunningAndReady"
+	// UnknownReason says that the reason for the condition is unknown.
+	UnknownReason = "Unknown"
 )
 
 const (
