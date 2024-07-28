@@ -240,8 +240,18 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
-	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultReadinessProbeTimeoutSeconds, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultReadinessProbeFailureThreshold, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
+	rayAgentRayletHealthCommand := fmt.Sprintf(
+		utils.BaseWgetHealthCommand,
+		utils.DefaultReadinessProbeTimeoutSeconds,
+		utils.DefaultDashboardAgentListenPort,
+		utils.RayAgentRayletHealthPath,
+	)
+	rayDashboardGCSHealthCommand := fmt.Sprintf(
+		utils.BaseWgetHealthCommand,
+		utils.DefaultReadinessProbeFailureThreshold,
+		utils.DefaultDashboardPort,
+		utils.RayDashboardGCSHealthPath,
+	)
 
 	// Generally, the liveness and readiness probes perform the same checks.
 	// For head node => Check GCS and Raylet status.
@@ -279,8 +289,12 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
-			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
-				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
+			rayServeProxyHealthCommand := fmt.Sprintf(
+				utils.BaseWgetHealthCommand,
+				utils.DefaultReadinessProbeInitialDelaySeconds,
+				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
+				utils.RayServeProxyHealthPath,
+			)
 			commands = append(commands, rayServeProxyHealthCommand)
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
