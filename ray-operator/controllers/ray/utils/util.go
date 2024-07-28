@@ -71,6 +71,38 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
+func FindPodReadyCondition(pod *corev1.Pod, condType rayv1.RayClusterConditionType) metav1.Condition {
+	replicaPodReadyCondition := metav1.Condition{
+		Type:   string(condType),
+		Status: metav1.ConditionFalse,
+		Reason: rayv1.UnknownReason,
+	}
+
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type != corev1.PodReady {
+			continue
+		}
+		// Set the status based on the PodReady condition
+		replicaPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
+		replicaPodReadyCondition.Message = cond.Message
+
+		// Determine the reason; default to PodRunningAndReady if the pod is ready but no specific reason is provided
+		reason := cond.Reason
+		if cond.Status == corev1.ConditionTrue && reason == "" {
+			reason = rayv1.PodRunningAndReady
+		}
+
+		// Update the reason if it's not empty
+		if reason != "" {
+			replicaPodReadyCondition.Reason = reason
+		}
+
+		// Since we're only interested in the PodReady condition, break after processing it
+		break
+	}
+	return replicaPodReadyCondition
+}
+
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {

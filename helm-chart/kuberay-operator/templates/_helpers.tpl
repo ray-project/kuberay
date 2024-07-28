@@ -55,6 +55,22 @@ Create the name of the service account to use
 {{- end -}}
 {{- end -}}
 
+
+{{/*
+FeatureGates
+*/}}
+{{- define "kuberay.featureGates" -}}
+{{- $features := "" }}
+{{- range .Values.featureGates }}
+  {{- $str := printf "%s=%t," .name .enabled }}
+  {{- $features = print $features $str }}
+{{- end }}
+{{- with .Values.featureGates }}
+--feature-gates={{ $features | trimSuffix "," }}
+{{- end }}
+{{- end }}
+
+
 {{/*
 Create a template to ensure consistency for Role and ClusterRole.
 */}}

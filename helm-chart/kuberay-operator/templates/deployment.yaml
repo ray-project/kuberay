@@ -56,6 +56,7 @@ spec:
             - /manager
           args:
             {{- $argList := list -}}
+            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
             {{- end -}}

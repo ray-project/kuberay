@@ -1676,6 +1676,12 @@ func TestCalculateStatus(t *testing.T) {
 		Status: corev1.PodStatus{
 			PodIP: headNodeIP,
 			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
 		},
 	}
 	runtimeObjects := []runtime.Object{headPod, headService}
@@ -1705,8 +1711,41 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Empty(t, newInstance.Status.Conditions)
 
-	// Test reconcilePodsErr with the feature gate enabled
+	// enable feature gate for the following tests
 	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+
+	// Test CheckRayHeadRunningAndReady with head pod running and ready
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+	condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
+	assert.Equal(t, metav1.ConditionTrue, condition.Status)
+
+	// Test CheckRayHeadRunningAndReady with head pod not ready
+	headPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
+	assert.Equal(t, metav1.ConditionFalse, condition.Status)
+
+	// Test CheckRayHeadRunningAndReady with head pod not running
+	headPod.Status.Phase = corev1.PodFailed
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	condition = meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
+	assert.Equal(t, metav1.ConditionFalse, condition.Status)
+
+	// Test reconcilePodsErr with the feature gate enabled
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
 	assert.Nil(t, err)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))

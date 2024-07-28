@@ -265,6 +265,31 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
+func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-head",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/node-type": string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   typ,
+					Status: status,
+				},
+			},
+		},
+	}
+}
+
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
 	tests := map[string]struct {
 		input *rayv1.RayCluster
@@ -584,6 +609,42 @@ env_vars:
 			} else {
 				assert.NotNil(t, err)
 			}
+		})
+	}
+}
+
+func TestFindHeadPodReadyCondition(t *testing.T) {
+	tests := map[string]struct {
+		pod      *corev1.Pod
+		expected metav1.Condition
+	}{
+		"condition true if Ray head pod is running and ready": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionTrue,
+			},
+		},
+		"condition false if Ray head pod is not running": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionFalse,
+			},
+		},
+		"condition false if Ray head pod is not ready": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionFalse,
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			replicaHeadPodReadyCondition := FindPodReadyCondition(tc.pod, rayv1.HeadPodReady)
+			assert.Equal(t, tc.expected.Status, replicaHeadPodReadyCondition.Status)
 		})
 	}
 }
