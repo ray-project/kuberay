@@ -192,14 +192,12 @@ var autoscalerContainer = corev1.Container{
 		},
 	},
 	Command: []string{
-		"ray",
+		"/bin/bash",
+		"-lc",
+		"--",
 	},
 	Args: []string{
-		"kuberay-autoscaler",
-		"--cluster-name",
-		"$(RAY_CLUSTER_NAME)",
-		"--cluster-namespace",
-		"$(RAY_CLUSTER_NAMESPACE)",
+		"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 	},
 	Resources: corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
