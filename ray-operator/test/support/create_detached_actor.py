@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('name')
 parser.add_argument('--num-cpus', type=float, default=1)
 parser.add_argument('--num-gpus', type=float, default=0)
+parser.add_argument('--custom-resource-name', type=str, default="CustomResource")
 parser.add_argument('--num-custom-resources', type=float, default=0)
 args = parser.parse_args()
 
