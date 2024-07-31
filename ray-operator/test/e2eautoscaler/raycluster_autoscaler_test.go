@@ -268,8 +268,7 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_1", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
-		// We don't use real TPU resources of Kubernetes here, therefore we can't test the RayClusterDesiredTPU.
-		// We test the Pods count of the "tpu-group" instead.
+
 		// Each TPU multi-host replica should have 4 workers, so we check for 4 pods in 'tpu-group'.
 		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(4))
 
