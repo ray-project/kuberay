@@ -1212,13 +1212,35 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 				Type:    string(rayv1.HeadPodReady),
 				Status:  metav1.ConditionFalse,
-				Reason:  "HeadPodNotFound",
+				Reason:  rayv1.HeadPodNotFound,
 				Message: "Head Pod not found",
 			})
 		} else {
-			replicaHeadPodReadyCondition := utils.FindPodReadyCondition(headPod, rayv1.HeadPodReady)
-			meta.SetStatusCondition(&newInstance.Status.Conditions, replicaHeadPodReadyCondition)
+			headPodReadyCondition := utils.FindHeadPodReadyCondition(headPod)
+			meta.SetStatusCondition(&newInstance.Status.Conditions, headPodReadyCondition)
 		}
+
+		if meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterReady)) == nil {
+			// RayClusterReady indicates whether all Ray Pods are ready when the RayCluster is first created.
+			// Note RayClusterReady StatusCondition will not be added to Raycluster until all Ray Pods are ready for the first time.
+			if utils.CheckAllPodsRunning(ctx, runtimePods) {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterReady),
+					Status:  metav1.ConditionTrue,
+					Reason:  rayv1.AllPodRunningAndReady,
+					Message: "All Ray Pods are ready. Future checks focus on the head",
+				})
+			}
+		} else { // After RayClusterReady is set to true for the first time, its meaning changes to be the same as HeadPodReady.
+			headPodReadyCondition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.HeadPodReady))
+			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.RayClusterReady),
+				Status:  headPodReadyCondition.Status,
+				Reason:  headPodReadyCondition.Reason,
+				Message: "Only check head after all Ray Pods are initially ready",
+			})
+		}
+
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
