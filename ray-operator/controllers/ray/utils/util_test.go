@@ -643,8 +643,8 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			replicaHeadPodReadyCondition := FindPodReadyCondition(tc.pod, rayv1.HeadPodReady)
-			assert.Equal(t, tc.expected.Status, replicaHeadPodReadyCondition.Status)
+			headPodReadyCondition := FindHeadPodReadyCondition(tc.pod)
+			assert.Equal(t, tc.expected.Status, headPodReadyCondition.Status)
 		})
 	}
 }
