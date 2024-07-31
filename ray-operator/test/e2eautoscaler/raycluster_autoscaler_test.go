@@ -209,7 +209,7 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
-		
+
 		// Each TPU multi-host replica should have 1 workers, so we check for 1 pod in 'tpu-group'.
 		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(1))
 
