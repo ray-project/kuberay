@@ -210,10 +210,10 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
 
-		// Each TPU multi-host replica should have 1 workers, so we check for 1 pod in 'tpu-group'.
+		// Each TPU multi-host replica should have 1 worker, so we check for 1 pod in 'tpu-group'.
 		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(1))
 
-		// Terminate the TPU detached actos, and the worker group replica should be deleted.
+		// Terminate the TPU detached actor and the worker group replica should be deleted.
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
