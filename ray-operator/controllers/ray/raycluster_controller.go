@@ -985,8 +985,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		}
 	}
 
-	replica := pod
-	if err := r.Create(ctx, &replica); err != nil {
+	if err := r.Create(ctx, &pod); err != nil {
 		return err
 	}
 	logger.Info("Created pod", "Pod ", pod.GenerateName)
