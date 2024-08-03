@@ -17,6 +17,7 @@ package ray
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -1707,7 +1708,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
 
 	// Test reconcilePodsErr with the feature gate disabled
-	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
 	assert.Nil(t, err)
 	assert.Empty(t, newInstance.Status.Conditions)
 
@@ -1740,7 +1741,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
 
 	// Test reconcilePodsErr with the feature gate enabled
-	newInstance, err = r.calculateStatus(ctx, testRayCluster, utils.ErrFailedCreateHeadPod)
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
 	assert.Nil(t, err)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }

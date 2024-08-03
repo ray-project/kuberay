@@ -197,22 +197,27 @@ func RayOriginatedFromCRDLabelValue(crdType CRDType) string {
 	return string(crdType)
 }
 
+type errRayClusterReplicaFailure struct {
+	reason string
+}
+
+func (e *errRayClusterReplicaFailure) Error() string {
+	return e.reason
+}
+
 // These are markers used by the calculateStatus() for setting the RayClusterReplicaFailure condition.
 var (
-	errRayClusterReplicaFailure = errors.New("RayClusterReplicaFailure")
-	ErrFailedDeleteAllPods      = errors.Join(errRayClusterReplicaFailure, errors.New("FailedDeleteAllPods"))
-	ErrFailedDeleteHeadPod      = errors.Join(errRayClusterReplicaFailure, errors.New("FailedDeleteHeadPod"))
-	ErrFailedCreateHeadPod      = errors.Join(errRayClusterReplicaFailure, errors.New("FailedCreateHeadPod"))
-	ErrFailedDeleteWorkerPod    = errors.Join(errRayClusterReplicaFailure, errors.New("FailedDeleteWorkerPod"))
-	ErrFailedCreateWorkerPod    = errors.Join(errRayClusterReplicaFailure, errors.New("FailedCreateWorkerPod"))
+	ErrFailedDeleteAllPods   = &errRayClusterReplicaFailure{reason: "FailedDeleteAllPods"}
+	ErrFailedDeleteHeadPod   = &errRayClusterReplicaFailure{reason: "FailedDeleteHeadPod"}
+	ErrFailedCreateHeadPod   = &errRayClusterReplicaFailure{reason: "FailedCreateHeadPod"}
+	ErrFailedDeleteWorkerPod = &errRayClusterReplicaFailure{reason: "FailedDeleteWorkerPod"}
+	ErrFailedCreateWorkerPod = &errRayClusterReplicaFailure{reason: "FailedCreateWorkerPod"}
 )
 
 func RayClusterReplicaFailureReason(err error) string {
-	if e, ok := err.(interface{ Unwrap() []error }); ok {
-		errs := e.Unwrap()
-		if len(errs) >= 2 && errors.Is(errs[0], errRayClusterReplicaFailure) {
-			return errs[1].Error()
-		}
+	var failure *errRayClusterReplicaFailure
+	if errors.As(err, &failure) {
+		return failure.reason
 	}
 	return ""
 }
