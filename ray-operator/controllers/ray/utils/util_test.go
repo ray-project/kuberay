@@ -655,5 +655,10 @@ func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateHeadPod), "FailedCreateHeadPod")
 	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod), "FailedDeleteWorkerPod")
 	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod), "FailedCreateWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))), "FailedDeleteAllPods")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))), "FailedDeleteHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))), "FailedCreateHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))), "FailedDeleteWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
 	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
 }
