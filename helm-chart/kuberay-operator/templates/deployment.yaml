@@ -82,8 +82,8 @@ spec:
             {{- $argList = append $argList "--log-file-encoder" -}}
             {{- $argList = append $argList .Values.logging.fileEncoder -}}
             {{- end -}}
-            {{- if not .Values.leaderElectionEnabled -}}
-            {{- $argList = append $argList "--enable-leader-election=false" -}}
+            {{- if hasKey .Values "leaderElectionEnabled" -}}
+            {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
             {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
