@@ -88,7 +88,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 }
 
 var _ = Context("Inside the default namespace", func() {
-	Describe("Static RayCluster", func() {
+	Describe("Static RayCluster", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-static", namespace)
@@ -227,7 +227,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with overridden app.kubernetes.io labels", func() {
+	Describe("RayCluster with overridden app.kubernetes.io labels", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-overridden-k8s-labels", namespace)
@@ -321,7 +321,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with autoscaling enabled", func() {
+	Describe("RayCluster with autoscaling enabled", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-autoscaler", namespace)
@@ -414,7 +414,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("Suspend RayCluster", func() {
+	Describe("Suspend RayCluster", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-suspend", namespace)
@@ -576,7 +576,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with a multi-host worker group", func() {
+	Describe("RayCluster with a multi-host worker group", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
@@ -670,7 +670,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with PodTemplate referencing a different namespace", func() {
+	Describe("RayCluster with PodTemplate referencing a different namespace", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-podtemplate-namespace", namespace)
@@ -704,7 +704,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster without resource request", func() {
+	Describe("RayCluster without resource request", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("no-resource-req", namespace)
@@ -789,7 +789,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with invalid NumOfHosts", func() {
+	Describe("RayCluster with invalid NumOfHosts", Ordered, func() {
 		// Some users only upgrade the KubeRay image without upgrading the CRD. For example, when a
 		// user upgrades the KubeRay operator from v1.0.0 to v1.1.0 without upgrading the CRD, the
 		// KubeRay operator will use the zero value of `NumOfHosts` in the CRD. Hence, all worker

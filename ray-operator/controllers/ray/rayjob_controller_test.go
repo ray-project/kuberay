@@ -113,7 +113,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 }
 
 var _ = Context("RayJob in K8sJobMode", func() {
-	Describe("RayJob SubmitterConfig BackoffLimit", func() {
+	Describe("RayJob SubmitterConfig BackoffLimit", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJobWithDefaultSubmitterConfigBackoffLimit := rayJobTemplate("rayjob-default", namespace)
@@ -186,7 +186,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 
-	Describe("Successful RayJob in K8sJobMode", func() {
+	Describe("Successful RayJob in K8sJobMode", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test", namespace)
@@ -311,7 +311,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 
-	Describe("Successful RayJob in K8sjobMode with DELETE_RAYJOB_CR_AFTER_JOB_FINISHES", func() {
+	Describe("Successful RayJob in K8sjobMode with DELETE_RAYJOB_CR_AFTER_JOB_FINISHES", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test-delete", namespace)
@@ -432,7 +432,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 
-	Describe("RayJob has passed the ActiveDeadlineSeconds", func() {
+	Describe("RayJob has passed the ActiveDeadlineSeconds", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		activeDeadlineSeconds := int32(3)
@@ -475,7 +475,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 		})
 	})
 
-	Describe("Retrying RayJob in K8sJobMode", func() {
+	Describe("Retrying RayJob in K8sJobMode", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-retry-test", namespace)
