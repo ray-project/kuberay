@@ -1,3 +1,5 @@
+// nolint:SA1019
+
 package support
 
 import (
