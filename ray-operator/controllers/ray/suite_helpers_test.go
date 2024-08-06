@@ -1,4 +1,4 @@
-//nolint:SA1019
+//nolint:SA1019 // https://github.com/ray-project/kuberay/pull/2288
 
 package ray
 
