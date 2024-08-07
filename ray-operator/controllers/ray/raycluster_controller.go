@@ -318,6 +318,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
 			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s due to %s", instance.Namespace, instance.Name, reconcileErr)
 			break
 		}
 	}
