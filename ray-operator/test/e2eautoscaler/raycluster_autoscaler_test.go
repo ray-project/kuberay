@@ -166,7 +166,7 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := newConfigMap(namespace.Name, "scripts-tpu", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -225,7 +225,7 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := newConfigMap(namespace.Name, "scripts-tpu", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
