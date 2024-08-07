@@ -30,7 +30,7 @@ import (
 )
 
 var _ = Context("RayJob with suspend operation", func() {
-	Describe("When creating a rayjob with suspend == true", func() {
+	Describe("When creating a rayjob with suspend == true", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := &rayv1.RayCluster{}
@@ -102,7 +102,7 @@ var _ = Context("RayJob with suspend operation", func() {
 		})
 	})
 
-	Describe("RayJob suspend operation shoud be atomic", func() {
+	Describe("RayJob suspend operation shoud be atomic", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-atomic-suspend", namespace)

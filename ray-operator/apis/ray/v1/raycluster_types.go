@@ -168,14 +168,18 @@ type RayClusterConditionType string
 
 // Custom Reason for RayClusterCondition
 const (
-	// PodRunningAndReady says that the pod is running and ready.
-	PodRunningAndReady = "PodRunningAndReady"
+	AllPodRunningAndReady  = "AllPodRunningAndReady"
+	HeadPodNotFound        = "HeadPodNotFound"
+	HeadPodRunningAndReady = "HeadPodRunningAndReady"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )
 
 const (
-	// HeadPodReady is added in a RayCluster when its Head Pod is ready for requests.
+	// RayClusterReady indicates whether all Ray Pods are ready when the RayCluster is first created.
+	// After RayClusterReady is set to true for the first time, it only indicates whether the RayCluster's head Pod is ready for requests.
+	RayClusterReady RayClusterConditionType = "RayClusterReady"
+	// HeadPodReady indicates whether RayCluster's head Pod is ready for requests.
 	HeadPodReady RayClusterConditionType = "HeadPodReady"
 	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
 	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
