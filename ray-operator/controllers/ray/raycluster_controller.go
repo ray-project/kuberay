@@ -652,6 +652,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to createHeadPod for RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
