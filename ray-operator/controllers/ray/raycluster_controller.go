@@ -757,6 +757,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			for i = 0; i < diff; i++ {
 				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
 				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to createWorkerPod for RayCluster %s/%s group %s due to %s", instance.Namespace, instance.Name, worker.GroupName, err)
 					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 				}
 			}
