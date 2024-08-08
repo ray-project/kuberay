@@ -315,7 +315,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	for _, fn := range reconcileFuncs {
-		logger.Info("Reconciling RayCluster", "function name", runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name())
 		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
 			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
@@ -1364,11 +1363,8 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 	serviceAccount := &corev1.ServiceAccount{}
 	namespacedName := common.RayClusterAutoscalerServiceAccountNamespacedName(instance)
 
-	logger.Info("Chia-wei test here reconcileAutoscalerServiceAccount", "ServiceAccount", namespacedName)
-
 	if err := r.Get(ctx, namespacedName, serviceAccount); err != nil {
 		if !errors.IsNotFound(err) {
-			logger.Error(err, "Chia-wei test here !!!", "Failed to get ServiceAccount", "ServiceAccount", namespacedName)
 			return err
 		}
 
@@ -1377,11 +1373,11 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 		// zero-downtime rolling updates when RayService is performed. See https://github.com/ray-project/kuberay/issues/1123
 		// for more details.
 		if instance.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName == namespacedName.Name {
-			err_msg := "If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. " +
-				"However, ServiceAccount " + namespacedName.Name + " is not found. Please create one. " +
-				"See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details."
-			logger.Error(err, err_msg, "ServiceAccount", namespacedName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err_msg)
+			logger.Error(err, fmt.Sprintf(
+				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
+					"However, ServiceAccount %s is not found. Please create one. "+
+					"See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name), "ServiceAccount", namespacedName)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err)
 			return err
 		}
 
