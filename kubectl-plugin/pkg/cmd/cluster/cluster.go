@@ -23,5 +23,6 @@ func NewClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(NewClusterGetCommand(streams))
+	cmd.AddCommand(NewClusterLogCommand(streams))
 	return cmd
 }
