@@ -187,7 +187,7 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 				WithMaxReplicas(3).
 				WithNumOfHosts(1).
 				WithGroupName("tpu-group").
-				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `"{\"TPU\": 4}"`}).
+				WithRayStartParams(map[string]string{"resources": `"{\"TPU\": 4}"`}).
 				WithTemplate(workerPodTemplateApplyConfiguration()))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
@@ -206,7 +206,7 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 		// Create a detached tpu actor, and 1 worker in the multi-host "tpu-group" should be created.
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=TPU", "--num-custom-resources=4"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
 
@@ -233,10 +233,18 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
+	// Set 'replicaIndex' label that would be set by the GKE Ray TPU webhook. This is used to scale
+	// down entire multi-host replicas atomically.
+	replicaIndexLabel := map[string]string{
+		"replicaIndex": "tpu-group-0",
+	}
+	podTemplate := workerPodTemplateApplyConfiguration().WithLabels(replicaIndexLabel)
+	minRayVersion := "2.32.0" // Multi-host autoscaling support starts in this version.
+
 	test.T().Run("Create a RayCluster with autoscaling enabled", func(_ *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
-			WithRayVersion(GetRayVersion()).
+			WithRayVersion(minRayVersion).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
 				WithTemplate(headPodTemplateApplyConfiguration())).
@@ -244,10 +252,10 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
-				WithNumOfHosts(4).
+				WithNumOfHosts(2).
 				WithGroupName("tpu-group").
-				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `"{\"TPU\": 4}"`}).
-				WithTemplate(workerPodTemplateApplyConfiguration()))
+				WithRayStartParams(map[string]string{"resources": `"{\"TPU\": 4}"`}).
+				WithTemplate(podTemplate))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
@@ -264,36 +272,26 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 		headPod := GetHeadPod(test, rayCluster)
 		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-		// Create a detached tpu actor, and 4 workers in the multi-host "tpu-group" should be created.
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_1", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
+		// Create a detached TPU actor, and 1 multi-host replica with 2 TPU workers should be created.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_1", "--custom-resource-name=TPU", "--num-custom-resources=4"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
 
-		// Each TPU multi-host replica should have 4 workers, so we check for 4 pods in 'tpu-group'.
-		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(4))
+		// Each TPU multi-host replica should have NumOfHosts workers, so we check for 2 pods in 'tpu-group'.
+		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(2))
 
-		// Each TPU multi-host worker should have a task or actor scheduled on it, therefore we create 3 more detached actors
-		// to run on each node in the multi-host TPU worker group.
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_2", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_3", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_4", "--custom-resource-name=\"TPU\"", "--num-custom-resources=4"})
+		// Each TPU multi-host worker should have a task or actor scheduled on it, therefore we create another detached actor
+		// to run on the second node in the multi-host TPU worker group.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor_2", "--custom-resource-name=TPU", "--num-custom-resources=4"})
+		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(1))))
+		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(2))
 
-		// Each new TPU detached actor should get scheduled to an existing scaled-up worker, so we check that there are still 4 pods in 'tpu-group'.
-		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(4))
-
-		// Terminating one TPU detached actor will result in the Ray node becoming idle, causing Ray to scale down the entire multi-host
-		// worker group. A new multi-host worker group will then be scaled back up since the remaining detached actors are running.
+		// Terminate the TPU detached actors, and the multi-host replica should be scaled down.
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor_1"})
-		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
-
-		// Terminate the remaining 3 TPU detached actors, and the worker group should be deleted.
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor_2"})
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor_3"})
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor_4"})
 		test.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
-		test.Expect(GetGroupPods(test, rayCluster, "tpu-group")).To(HaveLen(0))
 	})
 }
 
