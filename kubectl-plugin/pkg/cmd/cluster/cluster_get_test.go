@@ -24,7 +24,7 @@ import (
 func TestRayClusterGetComplete(t *testing.T) {
 	// Initialize members of the cluster get option struct and the struct itself
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeClusterGetOptions := NewClusterOptions(testStreams)
+	fakeClusterGetOptions := NewClusterGetOptions(testStreams)
 	fakeArgs := []string{"Expected", "output"}
 
 	*fakeClusterGetOptions.configFlags.Namespace = ""
@@ -87,13 +87,13 @@ func TestRayClusterGetValidate(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		opts        *ClusterOptions
+		opts        *ClusterGetOptions
 		expect      string
 		expectError string
 	}{
 		{
 			name: "Test validation when no context is set",
-			opts: &ClusterOptions{
+			opts: &ClusterGetOptions{
 				configFlags:   genericclioptions.NewConfigFlags(false),
 				AllNamespaces: false,
 				args:          []string{"random_arg"},
@@ -103,7 +103,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 		},
 		{
 			name: "Test validation when more than 1 arg",
-			opts: &ClusterOptions{
+			opts: &ClusterGetOptions{
 				// Use fake config to bypass the config flag checks
 				configFlags:   fakeConfigFlags,
 				AllNamespaces: false,
@@ -114,7 +114,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 		},
 		{
 			name: "Successful validation call",
-			opts: &ClusterOptions{
+			opts: &ClusterGetOptions{
 				// Use fake config to bypass the config flag checks
 				configFlags:   fakeConfigFlags,
 				AllNamespaces: false,
@@ -144,7 +144,7 @@ func TestRayClusterGetRun(t *testing.T) {
 
 	testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
 
-	fakeClusterGetOptions := NewClusterOptions(testStreams)
+	fakeClusterGetOptions := NewClusterGetOptions(testStreams)
 
 	// Create fake ray cluster unstructured object for fake rest response
 	raycluster := &unstructured.Unstructured{
