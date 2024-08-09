@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/cluster"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/log"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/session"
 )
 
@@ -22,5 +23,6 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 
 	cmd.AddCommand(cluster.NewClusterCommand(streams))
 	cmd.AddCommand(session.NewSessionCommand(streams))
+	cmd.AddCommand(log.NewClusterLogCommand(streams))
 	return cmd
 }
