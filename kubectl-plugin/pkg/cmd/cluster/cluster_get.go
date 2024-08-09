@@ -16,22 +16,22 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-type ClusterOptions struct {
+type ClusterGetOptions struct {
 	configFlags   *genericclioptions.ConfigFlags
 	ioStreams     *genericclioptions.IOStreams
 	args          []string
 	AllNamespaces bool
 }
 
-func NewClusterOptions(streams genericclioptions.IOStreams) *ClusterOptions {
-	return &ClusterOptions{
+func NewClusterGetOptions(streams genericclioptions.IOStreams) *ClusterGetOptions {
+	return &ClusterGetOptions{
 		configFlags: genericclioptions.NewConfigFlags(true),
 		ioStreams:   &streams,
 	}
 }
 
 func NewClusterGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewClusterOptions(streams)
+	options := NewClusterGetOptions(streams)
 	// Initialize the factory for later use with the current config flag
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
@@ -56,7 +56,7 @@ func NewClusterGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	return cmd
 }
 
-func (options *ClusterOptions) Complete(args []string) error {
+func (options *ClusterGetOptions) Complete(args []string) error {
 	if *options.configFlags.Namespace == "" {
 		options.AllNamespaces = true
 	}
@@ -65,7 +65,7 @@ func (options *ClusterOptions) Complete(args []string) error {
 	return nil
 }
 
-func (options *ClusterOptions) Validate() error {
+func (options *ClusterGetOptions) Validate() error {
 	// Overrides and binds the kube config then retrieves the merged result
 	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
@@ -80,7 +80,7 @@ func (options *ClusterOptions) Validate() error {
 	return nil
 }
 
-func (options *ClusterOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+func (options *ClusterGetOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
 	// Retrieves the dynamic client with factory.
 	dynamicClient, err := factory.DynamicClient()
 	if err != nil {
