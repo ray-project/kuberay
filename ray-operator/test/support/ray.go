@@ -75,7 +75,7 @@ func GetRayCluster(t Test, namespace, name string) *rayv1.RayCluster {
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
-	return cluster.Status.State
+	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
 
 func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {

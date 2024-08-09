@@ -133,6 +133,8 @@ type RayClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
+	//
+	// Deprecated: the State field is replaced by the Conditions field.
 	State ClusterState `json:"state,omitempty"`
 	// Reason provides more information about current State
 	Reason string `json:"reason,omitempty"`
