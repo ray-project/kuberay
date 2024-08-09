@@ -1,5 +1,3 @@
-//nolint:SA1019 // https://github.com/ray-project/kuberay/pull/2288
-
 package ray
 
 import (
@@ -366,10 +364,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 // this field should be used to determine whether to update this CR or not.
 func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context, oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
 	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
+
+	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
 			"old State: %s, new State: %s, old Reason: %s, new Reason: %s",
-			oldStatus.State, newStatus.State, oldStatus.Reason, newStatus.Reason))
+			oldStatus.State, newStatus.State, oldStatus.Reason, newStatus.Reason)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 		return true
 	}
 	if oldStatus.ReadyWorkerReplicas != newStatus.ReadyWorkerReplicas ||
@@ -1199,7 +1198,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
 	if utils.CheckAllPodsRunning(ctx, runtimePods) {
-		newInstance.Status.State = rayv1.Ready
+		newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 
 	// Check if the head node is running and ready by checking the head pod's status.
@@ -1245,7 +1244,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
-		newInstance.Status.State = rayv1.Suspended
+		newInstance.Status.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 
 	if err := r.updateEndpoints(ctx, newInstance); err != nil {
@@ -1259,11 +1258,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
-	if instance.Status.State != newInstance.Status.State {
+	if instance.Status.State != newInstance.Status.State { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 		if newInstance.Status.StateTransitionTimes == nil {
 			newInstance.Status.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time)
 		}
-		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow
+		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 
 	return newInstance, nil

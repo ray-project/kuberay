@@ -1,5 +1,3 @@
-//nolint:SA1019 // https://github.com/ray-project/kuberay/pull/2288
-
 /*
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -1535,7 +1533,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
-	assert.Empty(t, cluster.Status.State, "Cluster state should be empty")
+	assert.Empty(t, cluster.Status.State, "Cluster state should be empty") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
@@ -1545,13 +1543,13 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 
 	state := rayv1.Ready
 	newTestRayCluster := testRayCluster.DeepCopy()
-	newTestRayCluster.Status.State = state
+	newTestRayCluster.Status.State = state //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster after updating state")
-	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated")
+	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
 
 func TestInconsistentRayClusterStatus(t *testing.T) {
@@ -1595,7 +1593,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Case 1: `State` is different => return true
 	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Suspended
+	newStatus.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
 	// Case 2: `Reason` is different => return true
@@ -1886,7 +1884,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	}
 
 	preUpdateTime := metav1.Now()
-	testRayCluster.Status.State = rayv1.Ready
+	testRayCluster.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
