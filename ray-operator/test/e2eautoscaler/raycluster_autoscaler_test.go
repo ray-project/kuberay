@@ -283,6 +283,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 
 	test.T().Run("Create a RayCluster with autoscaling enabled", func(_ *testing.T) {
 		groupName := "custom-resource-group"
+
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
 			WithRayVersion(GetRayVersion()).
