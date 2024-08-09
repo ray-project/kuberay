@@ -653,6 +653,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to createHeadPod for RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
@@ -757,6 +758,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			for i = 0; i < diff; i++ {
 				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
 				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to createWorkerPod for RayCluster %s/%s group %s due to %s", instance.Namespace, instance.Name, worker.GroupName, err)
 					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 				}
 			}
@@ -1368,12 +1370,14 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
 					"However, ServiceAccount %s is not found. Please create one. "+
 					"See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name), "ServiceAccount", namespacedName)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err)
 			return err
 		}
 
 		// Create service account for autoscaler if there's no existing one in the cluster.
 		serviceAccount, err := common.BuildServiceAccount(instance)
 		if err != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to build serviceAccount %s for RayCluster %s/%s due to %s", serviceAccount, instance.Namespace, instance.Name, err)
 			return err
 		}
 
@@ -1390,6 +1394,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 				logger.Info("Pod service account already exist, no need to create")
 				return nil
 			}
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to create serviceAccount %s for RayCluster %s/%s due to %s", serviceAccount, instance.Namespace, instance.Name, err)
 			return err
 		}
 		logger.Info("Pod ServiceAccount created successfully", "service account name", serviceAccount.Name)
