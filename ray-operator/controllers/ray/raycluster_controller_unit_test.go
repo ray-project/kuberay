@@ -936,8 +936,10 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate head pod get evicted.
+	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
+	err = fakeClient.Update(ctx, &podList.Items[0])
+	assert.Nil(t, err, "Fail to update head Pod restart policy")
 	podList.Items[0].Status.Phase = corev1.PodFailed
-	podList.Items[0].Status.Reason = "Evicted"
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err, "Fail to update head Pod status")
 
@@ -2062,18 +2064,32 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 		Scheme:   newScheme,
 	}
 
-	// The head Pod will not be deleted because the restart policy is `Always`.
+	// The head Pod will be deleted regardless restart policy.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 0, len(podList.Items))
+
+	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
 	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 
-	// Make sure the head Pod's restart policy is `Never` and status is `Failed`.
+	// Make sure the head Pod's restart policy is `Never` and status is `Running`.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
 	err = fakeClient.Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
-	podList.Items[0].Status.Phase = corev1.PodFailed
+	podList.Items[0].Status.Phase = corev1.PodRunning
+	podList.Items[0].Status.ContainerStatuses = append(podList.Items[0].Status.ContainerStatuses,
+		corev1.ContainerStatus{
+			Name: podList.Items[0].Spec.Containers[utils.RayContainerIndex].Name,
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{},
+			},
+		})
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
@@ -2182,10 +2198,10 @@ func Test_ShouldDeletePod(t *testing.T) {
 			// The restart policy is `Always` and the Pod is in a terminate state.
 			// The expected behavior is that the controller will not delete the Pod because
 			// the restart policy is `Always`.
-			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=false",
+			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=true",
 			restartPolicy: corev1.RestartPolicyAlways,
 			phase:         corev1.PodFailed,
-			shouldDelete:  false,
+			shouldDelete:  true,
 		},
 		{
 			// The restart policy is `Always`, the Pod is not in a terminate state,

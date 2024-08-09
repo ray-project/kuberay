@@ -632,6 +632,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		logger.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
+			"Pod status reason", headPod.Status.Reason,
 			"Pod restart policy", headPod.Spec.RestartPolicy,
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
@@ -812,43 +813,33 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 // (1) shouldDelete: Whether the Pod should be deleted.
 // (2) reason: The reason why the Pod should or should not be deleted.
 func shouldDeletePod(pod corev1.Pod, nodeType rayv1.RayNodeType) (bool, string) {
-	// If a Pod's restart policy is set to `Always`, KubeRay will not delete
-	// the Pod and rely on the Pod's restart policy to restart the Pod.
-	isRestartPolicyAlways := pod.Spec.RestartPolicy == corev1.RestartPolicyAlways
+	// Based on the logic of the change of the status of the K8S pod, the following judgment is made.
+	// https://github.com/kubernetes/kubernetes/blob/3361895612dac57044d5dacc029d2ace1865479c/pkg/kubelet/kubelet_pods.go#L1556
 
 	// If the Pod's status is `Failed` or `Succeeded`, the Pod will not restart and we can safely delete it.
 	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-		if isRestartPolicyAlways {
-			// Based on my observation, a Pod with `RestartPolicy: Always` will never be in the terminated states (i.e., `Failed` or `Succeeded`).
-			// However, I couldn't find any well-defined behavior in the Kubernetes documentation, so I can't guarantee that the status transition
-			// from `Running` to `Failed / Succeeded` and back to `Running` won't occur when we kill the main process (i.e., `ray start` in KubeRay)
-			// in the head Pod. Therefore, I've added this check as a safeguard.
-			reason := fmt.Sprintf(
-				"The status of the %s Pod %s is %s. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
-					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase)
-			return false, reason
-		}
-
 		reason := fmt.Sprintf(
-			"The %s Pod %s status is %s which is a terminal state and it will not restart. "+
-				"KubeRay will delete the Pod and create new Pods in the next reconciliation if necessary.", nodeType, pod.Name, pod.Status.Phase)
+			"The %s Pod %s status is %s which is a terminal state. "+
+				"KubeRay will delete the Pod and create new Pods in the next reconciliation if necessary.",
+			nodeType, pod.Name, pod.Status.Phase)
 		return true, reason
 	}
 
 	rayContainerTerminated := getRayContainerStateTerminated(pod)
 	if pod.Status.Phase == corev1.PodRunning && rayContainerTerminated != nil {
-		if isRestartPolicyAlways {
-			// If restart policy is set to `Always`, KubeRay will not delete the Pod.
+		if pod.Spec.RestartPolicy == corev1.RestartPolicyNever {
 			reason := fmt.Sprintf(
-				"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. However, KubeRay will not delete the Pod because its restartPolicy is set to 'Always' "+
-					"and it should be able to restart automatically.", nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
-			return false, reason
+				"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. "+
+					"The container is unable to restart due to its restart policy %s, so KubeRay will delete it.",
+				nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated, pod.Spec.RestartPolicy)
+			return true, reason
 		}
+		// If restart policy is set to `Always` or `OnFailure`, KubeRay will not delete the Pod.
 		reason := fmt.Sprintf(
 			"The Pod status of the %s Pod %s is %s, and the Ray container terminated status is %v. "+
-				"The container is unable to restart due to its restart policy %s, so KubeRay will delete it.",
+				"However, KubeRay will not delete the Pod because its restartPolicy is set to %s and it should be able to restart automatically.",
 			nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated, pod.Spec.RestartPolicy)
-		return true, reason
+		return false, reason
 	}
 
 	// TODO (kevin85421): Consider deleting a Pod if its Ray container restarts excessively, as this might
