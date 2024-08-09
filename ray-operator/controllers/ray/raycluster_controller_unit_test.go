@@ -2196,8 +2196,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 	}{
 		{
 			// The restart policy is `Always` and the Pod is in a terminate state.
-			// The expected behavior is that the controller will not delete the Pod because
-			// the restart policy is `Always`.
+			// The expected behavior is that the controller will delete the Pod regardless of the restart policy.
 			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=true",
 			restartPolicy: corev1.RestartPolicyAlways,
 			phase:         corev1.PodFailed,
