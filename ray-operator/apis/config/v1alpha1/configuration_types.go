@@ -3,9 +3,6 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 //+kubebuilder:object:root=true
@@ -66,12 +63,4 @@ type Configuration struct {
 
 	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
 	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
-}
-
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
-}
-
-func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
-	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 }
