@@ -32,7 +32,6 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	// +kubebuilder:scaffold:imports
@@ -50,7 +49,6 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
-	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -68,6 +66,8 @@ func main() {
 	var useKubernetesProxy bool
 	var configFile string
 	var featureGates string
+	var enableBatchScheduler bool
+	var batchScheduler string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -90,8 +90,10 @@ func main() {
 		"Encoder to use for log file. Valid values are 'json' and 'console'. Defaults to 'json'")
 	flag.StringVar(&logStdoutEncoder, "log-stdout-encoder", "json",
 		"Encoder to use for logging stdout. Valid values are 'json' and 'console'. Defaults to 'json'")
-	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
-		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
+	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
+		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
+	flag.StringVar(&batchScheduler, "batch-scheduler", "",
+		"Batch scheduler name, supported values are volcano, yunikorn.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
@@ -111,9 +113,6 @@ func main() {
 
 		config, err = decodeConfig(configData, scheme)
 		exitOnError(err, "failed to decode config file")
-
-		// TODO: remove globally-scoped variables
-		ray.EnableBatchScheduler = config.EnableBatchScheduler
 	} else {
 		config.MetricsAddr = metricsAddr
 		config.ProbeAddr = probeAddr
@@ -124,7 +123,8 @@ func main() {
 		config.LogFile = logFile
 		config.LogFileEncoder = logFileEncoder
 		config.LogStdoutEncoder = logStdoutEncoder
-		config.EnableBatchScheduler = ray.EnableBatchScheduler
+		config.EnableBatchScheduler = enableBatchScheduler
+		config.BatchScheduler = batchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 	}
@@ -160,8 +160,22 @@ func main() {
 	if forcedClusterUpgrade {
 		setupLog.Info("Deprecated feature flag forced-cluster-upgrade is enabled, which has no effect.")
 	}
-	if ray.EnableBatchScheduler {
-		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
+	if config.EnableBatchScheduler {
+		if len(config.BatchScheduler) > 0 {
+			exitOnError(fmt.Errorf("invalid configuration found"),
+				"do not use both options together: \"batch-scheduler\" and \"enable-batch-scheduler\".")
+		}
+		setupLog.Info("Feature flag enable-batch-scheduler is deprecated and will not be supported soon. " +
+			"Use batch-scheduler instead. ")
+	}
+	if len(config.BatchScheduler) > 0 {
+		if config.BatchScheduler == "volcano" || config.BatchScheduler == "yunikorn" {
+			setupLog.Info("Feature flag batch-scheduler is enabled",
+				"scheduler name", config.BatchScheduler)
+		} else {
+			exitOnError(fmt.Errorf("invalid value for batch-scheduler"),
+				"value provided", config.BatchScheduler, "value supported", "volcano, yunikorn")
+		}
 	}
 
 	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {
@@ -220,7 +234,7 @@ func main() {
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
 	}
 	ctx := ctrl.SetupSignalHandler()
-	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
