@@ -1748,7 +1748,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
-func TestRayClusterReadyCondition(t *testing.T) {
+func TestRayClusterProvisionedCondition(t *testing.T) {
 	setupTest(t)
 	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
 
@@ -1808,40 +1808,40 @@ func TestRayClusterReadyCondition(t *testing.T) {
 		Scheme:   scheme.Scheme,
 	}
 
-	// Initially, neither head Pod nor worker Pod are ready. The RayClusterReady condition should not be present.
+	// Initially, neither head Pod nor worker Pod are ready. The RayClusterProvisioned condition should not be present.
 	headPod.Status = UnReadyStatus
 	workerPod.Status = UnReadyStatus
 	_ = fakeClient.Status().Update(ctx, headPod)
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterReady)))
+	assert.Nil(t, meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned)))
 
-	// After a while, all Ray Pods are ready for the first time, RayClusterReady condition should be added and set to True.
+	// After a while, all Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
 	headPod.Status = ReadyStatus
 	workerPod.Status = ReadyStatus
 	_ = fakeClient.Status().Update(ctx, headPod)
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	rayClusterReadyCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterReady))
-	assert.Equal(t, rayClusterReadyCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterReadyCondition.Reason, rayv1.AllPodRunningAndReady)
+	rayClusterProvisionedCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
 
-	// After a while, worker Pod fails readiness, but since RayClusterReady focuses solely on the headPod after all Ray Pods were initially ready,
-	// RayClusterReady condition should still be True.
+	// After a while, worker Pod fails readiness, but since RayClusterProvisioned focuses solely on whether all Ray Pods are ready for the first time,
+	// RayClusterProvisioned condition should still be True.
 	workerPod.Status = UnReadyStatus
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	rayClusterReadyCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterReady))
-	assert.Equal(t, rayClusterReadyCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterReadyCondition.Reason, rayv1.HeadPodRunningAndReady)
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)	
 
-	// After a while, head Pod also fails readiness, RayClusterReady condition should set to False.
+	// After a while, head Pod also fails readiness, RayClusterProvisioned condition should still be true.
 	headPod.Status = UnReadyStatus
 	_ = fakeClient.Status().Update(ctx, headPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	rayClusterReadyCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterReady))
-	assert.Equal(t, rayClusterReadyCondition.Status, metav1.ConditionFalse)
-	assert.Equal(t, rayClusterReadyCondition.Reason, rayv1.UnknownReason)
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
