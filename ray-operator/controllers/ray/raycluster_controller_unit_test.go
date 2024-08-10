@@ -1833,7 +1833,7 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
 	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)	
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
 
 	// After a while, head Pod also fails readiness, RayClusterProvisioned condition should still be true.
 	headPod.Status = UnReadyStatus
