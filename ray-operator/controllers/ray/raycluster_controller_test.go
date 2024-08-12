@@ -834,7 +834,7 @@ var _ = Context("Inside the default namespace", func() {
 			DeferCleanup(cleanUpFunc)
 		})
 
-		It("Should handle HeadPodReady and RayClusterReady conditions correctly", func(ctx SpecContext) {
+		It("Should handle HeadPodReady and RayClusterProvisioned conditions correctly", func(ctx SpecContext) {
 			namespace := "default"
 			rayCluster := rayClusterTemplate("raycluster-status-conditions-enabled", namespace)
 			rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
@@ -873,7 +873,7 @@ var _ = Context("Inside the default namespace", func() {
 			headPod = headPods.Items[0]
 
 			By("Check RayCluster conditions empty initially")
-			// Initially, neither head Pod nor worker Pod are ready. The RayClusterReady condition should not be present.
+			// Initially, neither head Pod nor worker Pod are ready. The RayClusterProvisioned condition should not be present.
 			Expect(testRayCluster.Status.Conditions).To(BeEmpty())
 
 			By("Update the head pod to Running and Ready")
@@ -887,7 +887,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
 
 			By("Check RayCluster HeadPodReady condition is true")
-			// The head pod is ready, so RayClusterReady condition should be added and set to True.
+			// The head pod is ready, so HeadPodReady condition should be added and set to True.
 			Eventually(
 				func() bool {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
@@ -897,14 +897,14 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
-			By("Check RayCluster RayClusterReady condition is false")
-			// But the worker pod is not ready yet, RayClusterReady condition should still be absent.
+			By("Check RayCluster RayClusterProvisioned condition is false")
+			// But the worker pod is not ready yet, RayClusterProvisioned condition should still be absent.
 			Consistently(
 				func() *metav1.Condition {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 						return nil
 					}
-					return meta.FindStatusCondition(rayCluster.Status.Conditions, string(rayv1.RayClusterReady))
+					return meta.FindStatusCondition(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
 				},
 				time.Second*3, time.Millisecond*500).Should(BeNil())
 
@@ -918,14 +918,14 @@ var _ = Context("Inside the default namespace", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 
-			By("Check RayCluster RayClusterReady condition is true")
-			// All Ray Pods are ready for the first time, RayClusterReady condition should be added and set to True.
+			By("Check RayCluster RayClusterProvisioned condition is true")
+			// All Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
 			Eventually(
 				func() bool {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 						return false
 					}
-					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterReady), metav1.ConditionTrue)
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
@@ -938,15 +938,15 @@ var _ = Context("Inside the default namespace", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
 
-			By("Check RayCluster RayClusterReady condition is true")
-			// The worker pod fails readiness, but since RayClusterReady focuses solely on the headPod after all Ray Pods were initially ready,
-			// RayClusterReady condition should still be True.
+			By("Check RayCluster RayClusterProvisioned condition is true")
+			// The worker pod fails readiness, but since RayClusterProvisioned focuses solely on whether all Ray Pods are ready for the first time,
+			// RayClusterProvisioned condition should still be True.
 			Consistently(
 				func() bool {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 						return false
 					}
-					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterReady), metav1.ConditionTrue)
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
@@ -970,14 +970,14 @@ var _ = Context("Inside the default namespace", func() {
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
-			By("Check RayCluster RayClusterReady condition is false")
-			// The head pod also fails readiness, RayClusterReady condition should set to False.
+			By("Check RayCluster RayClusterProvisioned condition is still true")
+			// The head pod also fails readiness, RayClusterProvisioned condition not changed.
 			Eventually(
 				func() bool {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 						return false
 					}
-					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterReady), metav1.ConditionFalse)
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 		})
