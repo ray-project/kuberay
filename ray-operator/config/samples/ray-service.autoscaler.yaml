@@ -39,7 +39,7 @@ spec:
         runtime_env:
           working_dir: "https://github.com/ray-project/test_dag/archive/59c994656f55ff8e0e642efe63f380debc831931.zip"
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.34.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
     enableInTreeAutoscaling: true
     autoscalerOptions:
@@ -63,7 +63,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.34.0
               resources:
                 limits:
                   cpu: 2
@@ -96,7 +96,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.34.0
                 lifecycle:
                   preStop:
                     exec:

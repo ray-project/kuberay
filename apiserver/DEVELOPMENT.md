@@ -70,7 +70,7 @@ There are two `make` targets provide execute the end to end test (integration be
 
 The `e2e` test targets use two variables to control what version of Ray images to use in the end to end tests:
 
-* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.9.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added to the image.
+* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.34.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added to the image.
 * `E2E_API_SERVER_URL` -- for the base URL of the deployed KubeRayAPI server. The default value is: `http://localhost:31888`
 
 The end to end test targets share the usage of the `GO_TEST_FLAGS`. Overriding the make file variable with a `-v` option allows for both unit and end to end tests to print any output / debug messages. By default, only if there's a test failure those messages are shown.

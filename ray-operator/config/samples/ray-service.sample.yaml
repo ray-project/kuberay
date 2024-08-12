@@ -60,7 +60,7 @@ spec:
           - name: Router
             num_replicas: 1
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.34.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -74,7 +74,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.34.0
               resources:
                 limits:
                   cpu: 2
@@ -107,7 +107,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.34.0
                 lifecycle:
                   preStop:
                     exec:

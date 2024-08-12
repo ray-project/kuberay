@@ -117,7 +117,7 @@ func withRayImage() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		rayImage := os.Getenv("E2E_API_SERVER_RAY_IMAGE")
 		if strings.TrimSpace(rayImage) == "" {
-			rayImage = "rayproject/ray:2.9.0-py310"
+			rayImage = "rayproject/ray:2.34.0-py310"
 		}
 		// detect if we are running on arm64 machine, most likely apple silicon
 		// the os name is not checked as it also possible that it might be linux

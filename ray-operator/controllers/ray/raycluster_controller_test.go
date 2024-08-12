@@ -58,7 +58,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
+								Image: "rayproject/ray:2.34.0",
 							},
 						},
 					},
@@ -76,7 +76,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-worker",
-									Image: "rayproject/ray:2.9.0",
+									Image: "rayproject/ray:2.34.0",
 								},
 							},
 						},
