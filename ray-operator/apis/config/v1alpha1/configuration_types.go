@@ -43,8 +43,8 @@ type Configuration struct {
 	// Defaults to `json` if empty.
 	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
 
-	// BatchScheduler enables the specific batch scheduler based on the given name
-	// supported values are volcano and yunikorn.
+	// BatchScheduler enables the batch scheduler integration with a specific scheduler
+	// based on the given name, currently, supported values are volcano and yunikorn.
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
 	// HeadSidecarContainers includes specification for a sidecar container
