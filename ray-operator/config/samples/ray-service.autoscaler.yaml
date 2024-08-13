@@ -36,6 +36,9 @@ spec:
       - name: signal
         import_path: autoscaling.signaling:app
         route_prefix: /signal
+        deployments:
+          - name: SignalDeployment
+            max_ongoing_requests: 1000
         runtime_env:
           working_dir: "https://github.com/ray-project/test_dag/archive/59c994656f55ff8e0e642efe63f380debc831931.zip"
   rayClusterConfig:
