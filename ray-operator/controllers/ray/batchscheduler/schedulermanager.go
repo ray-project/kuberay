@@ -29,23 +29,23 @@ type SchedulerManager struct {
 func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config) (*SchedulerManager, error) {
 	var factory schedulerinterface.BatchSchedulerFactory
 
-	// legacy option, if this is enabled, register volcano
-	if rayConfigs.EnableBatchScheduler {
-		factory = &volcano.VolcanoBatchSchedulerFactory{}
-	}
-
-	// a batch scheduler name is provided
+	// init with the default implementation
+	factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
+	// when a batch scheduler name is provided
 	if len(rayConfigs.BatchScheduler) > 0 {
 		switch rayConfigs.BatchScheduler {
 		case volcano.GetPluginName():
 			factory = &volcano.VolcanoBatchSchedulerFactory{}
 		case yunikorn.GetPluginName():
 			factory = &yunikorn.YuniKornSchedulerFactory{}
-		case schedulerinterface.GetDefaultPluginName():
-			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 		default:
 			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 		}
+	}
+
+	// legacy option, if this is enabled, register volcano
+	if rayConfigs.EnableBatchScheduler {
+		factory = &volcano.VolcanoBatchSchedulerFactory{}
 	}
 
 	scheduler, err := factory.New(config)
