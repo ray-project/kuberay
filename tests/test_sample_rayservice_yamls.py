@@ -285,6 +285,10 @@ class TestRayService:
             for cr_event in cr_events:
                 cr_event.trigger()
 
+
+@pytest.mark.skip(
+    reason="Ray Serve autoscaling has some breaking changes after Ray 2.9"
+)
 class TestRayServiceAutoscaling:
     """Test RayService autoscaling"""
     @pytest.fixture
