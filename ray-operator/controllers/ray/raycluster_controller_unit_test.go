@@ -924,46 +924,61 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
-	fakeClient := clientFake.NewClientBuilder().
-		WithRuntimeObjects(testPods...).
-		Build()
-	ctx := context.Background()
-
-	podList := corev1.PodList{}
-	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
-	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
-
-	// Simulate head pod get evicted.
-	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
-	err = fakeClient.Update(ctx, &podList.Items[0])
-	assert.Nil(t, err, "Fail to update head Pod restart policy")
-	podList.Items[0].Status.Phase = corev1.PodFailed
-	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err, "Fail to update head Pod status")
-
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+	tests := map[string]struct {
+		restartPolicy corev1.RestartPolicy
+	}{
+		"Pod with RestartPolicyAlways": {
+			restartPolicy: corev1.RestartPolicyAlways,
+		},
+		"Pod with RestartPolicyOnFailure": {
+			restartPolicy: corev1.RestartPolicyOnFailure,
+		},
 	}
 
-	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	// The head Pod with the status `Failed` will be deleted, and the function will return an
-	// error to requeue the request with a short delay. If the function returns nil, the controller
-	// will requeue the request after RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV (default: 300) seconds.
-	assert.NotNil(t, err)
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().
+				WithRuntimeObjects(testPods...).
+				Build()
+			ctx := context.Background()
 
-	// Filter head pod
-	err = fakeClient.List(ctx, &podList, &client.ListOptions{
-		LabelSelector: headSelector,
-		Namespace:     namespaceStr,
-	})
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
-	assert.Equal(t, 0, len(podList.Items),
-		"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+
+			// Simulate head pod get evicted.
+			podList.Items[0].Spec.RestartPolicy = tc.restartPolicy
+			err = fakeClient.Update(ctx, &podList.Items[0])
+			assert.Nil(t, err, "Fail to update head Pod restart policy")
+			podList.Items[0].Status.Phase = corev1.PodFailed
+			err = fakeClient.Status().Update(ctx, &podList.Items[0])
+			assert.Nil(t, err, "Fail to update head Pod status")
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+			}
+
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			// The head Pod with the status `Failed` will be deleted, and the function will return an
+			// error to requeue the request with a short delay. If the function returns nil, the controller
+			// will requeue the request after RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV (default: 300) seconds.
+			assert.NotNil(t, err)
+
+			// Filter head pod
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: headSelector,
+				Namespace:     namespaceStr,
+			})
+
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.Equal(t, 0, len(podList.Items),
+				"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+		})
+	}
 }
 
 func TestReconcileHeadService(t *testing.T) {
