@@ -630,12 +630,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		return err
 	}
 	// this option is deprecated and will be removed soon
-	if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
-		if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
+	if r.BatchSchedulerMgr != nil {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
+			if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
+				return err
+			}
+		} else {
 			return err
 		}
-	} else {
-		return err
 	}
 
 	// Reconcile head Pod
@@ -958,10 +960,12 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	// build the pod then create it
 	pod := r.buildHeadPod(ctx, instance)
 	// this option is deprecated and will be removed soon
-	if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
-		scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
-	} else {
-		return err
+	if r.BatchSchedulerMgr != nil {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
+		} else {
+			return err
+		}
 	}
 
 	logger.Info("createHeadPod", "head pod with name", pod.GenerateName)
@@ -977,10 +981,12 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	// build the pod then create it
 	pod := r.buildWorkerPod(ctx, instance, worker)
-	if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
-		scheduler.AddMetadataToPod(&instance, worker.GroupName, &pod)
-	} else {
-		return err
+	if r.BatchSchedulerMgr != nil {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
+			scheduler.AddMetadataToPod(&instance, worker.GroupName, &pod)
+		} else {
+			return err
+		}
 	}
 
 	if err := r.Create(ctx, &pod); err != nil {
@@ -1129,7 +1135,9 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
 
-	r.BatchSchedulerMgr.ConfigureReconciler(b)
+	if r.BatchSchedulerMgr != nil {
+		r.BatchSchedulerMgr.ConfigureReconciler(b)
+	}
 
 	return b.
 		WithOptions(controller.Options{
