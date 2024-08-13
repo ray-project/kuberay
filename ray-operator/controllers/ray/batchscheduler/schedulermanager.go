@@ -41,6 +41,8 @@ func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config
 			factory = &volcano.VolcanoBatchSchedulerFactory{}
 		case yunikorn.GetPluginName():
 			factory = &yunikorn.YuniKornSchedulerFactory{}
+		case schedulerinterface.GetDefaultPluginName():
+			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 		default:
 			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 		}

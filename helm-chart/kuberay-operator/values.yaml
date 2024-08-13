@@ -57,6 +57,7 @@ readinessProbe:
 
 batchScheduler:
   enabled: false
+  name: default
 
 featureGates:
   - name: RayClusterStatusConditions

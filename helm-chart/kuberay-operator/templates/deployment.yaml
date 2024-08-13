@@ -60,6 +60,11 @@ spec:
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
             {{- end -}}
+            {{- if .Values.batchScheduler -}}
+            {{- if .Values.batchScheduler.name -}}
+            {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
+            {{- end -}}
+            {{- end -}}
             {{- $watchNamespace := "" -}}
             {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
             {{- $watchNamespace = .Release.Namespace -}}
