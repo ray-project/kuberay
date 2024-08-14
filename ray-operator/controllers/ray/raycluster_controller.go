@@ -1210,15 +1210,22 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			meta.SetStatusCondition(&newInstance.Status.Conditions, headPodReadyCondition)
 		}
 
-		if meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) == nil {
+		if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
 			// RayClusterProvisioned indicates whether all Ray Pods are ready when the RayCluster is first created.
-			// Note RayClusterProvisioned StatusCondition will not be added to Raycluster until all Ray Pods are ready for the first time.
+			// Note RayClusterProvisioned StatusCondition will not be updated after all Ray Pods are ready for the first time.
 			if utils.CheckAllPodsRunning(ctx, runtimePods) {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
 					Status:  metav1.ConditionTrue,
 					Reason:  rayv1.AllPodRunningAndReadyFirstTime,
 					Message: "All Ray Pods are ready for the first time",
+				})
+			} else {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterProvisioned),
+					Status:  metav1.ConditionFalse,
+					Reason:  rayv1.RayClusterPodsProvisioning,
+					Message: "RayCluster Pods are being provisioned for first time",
 				})
 			}
 		}

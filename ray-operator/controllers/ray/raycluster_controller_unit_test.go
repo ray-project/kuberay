@@ -1829,7 +1829,9 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	_ = fakeClient.Status().Update(ctx, headPod)
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned)))
+	rayClusterProvisionedCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionFalse)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.RayClusterPodsProvisioning)
 
 	// After a while, all Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
 	headPod.Status = ReadyStatus
@@ -1837,7 +1839,7 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	_ = fakeClient.Status().Update(ctx, headPod)
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	rayClusterProvisionedCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
 	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
 	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
 

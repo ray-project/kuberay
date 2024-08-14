@@ -169,6 +169,7 @@ type RayClusterConditionType string
 // Custom Reason for RayClusterCondition
 const (
 	AllPodRunningAndReadyFirstTime = "AllPodRunningAndReadyFirstTime"
+	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
 	// UnknownReason says that the reason for the condition is unknown.
