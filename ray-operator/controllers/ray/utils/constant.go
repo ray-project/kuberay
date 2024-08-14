@@ -181,7 +181,7 @@ const (
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable
 	// as well as the user-agent. This constant is updated before release.
 	// TODO: Update KUBERAY_VERSION to be a build-time variable.
-	KUBERAY_VERSION = "nightly"
+	KUBERAY_VERSION = "v1.2.0"
 )
 
 type ServiceType string
