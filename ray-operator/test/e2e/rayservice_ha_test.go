@@ -38,7 +38,7 @@ applications:
   args:
     num_forwards: 0
   runtime_env:
-    working_dir: https://github.com/ray-project/serve_workloads/archive/a2e2405f3117f1b4134b6924b5f44c4ff0710c00.zip
+    working_dir: https://github.com/ray-project/serve_workloads/archive/a9f184f4d9ddb7f9a578502ae106470f87a702ef.zip
   deployments:
   - name: NoOp
     num_replicas: 2

@@ -31,7 +31,7 @@ spec:
           serviceAccountName: pytorch-distributed-training
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.34.0
               env:
               - name: NUM_WORKERS
                 value: "4"

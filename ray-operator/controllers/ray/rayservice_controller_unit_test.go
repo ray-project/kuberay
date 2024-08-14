@@ -30,7 +30,7 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	// `hash2` in this case.
 	cluster := rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			RayVersion: "2.9.0",
+			RayVersion: "2.34.0",
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
@@ -61,7 +61,7 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 
 func TestGetClusterAction(t *testing.T) {
 	clusterSpec1 := rayv1.RayClusterSpec{
-		RayVersion: "2.9.0",
+		RayVersion: "2.34.0",
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
 				Replicas:    ptr.To[int32](2),
