@@ -376,7 +376,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 }
 
 func TestFailedCreatek8sJob(t *testing.T) {
-
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-rayjob",
@@ -386,7 +385,7 @@ func TestFailedCreatek8sJob(t *testing.T) {
 
 	submitterTemplate := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-submit-pod",
+			Name:      "test-submit-pod",
 			Namespace: "default",
 		},
 		Spec: corev1.PodSpec{
@@ -398,7 +397,7 @@ func TestFailedCreatek8sJob(t *testing.T) {
 			},
 		},
 	}
-	
+
 	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
 			return utils.ErrFailedCreateWorkerPod
@@ -408,9 +407,9 @@ func TestFailedCreatek8sJob(t *testing.T) {
 	recorder := record.NewFakeRecorder(100)
 
 	reconciler := &RayJobReconciler{
-		Client: fakeClient,
+		Client:   fakeClient,
 		Recorder: recorder,
-		Scheme: scheme.Scheme,
+		Scheme:   scheme.Scheme,
 	}
 
 	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
