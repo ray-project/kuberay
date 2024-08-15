@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,10 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
 func TestCreateK8sJobIfNeed(t *testing.T) {
@@ -369,4 +373,60 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.Error(t, err, "The RayJob is invalid because the backoffLimit must be a positive integer.")
+}
+
+func TestFailedCreatek8sJob(t *testing.T) {
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+	}
+
+	submitterTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-submit-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "ray-submit",
+					Image: "rayproject/ray:latest",
+				},
+			},
+		},
+	}
+	
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+			return utils.ErrFailedCreateWorkerPod
+		},
+	}).WithScheme(scheme.Scheme).Build()
+
+	recorder := record.NewFakeRecorder(100)
+
+	reconciler := &RayJobReconciler{
+		Client: fakeClient,
+		Recorder: recorder,
+		Scheme: scheme.Scheme,
+	}
+
+	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
+
+	assert.NotNil(t, err, "Expected error due to simulated job creation failure")
+
+	var foundFailureEvent bool
+	events := []string{}
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "Failed to create new Kubernetes Job") {
+			foundFailureEvent = true
+			break
+		}
+		events = append(events, event)
+	}
+
+	assert.Truef(t, foundFailureEvent, "Expected event to be generated for job creation failure, got events: %s", strings.Join(events, "\n"))
 }
