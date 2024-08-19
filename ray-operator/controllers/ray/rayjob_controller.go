@@ -513,7 +513,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		return err
 	}
 	logger.Info("Kubernetes Job created", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
-	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "Created", "Created Kubernetes Job %s", job.Name)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, "k8sJobCreationCreated", "Created Kubernetes Job %s", job.Name)
 	return nil
 }
 
