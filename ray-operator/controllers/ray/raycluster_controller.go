@@ -692,6 +692,24 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
+			if workerPod.Status.Phase != "Running" {
+				if len(workerPod.Status.Conditions) > 0 {
+					for _, condition := range workerPod.Status.Conditions {
+						if condition.Message != "" {
+							logger.Info("reconcilePods",
+								"Worker Pod Name", workerPod.Name,
+								"Status", workerPod.Status.Phase,
+								"Condition Type", condition.Type,
+								"Condition Status", condition.Status,
+								"Message", condition.Message)
+						}
+					}
+				}
+			} else {
+				logger.Info("reconcilePods",
+					"Worker Pod Name", workerPod.Name,
+					"Status", workerPod.Status.Phase)
+			}
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
