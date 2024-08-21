@@ -734,6 +734,7 @@ func TestReconcileRayCluster(t *testing.T) {
 			Annotations: map[string]string{
 				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
 				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
 			},
 		},
 	}
