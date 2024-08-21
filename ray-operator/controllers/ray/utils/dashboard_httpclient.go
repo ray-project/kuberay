@@ -346,6 +346,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 	body, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
+	}
+
 	var jobResp RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
