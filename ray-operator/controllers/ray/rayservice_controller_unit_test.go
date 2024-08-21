@@ -783,7 +783,7 @@ func TestReconcileRayCluster(t *testing.T) {
 			shouldPrepareNewCluster: true,
 		},
 		// Test 6: If active KubeRay version doesn't match the KubeRay version annotation on the RayCluster, update the RayCluster.
-		"Active RayCluster cluster has changed. KubeRay version is mismatched. Update the RayCluster.": {
+		"Active RayCluster exists. KubeRay version is mismatched. Update the RayCluster.": {
 			activeCluster:           activeCluster.DeepCopy(),
 			updateRayClusterSpec:    true,
 			enableZeroDowntime:      false,
