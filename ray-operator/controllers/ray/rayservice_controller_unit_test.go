@@ -741,11 +741,11 @@ func TestReconcileRayCluster(t *testing.T) {
 
 	tests := map[string]struct {
 		activeCluster           *rayv1.RayCluster
+		kubeRayVersion          string
 		updateRayClusterSpec    bool
 		enableZeroDowntime      bool
 		shouldPrepareNewCluster bool
 		updateKubeRayVersion    bool
-		kubeRayVersion          string
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
