@@ -2,7 +2,7 @@ module github.com/ray-project/kuberay/ray-operator
 
 go 1.22.0
 
-toolchain go1.22.3
+toolchain go1.22.4
 
 replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 
@@ -27,6 +27,7 @@ require (
 	k8s.io/apiserver v0.29.6
 	k8s.io/client-go v0.29.6
 	k8s.io/code-generator v0.29.6
+	k8s.io/component-base v0.29.6
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/controller-runtime v0.17.5
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1
@@ -85,7 +86,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.29.6 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
