@@ -531,7 +531,15 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return RolloutNew
 		}
 
-		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
+		// Case 1: If the KubeRay version has changed and the hashes are not identical, update the RayCluster to get
+		// the new cluster hash and KubeRay version.
+		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
+		if activeKubeRayVersion != utils.KUBERAY_VERSION {
+			logger.Info("Active RayCluster config doesn't match goal config due to mismatched KubeRay versions. Updating RayCluster.")
+			return Update
+		}
+
+		// Case 2: If everything is identical except for the Replicas and WorkersToDelete of
 		// each WorkerGroup, then do nothing.
 		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
@@ -548,7 +556,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return DoNothing
 		}
 
-		// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// Case 3: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
 		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
 		if err != nil {
@@ -574,15 +582,6 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 				logger.Info("Active RayCluster config matches goal config, except that one or more entries were appended to WorkerGroupSpecs. Updating RayCluster.")
 				return Update
 			}
-		}
-
-		// Case 3: If the KubeRay version has changed and the hashes are not identical, update the RayCluster with the goalClusterHash
-		// and new KubeRay version, but do not restart the RayCluster.
-		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
-		if activeKubeRayVersion != utils.KUBERAY_VERSION {
-			activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = goalClusterHash
-			activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
-			return DoNothing
 		}
 
 		// Case 4: Otherwise, rollout a new cluster.
