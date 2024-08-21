@@ -412,6 +412,11 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
 			r.markRestartAndAddPendingClusterName(ctx, rayServiceInstance)
+		} else if activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion] != utils.KUBERAY_VERSION {
+			// If the KubeRay version differs causing a hash mismatch, perform a zero downtime upgrade
+			// and update the KubeRayVersion annotation to the new value.
+			activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
+			r.markRestartAndAddPendingClusterName(ctx, rayServiceInstance)
 		} else {
 			logger.Info("Zero-downtime upgrade is disabled (ENABLE_ZERO_DOWNTIME: false). Skip preparing a new RayCluster.")
 		}
@@ -576,7 +581,15 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			}
 		}
 
-		// Case 3: Otherwise, rollout a new cluster.
+		// Case 3: If the KubeRay version has changed and the hashes are not identical, update the RayCluster with the goalClusterHash
+		// and perform a Zero downtime upgrade.
+		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
+		if activeKubeRayVersion != utils.KUBERAY_VERSION {
+			activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = goalClusterHash
+			return RolloutNew
+		}
+
+		// Case 4: Otherwise, rollout a new cluster.
 		logger.Info("Active RayCluster config doesn't match goal config. " +
 			"RayService operator should prepare a new Ray cluster.\n" +
 			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
@@ -732,6 +745,9 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 		return nil, err
 	}
 	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
+
+	// set the KubeRay version used to create the RayCluster
+	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
