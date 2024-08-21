@@ -531,8 +531,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return RolloutNew
 		}
 
-		// Case 1: If the KubeRay version has changed and the hashes are not identical, update the RayCluster to get
-		// the new cluster hash and KubeRay version.
+		// Case 1: If the KubeRay version has changed, update the RayCluster to get the cluster hash and new KubeRay version.
 		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
 		if activeKubeRayVersion != utils.KUBERAY_VERSION {
 			logger.Info("Active RayCluster config doesn't match goal config due to mismatched KubeRay versions. Updating RayCluster.")
