@@ -802,7 +802,7 @@ func TestReconcileRayCluster(t *testing.T) {
 			}
 			runtimeObjects := []runtime.Object{}
 			if tc.activeCluster != nil {
-				// Update 'ray.io/kuberay-version' to a new version if kubeRayVersion is set
+				// Update 'ray.io/kuberay-version' to a new version if kubeRayVersion is set.
 				if tc.updateKubeRayVersion {
 					tc.activeCluster.Annotations[utils.KubeRayVersion] = tc.kubeRayVersion
 				}
