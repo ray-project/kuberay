@@ -744,6 +744,8 @@ func TestReconcileRayCluster(t *testing.T) {
 		updateRayClusterSpec    bool
 		enableZeroDowntime      bool
 		shouldPrepareNewCluster bool
+		updateKubeRayVersion    bool
+		kubeRayVersion          string
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
@@ -780,6 +782,15 @@ func TestReconcileRayCluster(t *testing.T) {
 			enableZeroDowntime:      false,
 			shouldPrepareNewCluster: true,
 		},
+		// Test 6: If active KubeRay version doesn't match the KubeRay version annotation on the RayCluster, update the RayCluster.
+		"Active RayCluster cluster has changed. KubeRay version is mismatched. Update the RayCluster.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      false,
+			shouldPrepareNewCluster: false,
+			updateKubeRayVersion:    true,
+			kubeRayVersion:          "new-version",
+		},
 	}
 
 	for name, tc := range tests {
@@ -791,11 +802,16 @@ func TestReconcileRayCluster(t *testing.T) {
 			}
 			runtimeObjects := []runtime.Object{}
 			if tc.activeCluster != nil {
+				// Update 'ray.io/kuberay-version' to a new version if kubeRayVersion is set
+				if tc.updateKubeRayVersion {
+					tc.activeCluster.Annotations[utils.KubeRayVersion] = tc.kubeRayVersion
+				}
 				runtimeObjects = append(runtimeObjects, tc.activeCluster.DeepCopy())
 			}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			r := RayServiceReconciler{
 				Client: fakeClient,
+				Scheme: newScheme,
 			}
 			service := rayService.DeepCopy()
 			if tc.updateRayClusterSpec {
@@ -805,8 +821,13 @@ func TestReconcileRayCluster(t *testing.T) {
 				service.Status.ActiveServiceStatus.RayClusterName = tc.activeCluster.Name
 			}
 			assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
-			_, _, err = r.reconcileRayCluster(ctx, service)
+			activeRayCluster, _, err := r.reconcileRayCluster(ctx, service)
 			assert.Nil(t, err)
+
+			// If the KubeRay version has changed, check that the RayCluster annotations have been updated to the correct version.
+			if tc.updateKubeRayVersion && activeRayCluster != nil {
+				assert.Equal(t, utils.KUBERAY_VERSION, activeRayCluster.Annotations[utils.KubeRayVersion])
+			}
 
 			// If KubeRay operator is preparing a new cluster, the `PendingServiceStatus.RayClusterName` should be set by calling the function `markRestart`.
 			if tc.shouldPrepareNewCluster {
