@@ -1,0 +1,321 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  labels:
+{{ include "ray-job.labels" . | indent 4 }}
+  name: {{ include "ray-job.fullname" . }}
+  {{ if .Values.annotations }}
+  annotations: {{ toYaml .Values.annotations | nindent 4 }}
+  {{ end }}
+spec:
+  entrypoint: {{ .Values.rayjob.entrypoint }}
+  shutdownAfterJobFinishes: {{ .Values.rayjob.shutdownAfterJobFinishes }}
+  ttlSecondsAfterFinished: {{ .Values.rayjob.ttlSecondsAfterFinished }}
+  runtimeEnvYAML: |
+    pip:
+      {{- if .Values.rayjob.pip }}
+      {{- range .Values.rayjob.pip }}
+      - {{ . }}
+      {{- end }}
+      {{- end }}
+    env_vars:
+      {{- if .Values.rayjob.env_vars }}
+      {{- range $key, $value := .Values.rayjob.env_vars }}
+      {{ $key }}: {{ $value }}
+      {{- end }}
+      {{- end }}
+    working_dir: {{ .Values.rayjob.working_dir }}
+  rayClusterSpec:
+    {{- if .Values.head.rayVersion }}
+    rayVersion: {{ .Values.head.rayVersion }}
+    {{- end }}
+    {{- if .Values.head.enableInTreeAutoscaling }}
+    enableInTreeAutoscaling: {{ .Values.head.enableInTreeAutoscaling }}
+    {{- end }}
+    {{- if .Values.head.autoscalerOptions }}
+    autoscalerOptions: {{- toYaml .Values.head.autoscalerOptions | nindent 6 }}
+    {{- end }}
+    headGroupSpec:
+      {{- if .Values.head.headService }}
+      headService: {{- toYaml .Values.head.headService | nindent 8 }}
+      {{- end }}
+      serviceType: {{ .Values.service.type }}
+      rayStartParams:
+      {{- if and (not .Values.head.rayStartParams) (not .Values.head.initArgs) }}
+        {}
+      {{- else }}
+        {{- range $key, $val := .Values.head.rayStartParams }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+        {{- /*
+        initArgs is a deprecated alias for rayStartParams.
+        */}}
+        {{- range $key, $val := .Values.head.initArgs }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+      {{- end }}
+      template:
+        spec:
+          imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 12 }}
+          {{- if .Values.head.serviceAccountName }}
+          serviceAccountName: {{ .Values.head.serviceAccountName }}
+          {{- end }}
+          {{- if .Values.head.restartPolicy }}
+          restartPolicy: {{ .Values.head.restartPolicy }}
+          {{- end }}
+          {{- if .Values.head.initContainers }}
+          initContainers: {{- toYaml .Values.head.initContainers | nindent 12 }}
+          {{- end }}
+          containers:
+            - {{ if .Values.head.volumeMounts }}
+              volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 14 }}
+              {{- end }}
+              name: ray-head
+              {{- if .Values.head.image }}
+              image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
+              imagePullPolicy: {{ .Values.head.image.pullPolicy }}
+              {{- else }}
+              image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- end }}
+              resources: {{- toYaml .Values.head.resources | nindent 16 }}
+              securityContext:
+              {{- toYaml .Values.head.securityContext | nindent 16 }}
+              {{- with concat .Values.common.containerEnv .Values.head.containerEnv }}
+              env:
+              {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.head.envFrom }}
+              envFrom: {{- toYaml . | nindent 16}}
+              {{- end }}
+              {{- if .Values.head.ports }}
+              ports: {{- toYaml .Values.head.ports | nindent 16}}
+              {{- end }}
+              {{- if .Values.head.lifecycle }}
+              lifecycle:
+              {{- toYaml .Values.head.lifecycle | nindent 16 }}
+              {{- end }}
+              {{- if .Values.head.command }}
+              command: {{- toYaml .Values.head.command | nindent 16}}
+              {{- end }}
+              {{- if .Values.head.args }}
+              args: {{- toYaml .Values.head.args | nindent 16}}
+              {{- end }}
+            {{- if .Values.head.sidecarContainers }}
+            {{- toYaml .Values.head.sidecarContainers | nindent 12 }}
+            {{- end }}
+          {{ if .Values.head.volumes }}
+          volumes: {{- toYaml .Values.head.volumes | nindent 12 }}
+          {{- end }}
+          affinity: {{- toYaml .Values.head.affinity | nindent 12 }}
+          {{ if .Values.head.priorityClassName }}
+          priorityClassName: {{- toYaml .Values.head.priorityClassName | nindent 12 }}
+          {{- end }}
+          {{ if .Values.head.priority }}
+          priority: {{- toYaml .Values.head.priority | nindent 12 }}
+          {{- end }}
+          tolerations: {{- toYaml .Values.head.tolerations | nindent 12 }}
+          nodeSelector: {{- toYaml .Values.head.nodeSelector | nindent 12 }}
+          {{- with .Values.head.podSecurityContext }}
+          securityContext:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+        metadata:
+          annotations: {{- toYaml .Values.head.annotations | nindent 12 }}
+          {{- if .Values.head.labels }}
+          labels: {{- toYaml .Values.head.labels | nindent 12 }}
+  {{ include "ray-job.labels" . | indent 10 }}
+          {{ else }}
+          labels: {{ include "ray-job.labels" . | nindent 12 }}
+          {{- end }}
+
+    workerGroupSpecs:
+    {{- range $groupName, $values := .Values.additionalWorkerGroups }}
+    {{- if ne $values.disabled true }}
+    - rayStartParams:
+      {{- if and (not $values.rayStartParams) (not $values.initArgs) }}
+        {}
+      {{- else }}
+        {{- range $key, $val := $values.rayStartParams }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+        {{- /*
+        initArgs is a deprecated alias for rayStartParams.
+        */}}
+        {{- range $key, $val := $values.initArgs }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+      {{- end }}
+      replicas: {{ $values.replicas }}
+      minReplicas: {{ $values.minReplicas | default 0 }}
+      maxReplicas: {{ $values.maxReplicas | default 2147483647 }}
+      numOfHosts: {{ $values.numOfHosts | default 1 }}
+      groupName: {{ $groupName }}
+      template:
+        spec:
+          imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 12 }}
+          {{- if $values.serviceAccountName }}
+          serviceAccountName: {{ $values.serviceAccountName }}
+          {{- end }}
+          {{- if $values.restartPolicy }}
+          restartPolicy: {{ $values.restartPolicy }}
+          {{- end }}
+          {{- if $values.initContainers }}
+          initContainers: {{- toYaml $values.initContainers | nindent 12 }}
+          {{- end }}
+          containers:
+            - {{ if $values.volumeMounts }}
+              volumeMounts: {{- toYaml $values.volumeMounts | nindent 14 }}
+              {{- end }}
+              name: ray-worker
+              {{- if $values.image }}
+              image: {{ $values.image.repository }}:{{ $values.image.tag }}
+              imagePullPolicy: {{ $values.image.pullPolicy }}
+              {{- else }}
+              image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              {{- end }}
+              resources: {{- toYaml $values.resources | nindent 16 }}
+              securityContext:
+              {{- toYaml $values.securityContext | nindent 16 }}
+              {{- with concat $.Values.common.containerEnv $values.containerEnv }}
+              env:
+              {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- if $values.envFrom }}
+              envFrom: {{- toYaml $values.envFrom | nindent 16 }}
+              {{- end }}
+              ports: {{- toYaml $values.ports | nindent 16}}
+              {{- if $values.lifecycle }}
+              lifecycle:
+              {{- toYaml $values.lifecycle | nindent 16 }}
+              {{- end }}
+              {{- if $values.command }}
+              command: {{- toYaml $values.command | nindent 16}}
+              {{- end }}
+              {{- if $values.args }}
+              args: {{- toYaml $values.args | nindent 16}}
+              {{- end }}
+            {{- if $values.sidecarContainers }}
+            {{- toYaml $values.sidecarContainers | nindent 12 }}
+            {{- end }}
+          {{ if $values.volumes }}
+          volumes: {{- toYaml $values.volumes | nindent 12 }}
+          {{- end }}
+          affinity: {{- toYaml $values.affinity | nindent 12 }}
+          {{ if $values.priorityClassName }}
+          priorityClassName: {{- toYaml $values.priorityClassName | nindent 12 }}
+          {{- end }}
+          {{ if $values.priority }}
+          priority: {{- toYaml $values.priority | nindent 12 }}
+          {{- end }}
+          tolerations: {{- toYaml $values.tolerations | nindent 12 }}
+          nodeSelector: {{- toYaml $values.nodeSelector | nindent 12 }}
+          {{- with $values.podSecurityContext }}
+          securityContext:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+        metadata:
+          annotations: {{- toYaml $values.annotations | nindent 12 }}
+          {{- if $values.labels }}
+          labels: {{- toYaml $values.labels | nindent 12 }}
+  {{ include "ray-job.labels" $ | indent 10 }}
+          {{ else }}
+          labels: {{ include "ray-job.labels" $ | nindent 12 }}
+          {{- end }}
+
+    {{- end }}
+    {{- end }}
+    {{- if ne (.Values.worker.disabled | default false) true }}
+    - rayStartParams:
+      {{- if and (not .Values.worker.rayStartParams) (not .Values.worker.initArgs) }}
+        {}
+      {{- else }}
+        {{- range $key, $val := .Values.worker.rayStartParams }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+        {{- /*
+        initArgs is a deprecated alias for rayStartParams.
+        */}}
+        {{- range $key, $val := .Values.worker.initArgs }}
+          {{ $key }}: {{ $val | quote }}
+        {{- end }}
+      {{- end }}
+      replicas: {{ .Values.worker.replicas }}
+      minReplicas: {{ .Values.worker.minReplicas | default 0 }}
+      maxReplicas: {{ .Values.worker.maxReplicas | default 2147483647 }}
+      numOfHosts: {{ .Values.worker.numOfHosts | default 1 }}
+      groupName: {{ .Values.worker.groupName }}
+      template:
+        spec:
+          imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 12 }}
+          {{- if .Values.worker.serviceAccountName }}
+          serviceAccountName: {{ .Values.worker.serviceAccountName }}
+          {{- end }}
+          {{- if .Values.worker.restartPolicy }}
+          restartPolicy: {{ .Values.worker.restartPolicy }}
+          {{- end }}
+          {{- if .Values.worker.initContainers }}
+          initContainers: {{- toYaml .Values.worker.initContainers | nindent 12 }}
+          {{- end }}
+          containers:
+            - {{ if .Values.worker.volumeMounts }}
+              volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 14 }}
+              {{- end }}
+              name: ray-worker
+              {{- if .Values.worker.image }}
+              image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
+              imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+              {{- else }}
+              image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- end }}
+              resources: {{- toYaml .Values.worker.resources | nindent 16 }}
+              securityContext:
+              {{- toYaml .Values.worker.securityContext | nindent 16 }}
+              {{- with concat .Values.common.containerEnv .Values.worker.containerEnv }}
+              env:
+              {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.worker.envFrom }}
+              envFrom: {{- toYaml . | nindent 16}}
+              {{- end }}
+              ports: {{- toYaml .Values.worker.ports | nindent 16}}
+              {{- if .Values.worker.lifecycle }}
+              lifecycle:
+              {{- toYaml .Values.worker.lifecycle | nindent 16 }}
+              {{- end }}
+              {{- if .Values.worker.command }}
+              command: {{- toYaml .Values.worker.command | nindent 16}}
+              {{- end }}
+              {{- if .Values.worker.args }}
+              args: {{- toYaml .Values.worker.args | nindent 16}}
+              {{- end }}
+            {{- if .Values.worker.sidecarContainers }}
+            {{- toYaml .Values.worker.sidecarContainers | nindent 12 }}
+            {{- end }}
+          {{ if .Values.worker.volumes }}
+          volumes: {{- toYaml .Values.worker.volumes | nindent 12 }}
+          {{- end }}
+          affinity: {{- toYaml .Values.worker.affinity | nindent 12 }}
+          {{ if .Values.worker.priorityClassName }}
+          priorityClassName: {{- toYaml .Values.worker.priorityClassName | nindent 12 }}
+          {{- end }}
+          {{ if .Values.worker.priority }}
+          priority: {{- toYaml .Values.worker.priority | nindent 12 }}
+          {{- end }}
+          tolerations: {{- toYaml .Values.worker.tolerations | nindent 12 }}
+          nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 12 }}
+          {{- with .Values.worker.podSecurityContext}}
+          securityContext:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+        metadata:
+          annotations: {{- toYaml .Values.worker.annotations | nindent 12 }}
+          {{- if .Values.worker.labels }}
+          labels: {{- toYaml .Values.worker.labels | nindent 12 }}
+  {{ include "ray-job.labels" . | indent 10 }}
+          {{ else }}
+          labels: {{ include "ray-job.labels" $ | nindent 12 }}
+          {{- end }}
+    {{- end }}
