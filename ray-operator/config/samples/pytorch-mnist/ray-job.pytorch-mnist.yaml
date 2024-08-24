@@ -11,7 +11,7 @@ spec:
       - torchvision
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     env_vars:
-      NUM_WORKERS: "4"
+      NUM_WORKERS: "2"
       CPUS_PER_WORKER: "2"
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
@@ -34,13 +34,13 @@ spec:
                   name: client
               resources:
                 limits:
-                  cpu: "2"
+                  cpu: "1"
                   memory: "4Gi"
                 requests:
-                  cpu: "2"
+                  cpu: "1"
                   memory: "4Gi"
     workerGroupSpecs:
-      - replicas: 4
+      - replicas: 2
         minReplicas: 1
         maxReplicas: 5
         groupName: small-group
@@ -53,8 +53,8 @@ spec:
                 image: rayproject/ray:2.34.0
                 resources:
                   limits:
-                    cpu: "2"
+                    cpu: "3"
                     memory: "4Gi"
                   requests:
-                    cpu: "2"
+                    cpu: "3"
                     memory: "4Gi"
