@@ -538,10 +538,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return Update
 		}
 
-		// Case 2: If everything is identical except for the Replicas and WorkersToDelete of
-		// each WorkerGroup, then do nothing.
-		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
-		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		activeClusterHashMinMaxReplicas, err := generateHashOnlyForMinMaxReplicas(activeRayCluster.Spec)
 		errContextFailedToSerialize := "Failed to serialize new RayCluster config. " +
 			"Manual config updates will NOT be tracked accurately. " +
 			"Please manually tear down the cluster and apply a new config."
@@ -549,13 +546,33 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			logger.Error(err, errContextFailedToSerialize)
 			return DoNothing
 		}
+		goalClusterHashMinMaxReplicas, err := generateHashOnlyForMinMaxReplicas(rayServiceInstance.Spec.RayClusterSpec)
+		if err != nil {
+			logger.Error(err, errContextFailedToSerialize)
+			return DoNothing
+		}
 
+		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		if err != nil {
+			logger.Error(err, errContextFailedToSerialize)
+			return DoNothing
+		}
+
+		// Case 2: If the min or max replicas have been updated, then update the cluster.
+		if activeClusterHashMinMaxReplicas != goalClusterHashMinMaxReplicas && activeClusterHash == goalClusterHash {
+			logger.Info("Active RayCluster config matches goal config, except that one or more min/max replicas were changed to WorkerGroupSpecs. Updating RayCluster.")
+			return Update
+		}
+
+		// Case 3: If everything is identical except for the Replicas and WorkersToDelete of
+		// each WorkerGroup, then do nothing.
 		if activeClusterHash == goalClusterHash {
 			logger.Info("Active Ray cluster config matches goal config. No need to update RayCluster.")
 			return DoNothing
 		}
 
-		// Case 3: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// Case 4: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
 		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
 		if err != nil {
@@ -583,7 +600,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			}
 		}
 
-		// Case 4: Otherwise, rollout a new cluster.
+		// Case 5: Otherwise, rollout a new cluster.
 		logger.Info("Active RayCluster config doesn't match goal config. " +
 			"RayService operator should prepare a new Ray cluster.\n" +
 			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
@@ -1201,7 +1218,16 @@ func getClusterAction(oldSpec rayv1.RayClusterSpec, newSpec rayv1.RayClusterSpec
 		}
 	}
 
-	// Case 3: Otherwise, rollout a new cluster.
+	// Case 3: Otherwise, if the min or max replicas have been updated, then update the cluster.
+	sameHashOnlyMinMaxReplicas, err := compareRayClusterJsonHash(oldSpec, newSpec, generateHashOnlyForMinMaxReplicas)
+	if err != nil {
+		return DoNothing, err
+	}
+	if !sameHashOnlyMinMaxReplicas && (len(newSpec.WorkerGroupSpecs) == len(oldSpec.WorkerGroupSpecs)) {
+		return Update, nil
+	}
+
+	// Case 4: Otherwise, rollout a new cluster.
 	return RolloutNew, nil
 }
 
@@ -1218,6 +1244,23 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 
 	// Generate a hash for the RayClusterSpec.
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
+}
+
+func generateHashOnlyForMinMaxReplicas(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
+	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+	rayClusterMinMaxReplicasSpec := rayv1.RayClusterSpec{}
+	updatedRayClusterWorkerGroupSpecs := len(updatedRayClusterSpec.WorkerGroupSpecs)
+
+	for i := 0; i < updatedRayClusterWorkerGroupSpecs; i++ {
+		workerGroupSpec := rayv1.WorkerGroupSpec{
+			MaxReplicas: updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas,
+			MinReplicas: updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas,
+		}
+		rayClusterMinMaxReplicasSpec.WorkerGroupSpecs = append(rayClusterMinMaxReplicasSpec.WorkerGroupSpecs, workerGroupSpec)
+	}
+
+	// Generate a hash for the RayClusterSpec that includes only `minReplicas` and `maxReplicas`.
+	return utils.GenerateJsonHash(rayClusterMinMaxReplicasSpec.WorkerGroupSpecs)
 }
 
 func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayClusterSpec, hashFunc func(rayv1.RayClusterSpec) (string, error)) (bool, error) {

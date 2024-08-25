@@ -59,6 +59,43 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	assert.NotEqual(t, hash1, hash3)
 }
 
+func TestGenerateHashOnlyForMinMaxReplicas(t *testing.T) {
+	// `generateHashOnlyForMinMaxReplicas` generates hash only for the minReplicas or max Replicas fields.
+	cluster := rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			RayVersion: "2.34.0",
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
+				},
+			},
+		},
+	}
+
+	hash1, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
+	hash2, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash2)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MaxReplicas++
+	hash3, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash3)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas = 1
+	*cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = 4
+	hash4, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash4)
+}
+
 func TestGetClusterAction(t *testing.T) {
 	clusterSpec1 := rayv1.RayClusterSpec{
 		RayVersion: "2.34.0",
@@ -155,6 +192,16 @@ func TestGetClusterAction(t *testing.T) {
 	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
 	assert.Nil(t, err)
 	assert.Equal(t, RolloutNew, action)
+
+	// Test Case 10: Only changing the number of min/max replicas in an existing WorkerGroupSpec should lead to Update.
+	clusterSpec10 := clusterSpec1.DeepCopy()
+	clusterSpec10.WorkerGroupSpecs[0] = rayv1.WorkerGroupSpec{
+		MinReplicas: ptr.To[int32](2),
+		MaxReplicas: ptr.To[int32](10),
+	}
+	action, err = getClusterAction(clusterSpec1, *clusterSpec10)
+	assert.Nil(t, err)
+	assert.Equal(t, Update, action)
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
@@ -737,15 +784,27 @@ func TestReconcileRayCluster(t *testing.T) {
 				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
 			},
 		},
+		Spec: rayv1.RayClusterSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
+				},
+			},
+		},
 	}
 
 	tests := map[string]struct {
-		activeCluster           *rayv1.RayCluster
-		kubeRayVersion          string
-		updateRayClusterSpec    bool
-		enableZeroDowntime      bool
-		shouldPrepareNewCluster bool
-		updateKubeRayVersion    bool
+		activeCluster                   *rayv1.RayCluster
+		kubeRayVersion                  string
+		updateRayClusterSpec            bool
+		enableZeroDowntime              bool
+		shouldPrepareNewCluster         bool
+		updateKubeRayVersion            bool
+		updateWorkerGroupMinMaxReplicas bool
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
@@ -793,6 +852,14 @@ func TestReconcileRayCluster(t *testing.T) {
 			updateKubeRayVersion:    true,
 			kubeRayVersion:          "new-version",
 		},
+		// Test 7: If the minReplicas/maxReplicas defined in the RayService spec doesn't match the ones on the RayCluster, update the RayCluster spec.
+		"Active RayCluster exists. minReplicas/maxReplicas is mismatched. Update the RayCluster.": {
+			activeCluster:                   activeCluster.DeepCopy(),
+			updateRayClusterSpec:            false,
+			enableZeroDowntime:              true,
+			shouldPrepareNewCluster:         false,
+			updateWorkerGroupMinMaxReplicas: true,
+		},
 	}
 
 	for name, tc := range tests {
@@ -819,12 +886,30 @@ func TestReconcileRayCluster(t *testing.T) {
 			if tc.updateRayClusterSpec {
 				service.Spec.RayClusterSpec.RayVersion = "new-version"
 			}
+
+			if tc.updateWorkerGroupMinMaxReplicas {
+				service.Spec.RayClusterSpec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{},
+						},
+						MinReplicas: ptr.To[int32](5),
+						MaxReplicas: ptr.To[int32](20),
+					},
+				}
+			}
+
 			if tc.activeCluster != nil {
 				service.Status.ActiveServiceStatus.RayClusterName = tc.activeCluster.Name
 			}
 			assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
 			activeRayCluster, _, err := r.reconcileRayCluster(ctx, service)
 			assert.Nil(t, err)
+
+			if tc.updateWorkerGroupMinMaxReplicas && activeRayCluster != nil {
+				assert.Equal(t, ptr.To[int32](20), activeRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas)
+				assert.Equal(t, ptr.To[int32](5), activeRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas)
+			}
 
 			// If the KubeRay version has changed, check that the RayCluster annotations have been updated to the correct version.
 			if tc.updateKubeRayVersion && activeRayCluster != nil {
