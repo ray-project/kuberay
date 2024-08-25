@@ -59,6 +59,43 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	assert.NotEqual(t, hash1, hash3)
 }
 
+func TestGenerateHashOnlyForMinMaxReplicas(t *testing.T) {
+	// `generateHashOnlyForMinMaxReplicas` generates hash only for the minReplicas or max Replicas fields.
+	cluster := rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			RayVersion: "2.34.0",
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
+				},
+			},
+		},
+	}
+
+	hash1, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas++
+	hash2, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash2)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MaxReplicas++
+	hash3, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.NotEqual(t, hash1, hash3)
+
+	*cluster.Spec.WorkerGroupSpecs[0].MinReplicas = 1
+	*cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = 4
+	hash4, err := generateHashOnlyForMinMaxReplicas(cluster.Spec)
+	assert.Nil(t, err)
+	assert.Equal(t, hash1, hash4)
+}
+
 func TestGetClusterAction(t *testing.T) {
 	clusterSpec1 := rayv1.RayClusterSpec{
 		RayVersion: "2.34.0",
@@ -155,6 +192,20 @@ func TestGetClusterAction(t *testing.T) {
 	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
 	assert.Nil(t, err)
 	assert.Equal(t, RolloutNew, action)
+
+	// Test Case 10: Only changing the number of min/max replicas in an existing WorkerGroupSpec should lead to Update.
+	clusterSpec10 := clusterSpec1.DeepCopy()
+	clusterSpec10.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
+	})
+	clusterSpec10.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		MinReplicas: ptr.To[int32](2),
+		MaxReplicas: ptr.To[int32](5),
+	})
+	action, err = getClusterAction(clusterSpec1, *clusterSpec10)
+	assert.Nil(t, err)
+	assert.Equal(t, Update, action)
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {

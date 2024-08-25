@@ -1201,7 +1201,16 @@ func getClusterAction(oldSpec rayv1.RayClusterSpec, newSpec rayv1.RayClusterSpec
 		}
 	}
 
-	// Case 3: Otherwise, rollout a new cluster.
+	// Case 3: Otherwise, if the min or max replicas have been updated, then update the cluster.
+	sameHashOnlyMinMaxReplicas, err := compareRayClusterJsonHash(oldSpec, newSpec, generateHashOnlyForMinMaxReplicas)
+	if err != nil {
+		return DoNothing, err
+	}
+	if !sameHashOnlyMinMaxReplicas && (len(newSpec.WorkerGroupSpecs) == len(oldSpec.WorkerGroupSpecs)) {
+		return Update, nil
+	}
+
+	// Case 4: Otherwise, rollout a new cluster.
 	return RolloutNew, nil
 }
 
@@ -1218,6 +1227,23 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 
 	// Generate a hash for the RayClusterSpec.
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
+}
+
+func generateHashOnlyForMinMaxReplicas(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
+	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+	rayClusterMinMaxReplicasSpec := rayv1.RayClusterSpec{}
+	updatedRayClusterWorkerGroupSpecs := len(updatedRayClusterSpec.WorkerGroupSpecs)
+
+	for i := 0; i < updatedRayClusterWorkerGroupSpecs; i++ {
+		workerGroupSpec := rayv1.WorkerGroupSpec{
+			MaxReplicas: updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas,
+			MinReplicas: updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas,
+		}
+		rayClusterMinMaxReplicasSpec.WorkerGroupSpecs = append(rayClusterMinMaxReplicasSpec.WorkerGroupSpecs, workerGroupSpec)
+	}
+
+	// Generate a hash for the RayClusterSpec that includes only `minReplicas` and `maxReplicas`.
+	return utils.GenerateJsonHash(rayClusterMinMaxReplicasSpec)
 }
 
 func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayClusterSpec, hashFunc func(rayv1.RayClusterSpec) (string, error)) (bool, error) {
