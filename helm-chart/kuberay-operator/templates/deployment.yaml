@@ -82,6 +82,9 @@ spec:
             {{- $argList = append $argList "--log-file-encoder" -}}
             {{- $argList = append $argList .Values.logging.fileEncoder -}}
             {{- end -}}
+            {{- if hasKey .Values "useKubernetesProxy" -}}
+            {{- $argList = append $argList (printf "--use-kubernetes-proxy=%t" .Values.useKubernetesProxy) -}}
+            {{- end -}}
             {{- if hasKey .Values "leaderElectionEnabled" -}}
             {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
             {{- end -}}

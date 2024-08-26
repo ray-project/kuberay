@@ -177,6 +177,7 @@ rules:
   resources:
   - services/proxy
   verbs:
+  - create
   - get
   - patch
   - update
