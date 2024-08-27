@@ -25,6 +25,7 @@ const (
 	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
+	KubeRayVersion                           = "ray.io/kuberay-version"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
