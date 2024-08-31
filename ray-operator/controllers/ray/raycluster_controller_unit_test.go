@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -2938,4 +2940,115 @@ func TestDeleteAllPods(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"deleted", "other"}, []string{pods.Items[0].Name, pods.Items[1].Name})
+}
+
+func TestEvents_FailedPodCreation(t *testing.T) {
+	tests := []struct {
+		errInject error
+		// simulate is responsible for simulating pod deletions in different scenarios.
+		simulate   func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch)
+		name       string
+		failureMsg string
+		podType    string
+	}{
+		{
+			errInject: utils.ErrFailedCreateWorkerPod,
+			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
+				// Simulate the deletion of 3 worker Pods. After the deletion, the number of worker Pods should be 3.
+				err := client.Delete(ctx, &podList.Items[2])
+				assert.Nil(t, err, "Fail to delete pod")
+				err = client.Delete(ctx, &podList.Items[3])
+				assert.Nil(t, err, "Fail to delete pod")
+				err = client.Delete(ctx, &podList.Items[4])
+				assert.Nil(t, err, "Fail to delete pod")
+			},
+			name:       "failure event for failed worker pod creation",
+			failureMsg: "Failed to create worker pod",
+			podType:    "worker",
+		},
+		{
+			errInject: utils.ErrFailedCreateHeadPod,
+			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
+				// Simulate the deletion of head pod
+				err := client.Delete(ctx, &podList.Items[0])
+				assert.Nil(t, err, "Fail to delete pod")
+			},
+			name:       "failure event for failed head pod creation",
+			failureMsg: "Failed to create head pod",
+			podType:    "head",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupTest(t)
+
+			// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+			// I added the assertion to prevent the test logic from being affected by other changes.
+			// However, we should refactor the tests in the future.
+
+			// This test makes some assumptions about the testRayCluster object.
+			// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Set the workersToDelete to empty.
+			assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+			expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+			assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+			// This test makes some assumptions about the testPods object.
+			// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+			assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+			numHeadPods := 1
+			oldNumWorkerPods := len(testPods) - numHeadPods
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			// We create a fake client with an interceptor for Create() in order to simulate a failure for pod creation.
+			// We return utils.ErrFailedCreateWorkerPod here because we deleted a worker pod in the previous step, so
+			// an attempt to reconcile that will take place.
+			fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+				Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+					return test.errInject
+				},
+			}).WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
+
+			// Get the pod list from the fake client.
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
+
+			test.simulate(ctx, t, podList, fakeClient)
+
+			// Buffer length of 100 is arbitrary here. We should have only 1 event genereated, but we keep 100
+			// if that isn't the case in the future. If this test starts timining out because of a full
+			// channel, this is probably the reason and we should change our approach or increase buffer length.
+			recorder := record.NewFakeRecorder(100)
+
+			// Initialize a new RayClusterReconciler.
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   scheme.Scheme,
+			}
+
+			// Since the desired state of the workerGroup is 3 replicas,
+			// the controller will try to create one worker pod.
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			// We should get an error here because of simulating a pod creation failure.
+			assert.NotNil(t, err, "unexpected error")
+
+			var foundFailureEvent bool
+			events := []string{}
+			for len(recorder.Events) > 0 {
+				event := <-recorder.Events
+				if strings.Contains(event, test.failureMsg) {
+					foundFailureEvent = true
+					break
+				}
+				events = append(events, event)
+			}
+
+			assert.Truef(t, foundFailureEvent, "Expected event to be generated for %s pod creation failure, got events: %s", test.podType, strings.Join(events, "\n"))
+		})
+	}
 }
