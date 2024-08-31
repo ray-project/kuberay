@@ -2963,7 +2963,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 				assert.Nil(t, err, "Fail to delete pod")
 			},
 			name:       "failure event for failed worker pod creation",
-			failureMsg: "Failed to create worker pod",
+			failureMsg: "Failed to create worker Pod",
 			podType:    "worker",
 		},
 		{
@@ -2974,7 +2974,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 				assert.Nil(t, err, "Fail to delete pod")
 			},
 			name:       "failure event for failed head pod creation",
-			failureMsg: "Failed to create head pod",
+			failureMsg: "Failed to create head Pod",
 			podType:    "head",
 		},
 	}
