@@ -183,7 +183,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !isReady {
-		logger.Info(fmt.Sprintf("Ray Serve applications are not ready to serve requests: checking again in %ss", ServiceDefaultRequeueDuration))
+		logger.Info("Ray Serve applications are not ready to serve requests", "requeue_duration", ServiceDefaultRequeueDuration.String())
 		r.Recorder.Eventf(rayServiceInstance, "Normal", "ServiceNotReady", "The service is not ready yet. Controller will perform a round of actions in %s.", ServiceDefaultRequeueDuration)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
