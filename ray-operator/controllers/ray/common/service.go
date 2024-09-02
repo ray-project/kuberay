@@ -248,7 +248,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				ports := []corev1.ServicePort{}
 				for _, port := range serveService.Spec.Ports {
 					if port.Name == utils.ServingPortName {
-						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
+						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port, AppProtocol: port.AppProtocol}
 						ports = append(ports, svcPort)
 						break
 					}
