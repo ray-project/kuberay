@@ -5,4 +5,5 @@ resources:
 - bases/ray.io_rayclusters.yaml
 - bases/ray.io_rayservices.yaml
 - bases/ray.io_rayjobs.yaml
-# +kubebuilder:scaffold:crdkustomizeresource
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
