@@ -3,7 +3,14 @@ kind: Kustomization
 resources:
 - ../../base/secure
 namespace: ray-system
-patchesJson6902:
+images:
+- name: kuberay/apiserver
+  newName: kuberay/apiserver
+  newTag: latest
+- name: kuberay/security-proxy
+  newName: kuberay/security-proxy
+  newTag: latest
+patches:
 - patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/imagePullPolicy
@@ -15,10 +22,3 @@ patchesJson6902:
     kind: Deployment
     name: kuberay-apiserver
     version: v1
-images:
-- name: kuberay/apiserver
-  newName: kuberay/apiserver
-  newTag: latest
-- name: kuberay/security-proxy
-  newName: kuberay/security-proxy
-  newTag: latest

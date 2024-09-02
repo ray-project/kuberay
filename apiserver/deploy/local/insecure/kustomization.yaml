@@ -3,7 +3,11 @@ kind: Kustomization
 resources:
 - ../../base/insecure
 namespace: ray-system
-patchesJson6902:
+images:
+- name: kuberay/apiserver
+  newName: quay.io/kuberay/apiserver
+  newTag: latest
+patches:
 - patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/imagePullPolicy
@@ -12,7 +16,3 @@ patchesJson6902:
     kind: Deployment
     name: kuberay-apiserver
     version: v1
-images:
-- name: kuberay/apiserver
-  newName: quay.io/kuberay/apiserver
-  newTag: latest

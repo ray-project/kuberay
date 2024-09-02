@@ -5,6 +5,10 @@ resources:
 - leader_election_role_binding.yaml
 - service_account.yaml
 
-commonLabels:
-  app.kubernetes.io/name: kuberay
-  app.kubernetes.io/component: kuberay-operator
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/component: kuberay-operator
+    app.kubernetes.io/name: kuberay
