@@ -3,8 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -26,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -41,17 +40,19 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	dashboardClientFunc func() utils.RayDashboardClientInterface
+	dashboardClientFunc          func() utils.RayDashboardClientInterface
+	deleteRayJobAfterJobFinishes bool
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider, config configapi.Configuration) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
-		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
-		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
-		dashboardClientFunc: dashboardClientFunc,
+		Client:                       mgr.GetClient(),
+		Scheme:                       mgr.GetScheme(),
+		Recorder:                     mgr.GetEventRecorderFor("rayjob-controller"),
+		dashboardClientFunc:          dashboardClientFunc,
+		deleteRayJobAfterJobFinishes: config.DeleteRayJobAfterJobFinishes,
 	}
 }
 
@@ -335,7 +336,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
-			if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
+
+			if r.deleteRayJobAfterJobFinishes {
 				err = r.Client.Delete(ctx, rayJobInstance)
 				logger.Info("RayJob is deleted")
 			} else {
@@ -344,6 +346,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				_, err = r.deleteClusterResources(ctx, rayJobInstance)
 				logger.Info("RayCluster is deleted", "RayCluster", rayJobInstance.Status.RayClusterName)
 			}
+
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}

@@ -14,11 +14,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/util/json"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -29,6 +31,18 @@ var (
 	// Job URL paths
 	JobPath = "/api/jobs/"
 )
+
+type RayClientProvider struct {
+	configapi.Configuration
+}
+
+func (r *RayClientProvider) GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface {
+	return GetRayDashboardClientFunc(mgr, r.UseKubernetesProxy)
+}
+
+func (r *RayClientProvider) GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface {
+	return GetRayHttpProxyClientFunc(mgr, r.UseKubernetesProxy)
+}
 
 type RayDashboardClientInterface interface {
 	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
