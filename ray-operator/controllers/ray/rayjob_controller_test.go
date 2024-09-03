@@ -239,7 +239,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 		It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -364,7 +364,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 		It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -526,7 +526,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 		It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -619,7 +619,7 @@ var _ = Context("RayJob in K8sJobMode", func() {
 
 		It("Make RayCluster.Status.State to be rayv1.Ready (attempt 2)", func() {
 			// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+			Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
