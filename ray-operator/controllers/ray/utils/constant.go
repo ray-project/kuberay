@@ -149,17 +149,21 @@ const (
 	// Ray FT default readiness probe values
 	DefaultReadinessProbeInitialDelaySeconds = 10
 	DefaultReadinessProbeTimeoutSeconds      = 2
-	DefaultReadinessProbePeriodSeconds       = 5
-	DefaultReadinessProbeSuccessThreshold    = 1
-	DefaultReadinessProbeFailureThreshold    = 10
-	ServeReadinessProbeFailureThreshold      = 1
+	// Probe timeout for Head pod needs to be longer as it queries two endpoints (api/local_raylet_healthz & api/gcs_healthz)
+	DefaultHeadReadinessProbeTimeoutSeconds = 5
+	DefaultReadinessProbePeriodSeconds      = 5
+	DefaultReadinessProbeSuccessThreshold   = 1
+	DefaultReadinessProbeFailureThreshold   = 10
+	ServeReadinessProbeFailureThreshold     = 1
 
 	// Ray FT default liveness probe values
 	DefaultLivenessProbeInitialDelaySeconds = 30
 	DefaultLivenessProbeTimeoutSeconds      = 2
-	DefaultLivenessProbePeriodSeconds       = 5
-	DefaultLivenessProbeSuccessThreshold    = 1
-	DefaultLivenessProbeFailureThreshold    = 120
+	// Probe timeout for Head pod needs to be longer as it queries two endpoints (api/local_raylet_healthz & api/gcs_healthz)
+	DefaultHeadLivenessProbeTimeoutSeconds = 5
+	DefaultLivenessProbePeriodSeconds      = 5
+	DefaultLivenessProbeSuccessThreshold   = 1
+	DefaultLivenessProbeFailureThreshold   = 120
 
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
