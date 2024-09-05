@@ -256,8 +256,9 @@ const (
 	FailedToCreateService K8sEventType = "FailedToCreateService"
 
 	// ServiceAccount event list
-	CreatedServiceAccount        K8sEventType = "CreatedServiceAccount"
-	FailedToCreateServiceAccount K8sEventType = "FailedToCreateServiceAccount"
+	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"
+	FailedToCreateServiceAccount     K8sEventType = "FailedToCreateServiceAccount"
+	AutoscalerServiceAccountNotFound K8sEventType = "AutoscalerServiceAccountNotFound"
 
 	// Role event list
 	CreatedRole        K8sEventType = "CreatedRole"
