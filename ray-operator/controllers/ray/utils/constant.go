@@ -25,6 +25,7 @@ const (
 	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
+	KubeRayVersion                           = "ray.io/kuberay-version"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
@@ -221,3 +222,48 @@ func RayClusterReplicaFailureReason(err error) string {
 	}
 	return ""
 }
+
+// Currently, KubeRay fires events when failures occur during the creation or deletion of resources.
+type K8sEventType string
+
+const (
+	// Head Pod event list
+	CreatedHeadPod        K8sEventType = "CreatedHeadPod"
+	FailedToCreateHeadPod K8sEventType = "FailedToCreateHeadPod"
+	DeletedHeadPod        K8sEventType = "DeletedHeadPod"
+	FailedToDeleteHeadPod K8sEventType = "FailedToDeleteHeadPod"
+
+	// Worker Pod event list
+	CreatedWorkerPod        K8sEventType = "CreatedWorkerPod"
+	FailedToCreateWorkerPod K8sEventType = "FailedToCreateWorkerPod"
+	DeletedWorkerPod        K8sEventType = "DeletedWorkerPod"
+	FailedToDeleteWorkerPod K8sEventType = "FailedToDeleteWorkerPod"
+
+	// Generic Pod event list
+	DeletedPod        K8sEventType = "DeletedPod"
+	FailedToDeletePod K8sEventType = "FailedToDeletePod"
+
+	// Ingress event list
+	CreatedIngress        K8sEventType = "CreatedIngress"
+	FailedToCreateIngress K8sEventType = "FailedToCreateIngress"
+
+	// Route event list
+	CreatedRoute        K8sEventType = "CreatedRoute"
+	FailedToCreateRoute K8sEventType = "FailedToCreateRoute"
+
+	// Service event list
+	CreatedService        K8sEventType = "CreatedService"
+	FailedToCreateService K8sEventType = "FailedToCreateService"
+
+	// ServiceAccount event list
+	CreatedServiceAccount        K8sEventType = "CreatedServiceAccount"
+	FailedToCreateServiceAccount K8sEventType = "FailedToCreateServiceAccount"
+
+	// Role event list
+	CreatedRole        K8sEventType = "CreatedRole"
+	FailedToCreateRole K8sEventType = "FailedToCreateRole"
+
+	// RoleBinding list
+	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
+	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+)

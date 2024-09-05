@@ -312,26 +312,6 @@ jobs:
         run: go test ./pkg/... -race -parallel 4
         working-directory: ${{env.working-directory}}
 
-  test-compatibility-2_7_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-latest
-    name: Compatibility Test - 2.7.0
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.7.0
-
   test-compatibility-2_8_0:
     needs:
       - build_operator
@@ -371,6 +351,26 @@ jobs:
       - uses: ./.github/workflows/actions/compatibility
         with:
           ray_version: 2.9.0
+
+  test-compatibility-2_34_0:
+    needs:
+      - build_operator
+      - build_apiserver
+      - lint
+    runs-on: ubuntu-latest
+    name: Compatibility Test - 2.34.0
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - uses: ./.github/workflows/actions/compatibility
+        with:
+          ray_version: 2.34.0
 
   test-compatibility-nightly:
     needs:

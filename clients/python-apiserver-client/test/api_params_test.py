@@ -181,7 +181,7 @@ def test_head_node_spec():
 
     head = HeadNodeSpec(
         compute_template="template",
-        image="rayproject/ray:2.9.0-py310",
+        image="rayproject/ray:2.34.0-py310",
         ray_start_params=DEFAULT_HEAD_START_PARAMS,
         enable_ingress=True,
         service_type=ServiceType.ClusterIP,
@@ -213,7 +213,7 @@ def test_worker_node_spec():
     worker = WorkerNodeSpec(
         group_name="group",
         compute_template="template",
-        image="rayproject/ray:2.9.0-py310",
+        image="rayproject/ray:2.34.0-py310",
         replicas=2,
         min_replicas=2,
         max_replicas=2,
@@ -261,7 +261,7 @@ def test_cluster_spec():
     spec = ClusterSpec(
         head_node=HeadNodeSpec(
             compute_template="template",
-            image="rayproject/ray:2.9.0-py310",
+            image="rayproject/ray:2.34.0-py310",
             ray_start_params=DEFAULT_HEAD_START_PARAMS,
             volumes=volumes,
             enable_ingress=True,
@@ -275,7 +275,7 @@ def test_cluster_spec():
                 replicas=2,
                 min_replicas=2,
                 max_replicas=2,
-                image="rayproject/ray:2.9.0-py310",
+                image="rayproject/ray:2.34.0-py310",
                 ray_start_params=DEFAULT_WORKER_START_PARAMS,
                 volumes=volumes,
                 environment=env_s,
@@ -287,7 +287,7 @@ def test_cluster_spec():
                 replicas=2,
                 min_replicas=2,
                 max_replicas=2,
-                image="rayproject/ray:2.9.0-py310",
+                image="rayproject/ray:2.34.0-py310",
                 ray_start_params=DEFAULT_WORKER_START_PARAMS,
                 volumes=volumes,
                 environment=env_s,
@@ -339,7 +339,7 @@ def test_cluster():
             volumes=volumes,
             environment=env_s,
             annotations={"a_key": "a_val"},
-            image="rayproject/ray:2.9.0-py310",
+            image="rayproject/ray:2.34.0-py310",
         ),
         worker_groups=[
             WorkerNodeSpec(
@@ -348,7 +348,7 @@ def test_cluster():
                 replicas=2,
                 min_replicas=2,
                 max_replicas=2,
-                image="rayproject/ray:2.9.0-py310",
+                image="rayproject/ray:2.34.0-py310",
                 ray_start_params=DEFAULT_WORKER_START_PARAMS,
                 volumes=volumes,
                 environment=env_s,
@@ -360,7 +360,7 @@ def test_cluster():
                 replicas=2,
                 min_replicas=2,
                 max_replicas=2,
-                image="rayproject/ray:2.9.0-py310",
+                image="rayproject/ray:2.34.0-py310",
                 ray_start_params=DEFAULT_WORKER_START_PARAMS,
                 volumes=volumes,
                 environment=env_s,
@@ -372,7 +372,7 @@ def test_cluster():
         name="test",
         namespace="default",
         user="boris",
-        version="2.9.0",
+        version="2.34.0",
         cluster_spec=spec,
         deployment_environment=Environment.DEV,
         cluster_environment=env_s,

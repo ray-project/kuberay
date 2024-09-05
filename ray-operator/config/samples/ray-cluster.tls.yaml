@@ -5,7 +5,7 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: raycluster-tls
 spec:
-  rayVersion: '2.9.0'
+  rayVersion: '2.34.0'
   # Note: Uncomment the `enableInTreeAutoscaling` and `autoscalerOptions`
   # if you wish to configure TLS for the autoscaler.
 
@@ -54,7 +54,7 @@ spec:
         initContainers:
           # Generate head's private key and certificate before `ray start`.
           - name: ray-head-tls
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.34.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -71,7 +71,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.34.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -142,7 +142,7 @@ spec:
         initContainers:
           # Generate worker's private key and certificate before `ray start`.
           - name: ray-worker-tls
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.34.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -159,7 +159,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.34.0
           lifecycle:
             preStop:
               exec:

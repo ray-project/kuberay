@@ -121,6 +121,8 @@ type RayClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
+	//
+	// Deprecated: the State field is replaced by the Conditions field.
 	State ClusterState `json:"state,omitempty"`
 	// DesiredCPU indicates total desired CPUs for the cluster
 	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
@@ -168,17 +170,18 @@ type RayClusterConditionType string
 
 // Custom Reason for RayClusterCondition
 const (
-	AllPodRunningAndReady  = "AllPodRunningAndReady"
-	HeadPodNotFound        = "HeadPodNotFound"
-	HeadPodRunningAndReady = "HeadPodRunningAndReady"
+	AllPodRunningAndReadyFirstTime = "AllPodRunningAndReadyFirstTime"
+	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
+	HeadPodNotFound                = "HeadPodNotFound"
+	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )
 
 const (
-	// RayClusterReady indicates whether all Ray Pods are ready when the RayCluster is first created.
-	// After RayClusterReady is set to true for the first time, it only indicates whether the RayCluster's head Pod is ready for requests.
-	RayClusterReady RayClusterConditionType = "RayClusterReady"
+	// RayClusterProvisioned indicates whether all Ray Pods are ready for the first time.
+	// After RayClusterProvisioned is set to true for the first time, it will not change anymore.
+	RayClusterProvisioned RayClusterConditionType = "RayClusterProvisioned"
 	// HeadPodReady indicates whether RayCluster's head Pod is ready for requests.
 	HeadPodReady RayClusterConditionType = "HeadPodReady"
 	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.

@@ -183,7 +183,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !isReady {
-		logger.Info(fmt.Sprintf("Ray Serve applications are not ready to serve requests: checking again in %ss", ServiceDefaultRequeueDuration))
+		logger.Info("Ray Serve applications are not ready to serve requests", "requeue_duration", ServiceDefaultRequeueDuration.String())
 		r.Recorder.Eventf(rayServiceInstance, "Normal", "ServiceNotReady", "The service is not ready yet. Controller will perform a round of actions in %s.", ServiceDefaultRequeueDuration)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
@@ -531,7 +531,14 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return RolloutNew
 		}
 
-		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
+		// Case 1: If the KubeRay version has changed, update the RayCluster to get the cluster hash and new KubeRay version.
+		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
+		if activeKubeRayVersion != utils.KUBERAY_VERSION {
+			logger.Info("Active RayCluster config doesn't match goal config due to mismatched KubeRay versions. Updating RayCluster.")
+			return Update
+		}
+
+		// Case 2: If everything is identical except for the Replicas and WorkersToDelete of
 		// each WorkerGroup, then do nothing.
 		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
@@ -548,7 +555,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return DoNothing
 		}
 
-		// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// Case 3: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
 		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
 		if err != nil {
@@ -576,7 +583,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			}
 		}
 
-		// Case 3: Otherwise, rollout a new cluster.
+		// Case 4: Otherwise, rollout a new cluster.
 		logger.Info("Active RayCluster config doesn't match goal config. " +
 			"RayService operator should prepare a new Ray cluster.\n" +
 			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
@@ -732,6 +739,9 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 		return nil, err
 	}
 	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
+
+	// set the KubeRay version used to create the RayCluster
+	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -979,9 +989,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
 		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
 		// with older versions of Kubernetes, we need to assign the ClusterIP here.
-		if newSvc.Spec.ClusterIP == "" {
-			newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
-		}
+		newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
 
 		// TODO (kevin85421): Consider not only the updates of the Spec but also the ObjectMeta.
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
