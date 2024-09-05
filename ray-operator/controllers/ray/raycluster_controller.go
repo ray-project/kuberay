@@ -1375,11 +1375,13 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 		// zero-downtime rolling updates when RayService is performed. See https://github.com/ray-project/kuberay/issues/1123
 		// for more details.
 		if instance.Spec.HeadGroupSpec.Template.Spec.ServiceAccountName == namespacedName.Name {
-			logger.Error(err, fmt.Sprintf(
-				"If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
-					"However, ServiceAccount %s is not found. Please create one. "+
-					"See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name), "ServiceAccount", namespacedName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s due to %s", instance.Namespace, instance.Name, err)
+			actionableMessage := fmt.Sprintf("If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
+				"However, ServiceAccount %s is not found. Please create one. See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name)
+
+			logger.Error(
+				err,
+				actionableMessage)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
 			return err
 		}
 
