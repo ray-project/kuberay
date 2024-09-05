@@ -1381,7 +1381,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 			logger.Error(
 				err,
 				actionableMessage)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "Failed", "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.AutoscalerServiceAccountNotFound), "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
 			return err
 		}
 
