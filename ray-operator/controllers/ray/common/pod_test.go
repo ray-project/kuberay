@@ -1167,35 +1167,33 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	rayContainer := &podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
 
-	// Test 1: User defines a custom HTTPGet probe.
-	httpGetProbe := corev1.Probe{
+	// Test 1: User defines a custom Exec probe to override default HTTP probe.
+	execProbe := corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				// Check Raylet status
-				Path: fmt.Sprintf("/%s", utils.RayAgentRayletHealthPath),
-				Port: intstr.FromInt(utils.DefaultDashboardAgentListenPort),
+			Exec: &corev1.ExecAction{
+				Command: []string{"foo", "bar"},
 			},
 		},
 	}
 
-	rayContainer.LivenessProbe = &httpGetProbe
-	rayContainer.ReadinessProbe = &httpGetProbe
+	rayContainer.LivenessProbe = &execProbe
+	rayContainer.ReadinessProbe = &execProbe
 	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "")
-	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
-	assert.Nil(t, rayContainer.LivenessProbe.Exec)
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.Nil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
 
-	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe for worker pod.
+	// Test 2: User does not define a custom probe. KubeRay will inject HTTP probe for worker pod.
 	// Here we test the case where the Ray Pod originates from RayServiceCRD,
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD)
-	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Path, utils.RayServeProxyHealthPath)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Port, intstr.FromInt(utils.DefaultServingPort))
 	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
 
@@ -1205,13 +1203,34 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD)
-	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	// head pod should not have Ray Serve proxy health probes
-	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.False(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
-	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
+	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Path, utils.RayDashboardGCSHealthPath)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Port, intstr.FromInt(utils.DefaultDashboardPort))
+	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
+
+	// Test 4: User does not define custom probe. Pod is a worker Pod for a RayJob
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayJobCRD)
+	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Path, utils.RayAgentRayletHealthPath)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Port, intstr.FromInt(utils.DefaultDashboardAgentListenPort))
+	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
+
+	// Test 5: User does not define custom probe. Pod is a head Pod for a RayJob
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayJobCRD)
+	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Path, utils.RayDashboardGCSHealthPath)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Port, intstr.FromInt(utils.DefaultDashboardPort))
+	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
 }
 
 func TestGenerateRayStartCommand(t *testing.T) {
