@@ -21,7 +21,7 @@ spec:
             - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
             - fastapi
   rayClusterConfig:
-    rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
+    rayVersion: '2.34.0' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -34,7 +34,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.9.0-py310
+            image: rayproject/ray:2.34.0-py310
             ports:
             - containerPort: 6379
               name: gcs
@@ -64,7 +64,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.9.0-py310
+            image: rayproject/ray:2.34.0-py310
             resources:
               limits:
                 # ct4p-hightpu-4t (v4) TPUs have 240 vCPUs, adjust this value based on your resource needs

@@ -45,7 +45,7 @@ var expectedRayJob = RayJob{
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
+								Image: "rayproject/ray:2.34.0",
 								Env: []corev1.EnvVar{
 									{
 										Name: "MY_POD_IP",
@@ -107,7 +107,7 @@ var expectedRayJob = RayJob{
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.9.0",
+									Image:   "rayproject/ray:2.34.0",
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{
@@ -168,7 +168,7 @@ var testRayJobJSON = `{
                         "containers": [
                             {
                                 "name": "ray-head",
-                                "image": "rayproject/ray:2.9.0",
+                                "image": "rayproject/ray:2.34.0",
                                 "ports": [
                                     {
                                         "name": "gcs-server",
@@ -231,7 +231,7 @@ var testRayJobJSON = `{
                             "containers": [
                                 {
                                     "name": "ray-worker",
-                                    "image": "rayproject/ray:2.9.0",
+                                    "image": "rayproject/ray:2.34.0",
                                     "command": [
                                         "echo"
                                     ],

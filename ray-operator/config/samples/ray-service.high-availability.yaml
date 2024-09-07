@@ -85,7 +85,7 @@ spec:
         import_path: fruit.deployment_graph
         route_prefix: /fruit
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/4d2c9a59d9eabfd4c8a9e04a7aae44fc8f5b416f.zip"
         deployments:
           - name: MangoStand
             num_replicas: 2
@@ -113,13 +113,8 @@ spec:
             max_replicas_per_node: 1
             ray_actor_options:
               num_cpus: 0.1
-          - name: DAGDriver
-            num_replicas: 2
-            max_replicas_per_node: 1
-            ray_actor_options:
-              num_cpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.34.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -131,7 +126,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.34.0
               env:
                 - name: RAY_REDIS_ADDRESS
                   value: redis:6379
@@ -144,10 +139,10 @@ spec:
               resources:
                 limits:
                   cpu: 1
-                  memory: 1Gi
+                  memory: 2Gi
                 requests:
                   cpu: 1
-                  memory: 1Gi
+                  memory: 2Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -173,7 +168,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.34.0
                 lifecycle:
                   preStop:
                     exec:
@@ -217,7 +212,7 @@ metadata:
 spec:
   containers:
   - name: ray-container
-    image: rayproject/ray:2.9.0
+    image: rayproject/ray:2.34.0
     command: ["/bin/bash", "-c", "--"]
     args: ["while true; do sleep 30; done;"]
     volumeMounts:

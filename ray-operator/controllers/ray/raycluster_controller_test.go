@@ -58,7 +58,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
+								Image: "rayproject/ray:2.34.0",
 							},
 						},
 					},
@@ -76,7 +76,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-worker",
-									Image: "rayproject/ray:2.9.0",
+									Image: "rayproject/ray:2.34.0",
 								},
 							},
 						},
@@ -898,15 +898,15 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
 			By("Check RayCluster RayClusterProvisioned condition is false")
-			// But the worker pod is not ready yet, RayClusterProvisioned condition should still be absent.
+			// But the worker pod is not ready yet, RayClusterProvisioned condition should be false.
 			Consistently(
-				func() *metav1.Condition {
+				func() bool {
 					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
-						return nil
+						return false
 					}
-					return meta.FindStatusCondition(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+					return meta.IsStatusConditionFalse(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
 				},
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
 
 			By("Update the worker pod to Running")
 			workerPod.Status.Phase = corev1.PodRunning

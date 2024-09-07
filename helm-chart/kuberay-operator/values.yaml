@@ -79,6 +79,9 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+# if userKubernetesProxy is set to true, the KubeRay operator will be configured with the --use-kubernetes-proxy flag.
+# Using this option to configure kuberay-operator to comunitcate to Ray head pods by proxying through the Kubernetes API Server.
+# useKubernetesProxy: true
 
 # If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true

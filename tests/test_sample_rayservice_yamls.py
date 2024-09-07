@@ -285,6 +285,7 @@ class TestRayService:
             for cr_event in cr_events:
                 cr_event.trigger()
 
+
 class TestRayServiceAutoscaling:
     """Test RayService autoscaling"""
     @pytest.fixture
