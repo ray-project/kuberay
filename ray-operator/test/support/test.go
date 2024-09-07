@@ -33,7 +33,6 @@ type Option[T any] interface {
 
 type errorOption[T any] func(to T) error
 
-//nolint:unused // To be removed when the false-positivity is fixed.
 func (o errorOption[T]) applyTo(to T) error {
 	return o(to)
 }

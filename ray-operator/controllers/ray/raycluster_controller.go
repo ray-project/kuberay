@@ -4,6 +4,7 @@ import (
 	"context"
 	errstd "errors"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -425,12 +426,12 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 		return err
 	}
 
-	if headRoutes.Items != nil && len(headRoutes.Items) == 1 {
+	if len(headRoutes.Items) == 1 {
 		logger.Info("reconcileIngresses", "head service route found", headRoutes.Items[0].Name)
 		return nil
 	}
 
-	if headRoutes.Items == nil || len(headRoutes.Items) == 0 {
+	if len(headRoutes.Items) == 0 {
 		route, err := common.BuildRouteForHeadService(*instance)
 		if err != nil {
 			return err
@@ -457,12 +458,12 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 		return err
 	}
 
-	if headIngresses.Items != nil && len(headIngresses.Items) == 1 {
+	if len(headIngresses.Items) == 1 {
 		logger.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
 		return nil
 	}
 
-	if headIngresses.Items == nil || len(headIngresses.Items) == 0 {
+	if len(headIngresses.Items) == 0 {
 		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
 		if err != nil {
 			return err
@@ -652,7 +653,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedHeadPod),
 				"Deleted head Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 				headPod.Namespace, headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod))
-			return fmt.Errorf(reason)
+			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
@@ -756,7 +757,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			worker.NumOfHosts = 1
 		}
 		numExpectedPods := workerReplicas * worker.NumOfHosts
-		diff := numExpectedPods - int32(len(runningPods.Items))
+
+		if len(runningPods.Items) > math.MaxInt32 {
+			return errstd.New("len(runningPods.Items) exceeds math.MaxInt32")
+		}
+		diff := numExpectedPods - int32(len(runningPods.Items)) //nolint:gosec // Already checked in the previous line.
 
 		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
