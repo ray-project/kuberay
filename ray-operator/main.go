@@ -160,19 +160,11 @@ func main() {
 	if forcedClusterUpgrade {
 		setupLog.Info("Deprecated feature flag forced-cluster-upgrade is enabled, which has no effect.")
 	}
-	if config.EnableBatchScheduler {
-		if len(config.BatchScheduler) > 0 {
-			exitOnError(fmt.Errorf("invalid configuration found"),
-				"do not use both options together: \"batch-scheduler\" and \"enable-batch-scheduler\".")
-		}
-		setupLog.Info("Feature flag enable-batch-scheduler is deprecated and will not be supported soon. " +
-			"Use batch-scheduler instead. ")
-	}
-	if len(config.BatchScheduler) > 0 {
-		if config.BatchScheduler == "volcano" || config.BatchScheduler == "yunikorn" {
-			setupLog.Info("Feature flag batch-scheduler is enabled",
-				"scheduler name", config.BatchScheduler)
-		}
+
+	// validate the batch scheduler configs,
+	// exit with error if the configs is invalid.
+	if err := configapi.ValidateBatchSchedulerConfig(setupLog, config); err != nil {
+		exitOnError(err, "batch scheduler configs validation failed")
 	}
 
 	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {

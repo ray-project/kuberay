@@ -64,9 +64,6 @@ func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config
 }
 
 func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {
-	batch.Lock()
-	defer batch.Unlock()
-
 	// for backwards compatibility
 	if batch.rayConfigs.EnableBatchScheduler {
 		if schedulerName, ok := app.ObjectMeta.Labels[utils.RaySchedulerName]; ok {

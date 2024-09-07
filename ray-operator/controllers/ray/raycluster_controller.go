@@ -109,8 +109,8 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	// init the batch scheduler manager
 	schedulerMgr, err := batchscheduler.NewSchedulerManager(rayConfigs, mgr.GetConfig())
 	if err != nil {
-		// fail fast if the scheduler plugin is failed to init
-		// prevent running the controller in vague state
+		// fail fast if the scheduler plugin fails to init
+		// prevent running the controller in an undefined state
 		panic(err)
 	}
 
@@ -633,7 +633,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return err
 	}
-	// this option is deprecated and will be removed soon
+	// check if the batch scheduler integration is enabled
+	// call the scheduler plugin if so
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(instance); err == nil {
 			if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
@@ -969,7 +970,8 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 	// build the pod then create it
 	pod := r.buildHeadPod(ctx, instance)
-	// this option is deprecated and will be removed soon
+	// check if the batch scheduler integration is enabled
+	// call the scheduler plugin if so
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(&instance); err == nil {
 			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
