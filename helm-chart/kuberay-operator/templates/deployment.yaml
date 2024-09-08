@@ -57,8 +57,13 @@ spec:
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
+            {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
+            {{- end -}}
+            {{- if .Values.batchScheduler.name -}}
+            {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
+            {{- end -}}
             {{- end -}}
             {{- $watchNamespace := "" -}}
             {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}

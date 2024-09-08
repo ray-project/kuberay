@@ -55,8 +55,33 @@ readinessProbe:
   periodSeconds: 5
   failureThreshold: 5
 
+# Enable customized Kubernetes scheduler integration. If enabled, Ray workloads will be scheduled
+# by the customized scheduler.
+#  * "enabled" is the legacy option and will be deprecated soon.
+#  * "name" is the standard option, expecting a scheduler name, supported values are
+#    "default", "volcano", and "yunikorn".
+#
+# Examples:
+#  1. Use volcano (deprecated)
+#       batchScheduler:
+#         enabled: true
+#
+#  2. Use volcano
+#       batchScheduler:
+#         name: volcano
+#
+#  3. Use yunikorn
+#       batchScheduler:
+#         name: yunikorn
+#
 batchScheduler:
+  # Deprecated. This option will be removed in the future.
+  # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
+  # Name of the scheduler, currently supported "default", "volcano" and "yunikorn",
+  # set the customized scheduler name, e.g "volcano" or "yunikorn", do not set
+  # "batchScheduler.enabled=true" at the same time as it will override this option.
+  name: default
 
 featureGates:
   - name: RayClusterStatusConditions
