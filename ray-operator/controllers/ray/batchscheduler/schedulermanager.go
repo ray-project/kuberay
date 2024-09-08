@@ -27,27 +27,8 @@ type SchedulerManager struct {
 
 // NewSchedulerManager maintains a specific scheduler plugin based on config
 func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config) (*SchedulerManager, error) {
-	var factory schedulerinterface.BatchSchedulerFactory
-
-	// init with the default implementation
-	factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
-	// when a batch scheduler name is provided
-	if len(rayConfigs.BatchScheduler) > 0 {
-		switch rayConfigs.BatchScheduler {
-		case volcano.GetPluginName():
-			factory = &volcano.VolcanoBatchSchedulerFactory{}
-		case yunikorn.GetPluginName():
-			factory = &yunikorn.YuniKornSchedulerFactory{}
-		default:
-			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
-		}
-	}
-
-	// legacy option, if this is enabled, register volcano
-	if rayConfigs.EnableBatchScheduler {
-		factory = &volcano.VolcanoBatchSchedulerFactory{}
-	}
-
+	// init the scheduler factory from config
+	factory := getSchedulerFactory(rayConfigs)
 	scheduler, err := factory.New(config)
 	if err != nil {
 		return nil, err
@@ -61,6 +42,30 @@ func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config
 	}
 
 	return &manager, nil
+}
+
+func getSchedulerFactory(rayConfigs configapi.Configuration) schedulerinterface.BatchSchedulerFactory {
+	// init with the default implementation
+	var factory schedulerinterface.BatchSchedulerFactory
+	// when a batch scheduler name is provided
+	if len(rayConfigs.BatchScheduler) > 0 {
+		switch rayConfigs.BatchScheduler {
+		case volcano.GetPluginName():
+			factory = &volcano.VolcanoBatchSchedulerFactory{}
+		case yunikorn.GetPluginName():
+			factory = &yunikorn.YuniKornSchedulerFactory{}
+		default:
+			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
+		}
+	}
+
+	// legacy option, if this is enabled, register volcano
+	// this is for backwards compatibility
+	if rayConfigs.EnableBatchScheduler {
+		factory = &volcano.VolcanoBatchSchedulerFactory{}
+	}
+
+	return factory
 }
 
 func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {

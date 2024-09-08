@@ -11,13 +11,11 @@ import (
 
 func ValidateBatchSchedulerConfig(logger logr.Logger, config Configuration) error {
 	if config.EnableBatchScheduler {
-		if len(config.BatchScheduler) > 0 {
-			return fmt.Errorf("invalid configuration found, " +
-				"do not use both options together: \"batch-scheduler\" and \"enable-batch-scheduler\"")
-		}
 		logger.Info("Feature flag enable-batch-scheduler is deprecated and will not be supported soon. " +
 			"Use batch-scheduler instead. ")
+		return nil
 	}
+
 	if len(config.BatchScheduler) > 0 {
 		// default option, no-opt.
 		if config.BatchScheduler == "default" {

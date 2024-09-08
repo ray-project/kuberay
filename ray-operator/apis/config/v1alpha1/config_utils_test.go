@@ -61,22 +61,11 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid option, both enable-batch-scheduler and batch-scheduler presents",
-			args: args{
-				logger: testr.New(t),
-				config: Configuration{
-					EnableBatchScheduler: true,
-					BatchScheduler:       yunikorn.SchedulerName,
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "invalid option, invalid scheduler name",
 			args: args{
 				logger: testr.New(t),
 				config: Configuration{
-					EnableBatchScheduler: true,
+					EnableBatchScheduler: false,
 					BatchScheduler:       "unknown-scheduler-name",
 				},
 			},
