@@ -29,6 +29,16 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-golangci-lint-version
+        name: golangci-lint version check
+        entry: bash -c 'version="1.60.3"; [ "$(golangci-lint --version | grep -oP "(?<=version )[\d\.]+")" = "$version" ] || echo "golangci-lint version is not $version"'
+        language: system
+        always_run: true
+        fail_fast: true
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: golangci-lint-ray-operator
         name: golangci-lint (ray-operator)
         entry: bash -c 'cd ray-operator && golangci-lint run --fix --exclude-files _generated.go --timeout 10m0s; status=$?; cd ..; exit $status'

@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.58.1
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
           mv ./bin/golangci-lint /usr/local/bin/golangci-lint
         shell: bash
       - uses: actions/checkout@v3

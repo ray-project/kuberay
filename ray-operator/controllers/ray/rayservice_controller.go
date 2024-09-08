@@ -2,7 +2,9 @@ package ray
 
 import (
 	"context"
+	errstd "errors"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -246,7 +248,10 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	for _, subset := range serveEndPoints.Subsets {
 		numServeEndpoints += len(subset.Addresses)
 	}
-	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints)
+	if numServeEndpoints > math.MaxInt32 {
+		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
+	}
+	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // Already checked in the previous line.
 	return nil
 }
 

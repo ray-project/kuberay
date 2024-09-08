@@ -536,7 +536,7 @@ func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName st
 }
 
 func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 	// Init containers in both head and worker require FQ_RAY_IP.
@@ -552,7 +552,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 
