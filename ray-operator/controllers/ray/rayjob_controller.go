@@ -177,14 +177,27 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.DashboardURL = clientURL
 		}
 
+		if rayJobInstance.Spec.SubmissionMode == rayv1.NoneMode {
+			logger.Info("SubmissionMode is NoneMode and the RayCluster is created. Transition the status from `Initializing` to `Waiting`.")
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusWaiting
+			break
+		}
+
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
 
-		logger.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
+		logger.Info("SubmissionMode is K8sJobMode and both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
+	case rayv1.JobDeploymentStatusWaiting:
+		rayJobId, found := rayJobInstance.ObjectMeta.Annotations[utils.RayJobSubmissionIdLabelKey]
+		if !found {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJobId is not found in the annotations")
+		}
+		rayJobInstance.Status.JobId = rayJobId
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusRunning:
 		if shouldUpdate := r.updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
@@ -615,7 +628,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 		return nil
 	}
 
-	if rayJob.Status.JobId == "" {
+	if rayJob.Spec.SubmissionMode != rayv1.NoneMode && rayJob.Status.JobId == "" {
 		if rayJob.Spec.JobId != "" {
 			rayJob.Status.JobId = rayJob.Spec.JobId
 		} else {
