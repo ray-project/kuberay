@@ -42,6 +42,7 @@ const (
 	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
+	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -58,6 +59,7 @@ type JobSubmissionMode string
 const (
 	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
 	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
+	NoneMode   JobSubmissionMode = "NoneMode"   // Don't submit job
 )
 
 type SubmitterConfig struct {
