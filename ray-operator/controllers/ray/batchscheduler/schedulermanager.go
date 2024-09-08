@@ -45,8 +45,9 @@ func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config
 }
 
 func getSchedulerFactory(rayConfigs configapi.Configuration) schedulerinterface.BatchSchedulerFactory {
-	// init with the default implementation
 	var factory schedulerinterface.BatchSchedulerFactory
+	// init with the default factory
+	factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 	// when a batch scheduler name is provided
 	if len(rayConfigs.BatchScheduler) > 0 {
 		switch rayConfigs.BatchScheduler {
