@@ -92,7 +92,7 @@ func main() {
 		"Encoder to use for logging stdout. Valid values are 'json' and 'console'. Defaults to 'json'")
 	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
 		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
-	flag.StringVar(&batchScheduler, "batch-scheduler", "default",
+	flag.StringVar(&batchScheduler, "batch-scheduler", "",
 		"Batch scheduler name, supported values are default, volcano, yunikorn.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
