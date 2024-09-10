@@ -4,9 +4,6 @@ linters-settings:
   gosec:
     excludes:
       - G601
-      # G115 is reporting false positives in golangci-lint v1.60.3.
-      # See this gosec issue for more information: https://github.com/securego/gosec/issues/1212.
-      - G115
   ginkgolinter:
     forbid-focus-container: true
   goimports:

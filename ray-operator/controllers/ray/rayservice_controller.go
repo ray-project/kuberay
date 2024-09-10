@@ -251,7 +251,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	if numServeEndpoints > math.MaxInt32 {
 		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
-	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints)
+	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	return nil
 }
 
