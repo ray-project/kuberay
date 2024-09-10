@@ -264,9 +264,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.LivenessProbe == nil {
+		probeTimeout := utils.DefaultLivenessProbeTimeoutSeconds
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = utils.DefaultHeadLivenessProbeTimeoutSeconds
+		}
+
 		rayContainer.LivenessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultLivenessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultLivenessProbeTimeoutSeconds,
+			TimeoutSeconds:      int32(probeTimeout),
 			PeriodSeconds:       utils.DefaultLivenessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
@@ -275,9 +280,13 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.ReadinessProbe == nil {
+		probeTimeout := utils.DefaultReadinessProbeTimeoutSeconds
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = utils.DefaultHeadReadinessProbeTimeoutSeconds
+		}
 		rayContainer.ReadinessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultReadinessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultReadinessProbeTimeoutSeconds,
+			TimeoutSeconds:      int32(probeTimeout),
 			PeriodSeconds:       utils.DefaultReadinessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
