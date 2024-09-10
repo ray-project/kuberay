@@ -1110,23 +1110,21 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayContainer := &podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
 
 	// Test 1: User defines a custom HTTPGet probe.
-	httpGetProbe := corev1.Probe{
+	execProbe := corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				// Check Raylet status
-				Path: fmt.Sprintf("/%s", utils.RayAgentRayletHealthPath),
-				Port: intstr.FromInt(utils.DefaultDashboardAgentListenPort),
+			Exec: &corev1.ExecAction{
+				Command: []string{"foo", "bar"},
 			},
 		},
 	}
 
-	rayContainer.LivenessProbe = &httpGetProbe
-	rayContainer.ReadinessProbe = &httpGetProbe
+	rayContainer.LivenessProbe = &execProbe
+	rayContainer.ReadinessProbe = &execProbe
 	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "")
-	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
-	assert.Nil(t, rayContainer.LivenessProbe.Exec)
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.Nil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
 
 	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe.
 	// Here we test the case where the Ray Pod originates from RayServiceCRD,
@@ -1134,8 +1132,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD)
-	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Path, utils.RayServeProxyHealthPath)
+	assert.Equal(t, rayContainer.ReadinessProbe.HTTPGet.Port, intstr.FromInt(utils.DefaultServingPort))
 }
