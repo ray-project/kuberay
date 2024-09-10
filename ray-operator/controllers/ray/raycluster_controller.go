@@ -4,7 +4,6 @@ import (
 	"context"
 	errstd "errors"
 	"fmt"
-	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -770,10 +769,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			worker.NumOfHosts = 1
 		}
 		numExpectedPods := int(workerReplicas * worker.NumOfHosts)
-
-		if len(runningPods.Items) > math.MaxInt32 {
-			return errstd.New("len(runningPods.Items) exceeds math.MaxInt32")
-		}
 		diff := numExpectedPods - len(runningPods.Items)
 
 		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
