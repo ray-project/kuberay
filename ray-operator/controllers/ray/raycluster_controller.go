@@ -774,7 +774,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if len(runningPods.Items) > math.MaxInt32 {
 			return errstd.New("len(runningPods.Items) exceeds math.MaxInt32")
 		}
-		diff := numExpectedPods - int32(len(runningPods.Items)) //nolint:gosec // Already checked in the previous line.
+		diff := numExpectedPods - int32(len(runningPods.Items))
 
 		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
