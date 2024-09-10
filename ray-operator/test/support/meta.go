@@ -6,7 +6,7 @@ type labelSelector string
 
 var _ Option[*metav1.ListOptions] = (*labelSelector)(nil)
 
-func (l labelSelector) applyTo(options *metav1.ListOptions) error { //nolint:unused // applyTo is required by the Option interface.
+func (l labelSelector) applyTo(options *metav1.ListOptions) error {
 	options.LabelSelector = string(l)
 	return nil
 }

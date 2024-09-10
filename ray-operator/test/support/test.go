@@ -33,7 +33,7 @@ type Option[T any] interface {
 
 type errorOption[T any] func(to T) error
 
-func (o errorOption[T]) applyTo(to T) error { //nolint:unused // applyTo is required by the Option interface.
+func (o errorOption[T]) applyTo(to T) error {
 	return o(to)
 }
 

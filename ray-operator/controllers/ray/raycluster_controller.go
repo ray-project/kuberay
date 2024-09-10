@@ -769,12 +769,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if worker.NumOfHosts <= 0 {
 			worker.NumOfHosts = 1
 		}
-		numExpectedPods := workerReplicas * worker.NumOfHosts
+		numExpectedPods := int(workerReplicas * worker.NumOfHosts)
 
 		if len(runningPods.Items) > math.MaxInt32 {
 			return errstd.New("len(runningPods.Items) exceeds math.MaxInt32")
 		}
-		diff := numExpectedPods - int32(len(runningPods.Items))
+		diff := numExpectedPods - len(runningPods.Items)
 
 		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
@@ -782,8 +782,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// pods need to be added
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
 			// create all workers of this group
-			var i int32
-			for i = 0; i < diff; i++ {
+			for i := 0; i < diff; i++ {
 				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
 				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
 					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
@@ -814,7 +813,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
 				randomlyRemovedWorkers := -diff
 				logger.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
-				for i := 0; i < int(randomlyRemovedWorkers); i++ {
+				for i := 0; i < randomlyRemovedWorkers; i++ {
 					randomPodToDelete := runningPods.Items[i]
 					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
